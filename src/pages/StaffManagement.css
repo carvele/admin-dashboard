@@ -1,0 +1,62 @@
+/* Staff Management Specific Styles */
+
+.member-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.role-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.role-chip:hover {
+    border-color: var(--color-gold);
+    background: #fff;
+}
+
+.owner-chip {
+    background: #faf5ed;
+    border-color: var(--color-gold);
+    color: var(--color-gold);
+}
+
+.owner-chip:hover {
+    background: #faf5ed;
+    cursor: default;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-dot.invited { background-color: var(--color-warning); }
+.status-dot.active { background-color: var(--color-success); }
+.status-dot.revoked { background-color: var(--color-danger); }
+
+.icon-btn-small {
+    padding: 6px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.icon-btn-small:hover {
+    background: #fff;
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
