@@ -1,4 +1,4 @@
-import React from 'rechart';
+import React from 'react';
 import './StatusBadge.css';
 
 const StatusBadge = ({ status }) => {
