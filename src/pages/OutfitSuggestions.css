@@ -1,0 +1,240 @@
+.outfit-suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.full-col {
+  grid-column: 1 / -1;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.outfit-display-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  background: white;
+}
+
+.outfit-display-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.outfit-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  margin-bottom: 0.25rem;
+}
+
+.outfit-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.items-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.items-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.item-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.item-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.item-cat {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+/* Modal Styles */
+.outfit-modal {
+  max-width: 600px;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.selected-items-box {
+  min-height: 80px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  background: #FAFAFA;
+}
+
+.selected-items-box.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selected-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.selected-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  border: 1px solid var(--border-color);
+  padding: 4px 8px 4px 4px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.chip-icon {
+  background: var(--bg-surface);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 50%;
+}
+
+.chip-remove:hover {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.small-search .input-field {
+  padding: 6px 10px 6px 30px;
+  font-size: 0.8rem;
+  min-height: 32px;
+}
+
+.small-search .search-icon {
+  left: 10px;
+  width: 14px;
+  height: 14px;
+}
+
+.available-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.available-item-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.available-item-card:hover {
+  border-color: var(--color-gold);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.available-item-card.selected {
+  border-color: var(--color-gold);
+  background: var(--cream);
+}
+
+.avail-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface);
+  border-radius: 6px;
+}
+
+.avail-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.avail-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+.avail-cat {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
