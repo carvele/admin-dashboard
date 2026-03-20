@@ -1,0 +1,109 @@
+rules_version = '2';
+
+// JezSy Collection — Firestore Security Rules
+// Deploy with: firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper: Check if user is authenticated ──
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // ── Helper: Check if the requesting user's email matches a staff doc with Admin/Owner role ──
+    function isAdminOrOwner() {
+      return isAuth() && (
+        get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['Admin', 'Owner']
+        || request.auth.token.email in ['admin@jezsy.com', 'admin@jezsycollection.com']
+      );
+    }
+
+    // ── Reservations ──
+    match /reservations/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── App Users (customers) ──
+    match /users/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── Staff ──
+    match /staff/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── Products (Catalog) ──
+    match /products/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── Inventory ──
+    match /inventory/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── Conversations & Messages ──
+    match /conversations/{docId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth();
+    }
+    match /messages/{docId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+    }
+
+    // ── Wardrobe Items & Outfits ──
+    match /wardrobeItems/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+    match /outfits/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // ── Analytics ──
+    match /analyticsConvRate/{docId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    // ── Devices ──
+    match /databases/{database}/documents/devices/{fingerprint} {
+      allow read, write: if isAuth();
+    }
+
+    // ── Settings ──
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    // ── Audit Logs ──
+    match /logs/{docId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      // Logs should never be updated or deleted
+      allow update, delete: if false;
+    }
+
+    // ── Notifications ──
+    match /notifications/{docId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth();
+      allow delete: if isAuth();
+    }
+
+    // ── Block everything else ──
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
