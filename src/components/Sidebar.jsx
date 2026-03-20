@@ -1,0 +1,117 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, CalendarCheck, Users, MessageSquare,
+  Shirt, Layers, Grid, View, PackageSearch,
+  BarChart3, Settings, Lock, Unlock, X, Menu, Shield
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { subscribeToCollection } from '../firebase/firestore';
+import './Sidebar.css';
+
+const ADMIN_ROUTES = ['/inventory', '/catalog', '/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
+
+const Sidebar = ({ isOpen, onClose }) => {
+  const { user, logout, isAdminUnlocked } = useAuth();
+  const navigate = useNavigate();
+
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToCollection('conversations', (data) => {
+      const count = data.reduce((sum, conv) => sum + (conv.unread || 0), 0);
+      setUnreadMessages(count);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleNavClick = (e, to) => {
+    const isRestricted = ADMIN_ROUTES.includes(to) && !isAdminUnlocked;
+    if (isRestricted) {
+      e.preventDefault();
+      // Simply block navigation since PIN logic is gone
+      return;
+    }
+    onClose?.();
+  };
+
+  const allLinks = [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', admin: false },
+    { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
+    { to: '/customers', icon: Users, label: 'Customers', admin: false },
+    { to: '/messages', icon: MessageSquare, label: 'Messages', admin: false, badge: unreadMessages > 0 ? unreadMessages : null },
+    { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
+    { to: '/outfits', icon: Layers, label: 'Outfit Suggestions', admin: false },
+    { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: true },
+    { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: true },
+    { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
+    { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
+    { to: '/devices', icon: Shield, label: 'Device Management', admin: true },
+    { to: '/staff', icon: Users, label: 'Team Management', admin: true },
+    { to: '/settings', icon: Settings, label: 'System Settings', admin: true },
+  ];
+
+  return (
+    <>
+      {/* Overlay for mobile */}
+      {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
+
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">
+          <div>
+            <h2>JezSy Collection</h2>
+            <span className="brand-subtitle">Fashion Management</span>
+          </div>
+          <button className="sidebar-close-btn" onClick={onClose}><X size={20}/></button>
+        </div>
+
+        <nav className="sidebar-nav">
+          <ul className="nav-list">
+            {allLinks.map((link, idx) => {
+              if (link === null) return <li key={idx} className="nav-divider" />;
+              if (link.separation) return <li key={idx} className="nav-divider" style={{ margin: '1rem 0' }} />;
+              
+              const Icon = link.icon;
+              const isRestricted = link.admin && !isAdminUnlocked;
+
+              // Hide restricted links entirely for non-admins to keep UI clean
+              if (isRestricted) return null;
+
+              return (
+                <li key={link.to || idx}>
+                  <NavLink
+                    to={link.to}
+                    className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                    onClick={(e) => handleNavClick(e, link.to)}
+                  >
+                    <Icon size={20} />
+                    <span>{link.label}</span>
+                    {link.badge && (
+                      <span className="badge-unread">{link.badge}</span>
+                    )}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="profile-badge">
+            <div className="profile-avatar">
+              <span>{user?.name?.[0]?.toUpperCase() || 'S'}</span>
+            </div>
+            <div className="profile-info">
+              <span className="profile-name">{user?.name || 'Staff Member'}</span>
+              <span className="profile-role" style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+};
+
+export default Sidebar;
