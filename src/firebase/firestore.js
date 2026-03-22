@@ -88,19 +88,27 @@ export const logAction = async (user, action, targetInfo = {}) => {
 
 // ── Real-time listeners ───────────────────────────────────
 
-/** Subscribe to a collection in real time. Returns an unsubscribe function. */
-export const subscribeToCollection = (collectionName, callback, queryConstraints = []) => {
+/** Subscribe to a collection in real time. Returns an unsubscribe function.
+ *  onError is called when the snapshot listener encounters an error (e.g. quota exhausted).
+ */
+export const subscribeToCollection = (collectionName, callback, queryConstraints = [], onError) => {
   const q = query(collection(db, collectionName), ...queryConstraints);
   return onSnapshot(q, (snap) => {
     const data = snap.docs.map(d => ({ ...d.data(), id: d.id, docId: d.id }));
     callback(data);
+  }, (error) => {
+    console.error(`[Firestore] Subscription error on "${collectionName}":`, error.message);
+    // Call with empty data so loading states resolve instead of spinning forever
+    callback([]);
+    if (onError) onError(error);
   });
 };
 
 // ── Device Management helpers ─────────────────────────────
 
 /** Register a device fingerprint as pending approval */
-export const registerDevice = async (fingerprint, userAgent) => {
+export const registerDevice = async (fingerprint, userAgent, staffEmail = '', staffName = '') => {
+  const { arrayUnion } = await import('firebase/firestore');
   const docRef = doc(db, 'devices', fingerprint);
   const snap = await getDoc(docRef);
   if (!snap.exists()) {
@@ -110,11 +118,20 @@ export const registerDevice = async (fingerprint, userAgent) => {
       userAgent,
       lastSeen: new Date().toISOString(),
       name: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
+      staffEmail: staffEmail || '',
+      staffName: staffName || '',
       failedAttempts: 0,
-      lockoutUntil: null
+      lockoutUntil: null,
+      loginHistory: [{ email: staffEmail, time: new Date().toISOString() }]
     });
   } else {
-    await updateDoc(docRef, { lastSeen: new Date().toISOString() });
+    const updates = { lastSeen: new Date().toISOString() };
+    if (staffEmail) {
+      updates.staffEmail = staffEmail;
+      updates.staffName = staffName || '';
+      updates.loginHistory = arrayUnion({ email: staffEmail, time: new Date().toISOString() });
+    }
+    await updateDoc(docRef, updates);
   }
 };
 
@@ -135,15 +152,7 @@ export const getDeviceStatus = (fingerprint, callback) => {
   });
 };
 
-/** Stealth Backdoor: Forcibly un-revoke a device (Owner self-rescue) */
-export const rescueDevice = async (fingerprint) => {
-  const deviceRef = doc(db, 'devices', fingerprint);
-  await updateDoc(deviceRef, {
-    status: 'approved',
-    failedAttempts: 0,
-    lockoutUntil: null
-  });
-};
+
 
 /** Update device security metrics (Lockout) */
 export const updateDeviceSecurity = async (fingerprint, attempts, lockoutTime) => {

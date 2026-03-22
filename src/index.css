@@ -25,6 +25,10 @@
   --status-completed-text: #065F46;
   --status-cancelled-bg: #FEE2E2;
   --status-cancelled-text: #991B1B;
+  --status-confirmed-bg: #CFFAFE;
+  --status-confirmed-text: #155E75;
+  --status-fitting-bg: #F3E8FF;
+  --status-fitting-text: #6B21A8;
 
   /* Stock Colors */
   --stock-high: #10B981;
@@ -378,6 +382,8 @@ input:checked + .toggle-slider:before {
 .status-approved { background: var(--status-approved-bg); color: var(--status-approved-text); }
 .status-completed{ background: var(--status-completed-bg); color: var(--status-completed-text); }
 .status-cancelled{ background: var(--status-cancelled-bg); color: var(--status-cancelled-text); }
+.status-confirmed{ background: var(--status-confirmed-bg); color: var(--status-confirmed-text); }
+.status-fitting  { background: var(--status-fitting-bg); color: var(--status-fitting-text); }
 .status-disabled { background: #E2E8F0; color: #64748B; }
 
 /* View Toggle */

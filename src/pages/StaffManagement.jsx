@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserPlus, UserMinus, Shield, ShieldCheck, Mail, Clock, Search, Trash2, Crown } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { auth, firebaseConfig } from '../firebase/config';
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { toast } from 'sonner';
 import './StaffManagement.css';
 
@@ -23,20 +26,51 @@ const StaffManagement = () => {
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
+    const adminEmail = user.email;
+    
+    if (!createForm.password || createForm.password.length < 6) {
+      toast.error('Password must be at least 6 characters long.');
+      return;
+    }
+    
     try {
+      // 1. Initialize a secondary Firebase instance so we don't log out the Admin
+      const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp_" + Date.now());
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      // 2. Create the new Firebase Auth account using the secondary instance
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, createForm.email, createForm.password);
+      
+      // 3. Create the Firestore staff document
       await addDocument('staff', {
         name: createForm.name,
         email: createForm.email,
+        authUid: cred.user.uid,
         role: createForm.role,
         status: 'active',
         createdAt: new Date().toISOString()
       });
-      await logAction(user, 'Created new staff account', { email: createForm.email, role: createForm.role });
-      toast.success(`Staff account created for ${createForm.name}`);
+      
+      // 4. Send password reset email
+      await sendPasswordResetEmail(secondaryAuth, createForm.email);
+      
+      // 5. Sign out the secondary instance to clean up
+      await secondaryAuth.signOut();
+      
+      // 6. Log action
+      await logAction(user, 'Created new staff account & sent reset', { email: createForm.email, role: createForm.role });
+      
+      toast.success(`Account created! A password reset email has been sent to ${createForm.name}.`);
       setIsCreateModalOpen(false);
       setCreateForm({ name: '', email: '', role: 'Sales Staff', password: '' });
+      
     } catch (err) {
-      toast.error('Failed to create staff account');
+      console.error('Staff creation error:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        toast.error('This email is already registered in Firebase Auth.');
+      } else {
+        toast.error('Failed to create staff account: ' + err.message);
+      }
     }
   };
 
@@ -75,19 +109,7 @@ const StaffManagement = () => {
     (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const hasOwner = staff.some(s => s.role === 'Owner');
   const myData = staff.find(s => s.email === user.email);
-
-  const claimOwnership = async () => {
-    if (!myData) return toast.error("Could not find your staff profile.");
-    try {
-      await updateDocument('staff', myData.docId, { role: 'Owner' });
-      await logAction(user, 'Claimed Master Ownership of the application');
-      toast.success('You have successfully claimed the Owner role! 👑');
-    } catch (err) {
-      toast.error('Failed to claim ownership.');
-    }
-  };
 
   return (
     <div className="page-container">
@@ -100,20 +122,6 @@ const StaffManagement = () => {
           <UserPlus size={18} /> Create Staff Account
         </button>
       </div>
-
-      {!hasOwner && user?.role === 'Admin' && (
-        <div className="mb-6 p-4 rounded border-2 border-[var(--color-gold)] bg-[#faf5ed] flex justify-between items-center shadow-sm">
-          <div>
-            <h3 className="text-lg font-bold" style={{ color: 'var(--color-gold)' }}>⚠️ Establish Master Ownership</h3>
-            <p className="text-sm mt-1 text-secondary leading-relaxed">
-              Your system currently does not have a designated <strong>Owner</strong>. The Owner is an immortal master account that cannot be downgraded or deleted by anyone else. If you are the founder, claim it now. This option can only be used once.
-            </p>
-          </div>
-          <button className="btn-primary" style={{ backgroundColor: 'var(--color-gold)', whiteSpace: 'nowrap' }} onClick={claimOwnership}>
-            Claim Ownership 👑
-          </button>
-        </div>
-      )}
 
       <div className="card">
         <div className="card-toolbar">
@@ -184,7 +192,18 @@ const StaffManagement = () => {
                 </tr>
               ))}
               {loading && <tr><td colSpan="5" className="text-center py-8">Loading team...</td></tr>}
-              {!loading && filteredStaff.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-secondary">No staff members found</td></tr>}
+              {!loading && filteredStaff.length === 0 && (
+                <tr>
+                  <td colSpan="5">
+                    <div className="empty-state flex-col flex-center gap-3 p-8">
+                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4"><UserMinus size={48} opacity={0.5} /></div>
+                      <h3 className="text-lg font-medium">No staff members found</h3>
+                      <p className="text-secondary text-center max-w-sm">There are no staff members matching your current search.</p>
+                      {searchTerm && <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>Clear Search</button>}
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -205,6 +224,10 @@ const StaffManagement = () => {
               <div className="form-group">
                 <label className="label">Email Address</label>
                 <input type="email" className="input-field" value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label className="label">Password</label>
+                <input type="password" className="input-field" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} required minLength={6} placeholder="Min. 6 characters" />
               </div>
               <div className="form-group">
                 <label className="label">Access Role</label>

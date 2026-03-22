@@ -17,7 +17,13 @@ export const seedDatabase = async () => {
     
     // Reservations
     for (const res of mockReservations) {
-      await addDocument('reservations', { ...res, countdown: undefined });
+      const resDocId = await addDocument('reservations', { ...res, countdown: undefined });
+      await addDocument(`reservations/${resDocId}/items`, {
+        item_id: `res_it_${Date.now()}_${res.id}`,
+        variant_id: res.outfit,
+        size: res.size || 'M',
+        quantity: 1
+      });
     }
     console.log("Seeded reservations");
 
@@ -68,7 +74,8 @@ export const seedDatabase = async () => {
       const { image, ...rest } = item;
       await addDocument('products', { 
         ...rest, 
-        imageUrl: image,
+        imageUrl: image, // Legacy fallback
+        image: { secure_url: image, public_id: `seed_mock_${item.id}` }, // ERD Schema
         timestamp: Date.now()
       });
     }

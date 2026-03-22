@@ -23,6 +23,47 @@ export const uploadFile = async (file, folderPath = 'catalog-assets') => {
 };
 
 /**
+ * Uploads a file to Cloudinary and returns the { secure_url, public_id } object.
+ * 
+ * @param {File} file - The file object from an input element.
+ * @returns {Promise<Object>} An object containing secure_url and public_id
+ */
+export const uploadToCloudinary = async (file, retries = 2) => {
+  if (!file) throw new Error("No file provided");
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'boutique_productDetails'); // Matches Android app
+
+      const response = await fetch('https://api.cloudinary.com/v1_1/dlrlgp4bq/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Cloudinary upload failed");
+      }
+      
+      const data = await response.json();
+      return {
+        secure_url: data.secure_url,
+        public_id: data.public_id
+      };
+    } catch (error) {
+      if (attempt === retries) {
+        console.error("Cloudinary upload error after retries:", error);
+        throw error;
+      }
+      console.warn(`Upload attempt ${attempt + 1} failed. Retrying...`, error);
+      await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); // Incremental backoff
+    }
+  }
+};
+
+/**
  * Deletes a file from Firebase Storage given its full public URL.
  * 
  * @param {string} fileUrl - The public download URL of the file to delete

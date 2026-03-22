@@ -14,6 +14,7 @@ const Messages = lazy(() => import('../pages/Messages'));
 const DigitalWardrobe = lazy(() => import('../pages/DigitalWardrobe'));
 const OutfitSuggestions = lazy(() => import('../pages/OutfitSuggestions'));
 const ClothingCatalog = lazy(() => import('../pages/ClothingCatalog'));
+const ProductForm = lazy(() => import('../pages/ProductForm'));
 const ARAssets = lazy(() => import('../pages/ARAssets'));
 const Inventory = lazy(() => import('../pages/Inventory'));
 const Analytics = lazy(() => import('../pages/Analytics'));
@@ -86,6 +87,12 @@ const DeviceProtectedRoute = ({ children }) => {
   return <PendingDeviceView />;
 };
 
+const RequireAdmin = ({ children }) => {
+  const { isAdminUnlocked } = useAuth();
+  if (!isAdminUnlocked) return <Navigate to="/dashboard" replace />;
+  return children;
+};
+
 const AnimatedRoutes = () => {
   const location = useLocation();
   
@@ -106,11 +113,15 @@ const AnimatedRoutes = () => {
           <Route path="outfits" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><OutfitSuggestions /></Suspense></ProtectedRoute>} />
           <Route path="inventory" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
           <Route path="catalog" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><ClothingCatalog /></Suspense></ProtectedRoute>} />
-          <Route path="ar-assets" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><ARAssets /></Suspense></ProtectedRoute>} />
-          <Route path="analytics" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Analytics /></Suspense></ProtectedRoute>} />
-          <Route path="devices" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><DeviceManagement /></Suspense></ProtectedRoute>} />
-          <Route path="staff" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><StaffManagement /></Suspense></ProtectedRoute>} />
-          <Route path="settings" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
+          
+          {/* Admin / Owner only routes */}
+          <Route path="catalog/new" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ProductForm /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="catalog/edit/:id" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ProductForm /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="ar-assets" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ARAssets /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="analytics" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><Analytics /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="devices" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><DeviceManagement /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="staff" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><StaffManagement /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route path="settings" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><Settings /></Suspense></RequireAdmin></ProtectedRoute>} />
         </Route>
       </Routes>
     </AnimatePresence>

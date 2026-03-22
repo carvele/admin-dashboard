@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Search, Filter, Plus, CheckCircle, XCircle, Clock, Eye, Trash2, CalendarCheck } from 'lucide-react';
+import { Calendar, Search, Filter, Plus, CheckCircle, XCircle, Clock, Eye, Trash2, CalendarCheck, UserCheck, Shirt } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../firebase/firestore';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction, query, where, collection } from '../firebase/firestore';
+import { getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { can } from '../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
 
@@ -29,13 +32,21 @@ const Reservations = () => {
   const { user } = useAuth();
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     const unsub = subscribeToCollection('reservations', (data) => {
       setReservations(data);
       setLoading(false);
     });
-    return () => unsub();
+    const unsubC = subscribeToCollection('customers', (data) => {
+      setCustomers(data);
+    });
+    const unsubP = subscribeToCollection('products', (data) => {
+      setProducts(data);
+    });
+    return () => { unsub(); unsubC(); unsubP(); };
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -45,7 +56,7 @@ const Reservations = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [viewModal, setViewModal] = useState(null);
 
-  const [newRes, setNewRes] = useState({ customer: '', outfit: 'Summer Breeze Set', size: 'M', date: '', deposit: false });
+  const [newRes, setNewRes] = useState({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
   const [newDate, setNewDate] = useState('');
 
   const filteredReservations = reservations.filter(r => {
@@ -54,23 +65,59 @@ const Reservations = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // --- ACTIONS ---
+  // --- Stock adjustment helper ---
+  const adjustStock = async (outfit, size, delta) => {
+    // delta = -1 means deduct (approve), +1 means restore (cancel)
+    try {
+      const q2 = query(collection(db, 'inventory'), where('item', '==', outfit), where('size', '==', size));
+      const snap = await getDocs(q2);
+      if (!snap.empty) {
+        const invDoc = snap.docs[0];
+        const data = invDoc.data();
+        await updateDocument('inventory', invDoc.id, {
+          available: Math.max(0, (data.available || 0) + delta),
+          reserved: Math.max(0, (data.reserved || 0) - delta)
+        });
+      }
+    } catch (err) {
+      console.warn('Stock adjustment failed:', err);
+    }
+  };
+
+  // --- LIFECYCLE ACTIONS ---
+  // Lifecycle: Pending → Confirmed → Fitting → Completed | Cancelled
   const handleAction = async (id, action) => {
     const res = reservations.find(r => r.id === id);
     if (!res) return;
     
     try {
-      if (action === 'approve') {
-        await updateDocument('reservations', res.docId, { status: 'Approved', staff: user?.name || 'Staff', countdown: false });
-        toast.success(`Reservation ${id} approved`);
-      } else if (action === 'reject') {
-        await updateDocument('reservations', res.docId, { status: 'Cancelled', countdown: false });
-        toast.error(`Reservation ${id} rejected`);
+      if (action === 'confirm') {
+        await updateDocument('reservations', res.docId, {
+          status: 'Confirmed',
+          staff: user?.name || 'Staff',
+          assigned_staff_id: user?.uid || '',
+          countdown: false
+        });
+        await adjustStock(res.outfit, res.size, -1); // Deduct stock on confirm
+        toast.success(`Reservation ${id} confirmed — stock reserved`);
+      } else if (action === 'fitting') {
+        await updateDocument('reservations', res.docId, { status: 'Fitting' });
+        toast.success(`Reservation ${id} — fitting session started`);
       } else if (action === 'complete') {
         await updateDocument('reservations', res.docId, { status: 'Completed' });
-        toast.success(`Reservation ${id} marked as completed`);
+        // Release reserved stock (item returned or purchased)
+        await adjustStock(res.outfit, res.size, 1);
+        toast.success(`Reservation ${id} completed — stock released`);
+      } else if (action === 'cancel') {
+        await updateDocument('reservations', res.docId, { status: 'Cancelled', countdown: false });
+        // Only restore stock if it was confirmed (stock was deducted)
+        if (res.status === 'Confirmed' || res.status === 'Fitting') {
+          await adjustStock(res.outfit, res.size, 1);
+        }
+        toast.error(`Reservation ${id} cancelled`);
       }
-      await logAction(user, `${action === 'approve' ? 'Approved' : action === 'reject' ? 'Cancelled' : 'Completed'} reservation`, { reservationId: id });
+      const actionLabels = { confirm: 'Confirmed', fitting: 'Started Fitting', complete: 'Completed', cancel: 'Cancelled' };
+      await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
     } catch (e) {
       toast.error('Failed to update reservation');
     }
@@ -79,6 +126,14 @@ const Reservations = () => {
   const handleReschedule = async (e) => {
     e.preventDefault();
     if (!newDate) { toast.error('Select a new date'); return; }
+
+    const conflict = reservations.some(r => 
+      r.id !== rescheduleModal.id &&
+      r.status !== 'Cancelled' && r.status !== 'Completed' &&
+      r.outfit === rescheduleModal.outfit && r.size === rescheduleModal.size &&
+      Math.abs(new Date(r.date) - new Date(newDate)) < 2 * 60 * 60 * 1000
+    );
+    if (conflict && !window.confirm("Warning: This outfit/size is already reserved within 2 hours of the new time. Proceed anyway?")) return;
     try {
       await updateDocument('reservations', rescheduleModal.docId, { date: newDate, countdown: true });
       await logAction(user, 'Rescheduled reservation', { reservationId: rescheduleModal.id, newDate });
@@ -103,22 +158,37 @@ const Reservations = () => {
 
   const handleCreateReservation = async (e) => {
     e.preventDefault();
+    
+    const conflict = reservations.some(r => 
+      r.status !== 'Cancelled' && r.status !== 'Completed' &&
+      r.outfit === newRes.outfit && r.size === newRes.size &&
+      Math.abs(new Date(r.date) - new Date(newRes.date)) < 2 * 60 * 60 * 1000
+    );
+    if (conflict && !window.confirm("Warning: This outfit/size is already reserved within 2 hours of this time. Proceed anyway?")) return;
+
+    // Find the customer_id FK from the selected customer name
+    const matchedCustomer = customers.find(c => (c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim()) === newRes.customer);
+    const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
+
     const mockId = `RES-${String(reservations.length + 1).padStart(3, '0')}`;
     try {
       await addDocument('reservations', {
-        id: mockId, // Note: storing custom ID field for UI display purposes, though doc.id is unique
+        id: mockId,
         customer: newRes.customer,
+        customer_id: customerId, // FK to users collection
         outfit: newRes.outfit,
         date: newRes.date,
         status: 'Pending',
         staff: 'Unassigned',
+        assigned_staff_id: '', // Will be set on Confirm
         countdown: true,
-        size: newRes.size
+        size: newRes.size,
+        deposit: newRes.deposit
       });
-      await logAction(user, 'Created new reservation', { customer: newRes.customer });
+      await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
       setIsModalOpen(false);
       toast.success('Reservation created successfully');
-      setNewRes({ customer: '', outfit: 'Summer Breeze Set', size: 'M', date: '', deposit: false });
+      setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
     } catch (e) {
       toast.error('Failed to create reservation');
     }
@@ -152,7 +222,8 @@ const Reservations = () => {
             <select className="input-field" style={{width: 'auto', minWidth: 150}} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="All">All Statuses</option>
               <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Fitting">Fitting</option>
               <option value="Completed">Completed</option>
               <option value="Cancelled">Cancelled</option>
             </select>
@@ -196,21 +267,30 @@ const Reservations = () => {
                     <td>
                       <div className="action-buttons">
                         <button className="action-icon view" title="View Details" onClick={() => setViewModal(res)}><Eye size={16} /></button>
+                        {/* Lifecycle: Pending → Confirmed → Fitting → Completed */}
                         {res.status === 'Pending' && (
                           <>
-                            <button className="action-icon approve" title="Approve" onClick={() => handleAction(res.id, 'approve')}><CheckCircle size={16} /></button>
-                            <button className="action-icon reject" title="Reject" onClick={() => handleAction(res.id, 'reject')}><XCircle size={16} /></button>
+                            <button className="action-icon approve" title="Confirm Booking" onClick={() => handleAction(res.id, 'confirm')}><CheckCircle size={16} /></button>
+                            <button className="action-icon reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}><XCircle size={16} /></button>
                           </>
                         )}
-                        {res.status === 'Approved' && (
+                        {res.status === 'Confirmed' && (
+                          <>
+                            <button className="action-icon approve" title="Start Fitting" onClick={() => handleAction(res.id, 'fitting')}><Shirt size={16} /></button>
+                            <button className="action-icon reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}><XCircle size={16} /></button>
+                          </>
+                        )}
+                        {res.status === 'Fitting' && (
                           <button className="action-icon approve" title="Mark Completed" onClick={() => handleAction(res.id, 'complete')}><CalendarCheck size={16} /></button>
                         )}
-                        {(res.status === 'Pending' || res.status === 'Approved') && (
+                        {(res.status === 'Pending' || res.status === 'Confirmed') && (
                           <button className="action-icon reschedule" title="Reschedule" onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}>
                             <Calendar size={16} />
                           </button>
                         )}
-                        <button className="action-icon reject" title="Delete" onClick={() => setDeleteConfirm(res)}><Trash2 size={16} /></button>
+                        {can(user?.role, 'delete_reservation') && (
+                          <button className="action-icon reject" title="Delete" onClick={() => setDeleteConfirm(res)}><Trash2 size={16} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -240,20 +320,28 @@ const Reservations = () => {
             </div>
             <form className="modal-body" onSubmit={handleCreateReservation}>
               <div className="form-group">
-                <label className="label">Customer Name</label>
-                <input type="text" className="input-field" value={newRes.customer} onChange={e => setNewRes({...newRes, customer: e.target.value})} required />
+                <label className="label">Customer</label>
+                <input type="text" className="input-field" list="customers-list" value={newRes.customer} onChange={e => setNewRes({...newRes, customer: e.target.value})} placeholder="Select or enter customer name..." required />
+                <datalist id="customers-list">
+                  {customers.map(c => <option key={c.id} value={c.name || c.first_name + ' ' + c.last_name} />)}
+                </datalist>
               </div>
               <div className="form-row">
                 <div className="form-group flex-1">
                   <label className="label">Selected Outfit</label>
                   <select className="input-field" value={newRes.outfit} onChange={e => setNewRes({...newRes, outfit: e.target.value})}>
-                    <option>Summer Breeze Set</option><option>Midnight Gala Gown</option><option>Classic Silk Blouse</option><option>Velvet Blazer</option>
+                    <option value="" disabled>Select a product...</option>
+                    {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group flex-1">
                   <label className="label">Size</label>
                   <select className="input-field" value={newRes.size} onChange={e => setNewRes({...newRes, size: e.target.value})}>
-                    <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option>
+                    {(() => {
+                      const selected = products.find(p => p.name === newRes.outfit);
+                      const sizes = selected?.sizes || ['XS','S','M','L','XL'];
+                      return sizes.map(s => <option key={s} value={s}>{s}</option>);
+                    })()}
                   </select>
                 </div>
               </div>
@@ -300,19 +388,40 @@ const Reservations = () => {
       {/* ===== VIEW DETAILS MODAL ===== */}
       {viewModal && (
         <div className="modal-overlay" onClick={() => setViewModal(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 420}}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 480}}>
             <div className="modal-header">
               <h2>Reservation Details</h2>
               <button className="close-btn" onClick={() => setViewModal(null)}>&times;</button>
             </div>
             <div className="modal-body">
+              {/* Lifecycle Progress Indicator */}
+              <div className="lifecycle-progress">
+                {['Pending', 'Confirmed', 'Fitting', 'Completed'].map((step, i) => {
+                  const statusOrder = { 'Pending': 0, 'Confirmed': 1, 'Fitting': 2, 'Completed': 3, 'Cancelled': -1 };
+                  const current = statusOrder[viewModal.status] ?? -1;
+                  const stepIdx = statusOrder[step];
+                  const isCancelled = viewModal.status === 'Cancelled';
+                  const isActive = !isCancelled && stepIdx <= current;
+                  return (
+                    <div key={step} className={`lifecycle-step ${isActive ? 'active' : ''} ${isCancelled ? 'cancelled' : ''}`}>
+                      <div className={`lifecycle-dot ${isActive ? 'filled' : ''}`}>{isActive ? '✓' : i + 1}</div>
+                      <span className="lifecycle-label">{step}</span>
+                      {i < 3 && <div className={`lifecycle-line ${isActive && stepIdx < current ? 'filled' : ''}`} />}
+                    </div>
+                  );
+                })}
+              </div>
+              {viewModal.status === 'Cancelled' && (
+                <div style={{textAlign:'center', color:'var(--stock-low)', fontSize:'0.85rem', fontWeight:600}}>This reservation was cancelled</div>
+              )}
               <div className="detail-row"><span className="detail-label">ID</span><span className="font-mono">{viewModal.id}</span></div>
               <div className="detail-row"><span className="detail-label">Customer</span><strong>{viewModal.customer}</strong></div>
               <div className="detail-row"><span className="detail-label">Outfit</span>{viewModal.outfit}</div>
               <div className="detail-row"><span className="detail-label">Size</span><span className="size-badge">{viewModal.size}</span></div>
               <div className="detail-row"><span className="detail-label">Date</span>{new Date(viewModal.date).toLocaleString()}</div>
               <div className="detail-row"><span className="detail-label">Status</span><StatusBadge status={viewModal.status} /></div>
-              <div className="detail-row"><span className="detail-label">Staff</span>{viewModal.staff}</div>
+              <div className="detail-row"><span className="detail-label">Staff</span>{viewModal.staff || 'Unassigned'}</div>
+              {viewModal.deposit && <div className="detail-row"><span className="detail-label">Deposit</span><span className="text-success">Paid ✓</span></div>}
             </div>
             <div className="modal-footer">
               <button className="btn-outline" onClick={() => setViewModal(null)}>Close</button>

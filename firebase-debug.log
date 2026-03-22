@@ -1,0 +1,4 @@
+[debug] [2026-03-20T06:49:23.696Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-20T06:49:23.825Z] No OAuth tokens found
+[debug] [2026-03-20T06:49:23.826Z] No OAuth tokens found
+[debug] [2026-03-20T06:49:23.826Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]

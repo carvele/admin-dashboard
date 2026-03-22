@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getDocument, setDocument, logAction } from '../firebase/firestore';
+import { getDocument, setDocument, logAction, addDocument } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { auth, db } from '../firebase/config';
 import './Settings.css';
 
 const Settings = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('boutique');
   const [isLoading, setIsLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [newCategory, setNewCategory] = useState('');
+  const [seedProgress, setSeedProgress] = useState(null); // { step, totalSteps, message }
   const [formData, setFormData] = useState({
     storeName: 'JezSy Collection',
     email: 'admin@jezsycollection.com',
@@ -36,6 +40,12 @@ const Settings = () => {
         const storeInfo = await getDocument('settings', 'storeInfo');
         const resRules = await getDocument('settings', 'reservations') || {};
         const arRules = await getDocument('settings', 'ar') || {};
+        
+        // Fetch categories
+        const catSnap = await getDocs(collection(db, 'categories'));
+        const cats = [];
+        catSnap.forEach(snapDoc => cats.push({ id: snapDoc.id, ...snapDoc.data() }));
+        setCategories(cats);
         
         setFormData(prev => ({
           ...prev,
@@ -114,6 +124,42 @@ const Settings = () => {
     }
   };
 
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategory.trim()) return;
+    try {
+      setIsLoading(true);
+      if (categories.some(c => c.name.toLowerCase() === newCategory.trim().toLowerCase())) {
+        toast.error("Category already exists!");
+        return;
+      }
+      const newDocId = await addDocument('categories', { name: newCategory.trim() });
+      setCategories(prev => [...prev, { id: newDocId, name: newCategory.trim() }]);
+      setNewCategory('');
+      toast.success('Category added successfully!');
+      await logAction(user, `Added new category: ${newCategory.trim()}`);
+    } catch (err) {
+      toast.error('Failed to add category: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catId, catName) => {
+    if (!window.confirm(`Are you sure you want to delete the category "${catName}"?`)) return;
+    try {
+      setIsLoading(true);
+      await deleteDoc(doc(db, 'categories', catId));
+      setCategories(prev => prev.filter(c => c.id !== catId));
+      toast.success('Category deleted successfully!');
+      await logAction(user, `Deleted category: ${catName}`);
+    } catch (err) {
+      toast.error('Failed to delete category: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header mb-2">
@@ -123,6 +169,7 @@ const Settings = () => {
 
       <div className="settings-horizontal-nav">
         <button className={`nav-tab ${activeTab === 'boutique' ? 'active' : ''}`} onClick={() => setActiveTab('boutique')}>Boutique Info</button>
+        <button className={`nav-tab ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => setActiveTab('categories')}>Categories</button>
         <button className={`nav-tab ${activeTab === 'reservation' ? 'active' : ''}`} onClick={() => setActiveTab('reservation')}>Reservation Rules</button>
         <button className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`} onClick={() => setActiveTab('ar')}>AR Try-On</button>
         <button className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>Notifications</button>
@@ -132,6 +179,49 @@ const Settings = () => {
       <div className="settings-content-area card">
         <form onSubmit={handleSave} className="settings-form">
           
+          {activeTab === 'categories' && (
+            <div className="animate-fade-in max-w-lg">
+              <div className="section-header-icon">
+                <Shield size={18} className="text-secondary" />
+                <h3 className="section-title mb-0">Product Categories</h3>
+              </div>
+              <p className="text-secondary text-sm mb-4">Manage the clothing categories available for your products.</p>
+              
+              <div className="flex gap-2 mt-4 mb-6">
+                <input 
+                  type="text" 
+                  className="input-field flex-1" 
+                  placeholder="New category name (e.g. Dresses)" 
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleAddCategory(e); } }}
+                />
+                <button type="button" className="btn-primary" onClick={handleAddCategory} disabled={isLoading || !newCategory.trim()}>
+                  Add
+                </button>
+              </div>
+
+              {categories.length === 0 ? (
+                <p className="text-sm text-secondary">No custom categories found. Default categories will be used.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {categories.map(cat => (
+                    <li key={cat.id} className="flex justify-between items-center p-3 border rounded-lg bg-[var(--surface-color)] hover:bg-[var(--surface-hover)] transition-colors">
+                      <span className="font-medium text-sm">{cat.name}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                        className="text-danger hover:underline text-xs"
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {activeTab === 'boutique' && (
             <div className="animate-fade-in">
               <div className="section-header-icon">
@@ -185,20 +275,38 @@ const Settings = () => {
               </div>
 
               <div className="form-group max-w-lg mt-6 pt-4 border-t">
-                <h4 className="text-danger mb-2">Developer Actions</h4>
-                <p className="text-secondary text-sm mb-3">One-time action to seed mock data into Firestore collections.</p>
+                <h4 className="text-danger mb-2">Developer Tools</h4>
+                <p className="text-secondary text-sm mb-3">Seed realistic demo data: customers, products, inventory, reservations, conversations, and messages.</p>
+                {seedProgress && (
+                  <div style={{marginBottom: '1rem'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.25rem'}}>
+                      <span>{seedProgress.message}</span>
+                      <span>{seedProgress.step}/{seedProgress.totalSteps}</span>
+                    </div>
+                    <div style={{height: 6, borderRadius: 3, background: 'var(--border-color)', overflow: 'hidden'}}>
+                      <div style={{height: '100%', width: `${(seedProgress.step / seedProgress.totalSteps) * 100}%`, background: 'var(--accent)', borderRadius: 3, transition: 'width 0.2s'}} />
+                    </div>
+                  </div>
+                )}
                 <button 
                   type="button" 
                   className="btn-outline border-danger text-danger"
+                  disabled={!!seedProgress}
                   onClick={async () => {
-                    const { seedDatabase } = await import('../firebase/seedData');
-                    toast.info('Seeding database, please wait...');
-                    const res = await seedDatabase();
-                    if (res.success) toast.success(res.message);
-                    else toast.error('Failed to seed: ' + res.message);
+                    if (!window.confirm('This will add demo data to your Firestore database. Continue?')) return;
+                    try {
+                      const { seedDemoData } = await import('../utils/seedDemoData');
+                      const result = await seedDemoData((p) => setSeedProgress(p));
+                      toast.success(`Seeded: ${result.customers} customers, ${result.products} products, ${result.reservations} reservations, ${result.conversations} conversations, ${result.messages} messages`);
+                      await logAction(user, 'Seeded demo data', result);
+                    } catch (err) {
+                      toast.error('Seeding failed: ' + err.message);
+                    } finally {
+                      setSeedProgress(null);
+                    }
                   }}
                 >
-                  Seed Mock Data to Firebase
+                  {seedProgress ? 'Seeding in progress...' : '🌱 Seed Demo Data'}
                 </button>
               </div>
             </div>

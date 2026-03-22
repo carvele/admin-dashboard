@@ -53,3 +53,4 @@ const PendingDeviceView = () => {
 };
 
 export default PendingDeviceView;
+

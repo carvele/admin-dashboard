@@ -37,3 +37,13 @@
   background-color: var(--stock-low);
   color: white;
 }
+
+.status-confirmed {
+  background-color: var(--status-confirmed-bg);
+  color: var(--status-confirmed-text);
+}
+
+.status-fitting {
+  background-color: var(--status-fitting-bg);
+  color: var(--status-fitting-text);
+}

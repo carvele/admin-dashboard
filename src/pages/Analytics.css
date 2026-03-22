@@ -1,127 +1,67 @@
-.analytics-page {
+.analytics-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.stat-card {
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
 }
 
-.stats-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-}
-
-.summary-card {
-  background-color: var(--white);
-  padding: 1.5rem;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-}
-
-.summary-card h4 {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  font-weight: 500;
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.5rem;
 }
 
-.summary-value {
-  font-size: 1.5rem;
+.stat-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  font-size: 1.875rem;
   font-weight: 700;
   color: var(--charcoal);
-  display: block;
+  margin-bottom: 0.5rem;
 }
 
-.summary-trend {
+.stat-change {
   font-size: 0.75rem;
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  font-weight: 500;
 }
+.text-success { color: #059669; }
+.text-danger { color: #DC2626; }
 
-.main-charts {
+.analytics-layout {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1.5rem;
 }
 
-.revenue-chart {
-  min-height: 400px;
-}
+.border-none { border: none; }
+.bg-transparent { background-color: transparent; }
 
-.top-products {
-  min-height: 400px;
+.demo-bar-group {
+  width: 100%;
 }
-
-.secondary-charts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.age-dist, .conversion-funnel {
-  min-height: 350px;
-}
-
-.product-rank-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.product-rank-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.5rem 0;
-}
-
-.rank-number {
-  width: 24px;
-  height: 24px;
-  background-color: var(--cream);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.product-rank-img {
-  width: 40px;
-  height: 40px;
-  background-color: #f1f1f1;
+.demo-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #E2E8F0;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+}
+.demo-fill {
+  height: 100%;
+  border-radius: 4px;
 }
 
-.product-rank-info {
-  flex: 1;
-}
-
-.product-rank-info h5 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 0.125rem;
-}
-
-.product-rank-info p {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.rank-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--charcoal);
-}
-
-@media (max-width: 1200px) {
-  .main-charts, .secondary-charts {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 1024px) {
+  .analytics-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .analytics-layout { grid-template-columns: 1fr; }
 }

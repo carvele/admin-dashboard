@@ -34,19 +34,19 @@ service cloud.firestore {
     // ── Staff ──
     match /staff/{docId} {
       allow read: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow create, update, delete: if isAdminOrOwner();
     }
 
     // ── Products (Catalog) ──
     match /products/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read, update: if isAuth();
+      allow create, delete: if isAdminOrOwner();
     }
 
     // ── Inventory ──
     match /inventory/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read, update: if isAuth();
+      allow create, delete: if isAdminOrOwner();
     }
 
     // ── Conversations & Messages ──
@@ -76,14 +76,14 @@ service cloud.firestore {
     }
 
     // ── Devices ──
-    match /databases/{database}/documents/devices/{fingerprint} {
-      allow read, write: if isAuth();
+    match /devices/{fingerprint} {
+      allow read, create, update: if isAuth();
+      allow delete: if isAdminOrOwner();
     }
 
     // ── Settings ──
     match /settings/{docId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
+      allow read, write: if isAdminOrOwner();
     }
 
     // ── Audit Logs ──

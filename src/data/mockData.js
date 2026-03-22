@@ -81,3 +81,4 @@ export const analyticsConvRate = [
   { month: 'Feb', tryOn: 189, reserved: 48 },
   { month: 'Mar', tryOn: 239, reserved: 180 },
 ];
+

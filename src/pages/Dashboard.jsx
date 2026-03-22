@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, Users, Shirt, Activity, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Calendar, Users, Shirt, Activity, Clock, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { subscribeToCollection } from '../firebase/firestore';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
@@ -11,14 +11,22 @@ const Dashboard = () => {
   const [reservations, setReservations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [trendFilter, setTrendFilter] = useState('This Week');
+  const [lastSynced, setLastSynced] = useState(new Date());
 
   React.useEffect(() => {
-    const unsubR = subscribeToCollection('reservations', setReservations);
-    const unsubC = subscribeToCollection('users', (data) => {
-      // Only count app customers, not staff
-      setCustomers(data.filter(u => !u.role || u.role === 'customer'));
+    const unsubR = subscribeToCollection('reservations', (data) => {
+      setReservations(data);
+      setLastSynced(new Date());
     });
-    const unsubI = subscribeToCollection('inventory', setInventory);
+    const unsubC = subscribeToCollection('users', (data) => {
+      setCustomers(data.filter(u => !u.role || u.role === 'customer'));
+      setLastSynced(new Date());
+    });
+    const unsubI = subscribeToCollection('inventory', (data) => {
+      setInventory(data);
+      setLastSynced(new Date());
+    });
     return () => { unsubR(); unsubC(); unsubI(); };
   }, []);
 
@@ -33,13 +41,27 @@ const Dashboard = () => {
   const computedPopular = Object.entries(outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 4).map(([name, count]) => ({ name, value: count * 100 }));
   const finalPopular = computedPopular.length > 0 ? computedPopular : [{name: 'No data', value: 1}];
 
-  // Basic mock trend for the area chart since we don't have historical dates seeded properly
-  const reservationTrends = [
-    { name: 'Mon', reservations: 12 }, { name: 'Tue', reservations: 19 },
-    { name: 'Wed', reservations: 15 }, { name: 'Thu', reservations: 22 },
-    { name: 'Fri', reservations: Math.max(25, reservations.length) },
-    { name: 'Sat', reservations: 48 }, { name: 'Sun', reservations: 42 }
-  ];
+  // Build dynamic reservation trends from actual DB data
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayCounts = {};
+  daysOfWeek.forEach(d => dayCounts[d] = 0);
+  
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  reservations.forEach(r => {
+    if (r.date) {
+      const resDate = new Date(r.date);
+      // Filter based on dropdown
+      if (trendFilter === 'This Week' && resDate < weekAgo) return;
+      if (trendFilter === 'This Month' && resDate < monthAgo) return;
+
+      const dayName = daysOfWeek[resDate.getDay()];
+      dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+    }
+  });
+  const reservationTrends = daysOfWeek.map(d => ({ name: d, reservations: dayCounts[d] }));
   // Framer Motion Variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -56,9 +78,19 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-page">
-      <div className="page-header">
-        <h1 className="page-title">Dashboard Overview</h1>
-        <p className="page-subtitle">Welcome back! Here is what is happening at JezSy Collection today.</p>
+      <div className="page-header d-flex justify-between align-center">
+        <div>
+          <h1 className="page-title">Dashboard Overview</h1>
+          <p className="page-subtitle">Welcome back! Here is what is happening at JezSy Collection today.</p>
+        </div>
+        <div className="system-health flex-center gap-3">
+          <div className="health-indicator flex-center gap-1 text-success text-sm font-medium px-3 py-1 rounded-full" style={{backgroundColor: 'rgba(34, 197, 94, 0.1)'}}>
+            <CheckCircle2 size={16} /> Pipeline Healthy
+          </div>
+          <div className="sync-status flex-center gap-1 text-secondary text-xs">
+            <RefreshCw size={12} /> Last synced: {lastSynced.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       <motion.div 
@@ -113,8 +145,9 @@ const Dashboard = () => {
         >
           <div className="card-header">
             <h3>Reservation Trends</h3>
-            <select className="input-field small-select">
-              <option>This Week</option><option>This Month</option>
+            <select className="input-field small-select" value={trendFilter} onChange={e => setTrendFilter(e.target.value)}>
+              <option value="This Week">This Week</option>
+              <option value="This Month">This Month</option>
             </select>
           </div>
           <div className="chart-container">

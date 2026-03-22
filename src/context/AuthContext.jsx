@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
-import { registerDevice, getDeviceStatus, rescueDevice, logAction, getStaffByEmail } from '../firebase/firestore';
+import { registerDevice, getDeviceStatus, logAction, getStaffByEmail } from '../firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
 
       // --- 2. Register device & start live listener (non-blocking) ---
       try {
-        await withTimeout(registerDevice(visitorId, navigator.userAgent), 5000);
+        await withTimeout(registerDevice(visitorId, navigator.userAgent, firebaseUser.email, firebaseUser.displayName || ''), 5000);
         deviceUnsubRef.current();
         deviceUnsubRef.current = getDeviceStatus(visitorId, (docSnap) => {
           if (docSnap) {
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       // --- 3. Staff role lookup ---
-      let resolvedRole = 'Sales Staff';
+      let resolvedRole = null;
       let staffName = '';
       try {
         const staffDoc = await withTimeout(getStaffByEmail(firebaseUser.email), 5000);
@@ -78,12 +78,24 @@ export const AuthProvider = ({ children }) => {
           resolvedRole = staffDoc.role;
           staffName = staffDoc.name;
         } else if (firebaseUser.email === 'admin@jezsy.com' || firebaseUser.email === 'admin@jezsycollection.com') {
-          resolvedRole = 'Admin';
+          resolvedRole = 'Owner';
+        } else {
+           await signOut(auth);
+           setUser(null);
+           setIsLoading(false);
+           toast.error("Access denied. Admin portal is for staff only.");
+           return;
         }
-      } catch {
-        console.warn('Staff role lookup timed out. Using fallback role.');
+      } catch (err) {
+        console.warn('Staff role lookup timed out or failed.', err);
         if (firebaseUser.email === 'admin@jezsy.com' || firebaseUser.email === 'admin@jezsycollection.com') {
-          resolvedRole = 'Admin';
+          resolvedRole = 'Owner';
+        } else {
+           await signOut(auth);
+           setUser(null);
+           setIsLoading(false);
+           toast.error("Access denied. Admin portal is for staff only.");
+           return;
         }
       }
 
@@ -181,18 +193,7 @@ export const AuthProvider = ({ children }) => {
     toast.info('Access is permanently managed by your staff role.');
   };
 
-  const rescueMyDevice = async () => {
-    if (!deviceFingerprint) return;
-    try {
-      await rescueDevice(deviceFingerprint);
-      await logAction(user, 'Stealth device rescue performed', { fingerprint: deviceFingerprint });
-      setDeviceStatus('approved');
-      setIsAdminUnlocked(true);
-      toast.success('Stealth Rescue Successful! Device unbanned.');
-    } catch (err) {
-      toast.error('Rescue failed.');
-    }
-  };
+
 
   if (isLoading) {
     return (
@@ -213,8 +214,7 @@ export const AuthProvider = ({ children }) => {
       deviceStatus, 
       deviceFingerprint,
       deviceData,
-      isLoading,
-      rescueMyDevice
+      isLoading
     }}>
       {children}
     </AuthContext.Provider>

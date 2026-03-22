@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Monitor, Smartphone, Tablet, CheckCircle, XCircle, Clock, Trash2, Shield, Edit2, Check, X } from 'lucide-react';
+import { Monitor, Smartphone, Tablet, CheckCircle, XCircle, Clock, Trash2, Shield, Edit2, Check, X, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { subscribeToCollection, updateDocument, deleteDocument, logAction } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, deleteDocument, logAction, setDocument } from '../firebase/firestore';
 import './DeviceManagement.css';
 
 const DeviceManagement = () => {
@@ -11,6 +11,14 @@ const DeviceManagement = () => {
   const [filter, setFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [newName, setNewName] = useState('');
+
+  // Parse platform from userAgent string
+  const detectPlatform = (ua) => {
+    if (!ua) return 'Unknown';
+    if (/Mobi|Android/i.test(ua)) return 'Mobile';
+    if (/iPad|tablet/i.test(ua)) return 'Tablet';
+    return 'Desktop';
+  };
 
   useEffect(() => {
     const unsub = subscribeToCollection('devices', (data) => {
@@ -111,7 +119,7 @@ const DeviceManagement = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header">
+      <div className="page-header d-flex justify-between align-center">
         <div>
           <h1 className="page-title"><Shield size={28} style={{ marginRight: 8, verticalAlign: 'middle' }} />Device Management</h1>
           <p className="page-subtitle">Approve or revoke devices that can access the admin dashboard</p>
@@ -175,7 +183,12 @@ const DeviceManagement = () => {
                       </button>
                     </div>
                   )}
-                  <p className="device-meta">{(device.userAgent || 'Unknown device').substring(0, 60)} · Last seen {formatLastAccess(device.lastAccess)}</p>
+                  <p className="device-meta">
+                    {detectPlatform(device.userAgent)} · {(device.userAgent || 'Unknown device').substring(0, 50)} · Last seen {formatLastAccess(device.lastAccess)}
+                  </p>
+                  <p className="device-meta" style={{color: 'var(--accent)', fontWeight: 500}}>
+                    👤 Owned by: {device.staffName || device.staffEmail || 'Unknown staff'}
+                  </p>
                   <p className="device-fp">Fingerprint: <code>{device.id}</code></p>
                 </div>
                 <div className="device-actions">
@@ -206,6 +219,7 @@ const DeviceManagement = () => {
           )}
         </div>
       </div>
+
     </div>
   );
 };

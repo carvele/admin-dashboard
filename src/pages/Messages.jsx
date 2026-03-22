@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Search, Send, Paperclip, CheckSquare, Image as ImageIcon, Shirt } from 'lucide-react';
-import { subscribeToCollection, addDocument, logAction } from '../firebase/firestore';
+import { Search, Send, Paperclip, CheckSquare, Image as ImageIcon, Shirt, Plus, X, MessageSquare } from 'lucide-react';
+import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection } from '../firebase/firestore';
 import { getAvatarColor } from '../utils/helpers';
 import './Messages.css';
 
@@ -12,6 +12,10 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [convSearchTerm, setConvSearchTerm] = useState('');
+  const [showNewConvModal, setShowNewConvModal] = useState(false);
+  const [allCustomers, setAllCustomers] = useState([]);
+  const [custSearchTerm, setCustSearchTerm] = useState('');
   const messagesEndRef = useRef(null);
   
   const scrollToBottom = () => {
@@ -31,14 +35,18 @@ const Messages = () => {
   }, []);
 
   useEffect(() => {
-    // In a real app, query by conversationId. Here we just load all messages for demonstration.
+    // Filter messages by active conversation
+    if (!activeChat) {
+      setMessages([]);
+      return;
+    }
     const unsub = subscribeToCollection('messages', (data) => {
-      // Sort messages to ensure consistent order if they have createdAt
-      const sorted = [...data].sort((a,b) => (a.id > b.id ? 1 : -1));
+      const filtered = data.filter(m => m.conversationId === activeChat.id);
+      const sorted = [...filtered].sort((a,b) => (a.id > b.id ? 1 : -1));
       setMessages(sorted);
     });
     return () => unsub();
-  }, []);
+  }, [activeChat?.id]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -52,10 +60,48 @@ const Messages = () => {
         text: newMessage,
         time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
       });
+      await updateDocument('conversations', activeChat.docId, {
+        lastMessage: newMessage,
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      });
       await logAction(user, 'Sent message to customer', { customerName: activeChat.customerName });
       setNewMessage('');
     } catch(err) {
       console.error(err);
+    }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      const users = await getCollection('users');
+      setAllCustomers(users.filter(u => !u.role || u.role === 'customer'));
+    } catch (err) {
+      console.error('Failed to load customers:', err);
+    }
+  };
+
+  const startNewConversation = async (customer) => {
+    const existing = conversations.find(c => c.customerName === (customer.name || customer.first_name));
+    if (existing) {
+      setActiveChat(existing);
+      setShowNewConvModal(false);
+      return;
+    }
+    try {
+      const customerName = customer.name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.email;
+      const customerId = customer.docId || customer.id || '';
+      const convId = await addDocument('conversations', {
+        id: `conv_${Date.now()}`,
+        customerName,
+        customerId, // FK to users collection
+        lastMessage: 'Conversation started by staff',
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        unread: 0
+      });
+      await logAction(user, 'Started new conversation', { customerName, customerId });
+      setShowNewConvModal(false);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
     }
   };
 
@@ -76,16 +122,26 @@ const Messages = () => {
           <h2>Messages</h2>
           <div className="search-box full-width mt-3">
             <Search size={18} className="search-icon" />
-            <input type="text" placeholder="Search conversations..." className="input-field pl-10" />
+            <input type="text" placeholder="Search conversations..." className="input-field pl-10" value={convSearchTerm} onChange={(e) => setConvSearchTerm(e.target.value)} />
           </div>
+          <button className="btn-primary full-width mt-2 flex-center gap-2" onClick={() => { setShowNewConvModal(true); loadCustomers(); }}>
+            <Plus size={16} /> New Conversation
+          </button>
         </div>
         
         <div className="conversation-list">
-          {conversations.map(conv => (
+          {conversations
+            .filter(conv => (conv.customerName || '').toLowerCase().includes(convSearchTerm.toLowerCase()))
+            .map(conv => (
             <div 
               key={conv.id} 
               className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unread > 0 ? 'unread' : ''}`}
-              onClick={() => setActiveChat(conv)}
+              onClick={() => {
+                setActiveChat(conv);
+                if (conv.unread > 0) {
+                  updateDocument('conversations', conv.docId, { unread: 0 });
+                }
+              }}
             >
               <div className="avatar" style={{backgroundColor: getAvatarColor(conv.customerName || 'User')}}>
                 {(conv.customerName || 'User').split(' ').map(n=>n[0]).join('')}
@@ -107,49 +163,57 @@ const Messages = () => {
 
       {/* Main Chat Area */}
       <div className="chat-area card">
-        <div className="chat-header">
-          {activeChat ? (
-            <div className="flex-center gap-3">
-              <div className="avatar" style={{backgroundColor: getAvatarColor(activeChat.customerName || 'User')}}>
-                {(activeChat.customerName || 'User').split(' ').map(n=>n[0]).join('')}
-              </div>
-              <div>
-                <h3>{activeChat.customerName}</h3>
-                <p className="status-text online">● Online</p>
-              </div>
-            </div>
-          ) : (
-            <div>Loading...</div>
-          )}
-          <button className="btn-outline small flex-center gap-2" disabled={!activeChat}>View Profile</button>
-        </div>
-
-        <div className="chat-history">
-          {activeMessages.map((msg, index) => (
-            <div key={msg.id || msg.docId || `msg-${index}`} className={`message-bubble-wrapper ${msg.sender === 'staff' ? 'sent' : 'received'}`}>
-              {msg.sender === 'customer' && activeChat && (
-                <div className="avatar small-av" style={{backgroundColor: getAvatarColor(activeChat.customerName || 'User')}}>
-                  {(activeChat.customerName || 'U')[0]}
+        {activeChat ? (
+          <>
+            <div className="chat-header">
+              <div className="flex-center gap-3">
+                <div className="avatar" style={{backgroundColor: getAvatarColor(activeChat.customerName || 'User')}}>
+                  {(activeChat.customerName || 'User').split(' ').map(n=>n[0]).join('')}
                 </div>
-              )}
-              <div className={`message-bubble ${msg.sender === 'staff' ? 'bubbles-sent' : 'bubbles-received'}`}>
-                {msg.isOutfitSuggestion ? (
-                  <div className="outfit-suggestion-card">
-                    <div className="os-icon"><Shirt size={20} /></div>
-                    <div className="os-info">
-                      <strong>Outfit Suggestion: Midnight Gala</strong>
-                      <button className="btn-primary small mt-2">View Details</button>
-                    </div>
-                  </div>
-                ) : (
-                  <p>{msg.text}</p>
-                )}
-                <span className="msg-time">{msg.time}</span>
+                <div>
+                  <h3>{activeChat.customerName}</h3>
+                  <p className="status-text online">● Online</p>
+                </div>
               </div>
+              <button className="btn-outline small flex-center gap-2" disabled={!activeChat}>View Profile</button>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+
+            <div className="chat-history">
+              {activeMessages.map((msg, index) => (
+                <div key={msg.id || msg.docId || `msg-${index}`} className={`message-bubble-wrapper ${msg.sender === 'staff' ? 'sent' : 'received'}`}>
+                  {msg.sender === 'customer' && activeChat && (
+                    <div className="avatar small-av" style={{backgroundColor: getAvatarColor(activeChat.customerName || 'User')}}>
+                      {getInitials(activeChat.customerName || 'User')[0]}
+                    </div>
+                  )}
+                  <div className={`message-bubble ${msg.sender === 'staff' ? 'bubbles-sent' : 'bubbles-received'}`}>
+                    {msg.isOutfitSuggestion ? (
+                      <div className="outfit-suggestion-card">
+                        <div className="os-icon"><Shirt size={20} /></div>
+                        <div className="os-info">
+                          <strong>Outfit Suggestion: Midnight Gala</strong>
+                          <button className="btn-primary small mt-2">View Details</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p>{msg.text}</p>
+                    )}
+                    <span className="msg-time">{msg.time || (msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '')}</span>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:'1rem', padding:'2rem', textAlign:'center'}}>
+            <div style={{padding:'1.5rem', borderRadius:'50%', background:'var(--surface-hover)'}}>
+              <MessageSquare size={48} strokeWidth={1} style={{opacity:0.5}} />
+            </div>
+            <h3 style={{fontSize:'1.1rem', fontWeight:600}}>No conversation selected</h3>
+            <p className="text-secondary" style={{maxWidth:280}}>Select a conversation from the sidebar, or start a new one to begin messaging.</p>
+          </div>
+        )}
 
         <div className="chat-input-area">
           <form onSubmit={handleSend} className="chat-form">
@@ -188,6 +252,44 @@ const Messages = () => {
           </form>
         </div>
       </div>
+
+      {/* ===== NEW CONVERSATION MODAL ===== */}
+      {showNewConvModal && (
+        <div className="modal-overlay" onClick={() => setShowNewConvModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 420}}>
+            <div className="modal-header">
+              <h2>Start New Conversation</h2>
+              <button className="close-btn" onClick={() => setShowNewConvModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="search-box full-width mb-3">
+                <Search size={18} className="search-icon" />
+                <input type="text" placeholder="Search customers by name or email..." className="input-field pl-10" value={custSearchTerm} onChange={(e) => setCustSearchTerm(e.target.value)} />
+              </div>
+              <div style={{maxHeight: 300, overflowY: 'auto'}}>
+                {allCustomers
+                  .filter(c => {
+                    const name = (c.name || `${c.first_name || ''} ${c.last_name || ''}`).toLowerCase();
+                    const email = (c.email || '').toLowerCase();
+                    return name.includes(custSearchTerm.toLowerCase()) || email.includes(custSearchTerm.toLowerCase());
+                  })
+                  .map(c => (
+                    <div key={c.id} className="conversation-item" style={{cursor: 'pointer'}} onClick={() => startNewConversation(c)}>
+                      <div className="avatar" style={{backgroundColor: getAvatarColor(c.name || c.email || 'U')}}>
+                        {(c.name || c.email || 'U')[0].toUpperCase()}
+                      </div>
+                      <div className="conv-details">
+                        <h4>{c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unknown'}</h4>
+                        <p className="text-secondary text-sm">{c.email}</p>
+                      </div>
+                    </div>
+                  ))}
+                {allCustomers.length === 0 && <p className="text-secondary text-center py-4">No customers found</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

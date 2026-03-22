@@ -10,6 +10,11 @@ const OutfitSuggestions = () => {
   
   const [outfitName, setOutfitName] = useState('');
   const [occasionTag, setOccasionTag] = useState('Casual');
+  const [outfitDescription, setOutfitDescription] = useState('');
+  const [outfitSeason, setOutfitSeason] = useState('All-Season');
+  const [outfitGender, setOutfitGender] = useState('Unisex');
+  const [styleVibe, setStyleVibe] = useState('Minimalist');
+  const [colorPalette, setColorPalette] = useState('Neutrals');
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [catalog, setCatalog] = useState([]);
@@ -55,6 +60,12 @@ const OutfitSuggestions = () => {
           price: item.price,
           image: item.imageUrl || '👗'
         })),
+        description: outfitDescription || '',
+        season: outfitSeason,
+        gender: outfitGender,
+        styleVibe: styleVibe,
+        colorPalette: colorPalette,
+        totalPrice: selectedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0),
       });
       toast.success('Outfit combination created!');
       setIsModalOpen(false);
@@ -62,6 +73,11 @@ const OutfitSuggestions = () => {
       // Reset modal state
       setOutfitName('');
       setOccasionTag('Casual');
+      setOutfitDescription('');
+      setOutfitSeason('All-Season');
+      setOutfitGender('Unisex');
+      setStyleVibe('Minimalist');
+      setColorPalette('Neutrals');
       setSelectedItems([]);
       setSearchTerm('');
     } catch (err) {
@@ -120,6 +136,13 @@ const OutfitSuggestions = () => {
                    <X size={16} />
                 </button>
               </div>
+              {outfit.description && <p className="text-secondary text-sm mt-1">{outfit.description}</p>}
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {outfit.season && <span className="outfit-tag"><Tag size={10} /> {outfit.season}</span>}
+                {outfit.gender && <span className="outfit-tag"><Tag size={10} /> {outfit.gender}</span>}
+                {outfit.styleVibe && <span className="outfit-tag"><Tag size={10} /> {outfit.styleVibe}</span>}
+                {outfit.colorPalette && <span className="outfit-tag"><Tag size={10} /> {outfit.colorPalette}</span>}
+              </div>
               
               <div className="outfit-display-items">
                 <p className="items-count">Items ({outfit.items.length}):</p>
@@ -136,6 +159,7 @@ const OutfitSuggestions = () => {
                     </li>
                   ))}
                 </ul>
+                {outfit.totalPrice > 0 && <p className="text-sm font-medium mt-2" style={{color: 'var(--color-gold)'}}>Total: ₱{outfit.totalPrice.toLocaleString()}</p>}
               </div>
             </div>
           ))
@@ -173,6 +197,50 @@ const OutfitSuggestions = () => {
                     <option>Formal</option>
                     <option>Work</option>
                     <option>Party</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Style Description / Tips</label>
+                <textarea className="input-field" rows="2" placeholder="e.g., Perfect for evening events..." value={outfitDescription} onChange={(e) => setOutfitDescription(e.target.value)}></textarea>
+              </div>
+              <div className="form-row mb-4">
+                <div className="form-group flex-1">
+                  <label className="label">Season</label>
+                  <select className="input-field" value={outfitSeason} onChange={(e) => setOutfitSeason(e.target.value)}>
+                    <option>All-Season</option>
+                    <option>Summer</option>
+                    <option>Winter</option>
+                    <option>Spring</option>
+                    <option>Autumn</option>
+                  </select>
+                </div>
+                <div className="form-group flex-1">
+                  {/* Reserved space to keep layout balanced */}
+                </div>
+              </div>
+              <div className="form-row mb-4">
+                <div className="form-group flex-1">
+                  <label className="label">Style Vibe</label>
+                  <select className="input-field" value={styleVibe} onChange={(e) => setStyleVibe(e.target.value)}>
+                    <option>Minimalist</option>
+                    <option>Chic</option>
+                    <option>Streetwear</option>
+                    <option>Vintage</option>
+                    <option>Boho</option>
+                    <option>Elegant</option>
+                  </select>
+                </div>
+                <div className="form-group flex-1">
+                  <label className="label">Color Palette</label>
+                  <select className="input-field" value={colorPalette} onChange={(e) => setColorPalette(e.target.value)}>
+                    <option>Neutrals</option>
+                    <option>Earth Tones</option>
+                    <option>Monochrome</option>
+                    <option>Pastels</option>
+                    <option>Vibrant</option>
+                    <option>Dark & Moody</option>
                   </select>
                 </div>
               </div>

@@ -3,13 +3,13 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarCheck, Users, MessageSquare,
   Shirt, Layers, Grid, View, PackageSearch,
-  BarChart3, Settings, Lock, Unlock, X, Menu, Shield
+  BarChart3, Settings, Lock, Unlock, X, Menu, Shield, PlusCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToCollection } from '../firebase/firestore';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/inventory', '/catalog', '/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
+const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
 
 const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout, isAdminUnlocked } = useAuth();
@@ -37,13 +37,13 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const allLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', admin: false },
+    { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: false },
+    { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
     { to: '/messages', icon: MessageSquare, label: 'Messages', admin: false, badge: unreadMessages > 0 ? unreadMessages : null },
     { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
     { to: '/outfits', icon: Layers, label: 'Outfit Suggestions', admin: false },
-    { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: true },
-    { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: true },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
     { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
     { to: '/devices', icon: Shield, label: 'Device Management', admin: true },

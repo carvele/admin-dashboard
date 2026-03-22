@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import './Inventory.css';
 
 const Inventory = () => {
-  const { user } = useAuth();
+  const { user, isAdminUnlocked } = useAuth();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,25 +49,21 @@ const Inventory = () => {
   };
 
   // --- ACTIONS ---
-  const syncProductStock = async (productDocId, sku, changedInventoryItemDocId, newAvailableValue) => {
+  const syncProductStock = async (productDocId, sku) => {
     try {
-      const allSizes = inventory.filter(i => (i.productDocId || i.sku) === (productDocId || sku));
+      const { getCollection } = await import('../firebase/firestore');
+      const currentInventory = await getCollection('inventory');
+      const allSizes = currentInventory.filter(i => (i.productDocId || i.sku) === (productDocId || sku));
+      
       let newTotalStock = 0;
       let actualProdDocId = productDocId;
       
       allSizes.forEach(s => {
-        if (s.docId === changedInventoryItemDocId) {
-          if (newAvailableValue !== null) {
-            newTotalStock += newAvailableValue;
-          }
-        } else {
-          newTotalStock += s.available;
-        }
-        if(!actualProdDocId && s.productDocId) actualProdDocId = s.productDocId;
+        newTotalStock += (s.available || 0);
+        if (!actualProdDocId && s.productDocId) actualProdDocId = s.productDocId;
       });
 
       if (!actualProdDocId) {
-        const { getCollection } = await import('../firebase/firestore');
         const prods = await getCollection('products');
         const match = prods.find(p => p.id === sku); // item.id is sku
         if (match) actualProdDocId = match.docId;
@@ -91,7 +87,7 @@ const Inventory = () => {
         total: restockModal.total + qty,
         available: restockModal.available + qty
       });
-      await syncProductStock(restockModal.productDocId, restockModal.sku, restockModal.docId, restockModal.available + qty);
+      await syncProductStock(restockModal.productDocId, restockModal.sku);
       await logAction(user, 'Restocked inventory item', { itemName: restockModal.item, size: restockModal.size, qtyAdded: qty });
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
@@ -113,7 +109,7 @@ const Inventory = () => {
         reserved: r,
         available: t - r
       });
-      await syncProductStock(editModal.productDocId, editModal.sku, editModal.docId, t - r);
+      await syncProductStock(editModal.productDocId, editModal.sku);
       await logAction(user, 'Updated inventory item details', { itemName: editModal.item, size: editModal.size });
       toast.success(`Updated ${editModal.item} (${editModal.size})`);
       setEditModal(null);
@@ -123,14 +119,16 @@ const Inventory = () => {
   };
 
   const handleDelete = async () => {
+    const item = deleteConfirm;
     try {
-      await deleteDocument('inventory', deleteConfirm.docId);
-      await syncProductStock(deleteConfirm.productDocId, deleteConfirm.sku, deleteConfirm.docId, 0); // available becomes 0 for deleted sizes
-      await logAction(user, 'Deleted inventory item', { itemName: deleteConfirm.item, size: deleteConfirm.size });
-      toast.success(`Removed ${deleteConfirm.item} (${deleteConfirm.size}) from inventory`);
-      setDeleteConfirm(null);
+      await deleteDocument('inventory', item.docId);
+      await syncProductStock(item.productDocId, item.sku);
+      await logAction(user, 'Deleted inventory item', { itemName: item.item, size: item.size });
+      toast.success(`Removed ${item.item} (${item.size}) from inventory`);
     } catch(e) {
       toast.error('Failed to delete item from inventory');
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -229,7 +227,16 @@ const Inventory = () => {
               {loading ? (
                 <tr><td colSpan="9" className="text-center py-8 text-secondary">Loading inventory...</td></tr>
               ) : filteredInv.length === 0 ? (
-                <tr><td colSpan="9" className="text-center py-8 text-secondary">No inventory items found</td></tr>
+                <tr>
+                  <td colSpan="9">
+                    <div className="empty-state flex-col flex-center gap-3 p-8">
+                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4"><PackageOpen size={48} opacity={0.5} /></div>
+                      <h3 className="text-lg font-medium">No inventory items found</h3>
+                      <p className="text-secondary text-center max-w-sm">We couldn't find any inventory records matching your current search. Try adjusting your filters.</p>
+                      {searchTerm && <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>Clear Search</button>}
+                    </div>
+                  </td>
+                </tr>
               ) : (
                 filteredInv.map(inv => {
                   const status = getStockStatus(inv.available, inv.total);
@@ -257,12 +264,16 @@ const Inventory = () => {
                           <button className="icon-btn-small restock-btn" title="Restock" onClick={() => { setRestockModal(inv); setRestockQty(''); }}>
                             <Package size={15} />
                           </button>
-                          <button className="icon-btn-small" title="Edit" onClick={() => openEditModal(inv)}>
-                            <Edit size={15} />
-                          </button>
-                          <button className="icon-btn-small text-danger" title="Delete" onClick={() => setDeleteConfirm(inv)}>
-                            <Trash2 size={15} />
-                          </button>
+                          {isAdminUnlocked && (
+                            <>
+                              <button className="icon-btn-small" title="Edit" onClick={() => openEditModal(inv)}>
+                                <Edit size={15} />
+                              </button>
+                              <button className="icon-btn-small text-danger" title="Delete" onClick={() => setDeleteConfirm(inv)}>
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
