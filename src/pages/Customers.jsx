@@ -42,30 +42,47 @@ const Customers = () => {
 
   // --- EDIT CUSTOMER ---
   const startEdit = () => {
+    const m = selectedCustomer.measurements || {};
     setEditForm({
       name: getUserDisplayName(selectedCustomer),
       email: selectedCustomer.email,
       phone: selectedCustomer.phone,
       status: selectedCustomer.status,
-      bust: selectedCustomer.measurements?.bust || '',
-      waist: selectedCustomer.measurements?.waist || '',
-      hips: selectedCustomer.measurements?.hips || '',
-      height: selectedCustomer.measurements?.height || '',
+      topBust: m.topBust || m.bust || '',
+      underBust: m.underBust || '',
+      waist: m.waist || '',
+      hip: m.hip || m.hips || '',
+      neck: m.neck || '',
+      shoulderWidth: m.shoulderWidth || '',
+      armLength: m.armLength || '',
+      backLength: m.backLength || '',
+      insideLegLength: m.insideLegLength || '',
+      height: selectedCustomer.user_height_cm || selectedCustomer.height || m.height || '',
+      weight: selectedCustomer.user_weight_kg || '',
     });
     setIsEditing(true);
   };
 
   const handleEditSave = async () => {
+    const toNum = (v) => v ? parseFloat(v) : null;
     const updated = {
       name: editForm.name,
       email: editForm.email,
       phone: editForm.phone,
       status: editForm.status,
+      user_height_cm: toNum(editForm.height),
+      user_weight_kg: toNum(editForm.weight),
       measurements: {
-        bust: editForm.bust ? parseInt(editForm.bust) : null,
-        waist: editForm.waist ? parseInt(editForm.waist) : null,
-        hips: editForm.hips ? parseInt(editForm.hips) : null,
-        height: editForm.height ? parseInt(editForm.height) : null,
+        ...(selectedCustomer.measurements || {}),
+        topBust: toNum(editForm.topBust),
+        underBust: toNum(editForm.underBust),
+        waist: toNum(editForm.waist),
+        hip: toNum(editForm.hip),
+        neck: toNum(editForm.neck),
+        shoulderWidth: toNum(editForm.shoulderWidth),
+        armLength: toNum(editForm.armLength),
+        backLength: toNum(editForm.backLength),
+        insideLegLength: toNum(editForm.insideLegLength),
       },
     };
     try {
@@ -313,27 +330,54 @@ const Customers = () => {
                   </div>
                 </div>
 
-                {/* Measurements */}
+                {/* Measurements – Full Android AI Scanner profile */}
                 <div className="profile-section">
                   <h4 className="section-title flex-center gap-2 justify-start"><Ruler size={18}/> Saved Measurements</h4>
                   {isEditing ? (
                     <div className="measurements-grid">
-                      <div className="measure-box"><span>Bust</span><input type="number" className="input-field" value={editForm.bust} onChange={e => setEditForm({...editForm, bust: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Bust</span><input type="number" className="input-field" value={editForm.topBust} onChange={e => setEditForm({...editForm, topBust: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Under Bust</span><input type="number" className="input-field" value={editForm.underBust || ''} onChange={e => setEditForm({...editForm, underBust: e.target.value})} placeholder="—" /></div>
                       <div className="measure-box"><span>Waist</span><input type="number" className="input-field" value={editForm.waist} onChange={e => setEditForm({...editForm, waist: e.target.value})} placeholder="—" /></div>
-                      <div className="measure-box"><span>Hips</span><input type="number" className="input-field" value={editForm.hips} onChange={e => setEditForm({...editForm, hips: e.target.value})} placeholder="—" /></div>
-                      <div className="measure-box"><span>Height</span><input type="number" className="input-field" value={editForm.height} onChange={e => setEditForm({...editForm, height: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Hips</span><input type="number" className="input-field" value={editForm.hip} onChange={e => setEditForm({...editForm, hip: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Neck</span><input type="number" className="input-field" value={editForm.neck || ''} onChange={e => setEditForm({...editForm, neck: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Shoulder</span><input type="number" className="input-field" value={editForm.shoulderWidth || ''} onChange={e => setEditForm({...editForm, shoulderWidth: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Arm Length</span><input type="number" className="input-field" value={editForm.armLength || ''} onChange={e => setEditForm({...editForm, armLength: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Back Length</span><input type="number" className="input-field" value={editForm.backLength || ''} onChange={e => setEditForm({...editForm, backLength: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Inside Leg</span><input type="number" className="input-field" value={editForm.insideLegLength || ''} onChange={e => setEditForm({...editForm, insideLegLength: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Height (cm)</span><input type="number" className="input-field" value={editForm.height} onChange={e => setEditForm({...editForm, height: e.target.value})} placeholder="—" /></div>
+                      <div className="measure-box"><span>Weight (kg)</span><input type="number" className="input-field" value={editForm.weight || ''} onChange={e => setEditForm({...editForm, weight: e.target.value})} placeholder="—" /></div>
                     </div>
-                  ) : selectedCustomer.measurements && selectedCustomer.measurements.bust ? (
-                    <div className="measurements-grid">
-                      <div className="measure-box"><span>Bust</span><strong>{selectedCustomer.measurements.bust}"</strong></div>
-                      <div className="measure-box"><span>Waist</span><strong>{selectedCustomer.measurements.waist}"</strong></div>
-                      <div className="measure-box"><span>Hips</span><strong>{selectedCustomer.measurements.hips}"</strong></div>
-                      <div className="measure-box"><span>Height</span><strong>{selectedCustomer.measurements.height}cm</strong></div>
-                    </div>
-                  ) : (
-                    <div className="empty-state">No measurements saved yet.</div>
-                  )}
+                  ) : (() => {
+                    const m = selectedCustomer.measurements || {};
+                    const hasMeasurements = m.topBust || m.bust || m.waist || m.hip || m.hips || m.neck || m.shoulderWidth || selectedCustomer.height || selectedCustomer.user_height_cm;
+                    if (!hasMeasurements) return <div className="empty-state">No measurements saved yet.</div>;
+
+                    const rows = [
+                      { label: 'Bust (Top)', value: m.topBust || m.bust },
+                      { label: 'Under Bust', value: m.underBust },
+                      { label: 'Waist', value: m.waist },
+                      { label: 'Hips', value: m.hip || m.hips },
+                      { label: 'Neck', value: m.neck },
+                      { label: 'Neck Base', value: m.neckBase },
+                      { label: 'Shoulder', value: m.shoulderWidth },
+                      { label: 'Back Length', value: m.backLength },
+                      { label: 'Arm Length', value: m.armLength },
+                      { label: 'Sleeve (CB)', value: m.sleeveLengthCenterBack },
+                      { label: 'Inside Leg', value: m.insideLegLength },
+                      { label: 'Height', value: selectedCustomer.user_height_cm || selectedCustomer.height || m.height, unit: 'cm' },
+                      { label: 'Weight', value: selectedCustomer.user_weight_kg, unit: 'kg' },
+                    ].filter(r => r.value);
+
+                    return (
+                      <div className="measurements-grid">
+                        {rows.map(r => (
+                          <div className="measure-box" key={r.label}><span>{r.label}</span><strong>{r.value}{r.unit ? r.unit : '"'}</strong></div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
+
               </div>
             </div>
           </div>

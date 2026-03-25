@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, Search, Filter, Plus, CheckCircle, XCircle, Clock, Eye, Trash2, CalendarCheck, UserCheck, Shirt } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
@@ -9,11 +10,18 @@ import { can } from '../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
 
+const parseDate = (d) => {
+  if (!d) return new Date();
+  if (d.toDate) return d.toDate();
+  if (d.seconds) return new Date(d.seconds * 1000);
+  return new Date(d);
+};
+
 const CountdownTimer = ({ targetDate }) => {
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
     const calc = () => {
-      const diff = new Date(targetDate) - new Date();
+      const diff = parseDate(targetDate) - new Date();
       if (diff > 0) {
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff / 1000 / 60) % 60);
@@ -30,6 +38,7 @@ const CountdownTimer = ({ targetDate }) => {
 
 const Reservations = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState([]);
@@ -60,7 +69,8 @@ const Reservations = () => {
   const [newDate, setNewDate] = useState('');
 
   const filteredReservations = reservations.filter(r => {
-    const matchesSearch = (r.customer || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || (r.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
+    const cust = r.customerName || r.customer || '';
+    const matchesSearch = cust.toLowerCase().includes((searchTerm || '').toLowerCase()) || (r.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -98,7 +108,7 @@ const Reservations = () => {
           assigned_staff_id: user?.uid || '',
           countdown: false
         });
-        await adjustStock(res.outfit, res.size, -1); // Deduct stock on confirm
+        await adjustStock(res.productName || res.outfit, res.size, -1); // Deduct stock on confirm
         toast.success(`Reservation ${id} confirmed — stock reserved`);
       } else if (action === 'fitting') {
         await updateDocument('reservations', res.docId, { status: 'Fitting' });
@@ -106,13 +116,13 @@ const Reservations = () => {
       } else if (action === 'complete') {
         await updateDocument('reservations', res.docId, { status: 'Completed' });
         // Release reserved stock (item returned or purchased)
-        await adjustStock(res.outfit, res.size, 1);
+        await adjustStock(res.productName || res.outfit, res.size, 1);
         toast.success(`Reservation ${id} completed — stock released`);
       } else if (action === 'cancel') {
         await updateDocument('reservations', res.docId, { status: 'Cancelled', countdown: false });
         // Only restore stock if it was confirmed (stock was deducted)
         if (res.status === 'Confirmed' || res.status === 'Fitting') {
-          await adjustStock(res.outfit, res.size, 1);
+          await adjustStock(res.productName || res.outfit, res.size, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
       }
@@ -130,12 +140,12 @@ const Reservations = () => {
     const conflict = reservations.some(r => 
       r.id !== rescheduleModal.id &&
       r.status !== 'Cancelled' && r.status !== 'Completed' &&
-      r.outfit === rescheduleModal.outfit && r.size === rescheduleModal.size &&
-      Math.abs(new Date(r.date) - new Date(newDate)) < 2 * 60 * 60 * 1000
+      (r.productName || r.outfit) === (rescheduleModal.productName || rescheduleModal.outfit) && r.size === rescheduleModal.size &&
+      Math.abs(parseDate(r.reservationDate || r.date) - new Date(newDate)) < 2 * 60 * 60 * 1000
     );
     if (conflict && !window.confirm("Warning: This outfit/size is already reserved within 2 hours of the new time. Proceed anyway?")) return;
     try {
-      await updateDocument('reservations', rescheduleModal.docId, { date: newDate, countdown: true });
+      await updateDocument('reservations', rescheduleModal.docId, { reservationDate: new Date(newDate), countdown: true });
       await logAction(user, 'Rescheduled reservation', { reservationId: rescheduleModal.id, newDate });
       toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
       setRescheduleModal(null);
@@ -148,7 +158,7 @@ const Reservations = () => {
   const handleDelete = async () => {
     try {
       await deleteDocument('reservations', deleteConfirm.docId);
-      await logAction(user, 'Deleted reservation', { reservationId: deleteConfirm.id, customer: deleteConfirm.customer });
+      await logAction(user, 'Deleted reservation', { reservationId: deleteConfirm.id, customer: (deleteConfirm.customerName || deleteConfirm.customer) });
       toast.success(`Reservation ${deleteConfirm.id} deleted`);
       setDeleteConfirm(null);
     } catch (e) {
@@ -161,8 +171,8 @@ const Reservations = () => {
     
     const conflict = reservations.some(r => 
       r.status !== 'Cancelled' && r.status !== 'Completed' &&
-      r.outfit === newRes.outfit && r.size === newRes.size &&
-      Math.abs(new Date(r.date) - new Date(newRes.date)) < 2 * 60 * 60 * 1000
+      (r.productName || r.outfit) === newRes.outfit && r.size === newRes.size &&
+      Math.abs(parseDate(r.reservationDate || r.date) - new Date(newRes.date)) < 2 * 60 * 60 * 1000
     );
     if (conflict && !window.confirm("Warning: This outfit/size is already reserved within 2 hours of this time. Proceed anyway?")) return;
 
@@ -171,19 +181,25 @@ const Reservations = () => {
     const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
 
     const mockId = `RES-${String(reservations.length + 1).padStart(3, '0')}`;
+    // Find productId and imageUrl if possible
+    const matchedProduct = products.find(p => p.name === newRes.outfit);
     try {
       await addDocument('reservations', {
         id: mockId,
-        customer: newRes.customer,
-        customer_id: customerId, // FK to users collection
-        outfit: newRes.outfit,
-        date: newRes.date,
+        customerName: newRes.customer,
+        customerId: customerId, // FK to users collection (matches Android field name)
+        productName: newRes.outfit,
+        productId: matchedProduct?.id || '',
+        imageUrl: matchedProduct?.images?.[0] || '',
+        reservationDate: new Date(newRes.date),
         status: 'Pending',
         staff: 'Unassigned',
         assigned_staff_id: '', // Will be set on Confirm
         countdown: true,
         size: newRes.size,
-        deposit: newRes.deposit
+        deposit: newRes.deposit,
+        timestamp: Date.now(),
+        rentalPrice: matchedProduct?.price || 0
       });
       await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
       setIsModalOpen(false);
@@ -247,20 +263,22 @@ const Reservations = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredReservations.map(res => (
+                {filteredReservations.map(res => {
+                  const rDate = parseDate(res.reservationDate || res.date);
+                  return (
                   <tr key={res.id}>
                     <td className="font-mono text-sm">{res.id}</td>
-                    <td className="font-medium">{res.customer}</td>
+                    <td className="font-medium">{res.customerName || res.customer}</td>
                     <td>
-                      <div>{res.outfit}</div>
+                      <div>{res.productName || res.outfit}</div>
                       <div className="text-secondary text-sm">Size: {res.size}</div>
                     </td>
                     <td>
-                      <div>{new Date(res.date).toLocaleDateString()}</div>
+                      <div>{rDate.toLocaleDateString()}</div>
                       <div className="text-secondary text-sm">
-                        {new Date(res.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {rDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </div>
-                      {res.countdown && res.status === 'Pending' && <CountdownTimer targetDate={res.date} />}
+                      {res.countdown && res.status === 'Pending' && <CountdownTimer targetDate={res.reservationDate || res.date} />}
                     </td>
                     <td><StatusBadge status={res.status} /></td>
                     <td className="text-secondary">{res.staff}</td>
@@ -276,7 +294,11 @@ const Reservations = () => {
                         )}
                         {res.status === 'Confirmed' && (
                           <>
-                            <button className="action-icon approve" title="Start Fitting" onClick={() => handleAction(res.id, 'fitting')}><Shirt size={16} /></button>
+                            {products.find(p => p.id === res.productId || p.name === (res.productName || res.outfit))?.isAlterable ? (
+                              <button className="action-icon approve" title="Start Fitting" onClick={() => handleAction(res.id, 'fitting')}><Shirt size={16} /></button>
+                            ) : (
+                              <button className="action-icon approve" title="Mark Completed" onClick={() => handleAction(res.id, 'complete')}><CalendarCheck size={16} /></button>
+                            )}
                             <button className="action-icon reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}><XCircle size={16} /></button>
                           </>
                         )}
@@ -294,7 +316,7 @@ const Reservations = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
                 {filteredReservations.length === 0 && (
                   <tr><td colSpan="7" className="text-center py-8 text-secondary">No reservations found</td></tr>
                 )}
@@ -371,7 +393,7 @@ const Reservations = () => {
               <button className="close-btn" onClick={() => setRescheduleModal(null)}>&times;</button>
             </div>
             <form className="modal-body" onSubmit={handleReschedule}>
-              <p className="text-secondary">Current: {new Date(rescheduleModal.date).toLocaleString()}</p>
+              <p className="text-secondary">Current: {parseDate(rescheduleModal.reservationDate || rescheduleModal.date).toLocaleString()}</p>
               <div className="form-group">
                 <label className="label">New Date & Time</label>
                 <input type="datetime-local" className="input-field" value={newDate} onChange={e => setNewDate(e.target.value)} required />
@@ -396,34 +418,53 @@ const Reservations = () => {
             <div className="modal-body">
               {/* Lifecycle Progress Indicator */}
               <div className="lifecycle-progress">
-                {['Pending', 'Confirmed', 'Fitting', 'Completed'].map((step, i) => {
-                  const statusOrder = { 'Pending': 0, 'Confirmed': 1, 'Fitting': 2, 'Completed': 3, 'Cancelled': -1 };
-                  const current = statusOrder[viewModal.status] ?? -1;
-                  const stepIdx = statusOrder[step];
-                  const isCancelled = viewModal.status === 'Cancelled';
-                  const isActive = !isCancelled && stepIdx <= current;
-                  return (
-                    <div key={step} className={`lifecycle-step ${isActive ? 'active' : ''} ${isCancelled ? 'cancelled' : ''}`}>
-                      <div className={`lifecycle-dot ${isActive ? 'filled' : ''}`}>{isActive ? '✓' : i + 1}</div>
-                      <span className="lifecycle-label">{step}</span>
-                      {i < 3 && <div className={`lifecycle-line ${isActive && stepIdx < current ? 'filled' : ''}`} />}
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const isAlterable = products.find(p => p.id === viewModal.productId || p.name === (viewModal.productName || viewModal.outfit))?.isAlterable;
+                  const steps = isAlterable ? ['Pending', 'Confirmed', 'Fitting', 'Completed'] : ['Pending', 'Confirmed', 'Completed'];
+                  const statusOrder = isAlterable ? { 'Pending': 0, 'Confirmed': 1, 'Fitting': 2, 'Completed': 3, 'Cancelled': -1 } : { 'Pending': 0, 'Confirmed': 1, 'Completed': 2, 'Cancelled': -1 };
+                  return steps.map((step, i) => {
+                    const current = statusOrder[viewModal.status] ?? -1;
+                    const stepIdx = statusOrder[step];
+                    const isCancelled = viewModal.status === 'Cancelled';
+                    const isActive = !isCancelled && stepIdx <= current;
+                    return (
+                      <div key={step} className={`lifecycle-step ${isActive ? 'active' : ''} ${isCancelled ? 'cancelled' : ''}`}>
+                        <div className={`lifecycle-dot ${isActive ? 'filled' : ''}`}>{isActive ? '✓' : i + 1}</div>
+                        <span className="lifecycle-label">{step}</span>
+                        {i < steps.length - 1 && <div className={`lifecycle-line ${isActive && stepIdx < current ? 'filled' : ''}`} />}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
               {viewModal.status === 'Cancelled' && (
                 <div style={{textAlign:'center', color:'var(--stock-low)', fontSize:'0.85rem', fontWeight:600}}>This reservation was cancelled</div>
               )}
               <div className="detail-row"><span className="detail-label">ID</span><span className="font-mono">{viewModal.id}</span></div>
-              <div className="detail-row"><span className="detail-label">Customer</span><strong>{viewModal.customer}</strong></div>
-              <div className="detail-row"><span className="detail-label">Outfit</span>{viewModal.outfit}</div>
+              <div className="detail-row"><span className="detail-label">Customer</span><strong>{viewModal.customerName || viewModal.customer}</strong></div>
+              <div className="detail-row"><span className="detail-label">Outfit</span>{viewModal.productName || viewModal.outfit}</div>
               <div className="detail-row"><span className="detail-label">Size</span><span className="size-badge">{viewModal.size}</span></div>
-              <div className="detail-row"><span className="detail-label">Date</span>{new Date(viewModal.date).toLocaleString()}</div>
+              <div className="detail-row"><span className="detail-label">Date</span>{parseDate(viewModal.reservationDate || viewModal.date).toLocaleString()}</div>
               <div className="detail-row"><span className="detail-label">Status</span><StatusBadge status={viewModal.status} /></div>
               <div className="detail-row"><span className="detail-label">Staff</span>{viewModal.staff || 'Unassigned'}</div>
               {viewModal.deposit && <div className="detail-row"><span className="detail-label">Deposit</span><span className="text-success">Paid ✓</span></div>}
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer" style={{justifyContent: 'space-between'}}>
+              <button className="btn-primary flex-center gap-2" 
+                onClick={() => {
+                  const cName = viewModal.customerName || viewModal.customer;
+                  const pName = viewModal.productName || viewModal.outfit;
+                  const dDate = parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString();
+                  navigate('/messages', { 
+                    state: { 
+                      buyerId: viewModal.customerId || '',
+                      buyerName: cName,
+                      prefillMessage: `Hi ${cName}, regarding your reservation for ${pName} on ${dDate}...`
+                    }
+                  });
+                }}>
+                <MessageSquare size={16} /> Message Buyer
+              </button>
               <button className="btn-outline" onClick={() => setViewModal(null)}>Close</button>
             </div>
           </div>
@@ -436,7 +477,7 @@ const Reservations = () => {
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 380, textAlign: 'center', padding: '2rem'}}>
             <div className="delete-icon-wrap"><Trash2 size={32} /></div>
             <h2>Delete Reservation?</h2>
-            <p className="text-secondary mt-2">Remove <strong>{deleteConfirm.id}</strong> for {deleteConfirm.customer}? This cannot be undone.</p>
+            <p className="text-secondary mt-2">Remove <strong>{deleteConfirm.id}</strong> for {deleteConfirm.customerName || deleteConfirm.customer}? This cannot be undone.</p>
             <div className="modal-footer justify-center mt-4">
               <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button className="btn-danger" onClick={handleDelete}>Delete</button>

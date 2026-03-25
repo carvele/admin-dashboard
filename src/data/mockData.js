@@ -16,12 +16,13 @@ export const popularOutfits = [
 ];
 
 export const mockReservations = [
-  { id: 'RES-001', customer: 'Emma Watson', outfit: 'Summer Breeze Set', date: '2026-03-14T10:00:00', status: 'Pending', staff: 'Unassigned', countdown: true, size: 'M' },
-  { id: 'RES-002', customer: 'Sophia Chen', outfit: 'Midnight Gala Gown', date: '2026-03-15T14:30:00', status: 'Approved', staff: 'Sarah Jennings', countdown: false, size: 'S' },
-  { id: 'RES-003', customer: 'Olivia Smith', outfit: 'Classic Silk Blouse', date: '2026-03-12T09:00:00', status: 'Completed', staff: 'Chloe Staff', countdown: false, size: 'L' },
-  { id: 'RES-004', customer: 'Mia Johnson', outfit: 'Velvet Blazer', date: '2026-03-16T16:00:00', status: 'Pending', staff: 'Unassigned', countdown: true, size: 'M' },
-  { id: 'RES-005', customer: 'Isabella Taylor', outfit: 'Summer Breeze Set', date: '2026-03-10T11:00:00', status: 'Cancelled', staff: 'Sarah Jennings', countdown: false, size: 'S' },
+  { id: 'RES-001', customerName: 'Emma Watson', productName: 'Summer Breeze Set', reservationDate: '2026-03-14T10:00:00', status: 'Pending', staff: 'Unassigned', countdown: true, size: 'M' },
+  { id: 'RES-002', customerName: 'Sophia Chen', productName: 'Midnight Gala Gown', reservationDate: '2026-03-15T14:30:00', status: 'Approved', staff: 'Sarah Jennings', countdown: false, size: 'S' },
+  { id: 'RES-003', customerName: 'Olivia Smith', productName: 'Classic Silk Blouse', reservationDate: '2026-03-12T09:00:00', status: 'Completed', staff: 'Chloe Staff', countdown: false, size: 'L' },
+  { id: 'RES-004', customerName: 'Mia Johnson', productName: 'Velvet Blazer', reservationDate: '2026-03-16T16:00:00', status: 'Pending', staff: 'Unassigned', countdown: true, size: 'M' },
+  { id: 'RES-005', customerName: 'Isabella Taylor', productName: 'Summer Breeze Set', reservationDate: '2026-03-10T11:00:00', status: 'Cancelled', staff: 'Sarah Jennings', countdown: false, size: 'S' },
 ];
+
 
 export const mockCustomers = [
   { id: 'CUST-001', name: 'Emma Watson', email: 'emma.w@example.com', phone: '+1 234 567 8900', reservations: 4, lastActive: '2 hours ago', status: 'Active', measurements: { bust: 34, waist: 26, hips: 36, height: 165 }, wardrobeItems: 12, joinedAt: '2025-09-15T10:30:00Z', lastOnline: Date.now() - 2 * 60 * 60 * 1000, totalSpent: 37400, preferredSizes: ['S', 'M'], engagementScore: 82 },

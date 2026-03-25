@@ -21,7 +21,7 @@ const OutfitSuggestions = () => {
 
   // Load saved outfits and catalog from Firestore
   useEffect(() => {
-    const unsubOutfits = subscribeToCollection('outfits', (data) => {
+    const unsubOutfits = subscribeToCollection('suggestedOutfits', (data) => {
       setOutfits(data);
     });
     
@@ -50,7 +50,7 @@ const OutfitSuggestions = () => {
     if (selectedItems.length === 0) { toast.error('Please select at least one item'); return; }
 
     try {
-      await addDocument('outfits', {
+      await addDocument('suggestedOutfits', {
         name: outfitName,
         tag: occasionTag,
         items: selectedItems.map(item => ({
@@ -87,7 +87,7 @@ const OutfitSuggestions = () => {
 
   const handleDelete = async (docId) => {
     try {
-      await deleteDocument('outfits', docId);
+      await deleteDocument('suggestedOutfits', docId);
       toast.success('Outfit deleted');
     } catch {
       toast.error('Failed to delete outfit');

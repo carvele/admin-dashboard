@@ -17,10 +17,22 @@ export const seedDatabase = async () => {
     
     // Reservations
     for (const res of mockReservations) {
-      const resDocId = await addDocument('reservations', { ...res, countdown: undefined });
+      const matchedProduct = mockCatalog.find(p => p.name === res.productName);
+      const resDocId = await addDocument('reservations', {
+        ...res,
+        countdown: undefined,
+        customerName: res.customerName,
+        productName: res.productName,
+        reservationDate: new Date(res.reservationDate),
+        rentalPrice: matchedProduct?.price || 0,
+        imageUrl: matchedProduct?.image || '',
+        customerId: '',       // Will be linked when a real user signs up
+        productId: matchedProduct?.id || '',
+        timestamp: Date.now()
+      });
       await addDocument(`reservations/${resDocId}/items`, {
         item_id: `res_it_${Date.now()}_${res.id}`,
-        variant_id: res.outfit,
+        variant_id: res.productName,
         size: res.size || 'M',
         quantity: 1
       });

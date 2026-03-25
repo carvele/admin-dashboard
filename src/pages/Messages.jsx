@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Search, Send, Paperclip, CheckSquare, Image as ImageIcon, Shirt, Plus, X, MessageSquare } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection } from '../firebase/firestore';
@@ -17,6 +18,7 @@ const Messages = () => {
   const [allCustomers, setAllCustomers] = useState([]);
   const [custSearchTerm, setCustSearchTerm] = useState('');
   const messagesEndRef = useRef(null);
+  const location = useLocation();
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,7 +56,7 @@ const Messages = () => {
 
     try {
       await addDocument('messages', {
-        id: messages.length + 1,
+        id: Date.now(),
         conversationId: activeChat.id,
         sender: 'staff',
         text: newMessage,
@@ -104,6 +106,25 @@ const Messages = () => {
       console.error('Failed to start conversation:', err);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.prefillMessage && conversations.length > 0) {
+      const { buyerId, buyerName, prefillMessage } = location.state;
+      const existing = conversations.find(c => c.customerId === buyerId || c.customerName === buyerName);
+      
+      if (existing) {
+        setActiveChat(existing);
+        setNewMessage(prefillMessage);
+        window.history.replaceState({}, document.title);
+      } else {
+        // Conversation doesn't exist, create it via existing function
+        startNewConversation({ name: buyerName, id: buyerId }).then(() => {
+          setNewMessage(prefillMessage);
+          window.history.replaceState({}, document.title);
+        });
+      }
+    }
+  }, [location.state, conversations]);
 
   // Filter messages for active chat and sort by time
   const activeMessages = messages

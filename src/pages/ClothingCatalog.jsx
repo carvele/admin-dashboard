@@ -59,9 +59,9 @@ const ClothingCatalog = () => {
 
   // --- DELETE PRODUCT ---
   const handleDelete = async () => {
+    if (!deleteConfirm) return;
     setIsDeleting(true);
     const itemToDelete = deleteConfirm;
-    setDeleteConfirm(null); // Close modal immediately
     try {
       await deleteDocument('products', itemToDelete.docId);
       
@@ -97,6 +97,7 @@ const ClothingCatalog = () => {
       toast.error('Failed to delete product: ' + e.message);
     } finally {
       setIsDeleting(false);
+      setDeleteConfirm(null);
     }
   };
 

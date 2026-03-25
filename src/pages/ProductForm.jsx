@@ -32,6 +32,7 @@ const ProductForm = () => {
     occasion: '',
     visibility: 'Published',
     featured: false,
+    isAlterable: false,
     sizes: ['OS'],
     images: [] // Array of image URLs/Maps
   });
@@ -81,6 +82,7 @@ const ProductForm = () => {
               occasion: doc.occasion || '',
               visibility: doc.visibility || 'Published',
               featured: doc.featured || false,
+              isAlterable: doc.isAlterable || false,
               sizes: doc.sizes || ['OS'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : [])
             });
@@ -140,16 +142,17 @@ const ProductForm = () => {
     setSaving(true);
     try {
       // 1. Upload new images if any
-      const uploadedImages = [];
+      setUploadProgress({ current: 0, total: selectedFiles.length > 0 ? selectedFiles.length : 0 });
+      let uploadedImages = [];
+      
       if (selectedFiles.length > 0) {
-        setUploadProgress({ current: 0, total: selectedFiles.length });
+        // Parallelize Cloudinary uploads
+        setUploadProgress({ current: 1, total: selectedFiles.length }); // Simplified progress for batch
+        const uploadPromises = selectedFiles.map(file => uploadToCloudinary(file));
+        const imageMaps = await Promise.all(uploadPromises);
+        uploadedImages = imageMaps.map(map => map.secure_url);
+        setUploadProgress({ current: selectedFiles.length, total: selectedFiles.length });
       }
-      for (let i = 0; i < selectedFiles.length; i++) {
-        setUploadProgress({ current: i + 1, total: selectedFiles.length });
-        const imageMap = await uploadToCloudinary(selectedFiles[i]);
-        uploadedImages.push(imageMap.secure_url);
-      }
-      setUploadProgress({ current: 0, total: 0 });
 
       const finalImages = [...formData.images, ...uploadedImages];
       
@@ -168,6 +171,7 @@ const ProductForm = () => {
         occasion: formData.occasion,
         visibility: formData.visibility,
         featured: formData.featured,
+        isAlterable: formData.isAlterable,
         created_by: user?.email || 'unknown',
         images: finalImages,
         // Legacy fallback
@@ -195,9 +199,9 @@ const ProductForm = () => {
         
         const newDocId = await addDocument('products', payload);
         
-        // Init inventory
-        for (const size of payload.sizes) {
-          await addDocument('inventory', {
+        // Init inventory in parallel
+        const inventoryPromises = payload.sizes.map(size => 
+          addDocument('inventory', {
             productDocId: newDocId,
             sku: payload.id,
             item: payload.name,
@@ -206,8 +210,10 @@ const ProductForm = () => {
             total: 0,
             reserved: 0,
             available: 0
-          });
-        }
+          })
+        );
+        await Promise.all(inventoryPromises);
+        
         toast.success('Product created successfully!');
       }
       
@@ -254,6 +260,18 @@ const ProductForm = () => {
               <input type="text" name="styleCode" className="input-field" value={formData.styleCode} onChange={handleChange} placeholder="e.g. JZ-4001" />
             </div>
           </div>
+          <div className="flex gap-4 items-center mt-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="featured" checked={formData.featured}
+                onChange={e => setFormData({ ...formData, featured: e.target.checked })} />
+              <span>Feature this product</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer px-4">
+              <input type="checkbox" name="isAlterable" checked={formData.isAlterable}
+                onChange={e => setFormData({ ...formData, isAlterable: e.target.checked })} />
+              <span>Allow Alterations & Fitting</span>
+            </label>
+          </div>
         </section>
 
         <section>
@@ -298,11 +316,12 @@ const ProductForm = () => {
                   key={size}
                   type="button"
                   onClick={() => toggleSize(size)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                    formData.sizes.includes(size)
-                      ? 'bg-[var(--primary)] text-white'
-                      : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
-                  }`}
+                  className="px-3 py-1 rounded-full text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: formData.sizes.includes(size) ? 'var(--charcoal)' : 'var(--beige)',
+                    color: formData.sizes.includes(size) ? 'white' : 'var(--charcoal)',
+                    border: '1px solid var(--border-color)'
+                  }}
                 >
                   {size}
                 </button>

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.1.0",
-    "firebase": "^12.10.0",
+    "firebase": "^12.11.0",
     "framer-motion": "^12.36.0",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
@@ -26,13 +26,13 @@
     "@modelcontextprotocol/server-github": "^2025.4.8",
     "@modelcontextprotocol/server-memory": "^2026.1.26",
     "@types/react": "^18.2.56",
-    "@types/react-dom": "^18.2.19",
-    "@vitejs/plugin-react": "^4.2.1",
-    "eslint": "^8.56.0",
+    "@types/react-dom": "^18.1.11",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.21.0",
     "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "firebase-tools": "^15.11.0",
-    "vite": "^5.1.4"
+    "vite": "^8.0.2"
   }
 }

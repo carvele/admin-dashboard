@@ -7,6 +7,13 @@ import './Dashboard.css';
 
 const COLORS = ['#8B6F5C', '#C9BEB4', '#E8DDD3', '#2C2C2C'];
 
+const parseDate = (d) => {
+  if (!d) return new Date();
+  if (d.toDate) return d.toDate();
+  if (d.seconds) return new Date(d.seconds * 1000);
+  return new Date(d);
+};
+
 const Dashboard = () => {
   const [reservations, setReservations] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -37,7 +44,10 @@ const Dashboard = () => {
   const recentCustomers = [...customers].sort((a,b) => (b.id || '').localeCompare(a.id || '')).slice(0, 3);
 
   const outfitCounts = {};
-  reservations.forEach(r => { outfitCounts[r.outfit] = (outfitCounts[r.outfit] || 0) + 1; });
+  reservations.forEach(r => {
+    const pName = r.productName || r.outfit;
+    outfitCounts[pName] = (outfitCounts[pName] || 0) + 1; 
+  });
   const computedPopular = Object.entries(outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 4).map(([name, count]) => ({ name, value: count * 100 }));
   const finalPopular = computedPopular.length > 0 ? computedPopular : [{name: 'No data', value: 1}];
 
@@ -51,8 +61,9 @@ const Dashboard = () => {
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   reservations.forEach(r => {
-    if (r.date) {
-      const resDate = new Date(r.date);
+    const rawDate = r.reservationDate || r.date;
+    if (rawDate) {
+      const resDate = parseDate(rawDate);
       // Filter based on dropdown
       if (trendFilter === 'This Week' && resDate < weekAgo) return;
       if (trendFilter === 'This Month' && resDate < monthAgo) return;
