@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Save } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, getDocument } from '../firebase/firestore';
+import { subscribeToCollection, addDocument, updateDocument, getDocument } from '../../firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { uploadToCloudinary, deleteFile } from '../firebase/storage';
-import { useAuth } from '../context/AuthContext';
+import { db } from '../../firebase/config';
+import { uploadToCloudinary, deleteFile } from '../../firebase/storage';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 
 const ProductForm = () => {
@@ -20,7 +20,8 @@ const ProductForm = () => {
   // Uniqlo-like details
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Outerwear',
+    category: 'Tops',
+    subCategory: '',
     price: '',
     description: '',
     material: '',
@@ -37,10 +38,17 @@ const ProductForm = () => {
     images: [] // Array of image URLs/Maps
   });
 
-  const [categories, setCategories] = useState(['Outerwear', 'Tops', 'Bottoms', 'Dresses', 'Accessories']);
+  const [categories, setCategories] = useState([
+    { name: 'Tops', subcategories: ['T-Shirts', 'Polos', 'Sweaters', 'Cardigans', 'Blouses'] },
+    { name: 'Bottoms', subcategories: ['Jeans', 'Trousers', 'Shorts', 'Leggings', 'Joggers'] },
+    { name: 'Outerwear', subcategories: ['Jackets', 'Coats', 'Parkas', 'Vests', 'Blazers'] },
+    { name: 'Dresses & Skirts', subcategories: ['Mini Dresses', 'Midi Dresses', 'Maxi Dresses', 'A-Line Skirts', 'Pencil Skirts'] },
+    { name: 'Innerwear', subcategories: ['Underwear', 'Socks', 'Thermals', 'Camisoles'] },
+    { name: 'Accessories', subcategories: ['Bags', 'Belts', 'Hats', 'Scarves', 'Jewelry'] },
+    { name: 'Special Collections', subcategories: ['Collaborations', 'Limited Edition', 'Seasonal Exclusives'] }
+  ]);
   const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'OS'];
-  const SEASONS = ['All-Season', 'Summer', 'Winter', 'Spring', 'Autumn'];
-  const OCCASIONS = ['Casual', 'Formal', 'Party', 'Wedding', 'Business', 'Resort'];
+  const SEASONS = ['All-Season', 'Dry Season (Summer)', 'Wet Season (Rainy)', 'Cool Season (-Ber Months)'];
   
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -53,7 +61,7 @@ const ProductForm = () => {
       try {
         const snap = await getDocs(collection(db, 'categories'));
         if (!snap.empty) {
-          const cats = snap.docs.map(d => d.data().name);
+          const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           setCategories(cats);
         }
       } catch (err) {
@@ -70,7 +78,8 @@ const ProductForm = () => {
           if (doc) {
             setFormData({
               name: doc.name || '',
-              category: doc.category || categories[0],
+              category: doc.category || (categories[0]?.name || 'Tops'),
+              subCategory: doc.subCategory || '',
               price: doc.price || '',
               description: doc.description || '',
               material: doc.material || '',
@@ -97,6 +106,30 @@ const ProductForm = () => {
       loadProduct();
     }
   }, [id, isEditing]);
+
+  // Auto-generate SKU from product name
+  useEffect(() => {
+    if (!isEditing && formData.name.trim()) {
+      const words = formData.name.trim().split(' ').filter(w => w.length > 0);
+      let acronym = 'ITM';
+      if (words.length >= 2) acronym = (words[0][0] + words[1][0]).toUpperCase();
+      else if (words.length === 1) acronym = formData.name.substring(0, 3).toUpperCase();
+      const generated = `JZ-${acronym}-${String(Date.now()).slice(-4)}`;
+      setFormData(prev => ({ ...prev, styleCode: generated }));
+    }
+  }, [formData.name, isEditing]);
+
+  // Handle subcategory logic when category changes
+  useEffect(() => {
+    const selectedCat = categories.find(c => c.name === formData.category);
+    if (selectedCat && selectedCat.subcategories && selectedCat.subcategories.length > 0) {
+      if (!selectedCat.subcategories.includes(formData.subCategory)) {
+        setFormData(prev => ({ ...prev, subCategory: selectedCat.subcategories[0] }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, subCategory: '' }));
+    }
+  }, [formData.category, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -140,14 +173,21 @@ const ProductForm = () => {
     }
 
     setSaving(true);
+    
+    // Safety timeout — reset saving state after 30 seconds max
+    const safetyTimeout = setTimeout(() => {
+      setSaving(false);
+      toast.error('Save timed out. Please try again.');
+    }, 30000);
+    
+    let success = false;
     try {
       // 1. Upload new images if any
       setUploadProgress({ current: 0, total: selectedFiles.length > 0 ? selectedFiles.length : 0 });
       let uploadedImages = [];
       
       if (selectedFiles.length > 0) {
-        // Parallelize Cloudinary uploads
-        setUploadProgress({ current: 1, total: selectedFiles.length }); // Simplified progress for batch
+        setUploadProgress({ current: 1, total: selectedFiles.length });
         const uploadPromises = selectedFiles.map(file => uploadToCloudinary(file));
         const imageMaps = await Promise.all(uploadPromises);
         uploadedImages = imageMaps.map(map => map.secure_url);
@@ -159,6 +199,7 @@ const ProductForm = () => {
       const payload = {
         name: formData.name,
         category: formData.category,
+        subCategory: formData.subCategory,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
         description: formData.description,
@@ -168,13 +209,11 @@ const ProductForm = () => {
         fitAndSizing: formData.fitAndSizing,
         styleCode: formData.styleCode,
         season: formData.season,
-        occasion: formData.occasion,
         visibility: formData.visibility,
         featured: formData.featured,
         isAlterable: formData.isAlterable,
         created_by: user?.email || 'unknown',
         images: finalImages,
-        // Legacy fallback
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
         timestamp: Date.now()
       };
@@ -183,7 +222,6 @@ const ProductForm = () => {
         await updateDocument('products', id, payload);
         toast.success('Product updated successfully!');
       } else {
-        // Generate pseudo-SKU based on product name
         const getNameAcronym = (name) => {
            const words = name.split(' ').filter(w => w.trim().length > 0);
            if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
@@ -199,7 +237,7 @@ const ProductForm = () => {
         
         const newDocId = await addDocument('products', payload);
         
-        // Init inventory in parallel
+        // Init inventory per size in parallel
         const inventoryPromises = payload.sizes.map(size => 
           addDocument('inventory', {
             productDocId: newDocId,
@@ -217,11 +255,13 @@ const ProductForm = () => {
         toast.success('Product created successfully!');
       }
       
-      navigate('/catalog');
+      success = true;
     } catch (err) {
       toast.error(`Error saving product: ${err.message}`);
     } finally {
+      clearTimeout(safetyTimeout);
       setSaving(false);
+      if (success) navigate('/catalog');
     }
   };
 
@@ -246,18 +286,27 @@ const ProductForm = () => {
               <input type="text" name="name" className="input-field" value={formData.name} onChange={handleChange} required />
             </div>
             <div>
-              <label className="label">Price ($) *</label>
+              <label className="label">Price (₱) *</label>
               <input type="number" name="price" className="input-field" value={formData.price} onChange={handleChange} required min="0" step="0.01"/>
             </div>
             <div>
               <label className="label">Category</label>
               <select name="category" className="input-field" value={formData.category} onChange={handleChange}>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="label">Style Code / SKU</label>
-              <input type="text" name="styleCode" className="input-field" value={formData.styleCode} onChange={handleChange} placeholder="e.g. JZ-4001" />
+              <label className="label">Sub-Category</label>
+              <select name="subCategory" className="input-field" value={formData.subCategory} onChange={handleChange} disabled={!categories.find(c => c.name === formData.category)?.subcategories?.length}>
+                <option value="">None</option>
+                {categories.find(c => c.name === formData.category)?.subcategories?.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Style Code / SKU (Auto-Generated)</label>
+              <input type="text" name="styleCode" className="input-field" value={formData.styleCode} readOnly style={{ backgroundColor: 'var(--beige)', cursor: 'default' }} placeholder="Auto-generated from product name" />
             </div>
           </div>
           <div className="flex gap-4 items-center mt-4">
@@ -303,6 +352,9 @@ const ProductForm = () => {
                     <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
                 </label>
             </div>
+            <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', fontStyle: 'italic'}}>
+              💡 Tip: For best results, upload product images with a white or transparent background.
+            </p>
         </section>
 
         {/* Variations */}
@@ -310,17 +362,22 @@ const ProductForm = () => {
           <h2 className="text-xl font-semibold mb-4 border-b pb-2">Variations & Specifications</h2>
           <div className="mb-4">
             <label className="label">Available Sizes *</label>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap mt-2" style={{ gap: '0.75rem' }}>
               {AVAILABLE_SIZES.map(size => (
                 <button
                   key={size}
                   type="button"
                   onClick={() => toggleSize(size)}
-                  className="px-3 py-1 rounded-full text-sm font-medium transition-colors"
+                  className="text-sm font-medium transition-colors"
                   style={{
                     backgroundColor: formData.sizes.includes(size) ? 'var(--charcoal)' : 'var(--beige)',
                     color: formData.sizes.includes(size) ? 'white' : 'var(--charcoal)',
-                    border: '1px solid var(--border-color)'
+                    border: formData.sizes.includes(size) ? '2px solid var(--charcoal)' : '2px solid var(--border-color)',
+                    borderRadius: '999px',
+                    padding: '0.5rem 1.25rem',
+                    minWidth: '48px',
+                    textAlign: 'center',
+                    cursor: 'pointer'
                   }}
                 >
                   {size}
@@ -348,13 +405,6 @@ const ProductForm = () => {
               <label className="label">Season</label>
               <select name="season" className="input-field" value={formData.season} onChange={handleChange}>
                   {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Occasion</label>
-              <select name="occasion" className="input-field" value={formData.occasion} onChange={handleChange}>
-                <option value="">Select Occasion</option>
-                {OCCASIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
           </div>

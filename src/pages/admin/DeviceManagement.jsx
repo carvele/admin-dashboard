@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Monitor, Smartphone, Tablet, CheckCircle, XCircle, Clock, Trash2, Shield, Edit2, Check, X, Plus } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
-import { subscribeToCollection, updateDocument, deleteDocument, logAction, setDocument } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, deleteDocument, logAction, setDocument } from '../../firebase/firestore';
 import './DeviceManagement.css';
 
 const DeviceManagement = () => {

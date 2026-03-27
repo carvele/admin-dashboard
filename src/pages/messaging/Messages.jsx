@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { Search, Send, Paperclip, CheckSquare, Image as ImageIcon, Shirt, Plus, X, MessageSquare } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection } from '../firebase/firestore';
-import { getAvatarColor } from '../utils/helpers';
+import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection } from '../../firebase/firestore';
+import { getAvatarColor } from '../../utils/helpers';
 import './Messages.css';
 
 const Messages = () => {

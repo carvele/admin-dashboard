@@ -6,21 +6,21 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import PendingDeviceView from '../components/PendingDeviceView';
 
 // ── Lazy-loaded pages (code-split for faster initial load) ──
-const Login = lazy(() => import('../pages/Login'));
-const Dashboard = lazy(() => import('../pages/Dashboard'));
-const Reservations = lazy(() => import('../pages/Reservations'));
-const Customers = lazy(() => import('../pages/Customers'));
-const Messages = lazy(() => import('../pages/Messages'));
-const DigitalWardrobe = lazy(() => import('../pages/DigitalWardrobe'));
-const OutfitSuggestions = lazy(() => import('../pages/OutfitSuggestions'));
-const ClothingCatalog = lazy(() => import('../pages/ClothingCatalog'));
-const ProductForm = lazy(() => import('../pages/ProductForm'));
-const ARAssets = lazy(() => import('../pages/ARAssets'));
-const Inventory = lazy(() => import('../pages/Inventory'));
-const Analytics = lazy(() => import('../pages/Analytics'));
-const DeviceManagement = lazy(() => import('../pages/DeviceManagement'));
-const Settings = lazy(() => import('../pages/Settings'));
-const StaffManagement = lazy(() => import('../pages/StaffManagement'));
+const Login = lazy(() => import('../pages/auth/Login'));
+const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
+const Reservations = lazy(() => import('../pages/customers/Reservations'));
+const Customers = lazy(() => import('../pages/customers/Customers'));
+const Messages = lazy(() => import('../pages/messaging/Messages'));
+const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
+const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions'));
+const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
+const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
+const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
+const Inventory = lazy(() => import('../pages/catalog/Inventory'));
+const Analytics = lazy(() => import('../pages/admin/Analytics'));
+const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
+const Settings = lazy(() => import('../pages/admin/Settings'));
+const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 
 // Suspense fallback
 const PageLoader = () => (

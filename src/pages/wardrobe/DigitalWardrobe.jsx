@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
-import { subscribeToCollection } from '../firebase/firestore';
-import { getAvatarColor, getUserDisplayName } from '../utils/helpers';
+import { subscribeToCollection } from '../../firebase/firestore';
+import { getAvatarColor, getUserDisplayName } from '../../utils/helpers';
 import './DigitalWardrobe.css';
 
 

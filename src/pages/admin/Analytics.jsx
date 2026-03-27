@@ -4,7 +4,7 @@ import {
   LineChart, Line, AreaChart, Area, Legend
 } from 'recharts';
 import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye } from 'lucide-react';
-import { subscribeToCollection } from '../firebase/firestore';
+import { subscribeToCollection } from '../../firebase/firestore';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { UserPlus, UserMinus, Shield, ShieldCheck, Mail, Clock, Search, Trash2, Crown } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../firebase/firestore';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../../firebase/firestore';
 import { initializeApp } from 'firebase/app';
-import { auth, firebaseConfig } from '../firebase/config';
+import { auth, firebaseConfig } from '../../firebase/config';
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { toast } from 'sonner';
 import './StaffManagement.css';

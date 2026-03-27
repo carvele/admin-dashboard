@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Calendar, Search, Filter, Plus, CheckCircle, XCircle, Clock, Eye, Trash2, CalendarCheck, UserCheck, Shirt } from 'lucide-react';
-import StatusBadge from '../components/StatusBadge';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction, query, where, collection } from '../firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
+import { Calendar, Search, Filter, Plus, CheckCircle, XCircle, Clock, Eye, Trash2, CalendarCheck, UserCheck, Shirt, MessageSquare } from 'lucide-react';
+import StatusBadge from '../../components/StatusBadge';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction, query, where, collection } from '../../firebase/firestore';
 import { getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { can } from '../utils/permissions';
+import { db } from '../../firebase/config';
+import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
 
@@ -455,11 +455,31 @@ const Reservations = () => {
                   const cName = viewModal.customerName || viewModal.customer;
                   const pName = viewModal.productName || viewModal.outfit;
                   const dDate = parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString();
+                  const resId = (viewModal.id || viewModal.docId || '').slice(-6).toUpperCase();
+                  const size = viewModal.size || 'N/A';
+                  const status = (viewModal.status || 'Pending').charAt(0).toUpperCase() + (viewModal.status || 'pending').slice(1);
+                  const deposit = viewModal.deposit ? '✓ Paid' : '✗ Unpaid';
+                  const prefill = [
+                    `Hi ${cName}! 👋`,
+                    ``,
+                    `Here's a summary of your reservation:`,
+                    `━━━━━━━━━━━━━━━━━━`,
+                    `📋 Reservation #${resId}`,
+                    `👗 Item: ${pName}`,
+                    `📐 Size: ${size}`,
+                    `📅 Date: ${dDate}`,
+                    `📊 Status: ${status}`,
+                    `💰 Deposit: ${deposit}`,
+                    `━━━━━━━━━━━━━━━━━━`,
+                    ``,
+                    `Please let us know if you have any questions!`,
+                    `— JezSy Collection`
+                  ].join('\n');
                   navigate('/messages', { 
                     state: { 
                       buyerId: viewModal.customerId || '',
                       buyerName: cName,
-                      prefillMessage: `Hi ${cName}, regarding your reservation for ${pName} on ${dDate}...`
+                      prefillMessage: prefill
                     }
                   });
                 }}>

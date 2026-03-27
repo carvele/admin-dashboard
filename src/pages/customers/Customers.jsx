@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Search, Mail, Phone, ShoppingBag, Ruler, Edit, Trash2, Save, Clock, Star, TrendingUp, Calendar, Heart, Users } from 'lucide-react';
-import { subscribeToCollection, updateDocument, deleteDocument } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, deleteDocument } from '../../firebase/firestore';
 import { toast } from 'sonner';
-import { getAvatarColor, getUserDisplayName, formatRelativeTime, isOnline, formatCurrency, formatDate, getHealthLabel } from '../utils/helpers';
-import { can } from '../utils/permissions';
-import { useAuth } from '../context/AuthContext';
+import { getAvatarColor, getUserDisplayName, formatRelativeTime, isOnline, formatCurrency, formatDate, getHealthLabel } from '../../utils/helpers';
+import { can } from '../../utils/permissions';
+import { useAuth } from '../../context/AuthContext';
 import './Customers.css';
 
 // ── Component ────────────────────────────────────────────────
@@ -37,7 +37,11 @@ const Customers = () => {
   // Stats
   const totalCustomers = customers.length;
   const activeCount = customers.filter(c => isOnline(c.lastOnline)).length;
-  const vipCount = customers.filter(c => c.status === 'VIP').length;
+  const newThisMonth = customers.filter(c => {
+    const joined = c.joinedAt?.toDate?.() || (c.joinedAt?.seconds ? new Date(c.joinedAt.seconds * 1000) : new Date(c.joinedAt || 0));
+    const now = new Date();
+    return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
+  }).length;
   const avgEngagement = customers.length > 0 ? Math.round(customers.reduce((sum, c) => sum + (c.engagementScore || 0), 0) / customers.length) : 0;
 
   // --- EDIT CUSTOMER ---
@@ -128,7 +132,7 @@ const Customers = () => {
         </div>
         <div className="cstat-card">
           <div className="cstat-icon" style={{ background: 'linear-gradient(135deg, #D4AF37, #F5D76E)' }}><Star size={18} /></div>
-          <div><p className="cstat-value">{vipCount}</p><p className="cstat-label">VIP Members</p></div>
+          <div><p className="cstat-value">{newThisMonth}</p><p className="cstat-label">New This Month</p></div>
         </div>
         <div className="cstat-card">
           <div className="cstat-icon" style={{ background: 'linear-gradient(135deg, #F97316, #FB923C)' }}><TrendingUp size={18} /></div>
@@ -255,7 +259,7 @@ const Customers = () => {
                   <>
                     <input type="text" className="input-field mt-3" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
                     <select className="input-field mt-2" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
-                      <option>Active</option><option>VIP</option><option>Inactive</option>
+                      <option>Active</option><option>Inactive</option>
                     </select>
                   </>
                 ) : (

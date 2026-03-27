@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Calendar, Users, Shirt, Activity, Clock, AlertTriangle, TrendingUp, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { subscribeToCollection } from '../firebase/firestore';
+import { subscribeToCollection } from '../../firebase/firestore';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
 
@@ -15,9 +16,12 @@ const parseDate = (d) => {
 };
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [reservations, setReservations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [suggestedOutfits, setSuggestedOutfits] = useState([]);
+  const [arSessionCount, setArSessionCount] = useState(0);
   const [trendFilter, setTrendFilter] = useState('This Week');
   const [lastSynced, setLastSynced] = useState(new Date());
 
@@ -34,7 +38,15 @@ const Dashboard = () => {
       setInventory(data);
       setLastSynced(new Date());
     });
-    return () => { unsubR(); unsubC(); unsubI(); };
+    const unsubO = subscribeToCollection('suggestedOutfits', (data) => {
+      setSuggestedOutfits(data);
+      setLastSynced(new Date());
+    });
+    const unsubAR = subscribeToCollection('ar_sessions', (data) => {
+      setArSessionCount(data.length);
+      setLastSynced(new Date());
+    });
+    return () => { unsubR(); unsubC(); unsubI(); unsubO(); unsubAR(); };
   }, []);
 
   const totalReservations = reservations.length;
@@ -43,13 +55,16 @@ const Dashboard = () => {
   const lowStockItems = inventory.filter(i => i.total === 0 || (i.available / i.total <= 0.2)).slice(0, 3);
   const recentCustomers = [...customers].sort((a,b) => (b.id || '').localeCompare(a.id || '')).slice(0, 3);
 
+  // Popular Outfit Combinations — sourced from admin-created suggestedOutfits
   const outfitCounts = {};
-  reservations.forEach(r => {
-    const pName = r.productName || r.outfit;
-    outfitCounts[pName] = (outfitCounts[pName] || 0) + 1; 
+  suggestedOutfits.forEach(o => {
+    const outfitName = o.name || o.title || 'Untitled Outfit';
+    // Count how many items/pieces each suggestion has as a popularity proxy
+    const pieceCount = (o.items || o.products || []).length || 1;
+    outfitCounts[outfitName] = (outfitCounts[outfitName] || 0) + pieceCount;
   });
-  const computedPopular = Object.entries(outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 4).map(([name, count]) => ({ name, value: count * 100 }));
-  const finalPopular = computedPopular.length > 0 ? computedPopular : [{name: 'No data', value: 1}];
+  const computedPopular = Object.entries(outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 4).map(([name, count]) => ({ name, value: count }));
+  const finalPopular = computedPopular.length > 0 ? computedPopular : [{name: 'No suggestions yet', value: 1}];
 
   // Build dynamic reservation trends from actual DB data
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -141,8 +156,8 @@ const Dashboard = () => {
           <div className="stat-icon ar"><Shirt size={24} /></div>
           <div className="stat-info">
             <p className="stat-label">AR Try-On Usage</p>
-            <h3 className="stat-value">—</h3>
-            <span className="stat-trend positive">Not tracked yet</span>
+            <h3 className="stat-value">{arSessionCount}</h3>
+            <span className="stat-trend positive"><TrendingUp size={14}/> Live from DB</span>
           </div>
         </motion.div>
       </motion.div>
@@ -188,7 +203,7 @@ const Dashboard = () => {
         >
           <div className="card-header">
             <h3>Popular Outfit Combinations</h3>
-            <button className="text-btn">View All</button>
+            <button className="text-btn" onClick={() => navigate('/outfits')}>View All</button>
           </div>
           <div className="chart-container pie-container">
             <ResponsiveContainer width="100%" height={260}>
@@ -232,7 +247,7 @@ const Dashboard = () => {
                 <div className="item-details">
                   <h4>{item.item}</h4><p>Size {item.size} · Only {item.available} left</p>
                 </div>
-                <button className="btn-outline small">Restock</button>
+                <button className="btn-outline small" onClick={() => navigate('/inventory')}>Restock</button>
               </div>
             ))}
           </div>
@@ -246,7 +261,7 @@ const Dashboard = () => {
         >
           <div className="card-header">
             <h3>Recent Customers</h3>
-            <button className="text-btn">View All</button>
+            <button className="text-btn" onClick={() => navigate('/customers')}>View All</button>
           </div>
           <div className="widget-list">
             {recentCustomers.length === 0 && <div className="p-4 text-center text-secondary">No customers yet.</div>}
@@ -258,7 +273,7 @@ const Dashboard = () => {
                 <div className="item-details">
                   <h4>{c.name}</h4><p>{c.lastActive}</p>
                 </div>
-                <button className="icon-btn small"><Users size={16} /></button>
+                <button className="icon-btn small" onClick={() => navigate('/customers')}><Users size={16} /></button>
               </div>
             ))}
           </div>

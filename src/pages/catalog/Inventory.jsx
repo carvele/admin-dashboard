@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Plus, Download, PackageOpen, Package, AlertTriangle, Edit, Trash2 } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../../firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import './Inventory.css';
 
@@ -18,6 +18,7 @@ const Inventory = () => {
     return () => unsub();
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Modals
   const [restockModal, setRestockModal] = useState(null);  // inv item or null
@@ -34,10 +35,15 @@ const Inventory = () => {
   const totalReserved = inventory.reduce((sum, i) => sum + i.reserved, 0);
   const lowStockCount = inventory.filter(i => i.available === 0 || (i.available / i.total) <= 0.2).length;
 
-  const filteredInv = inventory.filter(item =>
-    (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
-    (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase())
-  );
+  // Extract unique categories for filter
+  const uniqueCategories = ['All', ...new Set(inventory.map(i => i.category).filter(Boolean))];
+
+  const filteredInv = inventory.filter(item => {
+    const matchesSearch = (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+      (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
+    const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
 
   const getStockStatus = (available, total) => {
     if (total === 0) return { label: 'No Stock', color: 'var(--stock-low)' };
@@ -51,7 +57,7 @@ const Inventory = () => {
   // --- ACTIONS ---
   const syncProductStock = async (productDocId, sku) => {
     try {
-      const { getCollection } = await import('../firebase/firestore');
+      const { getCollection } = await import('../../firebase/firestore');
       const currentInventory = await getCollection('inventory');
       const allSizes = currentInventory.filter(i => (i.productDocId || i.sku) === (productDocId || sku));
       
@@ -206,6 +212,16 @@ const Inventory = () => {
               className="input-field pl-10"
             />
           </div>
+          <select
+            className="input-field"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ width: 'auto', minWidth: '150px' }}
+          >
+            {uniqueCategories.map(cat => (
+              <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+            ))}
+          </select>
         </div>
 
         <div className="table-container">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Search, Tag, Trash2, Shirt, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { subscribeToCollection, addDocument, deleteDocument } from '../firebase/firestore';
+import { subscribeToCollection, addDocument, deleteDocument, updateDocument } from '../../firebase/firestore';
 import './OutfitSuggestions.css';
 
 const OutfitSuggestions = () => {
@@ -94,6 +94,16 @@ const OutfitSuggestions = () => {
     }
   };
 
+  const toggleOutfitActive = async (outfit) => {
+    const newActive = !(outfit.active !== false); // default true
+    try {
+      await updateDocument('suggestedOutfits', outfit.docId, { active: newActive });
+      toast.success(newActive ? 'Outfit activated' : 'Outfit deactivated');
+    } catch {
+      toast.error('Failed to update outfit status');
+    }
+  };
+
   // Helper for rendering emoji vs real image
   const renderItemImage = (imageAsset) => {
     if (!imageAsset) return <Shirt size={16} />;
@@ -135,6 +145,15 @@ const OutfitSuggestions = () => {
                 <button className="icon-btn-small text-danger" onClick={() => handleDelete(outfit.docId)}>
                    <X size={16} />
                 </button>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'0.25rem'}}>
+                <label className="toggle-switch" style={{transform:'scale(0.8)'}}>
+                  <input type="checkbox" checked={outfit.active !== false} onChange={() => toggleOutfitActive(outfit)} />
+                  <span className="toggle-slider"></span>
+                </label>
+                <span style={{fontSize:'0.75rem', color: outfit.active !== false ? '#10B981' : 'var(--text-secondary)', fontWeight:500}}>
+                  {outfit.active !== false ? 'Active' : 'Inactive'}
+                </span>
               </div>
               {outfit.description && <p className="text-secondary text-sm mt-1">{outfit.description}</p>}
               <div className="flex gap-2 mt-2 flex-wrap">
@@ -210,10 +229,9 @@ const OutfitSuggestions = () => {
                   <label className="label">Season</label>
                   <select className="input-field" value={outfitSeason} onChange={(e) => setOutfitSeason(e.target.value)}>
                     <option>All-Season</option>
-                    <option>Summer</option>
-                    <option>Winter</option>
-                    <option>Spring</option>
-                    <option>Autumn</option>
+                    <option>Dry Season (Summer)</option>
+                    <option>Wet Season (Rainy)</option>
+                    <option>Cool Season (-Ber Months)</option>
                   </select>
                 </div>
                 <div className="form-group flex-1">

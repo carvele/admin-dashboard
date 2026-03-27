@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Camera, View, Settings, Check, Crosshair, Shirt, Trash2, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { subscribeToCollection, updateDocument, addDocument, deleteDocument } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, addDocument, deleteDocument } from '../../firebase/firestore';
 import './ARAssets.css';
 
 const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/demo/upload';

@@ -193,6 +193,12 @@ const TopNav = ({ user, onHamburger }) => {
         </div>
       </div>
       <div className="topnav-actions">
+        {/* ── Database Sync Status ── */}
+        <div className="sync-status" title="Connected to Real-time Database">
+          <div className="sync-indicator"></div>
+          <span className="sync-text">Live</span>
+        </div>
+
         <div className="notification-wrapper">
           <button 
             className="icon-btn" 

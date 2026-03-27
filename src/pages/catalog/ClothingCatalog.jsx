@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Trash2, Minus, Star } from 'lucide-react';
-import { subscribeToCollection, updateDocument, deleteDocument } from '../firebase/firestore';
+import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles } from 'lucide-react';
+import { subscribeToCollection, updateDocument, deleteDocument } from '../../firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { deleteFile } from '../firebase/storage';
+import { db } from '../../firebase/config';
+import { deleteFile } from '../../firebase/storage';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
-import { can } from '../utils/permissions';
-import ImageWithFallback from '../components/ImageWithFallback';
+import { useAuth } from '../../context/AuthContext';
+import { can } from '../../utils/permissions';
+import ImageWithFallback from '../../components/ImageWithFallback';
 import './ClothingCatalog.css';
 
 const ClothingCatalog = () => {
@@ -32,10 +32,10 @@ const ClothingCatalog = () => {
          if (!snap.empty) {
            setDbCategories(snap.docs.map(d => d.data().name));
          } else {
-           setDbCategories(['Outerwear', 'Tops', 'Bottoms', 'Dresses', 'Accessories']);
+            setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
          }
        } catch (err) {
-         setDbCategories(['Outerwear', 'Tops', 'Bottoms', 'Dresses', 'Accessories']);
+         setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
        }
     };
     fetchCategories();
@@ -49,7 +49,15 @@ const ClothingCatalog = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const categories = ['All', ...dbCategories];
-  const availableTags = ['New Arrival', 'Featured', 'AR Try-On'];
+  const availableTags = ['AR Try-On'];
+
+  // Auto-expire New Arrival after 7 days
+  const isNewArrival = (item) => {
+    if (!item.timestamp) return false;
+    const created = typeof item.timestamp === 'number' ? item.timestamp : Date.now();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    return (Date.now() - created) < sevenDays;
+  };
 
   const filteredCatalog = catalog.filter(item => {
     const matchesSearch = (item.name || '').toLowerCase().includes((searchTerm || '').toLowerCase());
@@ -101,15 +109,7 @@ const ClothingCatalog = () => {
     }
   };
 
-  // --- INLINE STOCK +/- ---
-  const updateStock = async (item, delta) => {
-    const newStock = Math.max(0, item.stock + delta);
-    try {
-      await updateDocument('products', item.docId, { stock: newStock });
-    } catch (e) {
-      toast.error('Failed to update stock');
-    }
-  };
+
 
   // --- TOGGLE TAGS ---
   const toggleTag = async (item, tag) => {
@@ -165,16 +165,8 @@ const ClothingCatalog = () => {
               ) : (
                 <span className="dw-emoji view-xl">{displayUrl || '👗'}</span>
               )}
-              {isAdminUnlocked && (
-                <div className="product-actions-overlay">
-                  <button className="icon-btn-light" title="Edit" onClick={() => navigate('/catalog/edit/' + item.docId)}><Edit size={16}/></button>
-                  {can(user?.role, 'delete_catalog') && (
-                    <button className="icon-btn-light danger" title="Delete" onClick={() => setDeleteConfirm(item)}><Trash2 size={16}/></button>
-                  )}
-                </div>
-              )}
-              {item.featured && (
-                <div className="featured-badge"><Star size={10}/> Featured</div>
+              {isNewArrival(item) && (
+                <div className="new-arrival-badge"><Sparkles size={10}/> New Arrival</div>
               )}
               {(item.tags || []).includes('AR Try-On') && (
                 <div className="ar-badge">AR Ready</div>
@@ -185,17 +177,12 @@ const ClothingCatalog = () => {
               <div className="flex-between align-start mb-2">
                 <div>
                   <h3 className="product-name">{item.name}</h3>
-                  <p className="product-category">{item.category}</p>
+                   <p className="product-category">
+                    {item.category}
+                    {item.subCategory && <span style={{opacity:0.6, marginLeft:'0.4rem'}}>• {item.subCategory}</span>}
+                  </p>
                 </div>
                 <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>
-              </div>
-
-              {/* Inline Stock Control */}
-              <div className="stock-inline-control mt-3">
-                <button className="stock-btn" onClick={() => updateStock(item, -1)} disabled={item.stock <= 0}><Minus size={14}/></button>
-                <span className="stock-count">{item.stock}</span>
-                <button className="stock-btn" onClick={() => updateStock(item, 1)}><Plus size={14}/></button>
-                <span className="text-secondary text-xs ml-2">in stock</span>
               </div>
 
               <div className="product-sizes mt-3">
@@ -204,7 +191,7 @@ const ClothingCatalog = () => {
                 ))}
               </div>
 
-              {/* Clickable Tags */}
+              {/* AR Tag Toggle */}
               <div className="product-tags mt-3">
                 {availableTags.map(tag => (
                   <button
@@ -216,6 +203,16 @@ const ClothingCatalog = () => {
                   </button>
                 ))}
               </div>
+
+              {/* CRUD Actions */}
+              {isAdminUnlocked && (
+                <div className="product-card-actions mt-3">
+                  <button className="btn-outline btn-sm flex-center gap-1" onClick={() => navigate('/catalog/edit/' + item.docId)}><Edit size={14}/> Edit</button>
+                  {can(user?.role, 'delete_catalog') && (
+                    <button className="btn-outline btn-sm btn-danger-outline flex-center gap-1" onClick={() => setDeleteConfirm(item)}><Trash2 size={14}/> Delete</button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           );
