@@ -21,6 +21,8 @@ export const getUserDisplayName = (user) => {
   if (user.name) return user.name;
   if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
   if (user.firstName) return user.firstName;
+  if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+  if (user.first_name) return user.first_name;
   if (user.email) return user.email;
   return 'User';
 };
@@ -67,6 +69,23 @@ export const formatCurrency = (amount) => {
 export const formatDate = (dateStr) => {
   if (!dateStr) return 'Unknown';
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
+// ── Timestamp Standardizer ──────────────────────────────────
+/** Converts mixed timestamp formats (Firebase Timestamp, JS Date, Unix epoch) to a JS Date */
+export const formatTimestamp = (ts) => {
+  if (!ts) return null;
+  // Handle Firebase Timestamp (has seconds/nanoseconds)
+  if (ts.seconds) return new Date(ts.seconds * 1000);
+  // Handle JS Date or epoch/string
+  return new Date(ts);
+};
+
+/** Converts a JS Date/string format into a Firebase-like timestamp shape if needed offline */
+export const toFirebaseTimestamp = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  return { seconds: Math.floor(d.getTime() / 1000), nanoseconds: (d.getTime() % 1000) * 1000000 };
 };
 
 // ── Health score label ──────────────────────────────────────

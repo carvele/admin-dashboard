@@ -49,8 +49,9 @@ const Reservations = () => {
       setReservations(data);
       setLoading(false);
     });
-    const unsubC = subscribeToCollection('customers', (data) => {
-      setCustomers(data);
+    const unsubC = subscribeToCollection('users', (data) => {
+      // Filter for app customers only (exclude staff)
+      setCustomers(data.filter(u => !u.role || u.role === 'customer'));
     });
     const unsubP = subscribeToCollection('products', (data) => {
       setProducts(data);
@@ -345,7 +346,7 @@ const Reservations = () => {
                 <label className="label">Customer</label>
                 <input type="text" className="input-field" list="customers-list" value={newRes.customer} onChange={e => setNewRes({...newRes, customer: e.target.value})} placeholder="Select or enter customer name..." required />
                 <datalist id="customers-list">
-                  {customers.map(c => <option key={c.id} value={c.name || c.first_name + ' ' + c.last_name} />)}
+                  {customers.map(c => <option key={c.id} value={c.name || (c.firstName ? `${c.firstName} ${c.lastName || ''}`.trim() : c.first_name ? `${c.first_name} ${c.last_name || ''}`.trim() : c.email || 'User')} />)}
                 </datalist>
               </div>
               <div className="form-row">

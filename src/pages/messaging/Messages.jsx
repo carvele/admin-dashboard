@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Search, Send, Paperclip, CheckSquare, Image as ImageIcon, Shirt, Plus, X, MessageSquare } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection } from '../../firebase/firestore';
+import { subscribeToCollection, addDocument, updateDocument, logAction, getCollection, serverTimestamp } from '../../firebase/firestore';
 import { getAvatarColor } from '../../utils/helpers';
 import './Messages.css';
 
@@ -42,26 +42,35 @@ const Messages = () => {
       setMessages([]);
       return;
     }
+    // Use customId (the 'conv_...' string) for filtering — Android sets this as conversationId on messages
+    const convKey = activeChat.customId || activeChat.id;
     const unsub = subscribeToCollection('messages', (data) => {
-      const filtered = data.filter(m => m.conversationId === activeChat.id);
-      const sorted = [...filtered].sort((a,b) => (a.id > b.id ? 1 : -1));
+      const filtered = data.filter(m => m.conversationId === convKey);
+      const sorted = [...filtered].sort((a,b) => {
+        const tA = a.createdAt?.seconds || a.customId || 0;
+        const tB = b.createdAt?.seconds || b.customId || 0;
+        return tA > tB ? 1 : -1;
+      });
       setMessages(sorted);
     });
     return () => unsub();
-  }, [activeChat?.id]);
+  }, [activeChat?.id, activeChat?.customId]);
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
     try {
+      // Use the custom conv_ ID so Android can find this message via .whereEqualTo("conversationId", convId)
+      const convKey = activeChat.customId || activeChat.id;
       await addDocument('messages', {
         id: Date.now(),
-        conversationId: activeChat.id,
+        conversationId: convKey,
         sender: 'staff',
         text: newMessage,
         time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
       });
+      // addDocument() auto-adds createdAt — needed for Android's .orderBy("createdAt")
       await updateDocument('conversations', activeChat.docId, {
         lastMessage: newMessage,
         time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
@@ -83,7 +92,7 @@ const Messages = () => {
   };
 
   const startNewConversation = async (customer) => {
-    const existing = conversations.find(c => c.customerName === (customer.name || customer.first_name));
+    const existing = conversations.find(c => c.customerName === (customer.name || customer.first_name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim()));
     if (existing) {
       setActiveChat(existing);
       setShowNewConvModal(false);
@@ -127,8 +136,10 @@ const Messages = () => {
   }, [location.state, conversations]);
 
   // Filter messages for active chat and sort by time
+  // Use customId (the conv_ string) for filtering — matches what Android writes as conversationId
+  const convKey = activeChat?.customId || activeChat?.id;
   const activeMessages = messages
-    .filter(m => activeChat && m.conversationId === activeChat.id)
+    .filter(m => activeChat && m.conversationId === convKey)
     .sort((a, b) => {
       const timeA = a.createdAt?.seconds || 0;
       const timeB = b.createdAt?.seconds || 0;

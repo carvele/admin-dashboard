@@ -23,6 +23,12 @@ service cloud.firestore {
     match /reservations/{docId} {
       allow read: if isAuth();
       allow create, update, delete: if isAuth();
+
+      // Sub-collection for reservation line items
+      match /items/{itemId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAuth();
+      }
     }
 
     // ── App Users (customers) ──
@@ -68,6 +74,10 @@ service cloud.firestore {
       allow read: if isAuth();
       allow create, update, delete: if isAuth();
     }
+    match /favorites/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
 
     // ── Analytics ──
     match /analyticsConvRate/{docId} {
@@ -99,6 +109,19 @@ service cloud.firestore {
       allow read: if isAuth();
       allow create, update: if isAuth();
       allow delete: if isAuth();
+    }
+
+    // ── Feedback (submitted from mobile app) ──
+    match /feedback/{docId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAdminOrOwner();
+    }
+
+    // ── Categories (managed from admin Settings) ──
+    match /categories/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdminOrOwner();
     }
 
     // ── Block everything else ──

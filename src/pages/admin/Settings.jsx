@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { getDocument, setDocument, logAction, addDocument, updateDocument } from '../../firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc, deleteField, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { uploadToCloudinary } from '../../firebase/storage';
 import './Settings.css';
@@ -753,6 +753,60 @@ const Settings = () => {
                       }}
                     >
                       Purge
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password Cleanup Migration */}
+                <div className="p-4 border rounded-lg" style={{ borderColor: 'var(--border-color)', marginBottom: '1rem' }}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem' }}>🔐 Cleanup Plaintext Passwords</h4>
+                      <p className="text-xs text-secondary">Finds and deletes any old plaintext `password` fields from user documents, and backfills missing roles.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-outline border-secondary text-xs"
+                      disabled={isLoading}
+                      onClick={async () => {
+                        if (!window.confirm('Run the password cleanup migration on all user documents?')) return;
+                        setIsLoading(true);
+                        try {
+                          const snap = await getDocs(collection(db, 'users'));
+                          let cleaned = 0;
+                          let skipped = 0;
+                          let updated = 0;
+                          
+                          for (const d of snap.docs) {
+                            const data = d.data();
+                            const updates = {};
+                            
+                            if (data.password !== undefined) {
+                              updates.password = deleteField();
+                              cleaned++;
+                            } else {
+                              skipped++;
+                            }
+                            
+                            if (!data.role) updates.role = 'customer';
+                            if (!data.createdAt) updates.createdAt = serverTimestamp();
+                            
+                            if (Object.keys(updates).length > 0) {
+                              await updateDoc(doc(db, 'users', d.id), updates);
+                              updated++;
+                            }
+                          }
+                          toast.success(`Migration complete! Removed ${cleaned} passwords, skipped ${skipped} clean docs.`);
+                          await logAction(user, `Ran password cleanup migration: ${cleaned} removed, ${updated} total updated.`);
+                        } catch (err) { 
+                          toast.error('Migration failed: ' + err.message); 
+                          console.error(err);
+                        } finally { 
+                          setIsLoading(false); 
+                        }
+                      }}
+                    >
+                      Run Migration
                     </button>
                   </div>
                 </div>

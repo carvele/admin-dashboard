@@ -14,61 +14,100 @@ import {
   onSnapshot,
   serverTimestamp
 } from 'firebase/firestore';
+import { measureAsync, trackError } from '../utils/analytics';
+
+// ── Resilience & Monitoring ─────────────────────────────────
+
+/** Execute an asynchronous operation with retry logic and performance monitoring */
+export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await measureAsync(operationName, asyncFn);
+    } catch (err) {
+      attempt++;
+      console.warn(`[Firestore] '${operationName}' failed (attempt ${attempt}/${maxRetries}):`, err.message);
+      if (attempt >= maxRetries) {
+        trackError(`firestore_${operationName}_failed`, { error: err.message, attempts: attempt });
+        throw err;
+      }
+      // Wait before retrying (exponential backoff)
+      await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+};
 
 // ── Generic CRUD helpers ──────────────────────────────────
 
 /** Get all documents from a collection */
 export const getCollection = async (collectionName) => {
-  const snap = await getDocs(collection(db, collectionName));
-  return snap.docs.map(d => ({ ...d.data(), id: d.id, docId: d.id }));
+  return withRetry(`getCollection_${collectionName}`, async () => {
+    const snap = await getDocs(collection(db, collectionName));
+    return snap.docs.map(d => {
+      const data = d.data();
+      return { ...data, customId: data.id || null, id: d.id, docId: d.id };
+    });
+  });
 };
 
 /** Get a single document by ID */
 export const getDocument = async (collectionName, docId) => {
-  const snap = await getDoc(doc(db, collectionName, docId));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  return withRetry(`getDocument_${collectionName}`, async () => {
+    const snap = await getDoc(doc(db, collectionName, docId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  });
 };
 
 /** Add a new document (auto-ID) */
 export const addDocument = async (collectionName, data) => {
-  const ref = await addDoc(collection(db, collectionName), {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+  return withRetry(`addDocument_${collectionName}`, async () => {
+    const ref = await addDoc(collection(db, collectionName), {
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return ref.id;
   });
-  return ref.id;
 };
 
 /** Get Staff Profile by Email */
 export const getStaffByEmail = async (email) => {
-  const q = query(collection(db, 'staff'), where('email', '==', email));
-  const snap = await getDocs(q);
-  if (!snap.empty) {
-    const doc = snap.docs[0];
-    return { id: doc.id, ...doc.data() };
-  }
-  return null;
+  return withRetry('getStaffByEmail', async () => {
+    const q = query(collection(db, 'staff'), where('email', '==', email));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const doc = snap.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+    return null;
+  });
 };
 
 /** Update an existing document */
 export const updateDocument = async (collectionName, docId, data) => {
-  await updateDoc(doc(db, collectionName, docId), {
-    ...data,
-    updatedAt: serverTimestamp()
+  return withRetry(`updateDocument_${collectionName}`, async () => {
+    await updateDoc(doc(db, collectionName, docId), {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
   });
 };
 
 /** Set/Overwrite a document (creates if doesn't exist) */
 export const setDocument = async (collectionName, docId, data) => {
-  await setDoc(doc(db, collectionName, docId), {
-    ...data,
-    updatedAt: serverTimestamp()
-  }, { merge: true });
+  return withRetry(`setDocument_${collectionName}`, async () => {
+    await setDoc(doc(db, collectionName, docId), {
+      ...data,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  });
 };
 
 /** Delete a document */
 export const deleteDocument = async (collectionName, docId) => {
-  await deleteDoc(doc(db, collectionName, docId));
+  return withRetry(`deleteDocument_${collectionName}`, async () => {
+    await deleteDoc(doc(db, collectionName, docId));
+  });
 };
 
 /** Log an action for auditing */
@@ -94,7 +133,10 @@ export const logAction = async (user, action, targetInfo = {}) => {
 export const subscribeToCollection = (collectionName, callback, queryConstraints = [], onError) => {
   const q = query(collection(db, collectionName), ...queryConstraints);
   return onSnapshot(q, (snap) => {
-    const data = snap.docs.map(d => ({ ...d.data(), id: d.id, docId: d.id }));
+    const data = snap.docs.map(d => {
+      const docData = d.data();
+      return { ...docData, customId: docData.id || null, id: d.id, docId: d.id };
+    });
     callback(data);
   }, (error) => {
     console.error(`[Firestore] Subscription error on "${collectionName}":`, error.message);
