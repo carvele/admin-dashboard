@@ -1,16 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import debounce from 'lodash.debounce';
 import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
 import { subscribeToCollection } from '../../firebase/firestore';
 import { getAvatarColor, getUserDisplayName } from '../../utils/helpers';
 import './DigitalWardrobe.css';
 
-
-
 const DigitalWardrobe = () => {
   const [wardrobeItems, setWardrobeItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeUserId, setActiveUserId] = useState(null);
+  
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useCallback(
+    debounce((val) => setSearchTerm(val), 300),
+    []
+  );
+
+  const handleSearchChange = (e) => {
+    setSearchInput(e.target.value);
+    debouncedSearch(e.target.value);
+  };
+
   const [viewMode, setViewMode] = useState('grid');
 
   // Subscribe to wardrobeItems (normalized top-level collection)
@@ -20,17 +31,20 @@ const DigitalWardrobe = () => {
     });
     const unsubUsers = subscribeToCollection('users', (data) => {
       // Only show app customers
-      const appUsers = data.filter(u => !u.role || u.role === 'customer');
+      const appUsers = data.filter((u) => !u.role || u.role === 'customer');
       setUsers(appUsers);
       if (appUsers.length > 0 && !activeUserId) {
         setActiveUserId(appUsers[0].id);
       }
     });
-    return () => { unsubItems(); unsubUsers(); };
+    return () => {
+      unsubItems();
+      unsubUsers();
+    };
   }, []);
 
   // Get the active user's details
-  const activeUser = users.find(u => u.id === activeUserId);
+  const activeUser = users.find((u) => u.id === activeUserId);
 
   // Group wardrobe items by userId for sidebar counts
   const itemCountByUser = wardrobeItems.reduce((acc, item) => {
@@ -40,16 +54,23 @@ const DigitalWardrobe = () => {
 
   // Filter wardrobe items for the selected user
   const userItems = wardrobeItems
-    .filter(item => item.userId === activeUserId)
-    .filter(item =>
-      (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.productId || '').toLowerCase().includes(searchTerm.toLowerCase())
+    .filter((item) => item.userId === activeUserId)
+    .filter(
+      (item) =>
+        (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.productId || '').toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
   const renderItemImage = (imgAsset) => {
     if (!imgAsset) return <Shirt size={32} className="text-secondary opacity-50" />;
     if (imgAsset.startsWith('http')) {
-      return <img src={imgAsset} alt="wardrobe-item" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+      return (
+        <img
+          src={imgAsset}
+          alt="wardrobe-item"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      );
     }
     return <span className="dw-emoji view-xl">{imgAsset}</span>;
   };
@@ -68,7 +89,7 @@ const DigitalWardrobe = () => {
             <h3>Customers</h3>
           </div>
           <div className="dw-customer-list">
-            {users.map(user => {
+            {users.map((user) => {
               const displayName = getUserDisplayName(user);
               return (
                 <div
@@ -76,8 +97,14 @@ const DigitalWardrobe = () => {
                   className={`dw-customer-item ${activeUserId === user.id ? 'active' : ''}`}
                   onClick={() => setActiveUserId(user.id)}
                 >
-                  <div className="avatar small-av" style={{ backgroundColor: getAvatarColor(displayName) }}>
-                    {displayName.split(' ').map(n => n[0]).join('')}
+                  <div
+                    className="avatar small-av"
+                    style={{ backgroundColor: getAvatarColor(displayName) }}
+                  >
+                    {displayName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')}
                   </div>
                   <div className="dw-customer-info">
                     <h4>{displayName}</h4>
@@ -94,11 +121,19 @@ const DigitalWardrobe = () => {
           <div className="dw-toolbar">
             {activeUser ? (
               <div className="flex-center gap-3">
-                <div className="avatar" style={{ backgroundColor: getAvatarColor(getUserDisplayName(activeUser)) }}>
-                  {getUserDisplayName(activeUser).split(' ').map(n => n[0]).join('')}
+                <div
+                  className="avatar"
+                  style={{ backgroundColor: getAvatarColor(getUserDisplayName(activeUser)) }}
+                >
+                  {getUserDisplayName(activeUser)
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')}
                 </div>
                 <div>
-                  <h3 className="font-medium text-lg">{getUserDisplayName(activeUser)}'s Wardrobe</h3>
+                  <h3 className="font-medium text-lg">
+                    {getUserDisplayName(activeUser)}'s Wardrobe
+                  </h3>
                 </div>
               </div>
             ) : (
@@ -111,8 +146,8 @@ const DigitalWardrobe = () => {
                 <input
                   type="text"
                   placeholder="Search items..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={handleSearchChange}
                   className="input-field pl-10"
                 />
               </div>
@@ -120,19 +155,29 @@ const DigitalWardrobe = () => {
                 <button
                   className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                   onClick={() => setViewMode('grid')}
-                ><Grid size={16} /></button>
+                >
+                  <Grid size={16} />
+                </button>
                 <button
                   className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
                   onClick={() => setViewMode('list')}
-                ><ListIcon size={16} /></button>
+                >
+                  <ListIcon size={16} />
+                </button>
               </div>
             </div>
           </div>
 
           <div className={`dw-items ${viewMode === 'grid' ? 'dw-grid' : 'dw-list'}`}>
-            {userItems.map(item => (
+            {userItems.map((item) => (
               <div key={item.id} className="dw-item-card card">
-                <div className="dw-img-placeholder" style={{ overflow: 'hidden', padding: item.imageUrl?.startsWith('http') ? '0' : '2rem' }}>
+                <div
+                  className="dw-img-placeholder"
+                  style={{
+                    overflow: 'hidden',
+                    padding: item.imageUrl?.startsWith('http') ? '0' : '2rem',
+                  }}
+                >
                   {renderItemImage(item.imageUrl)}
                 </div>
                 <div className="dw-item-details">
@@ -144,9 +189,7 @@ const DigitalWardrobe = () => {
               </div>
             ))}
             {userItems.length === 0 && (
-              <div className="empty-state full-width mt-4">
-                No items found in wardrobe.
-              </div>
+              <div className="empty-state full-width mt-4">No items found in wardrobe.</div>
             )}
           </div>
         </div>

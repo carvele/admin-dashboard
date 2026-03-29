@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import debounce from 'lodash.debounce';
 import { Plus, X, Search, Tag, Trash2, Shirt, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { subscribeToCollection, addDocument, deleteDocument, updateDocument } from '../../firebase/firestore';
+import {
+  subscribeToCollection,
+  addDocument,
+  deleteDocument,
+  updateDocument,
+} from '../../firebase/firestore';
+import { sanitizeText } from '../../utils/validation';
 import './OutfitSuggestions.css';
 
 const OutfitSuggestions = () => {
   const [outfits, setOutfits] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   const [outfitName, setOutfitName] = useState('');
   const [occasionTag, setOccasionTag] = useState('Casual');
   const [outfitDescription, setOutfitDescription] = useState('');
@@ -16,7 +23,19 @@ const OutfitSuggestions = () => {
   const [styleVibe, setStyleVibe] = useState('Minimalist');
   const [colorPalette, setColorPalette] = useState('Neutrals');
   const [selectedItems, setSelectedItems] = useState([]);
+  
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useCallback(
+    debounce((val) => setSearchTerm(val), 300),
+    []
+  );
+
+  const handleSearchChange = (e) => {
+    setSearchInput(e.target.value);
+    debouncedSearch(e.target.value);
+  };
+
   const [catalog, setCatalog] = useState([]);
 
   // Load saved outfits and catalog from Firestore
@@ -24,52 +43,61 @@ const OutfitSuggestions = () => {
     const unsubOutfits = subscribeToCollection('suggestedOutfits', (data) => {
       setOutfits(data);
     });
-    
+
     const unsubCatalog = subscribeToCollection('products', (data) => {
       setCatalog(data);
     });
-    
-    return () => { unsubOutfits(); unsubCatalog(); };
+
+    return () => {
+      unsubOutfits();
+      unsubCatalog();
+    };
   }, []);
 
-  const filteredCatalog = catalog.filter(item => 
-    (item.name || '').toLowerCase().includes((searchTerm || '').toLowerCase())
+  const filteredCatalog = catalog.filter((item) =>
+    (item.name || '').toLowerCase().includes((searchTerm || '').toLowerCase()),
   );
 
   const toggleItemSelection = (item) => {
-    const isSelected = selectedItems.find(i => i.id === item.id);
+    const isSelected = selectedItems.find((i) => i.id === item.id);
     if (isSelected) {
-      setSelectedItems(selectedItems.filter(i => i.id !== item.id));
+      setSelectedItems(selectedItems.filter((i) => i.id !== item.id));
     } else {
       setSelectedItems([...selectedItems, item]);
     }
   };
 
   const handleCreateOutfit = async () => {
-    if (!outfitName.trim()) { toast.error('Please enter an outfit name'); return; }
-    if (selectedItems.length === 0) { toast.error('Please select at least one item'); return; }
+    if (!outfitName.trim()) {
+      toast.error('Please enter an outfit name');
+      return;
+    }
+    if (selectedItems.length === 0) {
+      toast.error('Please select at least one item');
+      return;
+    }
 
     try {
       await addDocument('suggestedOutfits', {
-        name: outfitName,
-        tag: occasionTag,
-        items: selectedItems.map(item => ({
+        name: sanitizeText(outfitName),
+        tag: sanitizeText(occasionTag),
+        items: selectedItems.map((item) => ({
           id: item.docId,
           name: item.name,
           category: item.category,
           price: item.price,
-          image: item.imageUrl || '👗'
+          image: item.imageUrl || '👗',
         })),
-        description: outfitDescription || '',
-        season: outfitSeason,
-        gender: outfitGender,
-        styleVibe: styleVibe,
-        colorPalette: colorPalette,
+        description: sanitizeText(outfitDescription) || '',
+        season: sanitizeText(outfitSeason),
+        gender: sanitizeText(outfitGender),
+        styleVibe: sanitizeText(styleVibe),
+        colorPalette: sanitizeText(colorPalette),
         totalPrice: selectedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0),
       });
       toast.success('Outfit combination created!');
       setIsModalOpen(false);
-      
+
       // Reset modal state
       setOutfitName('');
       setOccasionTag('Casual');
@@ -79,6 +107,7 @@ const OutfitSuggestions = () => {
       setStyleVibe('Minimalist');
       setColorPalette('Neutrals');
       setSelectedItems([]);
+      setSearchInput('');
       setSearchTerm('');
     } catch (err) {
       toast.error('Failed to create outfit');
@@ -108,7 +137,13 @@ const OutfitSuggestions = () => {
   const renderItemImage = (imageAsset) => {
     if (!imageAsset) return <Shirt size={16} />;
     if (imageAsset.startsWith('http')) {
-      return <img src={imageAsset} alt="item" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />;
+      return (
+        <img
+          src={imageAsset}
+          alt="item"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
+        />
+      );
     }
     return imageAsset;
   };
@@ -133,7 +168,7 @@ const OutfitSuggestions = () => {
             <p className="text-secondary">Click "Create Outfit" to build your first suggestion.</p>
           </div>
         ) : (
-          outfits.map(outfit => (
+          outfits.map((outfit) => (
             <div key={outfit.id} className="card outfit-display-card">
               <div className="outfit-display-header">
                 <div>
@@ -142,35 +177,71 @@ const OutfitSuggestions = () => {
                     <Tag size={12} /> {outfit.tag}
                   </span>
                 </div>
-                <button className="icon-btn-small text-danger" onClick={() => handleDelete(outfit.docId)}>
-                   <X size={16} />
+                <button
+                  className="icon-btn-small text-danger"
+                  onClick={() => handleDelete(outfit.docId)}
+                >
+                  <X size={16} />
                 </button>
               </div>
-              <div style={{display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'0.25rem'}}>
-                <label className="toggle-switch" style={{transform:'scale(0.8)'}}>
-                  <input type="checkbox" checked={outfit.active !== false} onChange={() => toggleOutfitActive(outfit)} />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginTop: '0.25rem',
+                }}
+              >
+                <label className="toggle-switch" style={{ transform: 'scale(0.8)' }}>
+                  <input
+                    type="checkbox"
+                    checked={outfit.active !== false}
+                    onChange={() => toggleOutfitActive(outfit)}
+                  />
                   <span className="toggle-slider"></span>
                 </label>
-                <span style={{fontSize:'0.75rem', color: outfit.active !== false ? '#10B981' : 'var(--text-secondary)', fontWeight:500}}>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: outfit.active !== false ? '#10B981' : 'var(--text-secondary)',
+                    fontWeight: 500,
+                  }}
+                >
                   {outfit.active !== false ? 'Active' : 'Inactive'}
                 </span>
               </div>
-              {outfit.description && <p className="text-secondary text-sm mt-1">{outfit.description}</p>}
+              {outfit.description && (
+                <p className="text-secondary text-sm mt-1">{outfit.description}</p>
+              )}
               <div className="flex gap-2 mt-2 flex-wrap">
-                {outfit.season && <span className="outfit-tag"><Tag size={10} /> {outfit.season}</span>}
-                {outfit.gender && <span className="outfit-tag"><Tag size={10} /> {outfit.gender}</span>}
-                {outfit.styleVibe && <span className="outfit-tag"><Tag size={10} /> {outfit.styleVibe}</span>}
-                {outfit.colorPalette && <span className="outfit-tag"><Tag size={10} /> {outfit.colorPalette}</span>}
+                {outfit.season && (
+                  <span className="outfit-tag">
+                    <Tag size={10} /> {outfit.season}
+                  </span>
+                )}
+                {outfit.gender && (
+                  <span className="outfit-tag">
+                    <Tag size={10} /> {outfit.gender}
+                  </span>
+                )}
+                {outfit.styleVibe && (
+                  <span className="outfit-tag">
+                    <Tag size={10} /> {outfit.styleVibe}
+                  </span>
+                )}
+                {outfit.colorPalette && (
+                  <span className="outfit-tag">
+                    <Tag size={10} /> {outfit.colorPalette}
+                  </span>
+                )}
               </div>
-              
+
               <div className="outfit-display-items">
                 <p className="items-count">Items ({outfit.items.length}):</p>
                 <ul className="items-list">
-                  {outfit.items.map(item => (
+                  {outfit.items.map((item) => (
                     <li key={item.id}>
-                      <span className="item-icon">
-                        {renderItemImage(item.image)}
-                      </span>
+                      <span className="item-icon">{renderItemImage(item.image)}</span>
                       <div className="item-details">
                         <span className="item-name">{item.name}</span>
                         <span className="item-cat">{item.category}</span>
@@ -178,7 +249,11 @@ const OutfitSuggestions = () => {
                     </li>
                   ))}
                 </ul>
-                {outfit.totalPrice > 0 && <p className="text-sm font-medium mt-2" style={{color: 'var(--color-gold)'}}>Total: ₱{outfit.totalPrice.toLocaleString()}</p>}
+                {outfit.totalPrice > 0 && (
+                  <p className="text-sm font-medium mt-2" style={{ color: 'var(--color-gold)' }}>
+                    Total: ₱{outfit.totalPrice.toLocaleString()}
+                  </p>
+                )}
               </div>
             </div>
           ))
@@ -190,24 +265,26 @@ const OutfitSuggestions = () => {
           <div className="modal-content modal-lg outfit-modal">
             <div className="modal-header">
               <h2>Create Outfit Combination</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>&times;</button>
+              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+                &times;
+              </button>
             </div>
-            
+
             <div className="modal-body">
               <div className="form-row mb-4">
                 <div className="form-group flex-2">
                   <label className="label">Outfit Name</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="e.g., Evening Elegance" 
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g., Evening Elegance"
                     value={outfitName}
                     onChange={(e) => setOutfitName(e.target.value)}
                   />
                 </div>
                 <div className="form-group flex-1">
                   <label className="label">Occasion Tag</label>
-                  <select 
+                  <select
                     className="input-field"
                     value={occasionTag}
                     onChange={(e) => setOccasionTag(e.target.value)}
@@ -222,12 +299,22 @@ const OutfitSuggestions = () => {
 
               <div className="form-group">
                 <label className="label">Style Description / Tips</label>
-                <textarea className="input-field" rows="2" placeholder="e.g., Perfect for evening events..." value={outfitDescription} onChange={(e) => setOutfitDescription(e.target.value)}></textarea>
+                <textarea
+                  className="input-field"
+                  rows="2"
+                  placeholder="e.g., Perfect for evening events..."
+                  value={outfitDescription}
+                  onChange={(e) => setOutfitDescription(e.target.value)}
+                ></textarea>
               </div>
               <div className="form-row mb-4">
                 <div className="form-group flex-1">
                   <label className="label">Season</label>
-                  <select className="input-field" value={outfitSeason} onChange={(e) => setOutfitSeason(e.target.value)}>
+                  <select
+                    className="input-field"
+                    value={outfitSeason}
+                    onChange={(e) => setOutfitSeason(e.target.value)}
+                  >
                     <option>All-Season</option>
                     <option>Dry Season (Summer)</option>
                     <option>Wet Season (Rainy)</option>
@@ -241,7 +328,11 @@ const OutfitSuggestions = () => {
               <div className="form-row mb-4">
                 <div className="form-group flex-1">
                   <label className="label">Style Vibe</label>
-                  <select className="input-field" value={styleVibe} onChange={(e) => setStyleVibe(e.target.value)}>
+                  <select
+                    className="input-field"
+                    value={styleVibe}
+                    onChange={(e) => setStyleVibe(e.target.value)}
+                  >
                     <option>Minimalist</option>
                     <option>Chic</option>
                     <option>Streetwear</option>
@@ -252,7 +343,11 @@ const OutfitSuggestions = () => {
                 </div>
                 <div className="form-group flex-1">
                   <label className="label">Color Palette</label>
-                  <select className="input-field" value={colorPalette} onChange={(e) => setColorPalette(e.target.value)}>
+                  <select
+                    className="input-field"
+                    value={colorPalette}
+                    onChange={(e) => setColorPalette(e.target.value)}
+                  >
                     <option>Neutrals</option>
                     <option>Earth Tones</option>
                     <option>Monochrome</option>
@@ -267,14 +362,14 @@ const OutfitSuggestions = () => {
                 <label className="label">Selected Items ({selectedItems.length})</label>
                 <div className={`selected-items-box ${selectedItems.length === 0 ? 'empty' : ''}`}>
                   {selectedItems.length === 0 ? (
-                    <p className="text-secondary text-sm text-center">Select clothing items below to create an outfit</p>
+                    <p className="text-secondary text-sm text-center">
+                      Select clothing items below to create an outfit
+                    </p>
                   ) : (
                     <div className="selected-chips">
-                      {selectedItems.map(item => (
+                      {selectedItems.map((item) => (
                         <div key={item.id} className="selected-chip">
-                          <span className="chip-icon">
-                            {renderItemImage(item.image)}
-                          </span>
+                          <span className="chip-icon">{renderItemImage(item.image)}</span>
                           <span className="chip-name">{item.name}</span>
                           <button className="chip-remove" onClick={() => toggleItemSelection(item)}>
                             <X size={12} />
@@ -291,28 +386,26 @@ const OutfitSuggestions = () => {
                   <label className="label m-0">Available Clothing Items</label>
                   <div className="search-box small-search">
                     <Search size={14} className="search-icon" />
-                    <input 
-                      type="text" 
-                      placeholder="Search items..." 
+                    <input
+                      type="text"
+                      placeholder="Search items..."
                       className="input-field pl-8 input-sm"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      value={searchInput}
+                      onChange={handleSearchChange}
                     />
                   </div>
                 </div>
-                
+
                 <div className="available-items-grid">
-                  {filteredCatalog.map(item => {
-                    const isSelected = selectedItems.find(i => i.id === item.id);
+                  {filteredCatalog.map((item) => {
+                    const isSelected = selectedItems.find((i) => i.id === item.id);
                     return (
-                      <div 
-                        key={item.id} 
+                      <div
+                        key={item.id}
                         className={`available-item-card ${isSelected ? 'selected' : ''}`}
                         onClick={() => toggleItemSelection(item)}
                       >
-                        <div className="avail-icon">
-                          {renderItemImage(item.image)}
-                        </div>
+                        <div className="avail-icon">{renderItemImage(item.image)}</div>
                         <div className="avail-details">
                           <span className="avail-name">{item.name}</span>
                           <span className="avail-cat">{item.category}</span>
@@ -325,9 +418,11 @@ const OutfitSuggestions = () => {
             </div>
 
             <div className="modal-footer">
-              <button className="btn-outline" onClick={() => setIsModalOpen(false)}>Cancel</button>
-              <button 
-                className="btn-primary" 
+              <button className="btn-outline" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
                 onClick={handleCreateOutfit}
                 disabled={!outfitName.trim() || selectedItems.length === 0}
               >

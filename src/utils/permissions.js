@@ -1,25 +1,25 @@
 /**
  * Centralized permission matrix for the JezSy Collection Admin.
- * 
+ *
  * Roles: Owner, Admin, Sales Staff
  * UI restriction + this map = consistent enforcement.
  */
 
 const PERMISSIONS = {
-  'manage_staff':       ['Owner'],
-  'delete_catalog':     ['Owner', 'Admin'],
-  'create_catalog':     ['Owner', 'Admin'],
-  'edit_catalog':       ['Owner', 'Admin'],
-  'assign_reservation': ['Owner', 'Admin', 'Sales Staff'],
-  'create_reservation': ['Owner', 'Admin', 'Sales Staff'],
-  'delete_reservation': ['Owner', 'Admin'],
-  'view_analytics':     ['Owner', 'Admin'],
-  'export_analytics':   ['Owner'],
-  'manage_devices':     ['Owner'],
-  'delete_customer':    ['Owner', 'Admin'],
-  'edit_customer':      ['Owner', 'Admin', 'Sales Staff'],
-  'manage_settings':    ['Owner'],
-  'seed_demo_data':     ['Owner'],
+  manage_staff: ['Owner'],
+  delete_catalog: ['Owner', 'Admin'],
+  create_catalog: ['Owner', 'Admin'],
+  edit_catalog: ['Owner', 'Admin'],
+  assign_reservation: ['Owner', 'Admin', 'Sales Staff'],
+  create_reservation: ['Owner', 'Admin', 'Sales Staff'],
+  delete_reservation: ['Owner', 'Admin'],
+  view_analytics: ['Owner', 'Admin'],
+  export_analytics: ['Owner'],
+  manage_devices: ['Owner'],
+  delete_customer: ['Owner', 'Admin'],
+  edit_customer: ['Owner', 'Admin', 'Sales Staff'],
+  manage_settings: ['Owner'],
+  seed_demo_data: ['Owner'],
 };
 
 /**

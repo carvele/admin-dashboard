@@ -15,10 +15,7 @@ const DashboardLayout = () => {
 
   return (
     <div className="layout-container">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="layout-main">
         <TopNav user={user} onHamburger={() => setSidebarOpen(true)} />
         <main className="layout-content">

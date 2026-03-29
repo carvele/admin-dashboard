@@ -11,7 +11,7 @@
   flex-shrink: 0;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 100;
-  box-shadow: 2px 0 20px rgba(0,0,0,0.15);
+  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
 }
 
 /* Mobile */
@@ -21,7 +21,7 @@
     top: 0;
     left: 0;
     transform: translateX(-100%);
-    box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
   }
   .sidebar.sidebar-open {
     transform: translateX(0);
@@ -36,7 +36,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background-color: rgba(0,0,0,0.5);
+    background-color: rgba(0, 0, 0, 0.5);
     z-index: 99;
     backdrop-filter: blur(2px);
   }
@@ -45,7 +45,7 @@
 /* ===== Brand ===== */
 .sidebar-brand {
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -59,7 +59,7 @@
 }
 .brand-subtitle {
   font-size: 0.7rem;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   letter-spacing: 1.5px;
   text-transform: uppercase;
   display: block;
@@ -67,15 +67,20 @@
 }
 
 .sidebar-close-btn {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   padding: 0.25rem;
   border-radius: 4px;
   transition: all 0.2s;
   display: none;
 }
-.sidebar-close-btn:hover { color: white; background-color: rgba(255,255,255,0.1); }
+.sidebar-close-btn:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+}
 @media (max-width: 768px) {
-  .sidebar-close-btn { display: flex; }
+  .sidebar-close-btn {
+    display: flex;
+  }
 }
 
 /* ===== Nav ===== */
@@ -92,7 +97,7 @@
 }
 .nav-divider {
   height: 1px;
-  background-color: rgba(255,255,255,0.1);
+  background-color: rgba(255, 255, 255, 0.1);
   margin: 0.75rem 1rem;
 }
 
@@ -101,7 +106,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  color: rgba(253,251,247,0.65);
+  color: rgba(253, 251, 247, 0.65);
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -112,21 +117,21 @@
   overflow: hidden;
 }
 .nav-link:hover {
-  background-color: rgba(255,255,255,0.06);
+  background-color: rgba(255, 255, 255, 0.06);
   color: var(--white);
   transform: translateX(4px);
 }
 .nav-link.active {
-  background: linear-gradient(90deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%);
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
   color: var(--accent);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(212,175,55,0.2);
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.2);
 }
 
 /* ===== Footer Profile Badge ===== */
 .sidebar-footer {
   padding: 1rem;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .profile-badge {
   display: flex;
@@ -134,13 +139,13 @@
   gap: 0.75rem;
   padding: 0.75rem;
   border-radius: 12px;
-  background-color: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.05);
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   transition: background-color 0.2s;
   cursor: default;
 }
 .profile-badge:hover {
-  background-color: rgba(255,255,255,0.06);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 .profile-avatar {
   width: 36px;
@@ -178,16 +183,16 @@
 
 /* Locked admin links */
 .nav-link.locked {
-  color: rgba(253,251,247,0.4);
+  color: rgba(253, 251, 247, 0.4);
   cursor: pointer;
 }
 .nav-link.locked:hover {
-  background-color: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.55);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
 }
 .lock-icon {
   margin-left: auto;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255, 255, 255, 0.35);
   flex-shrink: 0;
 }
 .unlock-icon {
@@ -215,12 +220,12 @@
   font-weight: 600;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  background-color: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.8);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
   transition: all 0.2s;
 }
 .lock-admin-btn:hover {
-  background-color: rgba(239,68,68,0.2);
+  background-color: rgba(239, 68, 68, 0.2);
   color: #fca5a5;
 }
 
@@ -278,7 +283,7 @@
   font-size: 1.25rem;
 }
 .pin-error {
-  color: #DC2626;
+  color: #dc2626;
   font-size: 0.8125rem;
   margin-top: 0.5rem;
 }

@@ -4,11 +4,23 @@
   gap: 1.5rem;
 }
 
-.d-flex { display: flex; }
-.justify-between { justify-content: space-between; }
-.align-center { align-items: center; }
-.gap-2 { gap: 0.5rem; }
-.flex-center { display: flex; align-items: center; justify-content: center; }
+.d-flex {
+  display: flex;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.align-center {
+  align-items: center;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .header-actions {
   display: flex;
@@ -33,7 +45,7 @@
 .toggle-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .card-toolbar {
@@ -57,12 +69,25 @@
   padding-left: 2.5rem;
 }
 
-.font-mono { font-family: monospace; }
-.font-medium { font-weight: 500; }
-.text-sm { font-size: 0.875rem; }
-.text-secondary { color: var(--text-secondary); }
-.text-center { text-align: center; }
-.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.font-mono {
+  font-family: monospace;
+}
+.font-medium {
+  font-weight: 500;
+}
+.text-sm {
+  font-size: 0.875rem;
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-center {
+  text-align: center;
+}
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
 
 .countdown-text {
   display: inline-flex;
@@ -92,17 +117,34 @@
   background-color: var(--cream);
   transition: all 0.2s;
 }
-.action-icon:hover { transform: scale(1.05); }
-.action-icon.view:hover { background-color: var(--beige); color: var(--charcoal); }
-.action-icon.approve:hover { background-color: var(--status-completed-bg); color: var(--status-completed-text); }
-.action-icon.reject:hover { background-color: var(--status-cancelled-bg); color: var(--status-cancelled-text); }
-.action-icon.reschedule:hover { background-color: #E0E7FF; color: #4338CA; }
+.action-icon:hover {
+  transform: scale(1.05);
+}
+.action-icon.view:hover {
+  background-color: var(--beige);
+  color: var(--charcoal);
+}
+.action-icon.approve:hover {
+  background-color: var(--status-completed-bg);
+  color: var(--status-completed-text);
+}
+.action-icon.reject:hover {
+  background-color: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
+}
+.action-icon.reschedule:hover {
+  background-color: #e0e7ff;
+  color: #4338ca;
+}
 
 /* Modal Styles */
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -114,7 +156,7 @@
   border-radius: 12px;
   width: 100%;
   max-width: 500px;
-  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
 }
 .modal-header {
   padding: 1.5rem;
@@ -131,7 +173,9 @@
   font-size: 1.5rem;
   color: var(--text-secondary);
 }
-.close-btn:hover { color: var(--charcoal); }
+.close-btn:hover {
+  color: var(--charcoal);
+}
 .modal-body {
   padding: 1.5rem;
 }
@@ -164,7 +208,9 @@
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--border-color);
 }
-.detail-row:last-child { border-bottom: none; }
+.detail-row:last-child {
+  border-bottom: none;
+}
 .detail-label {
   font-size: 0.875rem;
   color: var(--text-secondary);

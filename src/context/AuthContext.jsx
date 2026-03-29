@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { registerDevice, getDeviceStatus, logAction, getStaffByEmail } from '../firebase/firestore';
@@ -15,7 +11,7 @@ const AuthContext = createContext(null);
 const withTimeout = (promise, ms = 5000) =>
   Promise.race([
     promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
   ]);
 
 export const AuthProvider = ({ children }) => {
@@ -37,23 +33,38 @@ export const AuthProvider = ({ children }) => {
 
     try {
       // --- 1. Fingerprint ---
-      let visitorId = localStorage.getItem('device_fallback_id');
+      let visitorId = null;
+      try {
+        const stored = localStorage.getItem('_jz_fp_id');
+        if (stored) visitorId = atob(stored);
+      } catch (e) {
+        // ignore decoding errors
+      }
+
       try {
         const fp = await withTimeout(FingerprintJS.load(), 3000);
         const result = await fp.get();
         visitorId = result.visitorId;
-        localStorage.setItem('device_fallback_id', visitorId);
+        localStorage.setItem('_jz_fp_id', btoa(visitorId));
       } catch {
         if (!visitorId) {
           visitorId = 'fb_' + Math.random().toString(36).substr(2, 9);
-          localStorage.setItem('device_fallback_id', visitorId);
+          localStorage.setItem('_jz_fp_id', btoa(visitorId));
         }
       }
       setDeviceFingerprint(visitorId);
 
       // --- 2. Register device & start live listener (non-blocking) ---
       try {
-        await withTimeout(registerDevice(visitorId, navigator.userAgent, firebaseUser.email, firebaseUser.displayName || ''), 5000);
+        await withTimeout(
+          registerDevice(
+            visitorId,
+            navigator.userAgent,
+            firebaseUser.email,
+            firebaseUser.displayName || '',
+          ),
+          5000,
+        );
         deviceUnsubRef.current();
         deviceUnsubRef.current = getDeviceStatus(visitorId, (docSnap) => {
           if (docSnap) {
@@ -65,7 +76,9 @@ export const AuthProvider = ({ children }) => {
           }
         });
       } catch {
-        console.warn('Device registration timed out or failed. Continuing without device tracking.');
+        console.warn(
+          'Device registration timed out or failed. Continuing without device tracking.',
+        );
         setDeviceStatus('approved'); // Graceful fallback: let them in
       }
 
@@ -77,25 +90,31 @@ export const AuthProvider = ({ children }) => {
         if (staffDoc) {
           resolvedRole = staffDoc.role;
           staffName = staffDoc.name;
-        } else if (firebaseUser.email === 'admin@jezsy.com' || firebaseUser.email === 'admin@jezsycollection.com') {
+        } else if (
+          firebaseUser.email === 'admin@jezsy.com' ||
+          firebaseUser.email === 'admin@jezsycollection.com'
+        ) {
           resolvedRole = 'Owner';
         } else {
-           await signOut(auth);
-           setUser(null);
-           setIsLoading(false);
-           toast.error("Access denied. Admin portal is for staff only.");
-           return;
+          await signOut(auth);
+          setUser(null);
+          setIsLoading(false);
+          toast.error('Access denied. Admin portal is for staff only.');
+          return;
         }
       } catch (err) {
         console.warn('Staff role lookup timed out or failed.', err);
-        if (firebaseUser.email === 'admin@jezsy.com' || firebaseUser.email === 'admin@jezsycollection.com') {
+        if (
+          firebaseUser.email === 'admin@jezsy.com' ||
+          firebaseUser.email === 'admin@jezsycollection.com'
+        ) {
           resolvedRole = 'Owner';
         } else {
-           await signOut(auth);
-           setUser(null);
-           setIsLoading(false);
-           toast.error("Access denied. Admin portal is for staff only.");
-           return;
+          await signOut(auth);
+          setUser(null);
+          setIsLoading(false);
+          toast.error('Access denied. Admin portal is for staff only.');
+          return;
         }
       }
 
@@ -104,13 +123,12 @@ export const AuthProvider = ({ children }) => {
         uid: firebaseUser.uid,
         name: staffName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Staff',
         email: firebaseUser.email,
-        role: resolvedRole
+        role: resolvedRole,
       });
 
       setIsAdminUnlocked(resolvedRole === 'Admin' || resolvedRole === 'Owner');
-
     } catch (err) {
-      console.error("Auth check failed:", err);
+      console.error('Auth check failed:', err);
       setDeviceStatus('error');
     } finally {
       // ★ GUARANTEED: always unblock the UI — no matter what
@@ -121,8 +139,20 @@ export const AuthProvider = ({ children }) => {
   // Listen for auth state changes (initial load + logout)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, handleDeviceCheck);
+    
+    // Background token refresher (every 10 minutes)
+    const tokenRefreshInterval = setInterval(() => {
+      if (auth.currentUser) {
+        auth.currentUser.getIdToken(true).catch((err) => {
+          console.error("Token refresh failed, ending session", err);
+          logout();
+        });
+      }
+    }, 10 * 60 * 1000);
+
     return () => {
       unsubscribe();
+      clearInterval(tokenRefreshInterval);
       deviceUnsubRef.current();
     };
   }, []);
@@ -130,15 +160,18 @@ export const AuthProvider = ({ children }) => {
   // Auto-logout idle timer (30 minutes)
   useEffect(() => {
     let timeoutId;
-    
+
     const resetTimer = () => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        if (user) {
-          toast.error("Session expired due to inactivity. Logging out.");
-          logout();
-        }
-      }, 30 * 60 * 1000);
+      timeoutId = setTimeout(
+        () => {
+          if (user) {
+            toast.error('Session expired due to inactivity. Logging out.');
+            logout();
+          }
+        },
+        30 * 60 * 1000,
+      );
     };
 
     if (user && deviceStatus === 'approved') {
@@ -170,7 +203,8 @@ export const AuthProvider = ({ children }) => {
       if (error.code === 'auth/user-not-found') message = 'No account found with this email.';
       if (error.code === 'auth/wrong-password') message = 'Incorrect password.';
       if (error.code === 'auth/invalid-email') message = 'Invalid email address.';
-      if (error.code === 'auth/invalid-credential') message = 'Invalid credentials. Please try again.';
+      if (error.code === 'auth/invalid-credential')
+        message = 'Invalid credentials. Please try again.';
       toast.error(message);
       throw error;
     }
@@ -181,6 +215,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAdminUnlocked(false);
     setDeviceStatus('checking');
+    localStorage.clear();
+    sessionStorage.clear();
     toast.info('Logged out successfully');
   };
 
@@ -193,29 +229,37 @@ export const AuthProvider = ({ children }) => {
     toast.info('Access is permanently managed by your staff role.');
   };
 
-
-
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--cream)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          backgroundColor: 'var(--cream)',
+        }}
+      >
         <div className="loading-spinner"></div>
       </div>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      logout, 
-      isAdminUnlocked, 
-      unlockAdmin, 
-      lockAdmin, 
-      deviceStatus, 
-      deviceFingerprint,
-      deviceData,
-      isLoading
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        isAdminUnlocked,
+        unlockAdmin,
+        lockAdmin,
+        deviceStatus,
+        deviceFingerprint,
+        deviceData,
+        isLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,23 @@
 import React, { useState } from 'react';
-import { Search, Plus, Download, PackageOpen, Package, AlertTriangle, Edit, Trash2 } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, logAction } from '../../firebase/firestore';
+import {
+  Search,
+  Plus,
+  Download,
+  PackageOpen,
+  Package,
+  AlertTriangle,
+  Edit,
+  Trash2,
+} from 'lucide-react';
+import {
+  subscribeToInventory,
+  updateInventoryItem,
+  deleteInventoryItem,
+  getInventory,
+  getProducts,
+  updateProduct,
+} from '../../services/productService';
+import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import './Inventory.css';
@@ -11,7 +28,7 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
-    const unsub = subscribeToCollection('inventory', (data) => {
+    const unsub = subscribeToInventory((data) => {
       setInventory(data);
       setLoading(false);
     });
@@ -21,7 +38,7 @@ const Inventory = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Modals
-  const [restockModal, setRestockModal] = useState(null);  // inv item or null
+  const [restockModal, setRestockModal] = useState(null); // inv item or null
   const [editModal, setEditModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -33,13 +50,16 @@ const Inventory = () => {
   const totalItems = inventory.length;
   const totalStock = inventory.reduce((sum, i) => sum + i.total, 0);
   const totalReserved = inventory.reduce((sum, i) => sum + i.reserved, 0);
-  const lowStockCount = inventory.filter(i => i.available === 0 || (i.available / i.total) <= 0.2).length;
+  const lowStockCount = inventory.filter(
+    (i) => i.available === 0 || i.available / i.total <= 0.2,
+  ).length;
 
   // Extract unique categories for filter
-  const uniqueCategories = ['All', ...new Set(inventory.map(i => i.category).filter(Boolean))];
+  const uniqueCategories = ['All', ...new Set(inventory.map((i) => i.category).filter(Boolean))];
 
-  const filteredInv = inventory.filter(item => {
-    const matchesSearch = (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+  const filteredInv = inventory.filter((item) => {
+    const matchesSearch =
+      (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
       (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
@@ -57,69 +77,87 @@ const Inventory = () => {
   // --- ACTIONS ---
   const syncProductStock = async (productDocId, sku) => {
     try {
-      const { getCollection } = await import('../../firebase/firestore');
-      const currentInventory = await getCollection('inventory');
-      const allSizes = currentInventory.filter(i => (i.productDocId || i.sku) === (productDocId || sku));
-      
+      const currentInventory = await getInventory();
+      const allSizes = currentInventory.filter(
+        (i) => (i.productDocId || i.sku) === (productDocId || sku),
+      );
+
       let newTotalStock = 0;
       let actualProdDocId = productDocId;
-      
-      allSizes.forEach(s => {
-        newTotalStock += (s.available || 0);
+
+      allSizes.forEach((s) => {
+        newTotalStock += s.available || 0;
         if (!actualProdDocId && s.productDocId) actualProdDocId = s.productDocId;
       });
 
       if (!actualProdDocId) {
-        const prods = await getCollection('products');
-        const match = prods.find(p => p.id === sku); // item.id is sku
+        const prods = await getProducts();
+        const match = prods.find((p) => p.id === sku); // item.id is sku
         if (match) actualProdDocId = match.docId;
       }
 
       if (actualProdDocId) {
-        await updateDocument('products', actualProdDocId, { stock: newTotalStock });
+        await updateProduct(actualProdDocId, { stock: newTotalStock });
       }
-    } catch(err) {
-      console.error("Failed to sync total stock to product:", err);
+    } catch (err) {
+      console.error('Failed to sync total stock to product:', err);
     }
   };
 
   const handleRestock = async (e) => {
     e.preventDefault();
     const qty = parseInt(restockQty);
-    if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
-    
+    if (!qty || qty <= 0) {
+      toast.error('Enter a valid quantity');
+      return;
+    }
+
     try {
-      await updateDocument('inventory', restockModal.docId, {
+      await updateInventoryItem(restockModal.docId, {
         total: restockModal.total + qty,
-        available: restockModal.available + qty
+        available: restockModal.available + qty,
       });
       await syncProductStock(restockModal.productDocId, restockModal.sku);
-      await logAction(user, 'Restocked inventory item', { itemName: restockModal.item, size: restockModal.size, qtyAdded: qty });
+      await logAction(user, 'Restocked inventory item', {
+        itemName: restockModal.item,
+        size: restockModal.size,
+        qtyAdded: qty,
+      });
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
       setRestockQty('');
-    } catch(e) {
+    } catch (e) {
       toast.error('Failed to restock items');
     }
   };
 
   const handleEdit = async (e) => {
     e.preventDefault();
-    const t = parseInt(editForm.total), r = parseInt(editForm.reserved);
-    if (isNaN(t) || isNaN(r) || t < 0 || r < 0) { toast.error('Enter valid numbers'); return; }
-    if (r > t) { toast.error('Reserved cannot exceed total'); return; }
-    
+    const t = parseInt(editForm.total),
+      r = parseInt(editForm.reserved);
+    if (isNaN(t) || isNaN(r) || t < 0 || r < 0) {
+      toast.error('Enter valid numbers');
+      return;
+    }
+    if (r > t) {
+      toast.error('Reserved cannot exceed total');
+      return;
+    }
+
     try {
-      await updateDocument('inventory', editModal.docId, {
+      await updateInventoryItem(editModal.docId, {
         total: t,
         reserved: r,
-        available: t - r
+        available: t - r,
       });
       await syncProductStock(editModal.productDocId, editModal.sku);
-      await logAction(user, 'Updated inventory item details', { itemName: editModal.item, size: editModal.size });
+      await logAction(user, 'Updated inventory item details', {
+        itemName: editModal.item,
+        size: editModal.size,
+      });
       toast.success(`Updated ${editModal.item} (${editModal.size})`);
       setEditModal(null);
-    } catch(e) {
+    } catch (e) {
       toast.error('Failed to update inventory');
     }
   };
@@ -127,17 +165,16 @@ const Inventory = () => {
   const handleDelete = async () => {
     const item = deleteConfirm;
     try {
-      await deleteDocument('inventory', item.docId);
+      await deleteInventoryItem(item.docId);
       await syncProductStock(item.productDocId, item.sku);
       await logAction(user, 'Deleted inventory item', { itemName: item.item, size: item.size });
       toast.success(`Removed ${item.item} (${item.size}) from inventory`);
-    } catch(e) {
+    } catch (e) {
       toast.error('Failed to delete item from inventory');
     } finally {
       setDeleteConfirm(null);
     }
   };
-
 
   const openEditModal = (inv) => {
     setEditForm({ total: inv.total, reserved: inv.reserved, available: inv.available });
@@ -146,11 +183,17 @@ const Inventory = () => {
 
   const handleExportCSV = () => {
     const header = 'SKU,Product,Category,Size,Total,Reserved,Available\n';
-    const rows = inventory.map(i => `${i.id},${i.item},${i.category},${i.size},${i.total},${i.reserved},${i.available}`).join('\n');
+    const rows = inventory
+      .map(
+        (i) => `${i.id},${i.item},${i.category},${i.size},${i.total},${i.reserved},${i.available}`,
+      )
+      .join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'inventory_export.csv'; a.click();
+    a.href = url;
+    a.download = 'inventory_export.csv';
+    a.click();
     URL.revokeObjectURL(url);
     toast.success('Inventory exported as CSV');
   };
@@ -160,7 +203,9 @@ const Inventory = () => {
       <div className="page-header d-flex justify-between align-center">
         <div>
           <h1 className="page-title">Inventory Management</h1>
-          <p className="page-subtitle">Track stock levels and quantities per size across all products</p>
+          <p className="page-subtitle">
+            Track stock levels and quantities per size across all products
+          </p>
         </div>
         <div className="flex-center gap-2">
           <button className="btn-outline flex-center gap-2" onClick={handleExportCSV}>
@@ -171,28 +216,36 @@ const Inventory = () => {
 
       <div className="inv-summary-grid">
         <div className="card inv-stat-card">
-          <div className="icon-bg-soft blue"><PackageOpen size={24}/></div>
+          <div className="icon-bg-soft blue">
+            <PackageOpen size={24} />
+          </div>
           <div className="inv-stat-content">
             <p className="stat-label">Total Unique Items</p>
             <h3>{totalItems}</h3>
           </div>
         </div>
         <div className="card inv-stat-card">
-          <div className="icon-bg-soft green"><PackageOpen size={24}/></div>
+          <div className="icon-bg-soft green">
+            <PackageOpen size={24} />
+          </div>
           <div className="inv-stat-content">
             <p className="stat-label">Total Stock Units</p>
             <h3>{totalStock.toLocaleString()}</h3>
           </div>
         </div>
         <div className="card inv-stat-card">
-          <div className="icon-bg-soft orange"><PackageOpen size={24}/></div>
+          <div className="icon-bg-soft orange">
+            <PackageOpen size={24} />
+          </div>
           <div className="inv-stat-content">
             <p className="stat-label">Reserved Units</p>
             <h3>{totalReserved.toLocaleString()}</h3>
           </div>
         </div>
         <div className={`card inv-stat-card ${lowStockCount > 0 ? 'border-danger' : ''}`}>
-          <div className="icon-bg-soft red"><AlertTriangle size={24}/></div>
+          <div className="icon-bg-soft red">
+            <AlertTriangle size={24} />
+          </div>
           <div className="inv-stat-content">
             <p className="stat-label text-danger font-medium">Low Stock Alerts</p>
             <h3 className="text-danger">{lowStockCount}</h3>
@@ -218,8 +271,10 @@ const Inventory = () => {
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{ width: 'auto', minWidth: '150px' }}
           >
-            {uniqueCategories.map(cat => (
-              <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+            {uniqueCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat === 'All' ? 'All Categories' : cat}
+              </option>
             ))}
           </select>
         </div>
@@ -241,20 +296,33 @@ const Inventory = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="9" className="text-center py-8 text-secondary">Loading inventory...</td></tr>
+                <tr>
+                  <td colSpan="9" className="text-center py-8 text-secondary">
+                    Loading inventory...
+                  </td>
+                </tr>
               ) : filteredInv.length === 0 ? (
                 <tr>
                   <td colSpan="9">
                     <div className="empty-state flex-col flex-center gap-3 p-8">
-                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4"><PackageOpen size={48} opacity={0.5} /></div>
+                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
+                        <PackageOpen size={48} opacity={0.5} />
+                      </div>
                       <h3 className="text-lg font-medium">No inventory items found</h3>
-                      <p className="text-secondary text-center max-w-sm">We couldn't find any inventory records matching your current search. Try adjusting your filters.</p>
-                      {searchTerm && <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>Clear Search</button>}
+                      <p className="text-secondary text-center max-w-sm">
+                        We couldn't find any inventory records matching your current search. Try
+                        adjusting your filters.
+                      </p>
+                      {searchTerm && (
+                        <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
+                          Clear Search
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredInv.map(inv => {
+                filteredInv.map((inv) => {
                   const status = getStockStatus(inv.available, inv.total);
                   const percent = inv.total > 0 ? (inv.available / inv.total) * 100 : 0;
 
@@ -263,29 +331,51 @@ const Inventory = () => {
                       <td className="font-mono text-xs text-secondary">{inv.sku || inv.id}</td>
                       <td className="font-medium">{inv.item}</td>
                       <td>{inv.category}</td>
-                      <td><span className="size-badge">{inv.size}</span></td>
+                      <td>
+                        <span className="size-badge">{inv.size}</span>
+                      </td>
                       <td className="text-right">{inv.total}</td>
                       <td className="text-right text-secondary">{inv.reserved}</td>
                       <td className="text-right font-medium">{inv.available}</td>
                       <td>
                         <div className="stock-progress-container">
                           <div className="stock-progress-bar">
-                            <div className="stock-progress-fill" style={{width: `${percent}%`, backgroundColor: status.color}}></div>
+                            <div
+                              className="stock-progress-fill"
+                              style={{ width: `${percent}%`, backgroundColor: status.color }}
+                            ></div>
                           </div>
-                          <span className="stock-status-label" style={{color: status.color}}>{status.label}</span>
+                          <span className="stock-status-label" style={{ color: status.color }}>
+                            {status.label}
+                          </span>
                         </div>
                       </td>
                       <td className="text-right">
                         <div className="action-buttons justify-end">
-                          <button className="icon-btn-small restock-btn" title="Restock" onClick={() => { setRestockModal(inv); setRestockQty(''); }}>
+                          <button
+                            className="icon-btn-small restock-btn"
+                            title="Restock"
+                            onClick={() => {
+                              setRestockModal(inv);
+                              setRestockQty('');
+                            }}
+                          >
                             <Package size={15} />
                           </button>
                           {isAdminUnlocked && (
                             <>
-                              <button className="icon-btn-small" title="Edit" onClick={() => openEditModal(inv)}>
+                              <button
+                                className="icon-btn-small"
+                                title="Edit"
+                                onClick={() => openEditModal(inv)}
+                              >
                                 <Edit size={15} />
                               </button>
-                              <button className="icon-btn-small text-danger" title="Delete" onClick={() => setDeleteConfirm(inv)}>
+                              <button
+                                className="icon-btn-small text-danger"
+                                title="Delete"
+                                onClick={() => setDeleteConfirm(inv)}
+                              >
                                 <Trash2 size={15} />
                               </button>
                             </>
@@ -304,30 +394,52 @@ const Inventory = () => {
       {/* ===== RESTOCK MODAL ===== */}
       {restockModal && (
         <div className="modal-overlay" onClick={() => setRestockModal(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 400}}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 400 }}
+          >
             <div className="modal-header">
               <h2>Restock Item</h2>
-              <button className="close-btn" onClick={() => setRestockModal(null)}>&times;</button>
+              <button className="close-btn" onClick={() => setRestockModal(null)}>
+                &times;
+              </button>
             </div>
             <form className="modal-body" onSubmit={handleRestock}>
               <div className="restock-item-info">
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
               </div>
-              <p className="text-secondary text-sm">Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}</p>
+              <p className="text-secondary text-sm">
+                Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}
+              </p>
               <div className="form-group">
                 <label className="label">Quantity to Add</label>
-                <input type="number" className="input-field" min="1" placeholder="Enter quantity" value={restockQty} onChange={e => setRestockQty(e.target.value)} autoFocus required />
+                <input
+                  type="number"
+                  className="input-field"
+                  min="1"
+                  placeholder="Enter quantity"
+                  value={restockQty}
+                  onChange={(e) => setRestockQty(e.target.value)}
+                  autoFocus
+                  required
+                />
               </div>
               {restockQty && parseInt(restockQty) > 0 && (
                 <div className="restock-preview">
-                  New Total: <strong>{restockModal.total + parseInt(restockQty)}</strong> &nbsp;|&nbsp;
-                  New Available: <strong>{restockModal.available + parseInt(restockQty)}</strong>
+                  New Total: <strong>{restockModal.total + parseInt(restockQty)}</strong>{' '}
+                  &nbsp;|&nbsp; New Available:{' '}
+                  <strong>{restockModal.available + parseInt(restockQty)}</strong>
                 </div>
               )}
               <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setRestockModal(null)}>Cancel</button>
-                <button type="submit" className="btn-primary">Confirm Restock</button>
+                <button type="button" className="btn-outline" onClick={() => setRestockModal(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Confirm Restock
+                </button>
               </div>
             </form>
           </div>
@@ -337,45 +449,107 @@ const Inventory = () => {
       {/* ===== EDIT STOCK MODAL ===== */}
       {editModal && (
         <div className="modal-overlay" onClick={() => setEditModal(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 420}}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 420 }}
+          >
             <div className="modal-header">
-              <h2>Edit Stock — {editModal.item} ({editModal.size})</h2>
-              <button className="close-btn" onClick={() => setEditModal(null)}>&times;</button>
+              <h2>
+                Edit Stock — {editModal.item} ({editModal.size})
+              </h2>
+              <button className="close-btn" onClick={() => setEditModal(null)}>
+                &times;
+              </button>
             </div>
             <form className="modal-body" onSubmit={handleEdit}>
               <div className="form-row">
                 <div className="form-group flex-1">
                   <label className="label">Total Units</label>
-                  <input type="number" className="input-field" min="0" value={editForm.total} onChange={e => setEditForm({ ...editForm, total: e.target.value, available: Math.max(0, parseInt(e.target.value || 0) - parseInt(editForm.reserved || 0)) })} required />
+                  <input
+                    type="number"
+                    className="input-field"
+                    min="0"
+                    value={editForm.total}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        total: e.target.value,
+                        available: Math.max(
+                          0,
+                          parseInt(e.target.value || 0) - parseInt(editForm.reserved || 0),
+                        ),
+                      })
+                    }
+                    required
+                  />
                 </div>
                 <div className="form-group flex-1">
                   <label className="label">Reserved</label>
-                  <input type="number" className="input-field" min="0" value={editForm.reserved} onChange={e => setEditForm({ ...editForm, reserved: e.target.value, available: Math.max(0, parseInt(editForm.total || 0) - parseInt(e.target.value || 0)) })} required />
+                  <input
+                    type="number"
+                    className="input-field"
+                    min="0"
+                    value={editForm.reserved}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        reserved: e.target.value,
+                        available: Math.max(
+                          0,
+                          parseInt(editForm.total || 0) - parseInt(e.target.value || 0),
+                        ),
+                      })
+                    }
+                    required
+                  />
                 </div>
               </div>
               <div className="restock-preview">
-                Calculated Available: <strong>{Math.max(0, parseInt(editForm.total || 0) - parseInt(editForm.reserved || 0))}</strong>
+                Calculated Available:{' '}
+                <strong>
+                  {Math.max(0, parseInt(editForm.total || 0) - parseInt(editForm.reserved || 0))}
+                </strong>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setEditModal(null)}>Cancel</button>
-                <button type="submit" className="btn-primary">Save Changes</button>
+                <button type="button" className="btn-outline" onClick={() => setEditModal(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save Changes
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-
       {/* ===== DELETE CONFIRM ===== */}
       {deleteConfirm && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 380, textAlign: 'center', padding: '2rem'}}>
-            <div className="delete-icon-wrap"><Trash2 size={32} /></div>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
+          >
+            <div className="delete-icon-wrap">
+              <Trash2 size={32} />
+            </div>
             <h2>Delete Item?</h2>
-            <p className="text-secondary mt-2">Remove <strong>{deleteConfirm.item} ({deleteConfirm.size})</strong> from inventory? This cannot be undone.</p>
+            <p className="text-secondary mt-2">
+              Remove{' '}
+              <strong>
+                {deleteConfirm.item} ({deleteConfirm.size})
+              </strong>{' '}
+              from inventory? This cannot be undone.
+            </p>
             <div className="modal-footer justify-center mt-4">
-              <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>Cancel</button>
-              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+              <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </button>
+              <button className="btn-danger" onClick={handleDelete}>
+                Delete
+              </button>
             </div>
           </div>
         </div>

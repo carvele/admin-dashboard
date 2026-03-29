@@ -24,7 +24,7 @@
 .tab-switcher .tab-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .align-status {
@@ -36,9 +36,18 @@
   padding: 0.25rem 0.6rem;
   border-radius: 20px;
 }
-.align-status.verified { background-color: #D1FAE5; color: #065F46; }
-.align-status.pending { background-color: #FEF3C7; color: #92400E; }
-.align-status.failed { background-color: #FEE2E2; color: #991B1B; }
+.align-status.verified {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+.align-status.pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+.align-status.failed {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
 
 .pose-grid {
   display: grid;
@@ -51,7 +60,7 @@
 }
 .pose-img-placeholder {
   height: 200px;
-  background-color: #E2E8F0;
+  background-color: #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,14 +74,16 @@
   margin-top: 0.5rem;
 }
 
-.modal-lg { max-width: 800px; }
+.modal-lg {
+  max-width: 800px;
+}
 .align-workspace {
   display: flex;
   gap: 2rem;
 }
 .align-preview-area {
   flex: 2;
-  background-color: #E2E8F0;
+  background-color: #e2e8f0;
   border-radius: 8px;
   height: 480px;
   display: flex;
@@ -83,12 +94,14 @@
 }
 .align-controls {
   flex: 1;
-  background-color: #FAFAFA;
+  background-color: #fafafa;
   padding: 1.5rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
-.line-height-2 { line-height: 1.2; }
+.line-height-2 {
+  line-height: 1.2;
+}
 
 .dummy-3d-model {
   position: relative;
@@ -103,11 +116,27 @@
   background-color: var(--accent);
   border: 2px solid white;
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   cursor: crosshair;
 }
-.shoulder-l { top: -20px; left: -20px; }
-.shoulder-r { top: -20px; right: -20px; }
-.waist-c { top: 30px; left: 50%; transform: translateX(-50%); }
-.hips-l { bottom: -20px; left: -10px; }
-.hips-r { bottom: -20px; right: -10px; }
+.shoulder-l {
+  top: -20px;
+  left: -20px;
+}
+.shoulder-r {
+  top: -20px;
+  right: -20px;
+}
+.waist-c {
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.hips-l {
+  bottom: -20px;
+  left: -10px;
+}
+.hips-r {
+  bottom: -20px;
+  right: -10px;
+}

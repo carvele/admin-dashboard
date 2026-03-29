@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import './Login.css';
@@ -21,8 +21,14 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email.trim()) { setError('Please enter your email.'); return; }
-    if (!form.password) { setError('Please enter your password.'); return; }
+    if (!form.email.trim()) {
+      setError('Please enter your email.');
+      return;
+    }
+    if (!form.password) {
+      setError('Please enter your password.');
+      return;
+    }
 
     setIsLoadingUI(true);
     setError('');
@@ -71,7 +77,7 @@ const Login = () => {
                 className="input-field"
                 placeholder="admin@jezsy.com"
                 value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
                 autoFocus
               />
             </div>
@@ -84,9 +90,13 @@ const Login = () => {
                   className="input-field"
                   placeholder="Enter password"
                   value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
                 />
-                <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -96,11 +106,28 @@ const Login = () => {
 
             <button type="submit" className="btn-primary login-btn" disabled={isLoadingUI}>
               {isLoadingUI ? (
-                <span className="loading-dots">Signing in<span>...</span></span>
+                <span className="loading-dots">
+                  Signing in<span>...</span>
+                </span>
               ) : (
-                <><LogIn size={18} /> Sign In</>
+                <>
+                  <LogIn size={18} /> Sign In
+                </>
               )}
             </button>
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <Link
+                to="/forgot-password"
+                style={{
+                  color: 'var(--gold)',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                }}
+              >
+                Forgot Password?
+              </Link>
+            </div>
           </form>
 
           <p className="login-footnote">

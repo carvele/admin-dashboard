@@ -111,7 +111,7 @@
   border: 1px dashed var(--border-color);
   border-radius: 8px;
   padding: 1rem;
-  background: #FAFAFA;
+  background: #fafafa;
 }
 
 .selected-items-box.empty {
@@ -136,7 +136,7 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .chip-icon {
@@ -163,8 +163,8 @@
 }
 
 .chip-remove:hover {
-  background: #FEE2E2;
-  color: #DC2626;
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .small-search .input-field {
@@ -202,7 +202,7 @@
 
 .available-item-card:hover {
   border-color: var(--color-gold);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .available-item-card.selected {

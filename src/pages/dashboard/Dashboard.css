@@ -27,7 +27,7 @@
   align-items: flex-start;
   gap: 1rem;
   border: 1px solid var(--border-color);
-  box-shadow: 0 2px 4px -1px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.02);
   transition: transform 0.2s;
 }
 .stat-card:hover {
@@ -43,10 +43,22 @@
   justify-content: center;
   flex-shrink: 0;
 }
-.stat-icon.calendar { background-color: var(--beige); color: var(--accent); }
-.stat-icon.users { background-color: #E0E7FF; color: #4338CA; }
-.stat-icon.clock { background-color: var(--status-pending-bg); color: var(--status-pending-text); }
-.stat-icon.ar { background-color: #F3E8FF; color: #7E22CE; }
+.stat-icon.calendar {
+  background-color: var(--beige);
+  color: var(--accent);
+}
+.stat-icon.users {
+  background-color: #e0e7ff;
+  color: #4338ca;
+}
+.stat-icon.clock {
+  background-color: var(--status-pending-bg);
+  color: var(--status-pending-text);
+}
+.stat-icon.ar {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+}
 
 .stat-info {
   flex: 1;
@@ -71,8 +83,12 @@
   gap: 0.25rem;
   font-weight: 500;
 }
-.stat-trend.positive { color: var(--stock-high); }
-.stat-trend.neutral { color: var(--text-secondary); }
+.stat-trend.positive {
+  color: var(--stock-high);
+}
+.stat-trend.neutral {
+  color: var(--text-secondary);
+}
 
 .charts-grid {
   display: grid;
@@ -137,8 +153,8 @@
 }
 
 .badge-danger {
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: #fee2e2;
+  color: #dc2626;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -172,10 +188,18 @@
   justify-content: center;
   flex-shrink: 0;
 }
-.item-icon-bg.alert { background-color: #FEE2E2; }
-.item-icon-bg.warning { background-color: #FEF3C7; }
-.text-danger { color: #DC2626; }
-.text-warning { color: #D97706; }
+.item-icon-bg.alert {
+  background-color: #fee2e2;
+}
+.item-icon-bg.warning {
+  background-color: #fef3c7;
+}
+.text-danger {
+  color: #dc2626;
+}
+.text-warning {
+  color: #d97706;
+}
 
 .item-details {
   flex: 1;
@@ -195,7 +219,8 @@
   color: var(--text-secondary);
 }
 
-.btn-outline.small, .icon-btn.small {
+.btn-outline.small,
+.icon-btn.small {
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   width: auto;
@@ -254,9 +279,15 @@
   border: 2px solid var(--white);
   box-shadow: 0 0 0 2px var(--cream);
 }
-.bg-accent { background-color: var(--accent); }
-.bg-charcoal { background-color: var(--charcoal); }
-.bg-success { background-color: var(--stock-high); }
+.bg-accent {
+  background-color: var(--accent);
+}
+.bg-charcoal {
+  background-color: var(--charcoal);
+}
+.bg-success {
+  background-color: var(--stock-high);
+}
 
 .timeline-content {
   display: flex;
@@ -298,12 +329,12 @@
   .stat-value {
     font-size: 1.5rem;
   }
-  
+
   /* Make the charts grid flow appropriately */
   .charts-grid {
     gap: 1rem;
   }
-  
+
   /* Timeline spacing */
   .timeline-item {
     padding-left: 1rem;

@@ -30,7 +30,12 @@ export const getUserDisplayName = (user) => {
 // ── User initials ───────────────────────────────────────────
 export const getInitials = (name) => {
   if (!name) return 'U';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
 };
 
 // ── Relative time formatter ─────────────────────────────────
@@ -56,7 +61,7 @@ export const formatRelativeTime = (timestamp) => {
 export const isOnline = (timestamp) => {
   if (!timestamp) return false;
   const ts = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
-  return (Date.now() - ts) < 15 * 60 * 1000; // within 15 mins
+  return Date.now() - ts < 15 * 60 * 1000; // within 15 mins
 };
 
 // ── Currency formatter ──────────────────────────────────────
@@ -68,7 +73,11 @@ export const formatCurrency = (amount) => {
 // ── Date formatter ──────────────────────────────────────────
 export const formatDate = (dateStr) => {
   if (!dateStr) return 'Unknown';
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
 // ── Timestamp Standardizer ──────────────────────────────────
@@ -94,4 +103,31 @@ export const getHealthLabel = (score) => {
   if (score >= 50) return { label: 'Good', color: '#F59E0B' };
   if (score >= 25) return { label: 'At Risk', color: '#F97316' };
   return { label: 'Churned', color: '#EF4444' };
+};
+
+// ── Security & Sanitization ─────────────────────────────────
+import DOMPurify from 'dompurify';
+
+/**
+ * Safely sanitize string for display
+ * Removes all HTML tags and dangerous attributes to prevent XSS.
+ */
+export const sanitizeForDisplay = (str) => {
+  if (!str) return '';
+  return DOMPurify.sanitize(str, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  });
+};
+
+/**
+ * Sanitize for display in HTML with limited formatting tags.
+ * Example: allow <b>, <i>, <u> tags only
+ */
+export const sanitizeForRichText = (str) => {
+  if (!str) return '';
+  return DOMPurify.sanitize(str, {
+    ALLOWED_TAGS: ['b', 'i', 'u', 'strong', 'em'],
+    ALLOWED_ATTR: [],
+  });
 };

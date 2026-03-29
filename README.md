@@ -23,15 +23,10 @@ The central management interface for the JezSy Collection boutique application, 
    npm install
    ```
 2. **Setup environment variables:**
-   Create a `.env` file in the project root containing your Firebase configuration:
-   ```env
-   VITE_FIREBASE_API_KEY=your_api_key
-   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-   VITE_FIREBASE_PROJECT_ID=your_project_id
-   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-   VITE_FIREBASE_APP_ID=your_app_id
+   ```bash
+   cp .env.example .env
    ```
+   *Edit `.env` and fill in your actual Firebase credentials.*
 3. **Run the local server:**
    ```bash
    npm run dev
@@ -40,6 +35,26 @@ The central management interface for the JezSy Collection boutique application, 
    ```bash
    npm run build
    ```
+
+## Available Scripts
+
+### Development
+- `npm run dev` - Start development server at http://localhost:5173
+
+### Build & Deploy
+- `npm run build` - Create production build
+- `npm run preview` - Preview production build locally
+
+### Testing
+- `npm test` - Run test suite
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Generate coverage report
+
+### Code Quality
+- `npm run lint` - Lint code with ESLint
+- `npm run lint:fix` - Auto-fix lint errors
+- `npm run format` - Format code with Prettier
+- `npm run type-check` - Check TypeScript types
 
 ## Documentation
 

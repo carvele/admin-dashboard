@@ -3,6 +3,21 @@
  * Provides reusable validation rules and a validateForm() function
  * that can be used across all form pages (reservations, products, users, etc.).
  */
+import DOMPurify from 'dompurify';
+
+export const sanitizeHtml = (html) => {
+  if (!html) return '';
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'span'],
+    ALLOWED_ATTR: ['href', 'target', 'class', 'style']
+  });
+};
+
+export const sanitizeText = (text) => {
+  if (typeof text !== 'string') return text;
+  if (!text) return '';
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [] }).trim();
+};
 
 // ── Predefined Patterns ──────────────────────────────────────
 const PATTERNS = {
@@ -127,13 +142,15 @@ export function validateForm(formData, rules) {
 
     // Min length
     if (fieldRules.minLength && strValue.length < fieldRules.minLength) {
-      errors[field] = fieldRules.message || `${field} must be at least ${fieldRules.minLength} characters`;
+      errors[field] =
+        fieldRules.message || `${field} must be at least ${fieldRules.minLength} characters`;
       continue;
     }
 
     // Max length
     if (fieldRules.maxLength && strValue.length > fieldRules.maxLength) {
-      errors[field] = fieldRules.message || `${field} must be at most ${fieldRules.maxLength} characters`;
+      errors[field] =
+        fieldRules.message || `${field} must be at most ${fieldRules.maxLength} characters`;
       continue;
     }
 
@@ -145,7 +162,8 @@ export function validateForm(formData, rules) {
 
     // Enum
     if (fieldRules.enum && !fieldRules.enum.includes(value)) {
-      errors[field] = fieldRules.message || `${field} must be one of: ${fieldRules.enum.join(', ')}`;
+      errors[field] =
+        fieldRules.message || `${field} must be one of: ${fieldRules.enum.join(', ')}`;
       continue;
     }
 
@@ -167,4 +185,6 @@ export const validators = {
   isValidUrl: (url) => !url || PATTERNS.url.test(url),
   isPositiveNumber: (val) => !isNaN(Number(val)) && Number(val) > 0,
   isNotEmpty: (val) => val !== undefined && val !== null && String(val).trim() !== '',
+  sanitizeText,
+  sanitizeHtml,
 };

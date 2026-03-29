@@ -1,31 +1,47 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, CalendarCheck, Users, MessageSquare,
-  Shirt, Layers, Grid, View, PackageSearch,
-  BarChart3, Settings, Lock, Unlock, X, Menu, Shield, PlusCircle
+  LayoutDashboard,
+  CalendarCheck,
+  Users,
+  MessageSquare,
+  Shirt,
+  Layers,
+  Grid,
+  View,
+  PackageSearch,
+  BarChart3,
+  Settings,
+  X,
+  Shield,
 } from 'lucide-react';
+// @ts-ignore
 import { useAuth } from '../context/AuthContext';
+// @ts-ignore
 import { subscribeToCollection } from '../firebase/firestore';
 import './Sidebar.css';
 
 const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
 
-const Sidebar = ({ isOpen, onClose }) => {
-  const { user, logout, isAdminUnlocked } = useAuth();
-  const navigate = useNavigate();
+interface SidebarProps {
+  isOpen: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+  const { user, isAdminUnlocked } = useAuth();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
-    const unsub = subscribeToCollection('conversations', (data) => {
-      const count = data.reduce((sum, conv) => sum + (conv.unread || 0), 0);
+    const unsub = subscribeToCollection('conversations', (data: any[]) => {
+      const count = data.reduce((sum: number, conv: any) => sum + (conv.unread || 0), 0);
       setUnreadMessages(count);
     });
     return () => unsub();
   }, []);
 
-  const handleNavClick = (e, to) => {
+  const handleNavClick = (e: React.MouseEvent, to: string) => {
     const isRestricted = ADMIN_ROUTES.includes(to) && !isAdminUnlocked;
     if (isRestricted) {
       e.preventDefault();
@@ -41,7 +57,13 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
-    { to: '/messages', icon: MessageSquare, label: 'Messages', admin: false, badge: unreadMessages > 0 ? unreadMessages : null },
+    {
+      to: '/messages',
+      icon: MessageSquare,
+      label: 'Messages',
+      admin: false,
+      badge: unreadMessages > 0 ? unreadMessages : null,
+    },
     { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
     { to: '/outfits', icon: Layers, label: 'Outfit Suggestions', admin: false },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
@@ -62,15 +84,14 @@ const Sidebar = ({ isOpen, onClose }) => {
             <h2>JezSy Collection</h2>
             <span className="brand-subtitle">Fashion Management</span>
           </div>
-          <button className="sidebar-close-btn" onClick={onClose}><X size={20}/></button>
+          <button className="sidebar-close-btn" onClick={onClose}>
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="sidebar-nav">
           <ul className="nav-list">
             {allLinks.map((link, idx) => {
-              if (link === null) return <li key={idx} className="nav-divider" />;
-              if (link.separation) return <li key={idx} className="nav-divider" style={{ margin: '1rem 0' }} />;
-              
               const Icon = link.icon;
               const isRestricted = link.admin && !isAdminUnlocked;
 
@@ -86,9 +107,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   >
                     <Icon size={20} />
                     <span>{link.label}</span>
-                    {link.badge && (
-                      <span className="badge-unread">{link.badge}</span>
-                    )}
+                    {link.badge && <span className="badge-unread">{link.badge}</span>}
                   </NavLink>
                 </li>
               );
@@ -103,7 +122,10 @@ const Sidebar = ({ isOpen, onClose }) => {
             </div>
             <div className="profile-info">
               <span className="profile-name">{user?.name || 'Staff Member'}</span>
-              <span className="profile-role" style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}>
+              <span
+                className="profile-role"
+                style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
+              >
                 {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
               </span>
             </div>

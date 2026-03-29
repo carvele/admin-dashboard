@@ -7,6 +7,7 @@ import PendingDeviceView from '../components/PendingDeviceView';
 
 // ── Lazy-loaded pages (code-split for faster initial load) ──
 const Login = lazy(() => import('../pages/auth/Login'));
+const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazy(() => import('../pages/customers/Reservations'));
 const Customers = lazy(() => import('../pages/customers/Customers'));
@@ -51,10 +52,10 @@ const ProtectedRoute = ({ children }) => {
 // Wrapper for the entire layout: ensures the device is approved OR bypassed by owner
 const DeviceProtectedRoute = ({ children }) => {
   const { user, deviceStatus, isAdminUnlocked } = useAuth();
-  
+
   // If not logged in at all, go to login
   if (!user) return <Navigate to="/login" replace />;
-  
+
   // If we are checking the fingerprint, just show a loading state
   if (deviceStatus === 'checking') {
     return (
@@ -71,8 +72,12 @@ const DeviceProtectedRoute = ({ children }) => {
         <div className="card text-center" style={{ maxWidth: '400px' }}>
           <h2 style={{ color: 'var(--stock-low)', marginBottom: '1rem' }}>Connection Issue</h2>
           <p>We couldn't verify your device or connect to the server.</p>
-          <p style={{ fontSize: '0.85rem', marginTop: '1rem' }}>Please check your internet and refresh the page.</p>
-          <button className="btn-primary mt-4" onClick={() => window.location.reload()}>Refresh Page</button>
+          <p style={{ fontSize: '0.85rem', marginTop: '1rem' }}>
+            Please check your internet and refresh the page.
+          </p>
+          <button className="btn-primary mt-4" onClick={() => window.location.reload()}>
+            Refresh Page
+          </button>
         </div>
       </div>
     );
@@ -95,33 +100,204 @@ const RequireAdmin = ({ children }) => {
 
 const AnimatedRoutes = () => {
   const location = useLocation();
-  
+
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <Login />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <ForgotPassword />
+            </Suspense>
+          }
+        />
 
         {/* Protect the entire dashboard layout behind the device check */}
-        <Route path="/" element={<DeviceProtectedRoute><DashboardLayout /></DeviceProtectedRoute>}>
+        <Route
+          path="/"
+          element={
+            <DeviceProtectedRoute>
+              <DashboardLayout />
+            </DeviceProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/dashboard" replace />} />
 
-          <Route path="dashboard" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Dashboard /></Suspense></ProtectedRoute>} />
-          <Route path="reservations" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Reservations /></Suspense></ProtectedRoute>} />
-          <Route path="customers" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Customers /></Suspense></ProtectedRoute>} />
-          <Route path="messages" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Messages /></Suspense></ProtectedRoute>} />
-          <Route path="wardrobe" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><DigitalWardrobe /></Suspense></ProtectedRoute>} />
-          <Route path="outfits" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><OutfitSuggestions /></Suspense></ProtectedRoute>} />
-          <Route path="inventory" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
-          <Route path="catalog" element={<ProtectedRoute><Suspense fallback={<PageLoader />}><ClothingCatalog /></Suspense></ProtectedRoute>} />
-          
+          <Route
+            path="dashboard"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Dashboard />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="reservations"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Reservations />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="customers"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Customers />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="messages"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Messages />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="wardrobe"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <DigitalWardrobe />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="outfits"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <OutfitSuggestions />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="inventory"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Inventory />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="catalog"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ClothingCatalog />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Admin / Owner only routes */}
-          <Route path="catalog/new" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ProductForm /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="catalog/edit/:id" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ProductForm /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="ar-assets" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><ARAssets /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="analytics" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><Analytics /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="devices" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><DeviceManagement /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="staff" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><StaffManagement /></Suspense></RequireAdmin></ProtectedRoute>} />
-          <Route path="settings" element={<ProtectedRoute><RequireAdmin><Suspense fallback={<PageLoader />}><Settings /></Suspense></RequireAdmin></ProtectedRoute>} />
+          <Route
+            path="catalog/new"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <ProductForm />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="catalog/edit/:id"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <ProductForm />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="ar-assets"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <ARAssets />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="analytics"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <Analytics />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="devices"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeviceManagement />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="staff"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <StaffManagement />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <Settings />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Routes>
     </AnimatePresence>

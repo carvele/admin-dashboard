@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Save } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, getDocument } from '../../firebase/firestore';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import {
+  createProduct,
+  updateProduct,
+  getProductById,
+  getCategories,
+  createInventoryItem,
+} from '../../services/productService';
 import { uploadToCloudinary, deleteFile } from '../../firebase/storage';
 import { useAuth } from '../../context/AuthContext';
+import { validateForm, productRules, sanitizeText } from '../../utils/validation';
+import { Logger } from '../../utils/Logger';
 import { toast } from 'sonner';
 
 const ProductForm = () => {
@@ -13,10 +19,11 @@ const ProductForm = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isEditing = Boolean(id);
-  
+
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
-  
+  const [oldData, setOldData] = useState(null); // To track changes for sync
+
   // Uniqlo-like details
   const [formData, setFormData] = useState({
     name: '',
@@ -35,21 +42,38 @@ const ProductForm = () => {
     featured: false,
     isAlterable: false,
     sizes: ['OS'],
-    images: [] // Array of image URLs/Maps
+    images: [], // Array of image URLs/Maps
   });
 
   const [categories, setCategories] = useState([
     { name: 'Tops', subcategories: ['T-Shirts', 'Polos', 'Sweaters', 'Cardigans', 'Blouses'] },
     { name: 'Bottoms', subcategories: ['Jeans', 'Trousers', 'Shorts', 'Leggings', 'Joggers'] },
     { name: 'Outerwear', subcategories: ['Jackets', 'Coats', 'Parkas', 'Vests', 'Blazers'] },
-    { name: 'Dresses & Skirts', subcategories: ['Mini Dresses', 'Midi Dresses', 'Maxi Dresses', 'A-Line Skirts', 'Pencil Skirts'] },
+    {
+      name: 'Dresses & Skirts',
+      subcategories: [
+        'Mini Dresses',
+        'Midi Dresses',
+        'Maxi Dresses',
+        'A-Line Skirts',
+        'Pencil Skirts',
+      ],
+    },
     { name: 'Innerwear', subcategories: ['Underwear', 'Socks', 'Thermals', 'Camisoles'] },
     { name: 'Accessories', subcategories: ['Bags', 'Belts', 'Hats', 'Scarves', 'Jewelry'] },
-    { name: 'Special Collections', subcategories: ['Collaborations', 'Limited Edition', 'Seasonal Exclusives'] }
+    {
+      name: 'Special Collections',
+      subcategories: ['Collaborations', 'Limited Edition', 'Seasonal Exclusives'],
+    },
   ]);
   const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'OS'];
-  const SEASONS = ['All-Season', 'Dry Season (Summer)', 'Wet Season (Rainy)', 'Cool Season (-Ber Months)'];
-  
+  const SEASONS = [
+    'All-Season',
+    'Dry Season (Summer)',
+    'Wet Season (Rainy)',
+    'Cool Season (-Ber Months)',
+  ];
+
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -59,13 +83,12 @@ const ProductForm = () => {
     // We could fetch dynamic categories here from DB
     const fetchCategories = async () => {
       try {
-        const snap = await getDocs(collection(db, 'categories'));
-        if (!snap.empty) {
-          const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const cats = await getCategories();
+        if (cats && cats.length > 0) {
           setCategories(cats);
         }
       } catch (err) {
-        console.error("No custom categories found, using defaults.", err);
+        console.error('No custom categories found, using defaults.', err);
       }
     };
     fetchCategories();
@@ -74,11 +97,11 @@ const ProductForm = () => {
     if (isEditing) {
       const loadProduct = async () => {
         try {
-          const doc = await getDocument('products', id);
+          const doc = await getProductById(id);
           if (doc) {
-            setFormData({
+            const data = {
               name: doc.name || '',
-              category: doc.category || (categories[0]?.name || 'Tops'),
+              category: doc.category || categories[0]?.name || 'Tops',
               subCategory: doc.subCategory || '',
               price: doc.price || '',
               description: doc.description || '',
@@ -93,11 +116,14 @@ const ProductForm = () => {
               featured: doc.featured || false,
               isAlterable: doc.isAlterable || false,
               sizes: doc.sizes || ['OS'],
-              images: doc.images || (doc.imageUrl ? [doc.imageUrl] : [])
-            });
+              images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
+            };
+            setFormData(data);
+            setOldData(data);
           }
         } catch (e) {
-          toast.error("Failed to load product");
+          Logger.error('Failed to load product', e);
+          toast.error('Failed to load product');
           navigate('/catalog');
         } finally {
           setLoading(false);
@@ -110,153 +136,155 @@ const ProductForm = () => {
   // Auto-generate SKU from product name
   useEffect(() => {
     if (!isEditing && formData.name.trim()) {
-      const words = formData.name.trim().split(' ').filter(w => w.length > 0);
+      const words = formData.name
+        .trim()
+        .split(' ')
+        .filter((w) => w.length > 0);
       let acronym = 'ITM';
       if (words.length >= 2) acronym = (words[0][0] + words[1][0]).toUpperCase();
       else if (words.length === 1) acronym = formData.name.substring(0, 3).toUpperCase();
       const generated = `JZ-${acronym}-${String(Date.now()).slice(-4)}`;
-      setFormData(prev => ({ ...prev, styleCode: generated }));
+      setFormData((prev) => ({ ...prev, styleCode: generated }));
     }
   }, [formData.name, isEditing]);
 
   // Handle subcategory logic when category changes
   useEffect(() => {
-    const selectedCat = categories.find(c => c.name === formData.category);
+    const selectedCat = categories.find((c) => c.name === formData.category);
     if (selectedCat && selectedCat.subcategories && selectedCat.subcategories.length > 0) {
       if (!selectedCat.subcategories.includes(formData.subCategory)) {
-        setFormData(prev => ({ ...prev, subCategory: selectedCat.subcategories[0] }));
+        setFormData((prev) => ({ ...prev, subCategory: selectedCat.subcategories[0] }));
       }
     } else {
-      setFormData(prev => ({ ...prev, subCategory: '' }));
+      setFormData((prev) => ({ ...prev, subCategory: '' }));
     }
   }, [formData.category, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    setSelectedFiles(prev => [...prev, ...files]);
-    
+    setSelectedFiles((prev) => [...prev, ...files]);
+
     // Create preview URLs
-    const newPreviews = files.map(file => URL.createObjectURL(file));
-    setPreviews(prev => [...prev, ...newPreviews]);
+    const newPreviews = files.map((file) => URL.createObjectURL(file));
+    setPreviews((prev) => [...prev, ...newPreviews]);
   };
 
   const removeSelectedFile = (index) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    setPreviews(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviews((prev) => prev.filter((_, i) => i !== index));
   };
-  
+
   const removeExistingImage = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index)
+      images: prev.images.filter((_, i) => i !== index),
     }));
   };
 
   const toggleSize = (size) => {
     const currentSizes = formData.sizes;
     const newSizes = currentSizes.includes(size)
-      ? currentSizes.filter(s => s !== size)
+      ? currentSizes.filter((s) => s !== size)
       : [...currentSizes, size];
     setFormData({ ...formData, sizes: newSizes });
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.price || formData.sizes.length === 0) {
-      toast.error('Name, Price, and at least one Size are required.');
+
+    // 1. Validate Form
+    const { isValid, errors } = validateForm(formData, productRules);
+    if (!isValid || formData.sizes.length === 0) {
+      const errorMsg =
+        formData.sizes.length === 0 ? 'At least one size is required' : Object.values(errors)[0];
+      toast.error(errorMsg);
       return;
     }
 
     setSaving(true);
-    
-    // Safety timeout — reset saving state after 30 seconds max
+
+    // Safety timeout
     const safetyTimeout = setTimeout(() => {
       setSaving(false);
       toast.error('Save timed out. Please try again.');
-    }, 30000);
-    
+    }, 45000); // 45s for image uploads
+
     let success = false;
     try {
-      // 1. Upload new images if any
-      setUploadProgress({ current: 0, total: selectedFiles.length > 0 ? selectedFiles.length : 0 });
+      // 2. Upload new images if any
+      setUploadProgress({ current: 0, total: selectedFiles.length });
       let uploadedImages = [];
-      
+
       if (selectedFiles.length > 0) {
-        setUploadProgress({ current: 1, total: selectedFiles.length });
-        const uploadPromises = selectedFiles.map(file => uploadToCloudinary(file));
-        const imageMaps = await Promise.all(uploadPromises);
-        uploadedImages = imageMaps.map(map => map.secure_url);
-        setUploadProgress({ current: selectedFiles.length, total: selectedFiles.length });
+        for (let i = 0; i < selectedFiles.length; i++) {
+          setUploadProgress({ current: i + 1, total: selectedFiles.length });
+          const imgMap = await uploadToCloudinary(selectedFiles[i]);
+          uploadedImages.push(imgMap.secure_url);
+        }
       }
 
       const finalImages = [...formData.images, ...uploadedImages];
-      
+
       const payload = {
-        name: formData.name,
+        name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
-        description: formData.description,
-        material: formData.material,
-        color: formData.color,
-        careInstructions: formData.careInstructions,
+        description: sanitizeText(formData.description),
+        material: sanitizeText(formData.material),
+        color: sanitizeText(formData.color),
+        careInstructions: sanitizeText(formData.careInstructions),
         fitAndSizing: formData.fitAndSizing,
         styleCode: formData.styleCode,
         season: formData.season,
         visibility: formData.visibility,
         featured: formData.featured,
         isAlterable: formData.isAlterable,
-        created_by: user?.email || 'unknown',
+        updated_by: user?.email || 'admin',
         images: finalImages,
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
 
       if (isEditing) {
-        await updateDocument('products', id, payload);
+        await updateProduct(id, payload);
+
         toast.success('Product updated successfully!');
       } else {
-        const getNameAcronym = (name) => {
-           const words = name.split(' ').filter(w => w.trim().length > 0);
-           if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-           if (words.length === 1) return name.substring(0, 3).toUpperCase();
-           return 'ITM';
-        };
-        const acronym = getNameAcronym(formData.name);
-        
-        const snap = await getDocs(collection(db, 'products'));
-        payload.id = `${acronym}-${String(snap.size + 1).padStart(3, '0')}`;
+        payload.created_by = user?.email || 'admin';
         payload.stock = 0;
         payload.tags = ['New Arrival'];
-        
-        const newDocId = await addDocument('products', payload);
-        
+
+        const newDocId = await createProduct(payload);
+
         // Init inventory per size in parallel
-        const inventoryPromises = payload.sizes.map(size => 
-          addDocument('inventory', {
+        Logger.info(`Initializing inventory for new product ${newDocId}...`);
+        const inventoryPromises = payload.sizes.map((size) =>
+          createInventoryItem({
             productDocId: newDocId,
-            sku: payload.id,
+            sku: payload.id || payload.styleCode,
             item: payload.name,
             category: payload.category,
             size: size,
             total: 0,
             reserved: 0,
-            available: 0
-          })
+            available: 0,
+          }),
         );
         await Promise.all(inventoryPromises);
-        
+
         toast.success('Product created successfully!');
       }
-      
+
       success = true;
     } catch (err) {
+      Logger.error('Error saving product:', err);
       toast.error(`Error saving product: ${err.message}`);
     } finally {
       clearTimeout(safetyTimeout);
@@ -283,78 +311,155 @@ const ProductForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="label">Product Name *</label>
-              <input type="text" name="name" className="input-field" value={formData.name} onChange={handleChange} required />
+              <input
+                type="text"
+                name="name"
+                className="input-field"
+                value={formData.name}
+                onChange={handleChange}
+                required
+              />
             </div>
             <div>
               <label className="label">Price (₱) *</label>
-              <input type="number" name="price" className="input-field" value={formData.price} onChange={handleChange} required min="0" step="0.01"/>
+              <input
+                type="number"
+                name="price"
+                className="input-field"
+                value={formData.price}
+                onChange={handleChange}
+                required
+                min="0"
+                step="0.01"
+              />
             </div>
             <div>
               <label className="label">Category</label>
-              <select name="category" className="input-field" value={formData.category} onChange={handleChange}>
-                {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Sub-Category</label>
-              <select name="subCategory" className="input-field" value={formData.subCategory} onChange={handleChange} disabled={!categories.find(c => c.name === formData.category)?.subcategories?.length}>
-                <option value="">None</option>
-                {categories.find(c => c.name === formData.category)?.subcategories?.map(s => (
-                  <option key={s} value={s}>{s}</option>
+              <select
+                name="category"
+                className="input-field"
+                value={formData.category}
+                onChange={handleChange}
+              >
+                {categories.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
+              <label className="label">Sub-Category</label>
+              <select
+                name="subCategory"
+                className="input-field"
+                value={formData.subCategory}
+                onChange={handleChange}
+                disabled={
+                  !categories.find((c) => c.name === formData.category)?.subcategories?.length
+                }
+              >
+                <option value="">None</option>
+                {categories
+                  .find((c) => c.name === formData.category)
+                  ?.subcategories?.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
               <label className="label">Style Code / SKU (Auto-Generated)</label>
-              <input type="text" name="styleCode" className="input-field" value={formData.styleCode} readOnly style={{ backgroundColor: 'var(--beige)', cursor: 'default' }} placeholder="Auto-generated from product name" />
+              <input
+                type="text"
+                name="styleCode"
+                className="input-field"
+                value={formData.styleCode}
+                readOnly
+                style={{ backgroundColor: 'var(--beige)', cursor: 'default' }}
+                placeholder="Auto-generated from product name"
+              />
             </div>
           </div>
           <div className="flex gap-4 items-center mt-4">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="featured" checked={formData.featured}
-                onChange={e => setFormData({ ...formData, featured: e.target.checked })} />
+              <input
+                type="checkbox"
+                name="featured"
+                checked={formData.featured}
+                onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+              />
               <span>Feature this product</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer px-4">
-              <input type="checkbox" name="isAlterable" checked={formData.isAlterable}
-                onChange={e => setFormData({ ...formData, isAlterable: e.target.checked })} />
+              <input
+                type="checkbox"
+                name="isAlterable"
+                checked={formData.isAlterable}
+                onChange={(e) => setFormData({ ...formData, isAlterable: e.target.checked })}
+              />
               <span>Allow Alterations & Fitting</span>
             </label>
           </div>
         </section>
 
         <section>
-            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Image Gallery</h2>
-            <div className="flex flex-wrap gap-4 mb-4">
-                {/* Existing Images */}
-                {formData.images.map((url, idx) => (
-                    <div key={idx} className="relative w-24 h-24 border rounded overflow-hidden">
-                        <img src={url} alt={`img-${idx}`} className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => removeExistingImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md">
-                            <X size={12} />
-                        </button>
-                    </div>
-                ))}
-                {/* New Previews */}
-                {previews.map((preview, idx) => (
-                    <div key={`prev-${idx}`} className="relative w-24 h-24 border border-dashed border-primary rounded overflow-hidden opacity-70">
-                         <img src={preview} alt="preview" className="w-full h-full object-cover" />
-                         <button type="button" onClick={() => removeSelectedFile(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md">
-                            <X size={12} />
-                        </button>
-                    </div>
-                ))}
-                
-                {/* Upload Button */}
-                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition">
-                    <Upload size={24} className="text-gray-400 mb-1" />
-                    <span className="text-xs text-gray-500 text-center">Add Image</span>
-                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
-                </label>
-            </div>
-            <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem', fontStyle: 'italic'}}>
-              💡 Tip: For best results, upload product images with a white or transparent background.
-            </p>
+          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Image Gallery</h2>
+          <div className="flex flex-wrap gap-4 mb-4">
+            {/* Existing Images */}
+            {formData.images.map((url, idx) => (
+              <div key={idx} className="relative w-24 h-24 border rounded overflow-hidden">
+                <img src={url} alt={`img-${idx}`} className="w-full h-full object-cover" loading="lazy" />
+                <button
+                  type="button"
+                  onClick={() => removeExistingImage(idx)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {/* New Previews */}
+            {previews.map((preview, idx) => (
+              <div
+                key={`prev-${idx}`}
+                className="relative w-24 h-24 border border-dashed border-primary rounded overflow-hidden opacity-70"
+              >
+                <img src={preview} alt="preview" className="w-full h-full object-cover" loading="lazy" />
+                <button
+                  type="button"
+                  onClick={() => removeSelectedFile(idx)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+
+            {/* Upload Button */}
+            <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition">
+              <Upload size={24} className="text-gray-400 mb-1" />
+              <span className="text-xs text-gray-500 text-center">Add Image</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </label>
+          </div>
+          <p
+            style={{
+              fontSize: '0.8rem',
+              color: 'var(--text-secondary)',
+              marginTop: '0.5rem',
+              fontStyle: 'italic',
+            }}
+          >
+            💡 Tip: For best results, upload product images with a white or transparent background.
+          </p>
         </section>
 
         {/* Variations */}
@@ -363,21 +468,25 @@ const ProductForm = () => {
           <div className="mb-4">
             <label className="label">Available Sizes *</label>
             <div className="flex flex-wrap mt-2" style={{ gap: '0.75rem' }}>
-              {AVAILABLE_SIZES.map(size => (
+              {AVAILABLE_SIZES.map((size) => (
                 <button
                   key={size}
                   type="button"
                   onClick={() => toggleSize(size)}
                   className="text-sm font-medium transition-colors"
                   style={{
-                    backgroundColor: formData.sizes.includes(size) ? 'var(--charcoal)' : 'var(--beige)',
+                    backgroundColor: formData.sizes.includes(size)
+                      ? 'var(--charcoal)'
+                      : 'var(--beige)',
                     color: formData.sizes.includes(size) ? 'white' : 'var(--charcoal)',
-                    border: formData.sizes.includes(size) ? '2px solid var(--charcoal)' : '2px solid var(--border-color)',
+                    border: formData.sizes.includes(size)
+                      ? '2px solid var(--charcoal)'
+                      : '2px solid var(--border-color)',
                     borderRadius: '999px',
                     padding: '0.5rem 1.25rem',
                     minWidth: '48px',
                     textAlign: 'center',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
                   }}
                 >
                   {size}
@@ -388,41 +497,74 @@ const ProductForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="label">Color (Name)</label>
-              <input type="text" name="color" className="input-field" value={formData.color} onChange={handleChange} placeholder="e.g. Ruby Red" />
+              <input
+                type="text"
+                name="color"
+                className="input-field"
+                value={formData.color}
+                onChange={handleChange}
+                placeholder="e.g. Ruby Red"
+              />
             </div>
             <div>
               <label className="label">Fit & Sizing</label>
-              <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing} onChange={handleChange}>
-                  <option value="">Select Fit</option>
-                  <option value="Slim Fit">Slim Fit</option>
-                  <option value="Regular Fit">Regular Fit</option>
-                  <option value="Oversized">Oversized</option>
-                  <option value="True to Size">True to Size</option>
-                  <option value="Runs Small">Runs Small</option>
+              <select
+                name="fitAndSizing"
+                className="input-field"
+                value={formData.fitAndSizing}
+                onChange={handleChange}
+              >
+                <option value="">Select Fit</option>
+                <option value="Slim Fit">Slim Fit</option>
+                <option value="Regular Fit">Regular Fit</option>
+                <option value="Oversized">Oversized</option>
+                <option value="True to Size">True to Size</option>
+                <option value="Runs Small">Runs Small</option>
               </select>
             </div>
             <div>
               <label className="label">Season</label>
-              <select name="season" className="input-field" value={formData.season} onChange={handleChange}>
-                  {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
+              <select
+                name="season"
+                className="input-field"
+                value={formData.season}
+                onChange={handleChange}
+              >
+                {SEASONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
           {/* Visibility & Featured */}
-          <div style={{display: 'flex', gap: '2rem', marginTop: '1rem', alignItems: 'center'}}>
-            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-              <label className="label" style={{marginBottom: 0}}>Visibility</label>
-              <select name="visibility" className="input-field" style={{width: 'auto', minWidth: 120}} value={formData.visibility} onChange={handleChange}>
+          <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label className="label" style={{ marginBottom: 0 }}>
+                Visibility
+              </label>
+              <select
+                name="visibility"
+                className="input-field"
+                style={{ width: 'auto', minWidth: 120 }}
+                value={formData.visibility}
+                onChange={handleChange}
+              >
                 <option value="Published">Published</option>
                 <option value="Draft">Draft</option>
               </select>
             </div>
-            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <label className="toggle-switch">
-                <input type="checkbox" checked={formData.featured} onChange={e => setFormData(prev => ({...prev, featured: e.target.checked}))} />
+                <input
+                  type="checkbox"
+                  checked={formData.featured}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, featured: e.target.checked }))}
+                />
                 <span className="toggle-slider"></span>
               </label>
-              <span style={{fontSize: '0.875rem', fontWeight: 500}}>Featured Product</span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Featured Product</span>
             </div>
           </div>
         </section>
@@ -432,22 +574,46 @@ const ProductForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="label">Product Description</label>
-              <textarea name="description" className="input-field" rows="3" value={formData.description} onChange={handleChange}></textarea>
+              <textarea
+                name="description"
+                className="input-field"
+                rows="3"
+                value={formData.description}
+                onChange={handleChange}
+              ></textarea>
             </div>
             <div>
               <label className="label">Material/Fabric</label>
-              <input type="text" name="material" className="input-field" value={formData.material} onChange={handleChange} />
+              <input
+                type="text"
+                name="material"
+                className="input-field"
+                value={formData.material}
+                onChange={handleChange}
+              />
             </div>
             <div>
               <label className="label">Care Instructions</label>
-              <input type="text" name="careInstructions" className="input-field" value={formData.careInstructions} onChange={handleChange} />
+              <input
+                type="text"
+                name="careInstructions"
+                className="input-field"
+                value={formData.careInstructions}
+                onChange={handleChange}
+              />
             </div>
           </div>
         </section>
 
         <div className="flex justify-end pt-4 border-t">
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? (uploadProgress.total > 0 ? `Uploading image ${uploadProgress.current} of ${uploadProgress.total}...` : 'Saving...') : (isEditing ? 'Save Changes' : 'Create Product')}
+            {saving
+              ? uploadProgress.total > 0
+                ? `Uploading image ${uploadProgress.current} of ${uploadProgress.total}...`
+                : 'Saving...'
+              : isEditing
+                ? 'Save Changes'
+                : 'Create Product'}
           </button>
         </div>
       </form>

@@ -1,130 +1,159 @@
 rules_version = '2';
 
-// JezSy Collection — Firestore Security Rules
-// Deploy with: firebase deploy --only firestore:rules
-
+// Canonical Firebase Security Rules (Batch 3)
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ── Helper: Check if user is authenticated ──
-    function isAuth() {
-      return request.auth != null;
-    }
-
-    // ── Helper: Check if the requesting user's email matches a staff doc with Admin/Owner role ──
-    function isAdminOrOwner() {
-      return isAuth() && (
+    
+    // Helper function for staff/admin auth
+    function isAdmin() {
+      return request.auth != null && (
         get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['Admin', 'Owner']
         || request.auth.token.email in ['admin@jezsy.com', 'admin@jezsycollection.com']
       );
     }
 
-    // ── Reservations ──
-    match /reservations/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
+    // ── USERS ──
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || isAdmin();
+      allow write: if request.auth.uid == userId && 
+                      request.resource.data.firstName is string &&
+                      request.resource.data.lastName is string &&
+                      request.resource.data.email is string &&
+                      !('password' in request.resource.data) &&  // Prevent password writes
+                      !('userId' in request.resource.data);      // Prevent redundant field
+    }
 
-      // Sub-collection for reservation line items
+    // ── STAFF ──
+    match /staff/{docId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ── PRODUCTS ──
+    match /products/{productId} {
+      allow read: if true;  // Public
+      allow write: if isAdmin() &&
+                      request.resource.data.name is string &&
+                      request.resource.data.price is number &&
+                      request.resource.data.price >= 0 &&
+                      !('id' in request.resource.data);  // Doc ID is source of truth
+    }
+
+    // ── INVENTORY ──
+    match /inventory/{docId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      allow create, delete: if isAdmin();
+    }
+    
+    // ── RESERVATIONS ──
+    match /reservations/{reservationId} {
+      allow read: if request.auth.uid == resource.data.customerId || isAdmin();
+      allow create: if request.auth != null &&
+                       request.resource.data.customerId == request.auth.uid &&
+                       request.resource.data.date is string &&
+                       request.resource.data.status == 'pending' &&
+                       !('id' in request.resource.data);
+      allow update: if isAdmin() || request.auth.uid == resource.data.customerId;
+      allow delete: if isAdmin();
+      
+      // NESTED ITEMS subcollection
       match /items/{itemId} {
-        allow read: if isAuth();
-        allow create, update, delete: if isAuth();
+        allow read: if request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.customerId || isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+    
+    // ── WARDROBE ITEMS ──
+    match /wardrobeItems/{itemId} {
+      allow read: if request.auth.uid == resource.data.userId || isAdmin();
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth.uid == resource.data.userId;
+      allow delete: if request.auth.uid == resource.data.userId || isAdmin();
+    }
+    
+    // ── OUTFITS ──
+    match /outfits/{outfitId} {
+      allow read: if request.auth.uid == resource.data.userId || isAdmin();
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth.uid == resource.data.userId;
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // ── CONVERSATIONS ──
+    match /conversations/{convId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin() &&
+                      request.resource.data.customerId is string &&
+                      request.resource.data.unread is number &&
+                      !('customId' in request.resource.data);
+      
+      // MESSAGES subcollection
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null &&
+                         request.resource.data.sender == request.auth.uid &&
+                         request.resource.data.text is string &&
+                         request.resource.data.text.size() > 0;
+        allow update: if false;  // Immutable
+        allow delete: if isAdmin();
       }
     }
 
-    // ── App Users (customers) ──
-    match /users/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
+    // ── MESSAGES (Root-level fallback if used) ──
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+                       request.resource.data.sender == request.auth.uid &&
+                       request.resource.data.text is string &&
+                       !('id' in request.resource.data);
+    }
+    
+    // ── FEEDBACK ──
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.message is string &&
+                       request.resource.data.message.size() >= 10 &&
+                       request.resource.data.message.size() <= 2000;
+      allow update, delete: if false;  // Immutable
     }
 
-    // ── Staff ──
-    match /staff/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAdminOrOwner();
-    }
-
-    // ── Products (Catalog) ──
-    match /products/{docId} {
-      allow read, update: if isAuth();
-      allow create, delete: if isAdminOrOwner();
-    }
-
-    // ── Inventory ──
-    match /inventory/{docId} {
-      allow read, update: if isAuth();
-      allow create, delete: if isAdminOrOwner();
-    }
-
-    // ── Conversations & Messages ──
-    match /conversations/{docId} {
-      allow read: if isAuth();
-      allow create, update: if isAuth();
-    }
-    match /messages/{docId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-    }
-
-    // ── Wardrobe Items & Outfits ──
-    match /wardrobeItems/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
-    }
-    match /outfits/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
-    }
-    match /favorites/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth();
-    }
-
-    // ── Analytics ──
-    match /analyticsConvRate/{docId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
-    }
-
-    // ── Devices ──
-    match /devices/{fingerprint} {
-      allow read, create, update: if isAuth();
-      allow delete: if isAdminOrOwner();
-    }
-
-    // ── Settings ──
+    // ── SETTINGS ──
     match /settings/{docId} {
-      allow read, write: if isAdminOrOwner();
+      allow read, write: if isAdmin();
     }
 
-    // ── Audit Logs ──
+    // ── ANALYTICS ──
+    match /analyticsConvRate/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── DEVICES ──
+    match /devices/{fingerprint} {
+      allow read, create, update: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+
+    // ── LOGS ──
     match /logs/{docId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      // Logs should never be updated or deleted
-      allow update, delete: if false;
+      allow read, create: if request.auth != null;
+      allow update, delete: if false; // immutable
     }
 
-    // ── Notifications ──
+    // ── NOTIFICATIONS ──
     match /notifications/{docId} {
-      allow read: if isAuth();
-      allow create, update: if isAuth();
-      allow delete: if isAuth();
+      allow read, create, update, delete: if request.auth != null;
     }
 
-    // ── Feedback (submitted from mobile app) ──
-    match /feedback/{docId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update, delete: if isAdminOrOwner();
-    }
-
-    // ── Categories (managed from admin Settings) ──
+    // ── CATEGORIES ──
     match /categories/{docId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAdminOrOwner();
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
     }
 
-    // ── Block everything else ──
+    // ── CATCH ALL ──
     match /{document=**} {
       allow read, write: if false;
     }

@@ -12,9 +12,37 @@ import {
   where,
   orderBy,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  writeBatch,
+  limit,
+  startAfter,
 } from 'firebase/firestore';
 import { measureAsync, trackError } from '../utils/analytics';
+
+/**
+ * Syncs product changes (name, category) to all associated inventory records.
+ */
+export const syncProductUpdateToInventory = async (productDocId, newData) => {
+  const { name, category } = newData;
+  if (!name && !category) return; // Nothing to sync
+
+  return withRetry(`syncProductUpdateToInventory`, async () => {
+    const q = query(collection(db, 'inventory'), where('productDocId', '==', productDocId));
+    const snap = await getDocs(q);
+
+    if (snap.empty) return;
+
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => {
+      const updates = {};
+      if (name) updates.item = name;
+      if (category) updates.category = category;
+      batch.update(d.ref, { ...updates, updatedAt: serverTimestamp() });
+    });
+
+    await batch.commit();
+  });
+};
 
 // ── Resilience & Monitoring ─────────────────────────────────
 
@@ -26,13 +54,16 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
       return await measureAsync(operationName, asyncFn);
     } catch (err) {
       attempt++;
-      console.warn(`[Firestore] '${operationName}' failed (attempt ${attempt}/${maxRetries}):`, err.message);
+      console.warn(
+        `[Firestore] '${operationName}' failed (attempt ${attempt}/${maxRetries}):`,
+        err.message,
+      );
       if (attempt >= maxRetries) {
         trackError(`firestore_${operationName}_failed`, { error: err.message, attempts: attempt });
         throw err;
       }
       // Wait before retrying (exponential backoff)
-      await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt - 1)));
+      await new Promise((res) => setTimeout(res, 1000 * Math.pow(2, attempt - 1)));
     }
   }
 };
@@ -43,10 +74,33 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 export const getCollection = async (collectionName) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
     const snap = await getDocs(collection(db, collectionName));
-    return snap.docs.map(d => {
+    return snap.docs.map((d) => {
       const data = d.data();
       return { ...data, customId: data.id || null, id: d.id, docId: d.id };
     });
+  });
+};
+
+/** Get a paginated list of documents from a collection */
+export const getPaginatedCollection = async (
+  collectionName,
+  pageSize,
+  lastDoc = null,
+  queryConstraints = [],
+) => {
+  return withRetry(`getPaginatedCollection_${collectionName}`, async () => {
+    let qArgs = [...queryConstraints, limit(pageSize)];
+    if (lastDoc) {
+      qArgs.push(startAfter(lastDoc));
+    }
+    const q = query(collection(db, collectionName), ...qArgs);
+    const snap = await getDocs(q);
+    const data = snap.docs.map((d) => {
+      const docData = d.data();
+      return { ...docData, customId: docData.id || null, id: d.id, docId: d.id };
+    });
+    const lastVisible = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+    return { data, lastVisible, hasMore: snap.docs.length === pageSize };
   });
 };
 
@@ -64,7 +118,7 @@ export const addDocument = async (collectionName, data) => {
     const ref = await addDoc(collection(db, collectionName), {
       ...data,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
     return ref.id;
   });
@@ -88,7 +142,7 @@ export const updateDocument = async (collectionName, docId, data) => {
   return withRetry(`updateDocument_${collectionName}`, async () => {
     await updateDoc(doc(db, collectionName, docId), {
       ...data,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   });
 };
@@ -96,10 +150,14 @@ export const updateDocument = async (collectionName, docId, data) => {
 /** Set/Overwrite a document (creates if doesn't exist) */
 export const setDocument = async (collectionName, docId, data) => {
   return withRetry(`setDocument_${collectionName}`, async () => {
-    await setDoc(doc(db, collectionName, docId), {
-      ...data,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    await setDoc(
+      doc(db, collectionName, docId),
+      {
+        ...data,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
   });
 };
 
@@ -118,10 +176,10 @@ export const logAction = async (user, action, targetInfo = {}) => {
       userName: user?.name || user?.email || 'System',
       action,
       ...targetInfo,
-      timestamp: serverTimestamp()
+      timestamp: serverTimestamp(),
     });
   } catch (err) {
-    console.error("Failed to log action:", err);
+    console.error('Failed to log action:', err);
   }
 };
 
@@ -132,18 +190,22 @@ export const logAction = async (user, action, targetInfo = {}) => {
  */
 export const subscribeToCollection = (collectionName, callback, queryConstraints = [], onError) => {
   const q = query(collection(db, collectionName), ...queryConstraints);
-  return onSnapshot(q, (snap) => {
-    const data = snap.docs.map(d => {
-      const docData = d.data();
-      return { ...docData, customId: docData.id || null, id: d.id, docId: d.id };
-    });
-    callback(data);
-  }, (error) => {
-    console.error(`[Firestore] Subscription error on "${collectionName}":`, error.message);
-    // Call with empty data so loading states resolve instead of spinning forever
-    callback([]);
-    if (onError) onError(error);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const data = snap.docs.map((d) => {
+        const docData = d.data();
+        return { ...docData, customId: docData.id || null, id: d.id, docId: d.id };
+      });
+      callback(data);
+    },
+    (error) => {
+      console.error(`[Firestore] Subscription error on "${collectionName}":`, error.message);
+      // Call with empty data so loading states resolve instead of spinning forever
+      callback([]);
+      if (onError) onError(error);
+    },
+  );
 };
 
 // ── Device Management helpers ─────────────────────────────
@@ -164,7 +226,7 @@ export const registerDevice = async (fingerprint, userAgent, staffEmail = '', st
       staffName: staffName || '',
       failedAttempts: 0,
       lockoutUntil: null,
-      loginHistory: [{ email: staffEmail, time: new Date().toISOString() }]
+      loginHistory: [{ email: staffEmail, time: new Date().toISOString() }],
     });
   } else {
     const updates = { lastSeen: new Date().toISOString() };
@@ -180,28 +242,30 @@ export const registerDevice = async (fingerprint, userAgent, staffEmail = '', st
 /** Get the current status of a device fingerprint in real-time */
 export const getDeviceStatus = (fingerprint, callback) => {
   const docRef = doc(db, 'devices', fingerprint);
-  return onSnapshot(docRef, (docSnap) => {
-    if (docSnap.exists()) {
-      // Update lastAccess while we are here (fire and forget)
-      updateDoc(docRef, { lastAccess: serverTimestamp() }).catch(() => {});
-      callback(docSnap.data());
-    } else {
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        // Update lastAccess while we are here (fire and forget)
+        updateDoc(docRef, { lastAccess: serverTimestamp() }).catch(() => {});
+        callback(docSnap.data());
+      } else {
+        callback(null);
+      }
+    },
+    (error) => {
+      console.error('Error listening to device:', error);
       callback(null);
-    }
-  }, (error) => {
-    console.error("Error listening to device:", error);
-    callback(null);
-  });
+    },
+  );
 };
-
-
 
 /** Update device security metrics (Lockout) */
 export const updateDeviceSecurity = async (fingerprint, attempts, lockoutTime) => {
   const deviceRef = doc(db, 'devices', fingerprint);
   await updateDoc(deviceRef, {
     failedAttempts: attempts,
-    lockoutUntil: lockoutTime
+    lockoutUntil: lockoutTime,
   });
 };
 

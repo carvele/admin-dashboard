@@ -6,7 +6,11 @@ const ImageWithFallback = ({ src, alt, className = '', fallbackSize = 24, ...pro
 
   if (error || !src) {
     return (
-      <div className={`flex-center bg-light text-secondary rounded ${className}`} style={{ minHeight: '100px' }} {...props}>
+      <div
+        className={`flex-center bg-light text-secondary rounded ${className}`}
+        style={{ minHeight: '100px' }}
+        {...props}
+      >
         <div className="flex-col flex-center gap-2">
           <ImageOff size={fallbackSize} opacity={0.5} />
           <span className="text-xs">Image unavailable</span>
@@ -16,13 +20,7 @@ const ImageWithFallback = ({ src, alt, className = '', fallbackSize = 24, ...pro
   }
 
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setError(true)}
-      {...props}
-    />
+    <img src={src} alt={alt} className={className} loading="lazy" onError={() => setError(true)} {...props} />
   );
 };
 

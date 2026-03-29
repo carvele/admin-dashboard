@@ -22,8 +22,13 @@
   font-weight: 600;
   color: var(--charcoal);
 }
-.full-width { width: 100%; top: 0; }
-.mt-3 { margin-top: 1rem; }
+.full-width {
+  width: 100%;
+  top: 0;
+}
+.mt-3 {
+  margin-top: 1rem;
+}
 
 .conversation-list {
   flex: 1;
@@ -39,14 +44,14 @@
   transition: background-color 0.2s;
 }
 .conversation-item:hover {
-  background-color: #FAFAFA;
+  background-color: #fafafa;
 }
 .conversation-item.active {
   background-color: var(--cream);
   border-left: 3px solid var(--accent);
 }
 .conversation-item.unread {
-  background-color: #F8FAFC;
+  background-color: #f8fafc;
 }
 
 .conv-details {
@@ -64,7 +69,10 @@
   font-weight: 600;
   color: var(--charcoal);
 }
-.conversation-item.unread h4 { font-weight: 700; color: #1a1a1a; }
+.conversation-item.unread h4 {
+  font-weight: 700;
+  color: #1a1a1a;
+}
 .time {
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -131,7 +139,7 @@
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
-  background-color: #FAFAFA;
+  background-color: #fafafa;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -150,7 +158,12 @@
   align-self: flex-start;
 }
 
-.small-av { width: 28px; height: 28px; font-size: 0.75rem; flex-shrink: 0; }
+.small-av {
+  width: 28px;
+  height: 28px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
 
 .message-bubble {
   padding: 0.875rem 1rem;
@@ -187,7 +200,7 @@
   align-items: flex-start;
 }
 .os-icon {
-  background-color: rgba(255,255,255,0.2);
+  background-color: rgba(255, 255, 255, 0.2);
   padding: 0.75rem;
   border-radius: 8px;
 }
@@ -235,7 +248,7 @@
   flex: 1;
   border-radius: 24px;
   padding: 0.75rem 1.25rem;
-  background-color: #F8FAFC;
+  background-color: #f8fafc;
 }
 
 .send-btn {
@@ -250,7 +263,7 @@
   transition: all 0.2s;
 }
 .send-btn:hover:not(:disabled) {
-  background-color: #7A5F4F;
+  background-color: #7a5f4f;
   transform: scale(1.05);
 }
 .send-btn:disabled {
@@ -260,5 +273,7 @@
 }
 
 @media (max-width: 900px) {
-  .messages-sidebar { display: none; }
+  .messages-sidebar {
+    display: none;
+  }
 }

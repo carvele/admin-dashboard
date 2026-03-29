@@ -11,8 +11,8 @@
   padding: 1.5rem;
 }
 .border-danger {
-  border: 1px solid #FCA5A5;
-  background-color: #FEF2F2;
+  border: 1px solid #fca5a5;
+  background-color: #fef2f2;
 }
 
 .icon-bg-soft {
@@ -23,10 +23,22 @@
   align-items: center;
   justify-content: center;
 }
-.icon-bg-soft.blue { background-color: #DBEAFE; color: #1E40AF; }
-.icon-bg-soft.green { background-color: #D1FAE5; color: #065F46; }
-.icon-bg-soft.orange { background-color: #FEF3C7; color: #92400E; }
-.icon-bg-soft.red { background-color: #FEE2E2; color: #DC2626; }
+.icon-bg-soft.blue {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+.icon-bg-soft.green {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+.icon-bg-soft.orange {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+.icon-bg-soft.red {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
 
 .inv-stat-content h3 {
   font-size: 1.5rem;
@@ -35,11 +47,18 @@
   margin-top: 0.25rem;
 }
 
-.mt-2 { margin-top: 0.5rem; }
-.text-right { text-align: right; }
-.w-1\/4 { width: 25%; }
+.mt-2 {
+  margin-top: 0.5rem;
+}
+.text-right {
+  text-align: right;
+}
+.w-1\/4 {
+  width: 25%;
+}
 
-.inv-table th, .inv-table td {
+.inv-table th,
+.inv-table td {
   padding: 1rem;
 }
 
@@ -51,7 +70,7 @@
 .stock-progress-bar {
   flex: 1;
   height: 6px;
-  background-color: #E2E8F0;
+  background-color: #e2e8f0;
   border-radius: 3px;
   overflow: hidden;
 }
@@ -83,14 +102,14 @@
   color: var(--charcoal);
 }
 .icon-btn-small.text-danger:hover {
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: #fee2e2;
+  color: #dc2626;
 }
 .icon-btn-small.restock-btn {
   color: var(--stock-high);
 }
 .icon-btn-small.restock-btn:hover {
-  background-color: #D1FAE5;
+  background-color: #d1fae5;
 }
 
 .restock-item-info {
@@ -112,8 +131,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: #fee2e2;
+  color: #dc2626;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,15 +140,17 @@
 }
 
 .btn-danger {
-  background-color: #DC2626;
+  background-color: #dc2626;
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   font-weight: 500;
-  transition: background-color 0.2s, transform 0.15s;
+  transition:
+    background-color 0.2s,
+    transform 0.15s;
 }
 .btn-danger:hover {
-  background-color: #B91C1C;
+  background-color: #b91c1c;
   transform: translateY(-1px);
 }
 
@@ -137,8 +158,12 @@
   display: flex;
   gap: 1rem;
 }
-.flex-1 { flex: 1; }
-.justify-center { justify-content: center; }
+.flex-1 {
+  flex: 1;
+}
+.justify-center {
+  justify-content: center;
+}
 .size-badge {
   display: inline-flex;
   align-items: center;
@@ -149,9 +174,15 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
-.text-xs { font-size: 0.75rem; }
+.text-xs {
+  font-size: 0.75rem;
+}
 
 @media (max-width: 768px) {
-  .inv-summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .form-row { flex-direction: column; }
+  .inv-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .form-row {
+    flex-direction: column;
+  }
 }
