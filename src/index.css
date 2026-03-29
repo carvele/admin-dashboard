@@ -5,7 +5,7 @@
   --warm-gray: #dcd3b6;
   --charcoal: #1f1c18;
   --accent: #d4af37;
-  --highlight: #aa8c2c; /* Deeper gold for active/hover */
+  --highlight: #aa8c2c;
 
   --white: #ffffff;
   --black: #000000;
@@ -15,6 +15,10 @@
 
   --border-color: #efe9db;
   --focus-ring: rgba(212, 175, 55, 0.4);
+  
+  /* Glassmorphism base */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(239, 233, 219, 0.5);
 
   /* Status Colors */
   --status-pending-bg: #fef3c7;
@@ -42,6 +46,42 @@
     sans-serif;
   color: var(--text-primary);
   background-color: var(--cream);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+:root.dark {
+  --cream: #121212;
+  --beige: #1e1e1e;
+  --warm-gray: #2d2d2d;
+  --charcoal: #fdfbf7;
+  --accent: #d4af37;
+  --highlight: #e5c158;
+
+  --white: #1e1e1e;
+  --black: #000000;
+
+  --text-primary: #e5e5e5;
+  --text-secondary: #a0a0a0;
+
+  --border-color: #333333;
+  --focus-ring: rgba(212, 175, 55, 0.3);
+  
+  --glass-bg: rgba(30, 30, 30, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+
+  /* Adjust status backgrounds for dark mode */
+  --status-pending-bg: rgba(245, 158, 11, 0.2);
+  --status-pending-text: #fbbf24;
+  --status-approved-bg: rgba(59, 130, 246, 0.2);
+  --status-approved-text: #60a5fa;
+  --status-completed-bg: rgba(16, 185, 129, 0.2);
+  --status-completed-text: #34d399;
+  --status-cancelled-bg: rgba(239, 68, 68, 0.2);
+  --status-cancelled-text: #f87171;
+  --status-confirmed-bg: rgba(6, 182, 212, 0.2);
+  --status-confirmed-text: #22d3ee;
+  --status-fitting-bg: rgba(139, 92, 246, 0.2);
+  --status-fitting-text: #a78bfa;
 }
 
 .flex-center-vh {
@@ -100,6 +140,8 @@ button {
     0 2px 4px -1px rgba(0, 0, 0, 0.03);
   padding: 1.5rem;
   border: 1px solid var(--border-color);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .btn-primary {
@@ -191,7 +233,7 @@ button {
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
-  background-color: #fafaf9;
+  background-color: var(--beige);
 }
 .table td {
   padding: 0.85rem 1rem;

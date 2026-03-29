@@ -4,6 +4,7 @@ import {
   addDocument,
   updateDocument,
   deleteDocument,
+  softDeleteDocument,
   subscribeToCollection,
   syncProductUpdateToInventory,
 } from '../firebase/firestore';
@@ -78,7 +79,7 @@ export const updateProduct = async (docId, updates) => {
 };
 
 export const deleteProduct = async (docId) => {
-  return deleteDocument('products', docId);
+  return softDeleteDocument('products', docId);
 };
 
 // --- Inventory Layer ---
@@ -98,7 +99,7 @@ export const updateInventoryItem = (docId, updates) => {
 };
 
 export const deleteInventoryItem = (docId) => {
-  return deleteDocument('inventory', docId);
+  return softDeleteDocument('inventory', docId);
 };
 
 // --- Category Layer ---
@@ -118,5 +119,5 @@ export const updateCategory = (docId, updates) => {
 };
 
 export const deleteCategory = (docId) => {
-  return deleteDocument('categories', docId);
+  return softDeleteDocument('categories', docId);
 };

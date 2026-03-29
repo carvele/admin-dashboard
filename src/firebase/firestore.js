@@ -70,10 +70,14 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 
 // ── Generic CRUD helpers ──────────────────────────────────
 
-/** Get all documents from a collection */
-export const getCollection = async (collectionName) => {
+/** Get all documents from a collection (filters out soft-deleted by default) */
+export const getCollection = async (collectionName, includeDeleted = false) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
-    const snap = await getDocs(collection(db, collectionName));
+    let q = query(collection(db, collectionName));
+    if (!includeDeleted) {
+      q = query(q, where('deleted', '!=', true));
+    }
+    const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data = d.data();
       return { ...data, customId: data.id || null, id: d.id, docId: d.id };
@@ -81,15 +85,21 @@ export const getCollection = async (collectionName) => {
   });
 };
 
-/** Get a paginated list of documents from a collection */
+/** Get a paginated list of documents from a collection (filters out soft-deleted by default) */
 export const getPaginatedCollection = async (
   collectionName,
   pageSize,
   lastDoc = null,
   queryConstraints = [],
+  includeDeleted = false,
 ) => {
   return withRetry(`getPaginatedCollection_${collectionName}`, async () => {
-    let qArgs = [...queryConstraints, limit(pageSize)];
+    let baseConstraints = [...queryConstraints];
+    if (!includeDeleted) {
+      baseConstraints.push(where('deleted', '!=', true));
+    }
+
+    let qArgs = [...baseConstraints, limit(pageSize)];
     if (lastDoc) {
       qArgs.push(startAfter(lastDoc));
     }
@@ -117,6 +127,7 @@ export const addDocument = async (collectionName, data) => {
   return withRetry(`addDocument_${collectionName}`, async () => {
     const ref = await addDoc(collection(db, collectionName), {
       ...data,
+      deleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -161,10 +172,21 @@ export const setDocument = async (collectionName, docId, data) => {
   });
 };
 
-/** Delete a document */
+/** Delete a document (hard delete) */
 export const deleteDocument = async (collectionName, docId) => {
   return withRetry(`deleteDocument_${collectionName}`, async () => {
     await deleteDoc(doc(db, collectionName, docId));
+  });
+};
+
+/** Mark a document as deleted (soft delete) */
+export const softDeleteDocument = async (collectionName, docId) => {
+  return withRetry(`softDeleteDocument_${collectionName}`, async () => {
+    await updateDoc(doc(db, collectionName, docId), {
+      deleted: true,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   });
 };
 
@@ -185,11 +207,20 @@ export const logAction = async (user, action, targetInfo = {}) => {
 
 // ── Real-time listeners ───────────────────────────────────
 
-/** Subscribe to a collection in real time. Returns an unsubscribe function.
- *  onError is called when the snapshot listener encounters an error (e.g. quota exhausted).
- */
-export const subscribeToCollection = (collectionName, callback, queryConstraints = [], onError) => {
-  const q = query(collection(db, collectionName), ...queryConstraints);
+/** Subscribe to a collection in real time (filters out soft-deleted by default) */
+export const subscribeToCollection = (
+  collectionName,
+  callback,
+  queryConstraints = [],
+  onError,
+  includeDeleted = false,
+) => {
+  let finalConstraints = [...queryConstraints];
+  if (!includeDeleted) {
+    finalConstraints.push(where('deleted', '!=', true));
+  }
+
+  const q = query(collection(db, collectionName), ...finalConstraints);
   return onSnapshot(
     q,
     (snap) => {

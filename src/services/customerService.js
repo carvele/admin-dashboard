@@ -4,13 +4,15 @@ import {
   addDocument,
   updateDocument,
   deleteDocument,
+  softDeleteDocument,
   subscribeToCollection,
 } from '../firebase/firestore';
 
 /**
  * @typedef {Object} Customer
  * @property {string} docId
- * @property {string} name
+ * @property {string} firstName
+ * @property {string} lastName
  * @property {string} email
  * @property {string} status - 'Active', 'Inactive', 'VIP'
  * @property {string} phone
@@ -55,9 +57,9 @@ export const subscribeToCustomers = (callback) => {
 export const getCustomers = () => getCollection('users');
 export const getCustomerById = (id) => getDocument('users', id);
 
-export const getPaginatedCustomers = (pageSize, lastDoc = null, constraints = []) => {
+export const getPaginatedCustomers = (pageSize, lastDoc = null, constraints = [], includeDeleted = false) => {
   const { getPaginatedCollection } = require('../firebase/firestore');
-  return getPaginatedCollection('users', pageSize, lastDoc, constraints);
+  return getPaginatedCollection('users', pageSize, lastDoc, constraints, includeDeleted);
 };
 
 export const createCustomer = (customerData) => {
@@ -69,7 +71,7 @@ export const updateCustomer = (docId, updates) => {
 };
 
 export const deleteCustomer = (docId) => {
-  return deleteDocument('users', docId);
+  return softDeleteDocument('users', docId);
 };
 
 // --- Reservations ---
@@ -84,7 +86,7 @@ export const createReservation = (data) => addDocument('reservations', data);
 
 export const updateReservation = (docId, updates) => updateDocument('reservations', docId, updates);
 
-export const deleteReservation = (docId) => deleteDocument('reservations', docId);
+export const deleteReservation = (docId) => softDeleteDocument('reservations', docId);
 
 // --- Wardrobe ---
 
