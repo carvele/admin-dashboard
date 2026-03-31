@@ -8,6 +8,7 @@ import {
   subscribeToCollection,
   syncProductUpdateToInventory,
 } from '../firebase/firestore';
+import { queryCache, CACHE_TTL } from '../utils/cache';
 
 /**
  * @typedef {Object} Product
@@ -63,15 +64,26 @@ export const subscribeToProducts = (callback) => {
   return subscribeToCollection('products', callback);
 };
 
-export const getProducts = () => getCollection('products');
+export const getProducts = async () => {
+  const cacheKey = 'products';
+  if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
+  const data = await getCollection('products');
+  queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
+  return data;
+};
+
 export const getProductById = (id) => getDocument('products', id);
 
 export const createProduct = async (productData) => {
+  queryCache.invalidateByPrefix('products');
+  queryCache.invalidateByPrefix('inventory');
   return addDocument('products', productData);
 };
 
 export const updateProduct = async (docId, updates) => {
   await updateDocument('products', docId, updates);
+  queryCache.invalidateByPrefix('products');
+  queryCache.invalidateByPrefix('inventory');
   // Auto-propagate specific column updates to Inventory mapping
   if (updates.name || updates.category) {
     await syncProductUpdateToInventory(docId, updates);
@@ -79,6 +91,8 @@ export const updateProduct = async (docId, updates) => {
 };
 
 export const deleteProduct = async (docId) => {
+  queryCache.invalidateByPrefix('products');
+  queryCache.invalidateByPrefix('inventory');
   return softDeleteDocument('products', docId);
 };
 
@@ -88,17 +102,26 @@ export const subscribeToInventory = (callback) => {
   return subscribeToCollection('inventory', callback);
 };
 
-export const getInventory = () => getCollection('inventory');
+export const getInventory = async () => {
+  const cacheKey = 'inventory';
+  if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
+  const data = await getCollection('inventory');
+  queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
+  return data;
+};
 
 export const createInventoryItem = (data) => {
+  queryCache.invalidateByPrefix('inventory');
   return addDocument('inventory', data);
 };
 
 export const updateInventoryItem = (docId, updates) => {
+  queryCache.invalidateByPrefix('inventory');
   return updateDocument('inventory', docId, updates);
 };
 
 export const deleteInventoryItem = (docId) => {
+  queryCache.invalidateByPrefix('inventory');
   return softDeleteDocument('inventory', docId);
 };
 
@@ -108,16 +131,25 @@ export const subscribeToCategories = (callback) => {
   return subscribeToCollection('categories', callback);
 };
 
-export const getCategories = () => getCollection('categories');
+export const getCategories = async () => {
+  const cacheKey = 'categories';
+  if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
+  const data = await getCollection('categories');
+  queryCache.set(cacheKey, data, CACHE_TTL.LONG);
+  return data;
+};
 
 export const createCategory = (categoryData) => {
+  queryCache.invalidateByPrefix('categories');
   return addDocument('categories', categoryData);
 };
 
 export const updateCategory = (docId, updates) => {
+  queryCache.invalidateByPrefix('categories');
   return updateDocument('categories', docId, updates);
 };
 
 export const deleteCategory = (docId) => {
+  queryCache.invalidateByPrefix('categories');
   return softDeleteDocument('categories', docId);
 };

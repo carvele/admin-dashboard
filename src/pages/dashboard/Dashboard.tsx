@@ -23,13 +23,13 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 // @ts-ignore
-import { subscribeToReservations } from '../../services/reservationService';
+import { getReservations } from '../../services/reservationService';
 // @ts-ignore
-import { subscribeToCustomers } from '../../services/customerService';
+import { getCustomers } from '../../services/customerService';
 // @ts-ignore
-import { subscribeToInventory } from '../../services/productService';
+import { getInventory } from '../../services/productService';
 // @ts-ignore
-import { subscribeToSuggestedOutfits, subscribeToARSessions } from '../../services/wardrobeService';
+import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
 
@@ -52,34 +52,31 @@ const Dashboard = () => {
   const [trendFilter, setTrendFilter] = useState('This Week');
   const [lastSynced, setLastSynced] = useState(new Date());
 
+  const loadDashboard = async () => {
+    try {
+      const [resData, cusData, invData, outData, arData] = await Promise.all([
+        getReservations(),
+        getCustomers(),
+        getInventory(),
+        getSuggestedOutfits(),
+        getARSessions(),
+      ]);
+      setReservations(resData || []);
+      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
+      setInventory(invData || []);
+      setSuggestedOutfits(outData || []);
+      setArSessionCount(arData?.length || 0);
+      setLastSynced(new Date());
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+    }
+  };
+
   React.useEffect(() => {
-    const unsubR = subscribeToReservations((data: any[]) => {
-      setReservations(data);
-      setLastSynced(new Date());
-    });
-    const unsubC = subscribeToCustomers((data: any[]) => {
-      setCustomers(data.filter((u: any) => !u.role || u.role === 'customer'));
-      setLastSynced(new Date());
-    });
-    const unsubI = subscribeToInventory((data: any[]) => {
-      setInventory(data);
-      setLastSynced(new Date());
-    });
-    const unsubO = subscribeToSuggestedOutfits((data: any[]) => {
-      setSuggestedOutfits(data);
-      setLastSynced(new Date());
-    });
-    const unsubAR = subscribeToARSessions((data: any[]) => {
-      setArSessionCount(data.length);
-      setLastSynced(new Date());
-    });
-    return () => {
-      unsubR();
-      unsubC();
-      unsubI();
-      unsubO();
-      unsubAR();
-    };
+    loadDashboard();
+    // Poll every 5 minutes
+    const intervalId = setInterval(loadDashboard, 5 * 60 * 1000);
+    return () => clearInterval(intervalId);
   }, []);
 
   const totalReservations = reservations.length;
@@ -160,7 +157,7 @@ const Dashboard = () => {
             <CheckCircle2 size={16} /> Pipeline Healthy
           </div>
           <div className="sync-status flex-center gap-1 text-secondary text-xs">
-            <RefreshCw size={12} /> Last synced: {lastSynced.toLocaleTimeString()}
+            <RefreshCw size={12} className="cursor-pointer" onClick={loadDashboard} style={{ cursor: 'pointer' }} /> Last synced: {lastSynced.toLocaleTimeString()}
           </div>
         </div>
       </div>

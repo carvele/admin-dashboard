@@ -9,17 +9,46 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
  * @returns {Promise<string>} The public download URL for the file
  */
 export const uploadFile = async (file, folderPath = 'catalog-assets') => {
-  if (!file) throw new Error('No file provided');
+  throw new Error(
+    'Firebase Storage quota exceeded. Please upload to Cloudinary instead by using uploadToCloudinary().',
+  );
+};
 
-  // Create a unique filename to prevent overwrites
-  const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-  const storageRef = ref(storage, `${folderPath}/${uniqueName}`);
-
-  // We use uploadBytesResumable in case we want to show progress bars later
-  const uploadTask = await uploadBytesResumable(storageRef, file);
-  const downloadURL = await getDownloadURL(uploadTask.ref);
-
-  return downloadURL;
+/**
+ * Compresses an image file using browser Canvas before upload.
+ */
+const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) return resolve(file); // Only process images
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      let { width, height } = img;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return reject(new Error('Canvas is empty'));
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          resolve(compressedFile);
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = (err) => reject(err);
+  });
 };
 
 /**
@@ -31,13 +60,21 @@ export const uploadFile = async (file, folderPath = 'catalog-assets') => {
 export const uploadToCloudinary = async (file, retries = 2) => {
   if (!file) throw new Error('No file provided');
 
+  let processedFile = file;
+  try {
+    processedFile = await compressImage(file);
+    console.log(`[Storage] Compressed image from ${file.size} to ${processedFile.size} bytes`);
+  } catch (err) {
+    console.warn('[Storage] Image compression failed, uploading original', err);
+  }
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', processedFile);
       formData.append('upload_preset', 'boutique_productDetails'); // Matches Android app
 
-      const response = await fetch('https://api.cloudinary.com/v1_1/dlrlgp4bq/upload', {
+      const response = await fetch('https://api.cloudinary.com/v1_1/dlrlgp4bq/image/upload', {
         method: 'POST',
         body: formData,
       });

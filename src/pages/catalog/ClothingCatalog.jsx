@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles } from 'lucide-react';
 import {
-  subscribeToProducts,
+  getProducts,
   updateProduct,
   deleteProduct,
   getCategories,
@@ -24,11 +24,18 @@ const ClothingCatalog = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to products
-    const unsubProducts = subscribeToProducts((data) => {
-      setCatalog(data);
-      setLoading(false);
-    });
+    // Fetch products (now cached)
+    const fetchProducts = async () => {
+      try {
+        const data = await getProducts();
+        setCatalog(data);
+      } catch (err) {
+        toast.error('Failed to load products');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
 
     // Fetch dynamic categories once (could also subscribe if needed)
     const fetchCategories = async () => {
@@ -60,8 +67,6 @@ const ClothingCatalog = () => {
       }
     };
     fetchCategories();
-
-    return () => unsubProducts();
   }, []);
 
   const [searchTerm, setSearchTerm] = useState('');

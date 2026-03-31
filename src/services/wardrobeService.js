@@ -34,6 +34,10 @@ export const subscribeToARSessions = (callback) => {
   return subscribeToCollection('ar_sessions', callback);
 };
 
+export const getARSessions = () => {
+  return getCollection('ar_sessions');
+};
+
 export const subscribeToARAssets = (callback) => {
   return subscribeToCollection('ar_assets', callback);
 };

@@ -37,6 +37,20 @@ class ClientCache {
   delete(key) {
     this.cache.delete(key);
   }
+
+  invalidateByPrefix(prefix) {
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
+  }
 }
+
+export const CACHE_TTL = {
+  SHORT: 3 * 60 * 1000,
+  MEDIUM: 5 * 60 * 1000,
+  LONG: 10 * 60 * 1000,
+};
 
 export const queryCache = new ClientCache();

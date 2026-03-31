@@ -53,6 +53,10 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
     try {
       return await measureAsync(operationName, asyncFn);
     } catch (err) {
+      if (err.code === 'resource-exhausted') {
+        console.error(`[Firestore] Quota exceeded on '${operationName}'. Aborting.`);
+        throw err;
+      }
       attempt++;
       console.warn(
         `[Firestore] '${operationName}' failed (attempt ${attempt}/${maxRetries}):`,
@@ -277,8 +281,6 @@ export const getDeviceStatus = (fingerprint, callback) => {
     docRef,
     (docSnap) => {
       if (docSnap.exists()) {
-        // Update lastAccess while we are here (fire and forget)
-        updateDoc(docRef, { lastAccess: serverTimestamp() }).catch(() => {});
         callback(docSnap.data());
       } else {
         callback(null);

@@ -39,7 +39,7 @@ const ProductForm = () => {
     season: 'All-Season',
     occasion: '',
     visibility: 'Published',
-    featured: false,
+    isFeatured: false,
     isAlterable: false,
     sizes: ['OS'],
     images: [], // Array of image URLs/Maps
@@ -113,7 +113,7 @@ const ProductForm = () => {
               season: doc.season || 'All-Season',
               occasion: doc.occasion || '',
               visibility: doc.visibility || 'Published',
-              featured: doc.featured || false,
+              isFeatured: doc.isFeatured ?? doc.featured ?? false,
               isAlterable: doc.isAlterable || false,
               sizes: doc.sizes || ['OS'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
@@ -223,11 +223,19 @@ const ProductForm = () => {
       if (selectedFiles.length > 0) {
         for (let i = 0; i < selectedFiles.length; i++) {
           setUploadProgress({ current: i + 1, total: selectedFiles.length });
-          const imgMap = await uploadToCloudinary(selectedFiles[i]);
-          uploadedImages.push(imgMap.secure_url);
+          console.log(`[DEBUG] Uploading image ${i + 1} of ${selectedFiles.length} to Cloudinary...`);
+          try {
+            const imgMap = await uploadToCloudinary(selectedFiles[i]);
+            console.log(`[DEBUG] Cloudinary upload success:`, imgMap);
+            uploadedImages.push(imgMap.secure_url);
+          } catch (uploadErr) {
+            console.error(`[DEBUG] Cloudinary upload FAILED for image ${i + 1}:`, uploadErr);
+            throw uploadErr;
+          }
         }
       }
 
+      console.log('[DEBUG] All images uploaded. Preparing payload...');
       const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
@@ -244,7 +252,7 @@ const ProductForm = () => {
         styleCode: formData.styleCode,
         season: formData.season,
         visibility: formData.visibility,
-        featured: formData.featured,
+        isFeatured: formData.isFeatured,
         isAlterable: formData.isAlterable,
         updated_by: user?.email || 'admin',
         images: finalImages,
@@ -253,15 +261,18 @@ const ProductForm = () => {
       };
 
       if (isEditing) {
+        console.log('[DEBUG] Updating product in Firestore...', { id, payload });
         await updateProduct(id, payload);
-
+        console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
         payload.created_by = user?.email || 'admin';
         payload.stock = 0;
         payload.tags = ['New Arrival'];
 
+        console.log('[DEBUG] Creating product in Firestore...', payload);
         const newDocId = await createProduct(payload);
+        console.log('[DEBUG] Firestore create SUCCESS. Doc ID:', newDocId);
 
         // Init inventory per size in parallel
         Logger.info(`Initializing inventory for new product ${newDocId}...`);
@@ -278,7 +289,7 @@ const ProductForm = () => {
           }),
         );
         await Promise.all(inventoryPromises);
-
+        console.log('[DEBUG] Inventory items created successfully');
         toast.success('Product created successfully!');
       }
 
@@ -386,9 +397,9 @@ const ProductForm = () => {
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                name="featured"
-                checked={formData.featured}
-                onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+                name="isFeatured"
+                checked={formData.isFeatured}
+                onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
               />
               <span>Feature this product</span>
             </label>
@@ -559,8 +570,9 @@ const ProductForm = () => {
               <label className="toggle-switch">
                 <input
                   type="checkbox"
-                  checked={formData.featured}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, featured: e.target.checked }))}
+                  name="isFeatured"
+                  checked={formData.isFeatured}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, isFeatured: e.target.checked }))}
                 />
                 <span className="toggle-slider"></span>
               </label>
