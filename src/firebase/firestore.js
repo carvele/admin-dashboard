@@ -74,12 +74,15 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 
 // ── Generic CRUD helpers ──────────────────────────────────
 
-/** Get all documents from a collection (filters out soft-deleted by default) */
-export const getCollection = async (collectionName, includeDeleted = false) => {
+/** Get documents from a collection (filters out soft-deleted by default, optional limit) */
+export const getCollection = async (collectionName, includeDeleted = false, maxResults = 0) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
     let q = query(collection(db, collectionName));
     if (!includeDeleted) {
       q = query(q, where('deleted', '!=', true));
+    }
+    if (maxResults > 0) {
+      q = query(q, limit(maxResults));
     }
     const snap = await getDocs(q);
     return snap.docs.map((d) => {

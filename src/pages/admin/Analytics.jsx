@@ -45,12 +45,16 @@ const Analytics = () => {
   const [dateRange, setDateRange] = useState('30d');
 
   useEffect(() => {
-    const unsubR = subscribeToCollection('reservations', setReservations);
+    // Only listen to the most recent 500 records to save reads while keeping analytics relevant
+    const limitConstraint = [orderBy('createdAt', 'desc'), limit(500)];
+    
+    const unsubR = subscribeToCollection('reservations', setReservations, limitConstraint);
     const unsubC = subscribeToCollection('users', (data) => {
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
-    });
-    const unsubCat = subscribeToCollection('products', setCatalog);
-    const unsubConv = subscribeToCollection('analyticsConvRate', setConvRates);
+    }, limitConstraint);
+    const unsubCat = subscribeToCollection('products', setCatalog, limitConstraint);
+    const unsubConv = subscribeToCollection('analyticsConvRate', setConvRates, [limit(100)]);
+    
     return () => {
       unsubR();
       unsubC();

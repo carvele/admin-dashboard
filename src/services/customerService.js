@@ -54,7 +54,9 @@ export const subscribeToCustomers = (callback) => {
   return subscribeToCollection('users', callback);
 };
 
-export const getCustomers = () => getCollection('users');
+export const getCustomers = (maxResults = 0) => {
+  return getCollection('users', false, maxResults);
+};
 export const getCustomerById = (id) => getDocument('users', id);
 
 export const getPaginatedCustomers = (pageSize, lastDoc = null, constraints = [], includeDeleted = false) => {

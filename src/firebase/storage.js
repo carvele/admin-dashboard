@@ -3,15 +3,53 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
 
 /**
  * Uploads a file to Firebase Storage and returns the public download URL.
- *
- * @param {File} file - The file object from an input element.
- * @param {string} folderPath - The storage folder (e.g., 'catalog-assets')
- * @returns {Promise<string>} The public download URL for the file
  */
 export const uploadFile = async (file, folderPath = 'catalog-assets') => {
-  throw new Error(
-    'Firebase Storage quota exceeded. Please upload to Cloudinary instead by using uploadToCloudinary().',
-  );
+  if (!file) throw new Error('No file provided');
+  
+  const fileName = `${Date.now()}_${file.name}`;
+  const storageRef = ref(storage, `${folderPath}/${fileName}`);
+  const uploadTask = uploadBytesResumable(storageRef, file);
+
+  return new Promise((resolve, reject) => {
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        // Handle progress if needed
+      },
+      (error) => {
+        console.error('[Storage] Firebase upload failed:', error);
+        reject(error);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        resolve(downloadURL);
+      }
+    );
+  });
+};
+
+/**
+ * Routes a file to the correct storage provider based on its type.
+ * - Images & Masks -> Cloudinary
+ * - 3D Models (.glb, .obj) -> Firebase Storage
+ * - User Avatars -> Firebase Storage
+ */
+export const routeAndUploadFile = async (file, folderPath = 'catalog-assets') => {
+  if (!file) return null;
+
+  const fileName = file.name.toLowerCase();
+  const is3DModel = fileName.endsWith('.glb') || fileName.endsWith('.obj');
+  const isAvatar = folderPath === 'avatars';
+
+  if (is3DModel || isAvatar) {
+    console.log(`[Storage] Routing ${file.name} to Firebase Storage...`);
+    return await uploadFile(file, folderPath);
+  } else {
+    console.log(`[Storage] Routing ${file.name} to Cloudinary...`);
+    const { secure_url } = await uploadToCloudinary(file);
+    return secure_url;
+  }
 };
 
 /**

@@ -20,8 +20,8 @@ export const getPaginatedReservations = (pageSize, lastDoc = null, constraints =
   return getPaginatedCollection('reservations', pageSize, lastDoc, constraints);
 };
 
-export const getReservations = () => {
-  return getCollection('reservations');
+export const getReservations = (maxResults = 0) => {
+  return getCollection('reservations', false, maxResults);
 };
 
 export const createReservation = (data) => {

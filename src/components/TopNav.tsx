@@ -11,7 +11,7 @@ import {
   sanitizeForDisplay,
 } from '../utils/helpers';
 // @ts-ignore
-import { subscribeToCollection, updateDocument } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, orderBy, limit } from '../firebase/firestore';
 import './TopNav.css';
 import { User } from '../types';
 
@@ -31,38 +31,107 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [reservations, setReservations] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const searchRef = useRef(null);
 
   const initials = getInitials((user as any)?.name);
 
-  // ── Subscribe to data for search ──
+  // ── Manage search results on-demand ──
   useEffect(() => {
-    const unsubR = subscribeToCollection('reservations', setReservations);
-    const unsubC = subscribeToCollection('users', (data: any[]) => {
-      setCustomers(data.filter((u: any) => !u.role || u.role === 'customer'));
-    });
-    const unsubP = subscribeToCollection('products', setProducts);
-    return () => {
-      unsubR();
-      unsubC();
-      unsubP();
-    };
-  }, []);
+    const handler = setTimeout(async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
 
-  // ── Subscribe to notifications ──
+      // Instead of global subscriptions, we'd ideally search via a callable function or specific indices.
+      // Since this is a small-to-md shop, we search once when typing pauses.
+      try {
+        const { getCollection } = await import('../firebase/firestore');
+        const q = sanitizeForDisplay(searchQuery).toLowerCase();
+        const results: any[] = [];
+
+        // Check if we already have data from active page-level listeners (optional optimization)
+        // Here we just fetch small chunks to reduce reads
+        const resSearch = await getCollection('reservations', false); 
+        const custSearch = await getCollection('users', false);
+        const prodSearch = await getCollection('products', false);
+
+        resSearch.forEach((r: any) => {
+          const sCustomer = (r.customer || r.customerName || '').toLowerCase();
+          if (sCustomer.includes(q) || (r.id && r.id.toLowerCase().includes(q))) {
+            results.push({
+              type: 'Reservation',
+              label: `${r.id} — ${r.customer || r.customerName}`,
+              sub: r.outfit || r.productName || 'Order',
+              path: '/reservations',
+            });
+          }
+        });
+
+        custSearch.forEach((c: any) => {
+          if ((c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)) {
+            results.push({ type: 'Customer', label: c.name, sub: c.email, path: '/customers' });
+          }
+        });
+
+        // Search products
+        prodSearch.forEach((p: any) => {
+          if ((p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)) {
+            results.push({
+              type: 'Product',
+              label: p.name,
+              sub: `${p.category} · ₱${(p.price || 0).toLocaleString()}`,
+              path: '/catalog',
+            });
+          }
+        });
+
+        // Quick nav items
+        const navItems = [
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Reservations', path: '/reservations' },
+          { label: 'Customers', path: '/customers' },
+          { label: 'Messages', path: '/messages' },
+          { label: 'Inventory', path: '/inventory' },
+          { label: 'Catalog', path: '/catalog' },
+          { label: 'Analytics', path: '/analytics' },
+          { label: 'Settings', path: '/settings' },
+          { label: 'Staff Management', path: '/staff' },
+          { label: 'Device Management', path: '/devices' },
+        ];
+        navItems.forEach((item) => {
+          if (item.label.toLowerCase().includes(q)) {
+            results.push({ type: 'Page', label: item.label, sub: 'Navigate', path: item.path });
+          }
+        });
+
+        setSearchResults(results.slice(0, 10));
+        setShowSearchResults(true);
+      } catch (err) {
+        console.error('Search failed:', err);
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // ── Subscribe to notifications (Limited to 20 recent) ──
   useEffect(() => {
-    const unsub = subscribeToCollection('notifications', (data: any[]) => {
-      const sorted = [...data].sort((a, b) => {
-        const aTime = a.createdAt?.seconds || 0;
-        const bTime = b.createdAt?.seconds || 0;
-        return bTime - aTime;
-      });
-      setNotifications(sorted.slice(0, 10));
-      setUnreadCount(sorted.filter((n) => !n.read).length);
-    });
+    // Only listen to the most recent 20 notifications to save reads
+    const unsub = subscribeToCollection(
+      'notifications',
+      (data: any[]) => {
+        const sorted = [...data].sort((a, b) => {
+          const aTime = a.createdAt?.seconds || 0;
+          const bTime = b.createdAt?.seconds || 0;
+          return bTime - aTime;
+        });
+        setNotifications(sorted);
+        setUnreadCount(sorted.filter((n) => !n.read).length);
+      },
+      [orderBy('createdAt', 'desc'), limit(20)],
+    );
     return () => unsub();
   }, []);
 
@@ -76,86 +145,6 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // ── Perform search ──
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    const q = sanitizeForDisplay(searchQuery).toLowerCase();
-    const results: any[] = [];
-
-    // Search reservations
-    reservations.forEach((r) => {
-      const sanitizedCustomer = sanitizeForDisplay(r.customer || '');
-      const sanitizedId = sanitizeForDisplay(r.id || '');
-      const sanitizedOutfit = sanitizeForDisplay(r.outfit || '');
-
-      if (
-        sanitizedCustomer.toLowerCase().includes(q) ||
-        sanitizedId.toLowerCase().includes(q) ||
-        sanitizedOutfit.toLowerCase().includes(q)
-      ) {
-        results.push({
-          type: 'Reservation',
-          label: `${sanitizedId} — ${sanitizedCustomer}`,
-          sub: sanitizedOutfit,
-          path: '/reservations',
-        });
-      }
-    });
-
-    // Search customers
-    customers.forEach((c) => {
-      const name = sanitizeForDisplay(c.name || c.email || '');
-      const sanitizedEmail = sanitizeForDisplay(c.email || '');
-
-      if (name.toLowerCase().includes(q) || sanitizedEmail.toLowerCase().includes(q)) {
-        results.push({ type: 'Customer', label: name, sub: sanitizedEmail, path: '/customers' });
-      }
-    });
-
-    // Search products
-    products.forEach((p) => {
-      const sanitizedName = sanitizeForDisplay(p.name || '');
-      const sanitizedCategory = sanitizeForDisplay(p.category || '');
-      const sanitizedPrice = sanitizeForDisplay((p.price || 0).toString());
-
-      if (sanitizedName.toLowerCase().includes(q) || sanitizedCategory.toLowerCase().includes(q)) {
-        results.push({
-          type: 'Product',
-          label: sanitizedName,
-          sub: `${sanitizedCategory} · ₱${parseFloat(sanitizedPrice).toLocaleString()}`,
-          path: '/catalog',
-        });
-      }
-    });
-
-    // Quick nav
-    const navItems = [
-      { label: 'Dashboard', path: '/dashboard' },
-      { label: 'Reservations', path: '/reservations' },
-      { label: 'Customers', path: '/customers' },
-      { label: 'Messages', path: '/messages' },
-      { label: 'Inventory', path: '/inventory' },
-      { label: 'Catalog', path: '/catalog' },
-      { label: 'Analytics', path: '/analytics' },
-      { label: 'Settings', path: '/settings' },
-      { label: 'Staff Management', path: '/staff' },
-      { label: 'Device Management', path: '/devices' },
-    ];
-    navItems.forEach((item) => {
-      if (item.label.toLowerCase().includes(q)) {
-        results.push({ type: 'Page', label: item.label, sub: 'Navigate', path: item.path });
-      }
-    });
-
-    setSearchResults(results.slice(0, 8));
-    setShowSearchResults(true);
-  }, [searchQuery, reservations, customers, products]);
 
   const handleResultClick = (path: string) => {
     navigate(path);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Save } from 'lucide-react';
+import { ArrowLeft, Upload, X, Save, Shirt } from 'lucide-react';
 import {
   createProduct,
   updateProduct,
@@ -8,7 +8,7 @@ import {
   getCategories,
   createInventoryItem,
 } from '../../services/productService';
-import { uploadToCloudinary, deleteFile } from '../../firebase/storage';
+import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { Logger } from '../../utils/Logger';
@@ -44,6 +44,8 @@ const ProductForm = () => {
     isAlterable: false,
     sizes: ['OS'],
     images: [], // Array of image URLs/Maps
+    model3DURL: '',
+    maskURL: '',
   });
 
   const [categories, setCategories] = useState([
@@ -85,6 +87,8 @@ const ProductForm = () => {
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
+  const [model3DFile, setModel3DFile] = useState(null);
+  const [maskFile, setMaskFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
@@ -126,6 +130,8 @@ const ProductForm = () => {
               isAlterable: doc.isAlterable || false,
               sizes: doc.sizes || ['OS'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
+              model3DURL: doc.model3DURL || '',
+              maskURL: doc.maskURL || '',
             };
             setFormData(data);
             setOldData(data);
@@ -255,20 +261,28 @@ const ProductForm = () => {
 
       if (selectedFiles.length > 0) {
         for (let i = 0; i < selectedFiles.length; i++) {
-          setUploadProgress({ current: i + 1, total: selectedFiles.length });
-          console.log(`[DEBUG] Uploading image ${i + 1} of ${selectedFiles.length} to Cloudinary...`);
-          try {
-            const imgMap = await uploadToCloudinary(selectedFiles[i]);
-            console.log(`[DEBUG] Cloudinary upload success:`, imgMap);
-            uploadedImages.push(imgMap.secure_url);
-          } catch (uploadErr) {
-            console.error(`[DEBUG] Cloudinary upload FAILED for image ${i + 1}:`, uploadErr);
-            throw uploadErr;
-          }
+          setUploadProgress({ current: i + 1, total: selectedFiles.length + (maskFile ? 1 : 0) + (model3DFile ? 1 : 0) });
+          console.log(`[Storage] Uploading gallery image ${i + 1}...`);
+          const url = await routeAndUploadFile(selectedFiles[i]);
+          uploadedImages.push(url);
         }
       }
 
-      console.log('[DEBUG] All images uploaded. Preparing payload...');
+      // 3. Upload Mask if any
+      let finalMaskURL = formData.maskURL;
+      if (maskFile) {
+        console.log('[Storage] Uploading segmentation mask...');
+        finalMaskURL = await routeAndUploadFile(maskFile);
+      }
+
+      // 4. Upload 3D Model if any
+      let finalModel3DURL = formData.model3DURL;
+      if (model3DFile) {
+        console.log('[Storage] Uploading 3D model to Firebase...');
+        finalModel3DURL = await routeAndUploadFile(model3DFile, 'catalog-assets/models');
+      }
+
+      console.log('[DEBUG] All assets handled. Preparing payload...');
       const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
@@ -291,6 +305,8 @@ const ProductForm = () => {
         updated_by: user?.email || 'admin',
         images: finalImages,
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
+        model3DURL: finalModel3DURL,
+        maskURL: finalMaskURL,
         timestamp: Date.now(),
       };
 
@@ -539,6 +555,52 @@ const ProductForm = () => {
           >
             💡 Tip: For best results, upload product images with a white or transparent background.
           </p>
+        </section>
+
+        {/* 3D & AI Assets */}
+        <section className="p-4 border rounded-lg bg-gray-50/50">
+          <h2 className="text-xl font-semibold mb-4 border-b pb-2 flex items-center gap-2">
+            <Shirt size={20} className="text-primary" /> 3D Virtual Try-On Assets
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="label">3D Model (.glb / .obj)</label>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept=".glb,.obj"
+                  className="input-field"
+                  onChange={(e) => setModel3DFile(e.target.files?.[0] || null)}
+                />
+                {formData.model3DURL && (
+                  <p className="text-xs text-success break-all">Current: {formData.model3DURL}</p>
+                )}
+                <p className="text-xs text-secondary mt-1">
+                  Required for Virtual Try-On. Upload 3D files here. Serving from Firebase Storage.
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="label">Segmentation Mask (AI)</label>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="input-field"
+                  onChange={(e) => setMaskFile(e.target.files?.[0] || null)}
+                />
+                {formData.maskURL && (
+                  <div className="flex items-center gap-2">
+                    <img src={formData.maskURL} className="w-10 h-10 object-contain border rounded" alt="mask preview" />
+                    <p className="text-xs text-success truncate">{formData.maskURL}</p>
+                  </div>
+                )}
+                <p className="text-xs text-secondary mt-1">
+                  AI-generated mask for precise garment overlay. Serving from Cloudinary.
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Variations */}

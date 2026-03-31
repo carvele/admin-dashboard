@@ -1100,26 +1100,35 @@ const Settings = () => {
                       onClick={async () => {
                         if (
                           !window.confirm(
-                            'Delete ALL users with "test" in their name/email? This cannot be undone.',
+                            'Search for users with "test" in their name/email? This will not delete them yet.',
                           )
                         )
                           return;
                         setIsLoading(true);
                         try {
                           const snap = await getDocs(collection(db, 'users'));
-                          let count = 0;
-                          for (const d of snap.docs) {
+                          const testDocs = snap.docs.filter(d => {
                             const data = d.data();
-                            const isTest = ((data.name || '') + (data.email || ''))
-                              .toLowerCase()
-                              .includes('test');
-                            if (isTest) {
-                              await deleteDoc(doc(db, 'users', d.id));
-                              count++;
-                            }
+                            return ((data.name || '') + (data.email || ''))
+                                .toLowerCase()
+                                .includes('test');
+                          });
+
+                          if (testDocs.length === 0) {
+                            toast.info('No test users found.');
+                            return;
                           }
-                          toast.success(`Deleted ${count} test users`);
-                          await logAction(user, `Purged ${count} test users`);
+
+                          if (!window.confirm(`Found ${testDocs.length} test users. Delete all of them? This will use ${testDocs.length} writes.`)) {
+                            return;
+                          }
+
+                          const batch = writeBatch(db);
+                          testDocs.forEach(d => batch.delete(d.ref));
+                          await batch.commit();
+
+                          toast.success(`Deleted ${testDocs.length} test users`);
+                          await logAction(user, `Purged ${testDocs.length} test users`);
                         } catch (err) {
                           toast.error('Failed: ' + err.message);
                         } finally {
@@ -1153,23 +1162,38 @@ const Settings = () => {
                       onClick={async () => {
                         if (
                           !window.confirm(
-                            'Delete ALL products with "test" or "demo" in their name? This cannot be undone.',
+                            'Search for products with "test" or "demo" in their name? This will not delete them yet.',
                           )
                         )
                           return;
                         setIsLoading(true);
                         try {
                           const snap = await getDocs(collection(db, 'products'));
-                          let count = 0;
-                          for (const d of snap.docs) {
+                          const testDocs = snap.docs.filter((d) => {
                             const name = (d.data().name || '').toLowerCase();
-                            if (name.includes('test') || name.includes('demo')) {
-                              await deleteDoc(doc(db, 'products', d.id));
-                              count++;
-                            }
+                            return name.includes('test') || name.includes('demo');
+                          });
+
+                          if (testDocs.length === 0) {
+                            toast.info('No test products found.');
+                            return;
                           }
-                          toast.success(`Deleted ${count} test products`);
-                          await logAction(user, `Purged ${count} test products`);
+
+                          if (
+                            !window.confirm(
+                              `Found ${testDocs.length} test products. Delete all? This cannot be undone.`,
+                            )
+                          )
+                            return;
+
+                          for (let i = 0; i < testDocs.length; i += 500) {
+                            const batch = writeBatch(db);
+                            testDocs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+                            await batch.commit();
+                          }
+
+                          toast.success(`Deleted ${testDocs.length} test products`);
+                          await logAction(user, `Purged ${testDocs.length} test products`);
                         } catch (err) {
                           toast.error('Failed: ' + err.message);
                         } finally {
@@ -1201,32 +1225,42 @@ const Settings = () => {
                       className="btn-outline border-danger text-danger text-xs"
                       disabled={isLoading}
                       onClick={async () => {
-                        if (
-                          !window.confirm(
-                            'Delete all completed/cancelled reservations older than 90 days?',
-                          )
-                        )
-                          return;
                         setIsLoading(true);
                         try {
                           const snap = await getDocs(collection(db, 'reservations'));
                           const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-                          let count = 0;
-                          for (const d of snap.docs) {
+                          const oldDocs = snap.docs.filter((d) => {
                             const data = d.data();
                             const status = (data.status || '').toLowerCase();
                             if (status === 'completed' || status === 'cancelled') {
                               const ts = data.reservationDate?.seconds
                                 ? data.reservationDate.seconds * 1000
                                 : data.timestamp || Date.now();
-                              if (ts < cutoff) {
-                                await deleteDoc(doc(db, 'reservations', d.id));
-                                count++;
-                              }
+                              return ts < cutoff;
                             }
+                            return false;
+                          });
+
+                          if (oldDocs.length === 0) {
+                            toast.info('No old reservations found.');
+                            return;
                           }
-                          toast.success(`Deleted ${count} old reservations`);
-                          await logAction(user, `Purged ${count} old reservations`);
+
+                          if (
+                            !window.confirm(
+                              `Found ${oldDocs.length} old reservations. Delete all?`,
+                            )
+                          )
+                            return;
+
+                          for (let i = 0; i < oldDocs.length; i += 500) {
+                            const batch = writeBatch(db);
+                            oldDocs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+                            await batch.commit();
+                          }
+
+                          toast.success(`Deleted ${oldDocs.length} old reservations`);
+                          await logAction(user, `Purged ${oldDocs.length} old reservations`);
                         } catch (err) {
                           toast.error('Failed: ' + err.message);
                         } finally {
@@ -1250,8 +1284,7 @@ const Settings = () => {
                         🔐 Cleanup Plaintext Passwords
                       </h4>
                       <p className="text-xs text-secondary">
-                        Finds and deletes any old plaintext `password` fields from user documents,
-                        and backfills missing roles.
+                        Finds and deletes any old plaintext `password` fields from user documents.
                       </p>
                     </div>
                     <button
@@ -1259,48 +1292,43 @@ const Settings = () => {
                       className="btn-outline border-secondary text-xs"
                       disabled={isLoading}
                       onClick={async () => {
-                        if (
-                          !window.confirm(
-                            'Run the password cleanup migration on all user documents?',
-                          )
-                        )
-                          return;
                         setIsLoading(true);
                         try {
                           const snap = await getDocs(collection(db, 'users'));
-                          let cleaned = 0;
-                          let skipped = 0;
-                          let updated = 0;
+                          const dirtyDocs = snap.docs.filter((d) => d.data().password !== undefined);
 
-                          for (const d of snap.docs) {
-                            const data = d.data();
-                            const updates = {};
-
-                            if (data.password !== undefined) {
-                              updates.password = deleteField();
-                              cleaned++;
-                            } else {
-                              skipped++;
-                            }
-
-                            if (!data.role) updates.role = 'customer';
-                            if (!data.createdAt) updates.createdAt = serverTimestamp();
-
-                            if (Object.keys(updates).length > 0) {
-                              await updateDoc(doc(db, 'users', d.id), updates);
-                              updated++;
-                            }
+                          if (dirtyDocs.length === 0) {
+                            toast.info('Database is already clean.');
+                            return;
                           }
+
+                          if (
+                            !window.confirm(
+                              `Found ${dirtyDocs.length} user documents with plaintext passwords. Run cleanup?`,
+                            )
+                          )
+                            return;
+
+                          for (let i = 0; i < dirtyDocs.length; i += 500) {
+                            const batch = writeBatch(db);
+                            dirtyDocs.slice(i, i + 500).forEach((d) => {
+                              batch.update(d.ref, { 
+                                password: deleteField(),
+                                updatedAt: serverTimestamp() 
+                              });
+                            });
+                            await batch.commit();
+                          }
+
                           toast.success(
-                            `Migration complete! Removed ${cleaned} passwords, skipped ${skipped} clean docs.`,
+                            `Cleanup complete! Removed ${dirtyDocs.length} plaintext passwords.`,
                           );
                           await logAction(
                             user,
-                            `Ran password cleanup migration: ${cleaned} removed, ${updated} total updated.`,
+                            `Ran password migration: ${dirtyDocs.length} passwords removed.`,
                           );
                         } catch (err) {
                           toast.error('Migration failed: ' + err.message);
-                          console.error(err);
                         } finally {
                           setIsLoading(false);
                         }
@@ -1344,24 +1372,37 @@ const Settings = () => {
                           )
                         )
                           return;
-                        const confirm2 = window.prompt('Type DELETE to confirm:');
-                        if (confirm2 !== 'DELETE') {
-                          toast.info('Aborted.');
-                          return;
-                        }
+                        const confirmPrompt = window.prompt('Type DELETE to confirm:');
+                        if (confirmPrompt !== 'DELETE') return;
+
                         setIsLoading(true);
                         try {
                           const snap = await getDocs(collection(db, 'users'));
-                          let count = 0;
-                          for (const d of snap.docs) {
+                          const customerDocs = snap.docs.filter((d) => {
                             const role = (d.data().role || '').toLowerCase();
-                            if (role !== 'admin' && role !== 'owner' && role !== 'staff') {
-                              await deleteDoc(doc(db, 'users', d.id));
-                              count++;
-                            }
+                            return role !== 'admin' && role !== 'owner' && role !== 'staff';
+                          });
+
+                          if (customerDocs.length === 0) {
+                            toast.info('No customer accounts found.');
+                            return;
                           }
-                          toast.success(`Deleted ${count} customer accounts`);
-                          await logAction(user, `NUKE: Purged ${count} customer accounts`);
+
+                          if (
+                            !window.confirm(
+                              `Found ${customerDocs.length} customer accounts. NUKE THEM ALL?`,
+                            )
+                          )
+                            return;
+
+                          for (let i = 0; i < customerDocs.length; i += 500) {
+                            const batch = writeBatch(db);
+                            customerDocs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+                            await batch.commit();
+                          }
+
+                          toast.success(`Deleted ${customerDocs.length} customer accounts`);
+                          await logAction(user, `NUKE: Purged ${customerDocs.length} accounts`);
                         } catch (err) {
                           toast.error('Failed: ' + err.message);
                         } finally {

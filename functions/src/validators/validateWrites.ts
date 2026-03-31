@@ -49,16 +49,18 @@ export const validateProductWrite = functions.firestore
       await db.collection('products').doc(productId).update({
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    } else {
-      // Prevent infinite loops on update by checking if only timestamps changed
+      // Prevent infinite loops on update by checking if any relevant data changed
       const beforeData = change.before.data();
-      if (
-        beforeData && 
-        newData.updatedAt && 
-        (!newData.createdAt || beforeData.createdAt?.isEqual(newData.createdAt)) &&
-        JSON.stringify({...beforeData, updatedAt: null, createdAt: null}) === JSON.stringify({...newData, updatedAt: null, createdAt: null})
-      ) {
-         return null; 
+      const relevantFields = ['name', 'price', 'stockQuantity', 'sizes', 'colors', 'category', 'subCategory', 'images', 'isFeatured', 'model3DURL', 'maskURL'];
+      
+      const hasChanged = relevantFields.some(field => {
+        const before = beforeData?.[field];
+        const after = newData?.[field];
+        return JSON.stringify(before) !== JSON.stringify(after);
+      });
+
+      if (!hasChanged) {
+        return null;
       }
       
       await db.collection('products').doc(productId).update({

@@ -64,10 +64,10 @@ export const subscribeToProducts = (callback) => {
   return subscribeToCollection('products', callback);
 };
 
-export const getProducts = async () => {
-  const cacheKey = 'products';
+export const getProducts = async (maxResults = 0) => {
+  const cacheKey = `products_${maxResults}`;
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
-  const data = await getCollection('products');
+  const data = await getCollection('products', false, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
 };
@@ -102,10 +102,10 @@ export const subscribeToInventory = (callback) => {
   return subscribeToCollection('inventory', callback);
 };
 
-export const getInventory = async () => {
-  const cacheKey = 'inventory';
+export const getInventory = async (maxResults = 0) => {
+  const cacheKey = `inventory_${maxResults}`;
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
-  const data = await getCollection('inventory');
+  const data = await getCollection('inventory', false, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
 };

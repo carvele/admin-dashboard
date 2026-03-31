@@ -55,11 +55,11 @@ const Dashboard = () => {
   const loadDashboard = async () => {
     try {
       const [resData, cusData, invData, outData, arData] = await Promise.all([
-        getReservations(),
-        getCustomers(),
-        getInventory(),
-        getSuggestedOutfits(),
-        getARSessions(),
+        getReservations(100), // Limit to recent 100 for dashboard
+        getCustomers(100),    // Limit to recent 100 
+        getInventory(100),    // Limit to recent 100
+        getSuggestedOutfits(50),
+        getARSessions(50),
       ]);
       setReservations(resData || []);
       setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));

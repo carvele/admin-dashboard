@@ -10,8 +10,8 @@ export const subscribeToSuggestedOutfits = (callback) => {
   return subscribeToCollection('suggestedOutfits', callback);
 };
 
-export const getSuggestedOutfits = () => {
-  return getCollection('suggestedOutfits');
+export const getSuggestedOutfits = (maxResults = 0) => {
+  return getCollection('suggestedOutfits', false, maxResults);
 };
 
 export const createSuggestedOutfit = (data) => {
