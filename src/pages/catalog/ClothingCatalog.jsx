@@ -247,6 +247,11 @@ const ClothingCatalog = () => {
                           • {item.subCategory}
                         </span>
                       )}
+                      {item.subSubCategory && (
+                        <span style={{ opacity: 0.6, marginLeft: '0.4rem' }}>
+                          • {item.subSubCategory}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>

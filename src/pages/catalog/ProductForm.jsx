@@ -29,6 +29,7 @@ const ProductForm = () => {
     name: '',
     category: 'Tops',
     subCategory: '',
+    subSubCategory: '',
     price: '',
     description: '',
     material: '',
@@ -46,24 +47,31 @@ const ProductForm = () => {
   });
 
   const [categories, setCategories] = useState([
-    { name: 'Tops', subcategories: ['T-Shirts', 'Polos', 'Sweaters', 'Cardigans', 'Blouses'] },
-    { name: 'Bottoms', subcategories: ['Jeans', 'Trousers', 'Shorts', 'Leggings', 'Joggers'] },
-    { name: 'Outerwear', subcategories: ['Jackets', 'Coats', 'Parkas', 'Vests', 'Blazers'] },
     {
-      name: 'Dresses & Skirts',
+      name: 'Tops',
       subcategories: [
-        'Mini Dresses',
-        'Midi Dresses',
-        'Maxi Dresses',
-        'A-Line Skirts',
-        'Pencil Skirts',
+        { name: 'Innerwear', subSubcategories: ['Sports Bra', 'Bra'] },
+        { name: 'Outerwear', subSubcategories: ['Sporty Top', 'Knitted Tops', 'Blazers', 'T-Shirt'] },
       ],
     },
-    { name: 'Innerwear', subcategories: ['Underwear', 'Socks', 'Thermals', 'Camisoles'] },
-    { name: 'Accessories', subcategories: ['Bags', 'Belts', 'Hats', 'Scarves', 'Jewelry'] },
+    { name: 'Dresses', subcategories: [] },
     {
-      name: 'Special Collections',
-      subcategories: ['Collaborations', 'Limited Edition', 'Seasonal Exclusives'],
+      name: 'Bottoms',
+      subcategories: [
+        { name: 'Skirts', subSubcategories: [] },
+        { name: 'Jeans', subSubcategories: [] },
+        { name: 'Pants', subSubcategories: [] },
+        { name: 'Shorts', subSubcategories: [] },
+      ],
+    },
+    { name: 'Bags', subcategories: [] },
+    {
+      name: 'Footwear',
+      subcategories: [
+        { name: 'Shoes', subSubcategories: [] },
+        { name: 'Heels', subSubcategories: [] },
+        { name: 'Sandals', subSubcategories: [] },
+      ],
     },
   ]);
   const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'OS'];
@@ -103,6 +111,7 @@ const ProductForm = () => {
               name: doc.name || '',
               category: doc.category || categories[0]?.name || 'Tops',
               subCategory: doc.subCategory || '',
+              subSubCategory: doc.subSubCategory || '',
               price: doc.price || '',
               description: doc.description || '',
               material: doc.material || '',
@@ -152,13 +161,37 @@ const ProductForm = () => {
   useEffect(() => {
     const selectedCat = categories.find((c) => c.name === formData.category);
     if (selectedCat && selectedCat.subcategories && selectedCat.subcategories.length > 0) {
-      if (!selectedCat.subcategories.includes(formData.subCategory)) {
-        setFormData((prev) => ({ ...prev, subCategory: selectedCat.subcategories[0] }));
+      const firstSubCat = selectedCat.subcategories[0];
+      const subCatName = typeof firstSubCat === 'string' ? firstSubCat : firstSubCat.name;
+      const isValidSubCategory = selectedCat.subcategories.some(
+        s => (typeof s === 'string' ? s : s.name) === formData.subCategory
+      );
+
+      if (!isValidSubCategory) {
+         setFormData((prev) => ({ ...prev, subCategory: subCatName, subSubCategory: '' }));
       }
     } else {
-      setFormData((prev) => ({ ...prev, subCategory: '' }));
+      setFormData((prev) => ({ ...prev, subCategory: '', subSubCategory: '' }));
     }
   }, [formData.category, categories]);
+
+  // Handle subSubCategory logic when subCategory changes
+  useEffect(() => {
+    const selectedCat = categories.find((c) => c.name === formData.category);
+    if (!selectedCat) return;
+
+    const selectedSubCat = selectedCat.subcategories?.find(
+      (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
+    );
+
+    if (selectedSubCat && selectedSubCat.subSubcategories && selectedSubCat.subSubcategories.length > 0) {
+      if (!selectedSubCat.subSubcategories.includes(formData.subSubCategory)) {
+        setFormData((prev) => ({ ...prev, subSubCategory: selectedSubCat.subSubcategories[0] }));
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, subSubCategory: '' }));
+    }
+  }, [formData.subCategory, formData.category, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -242,6 +275,7 @@ const ProductForm = () => {
         name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
+        subSubCategory: formData.subSubCategory,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
@@ -373,11 +407,45 @@ const ProductForm = () => {
                 <option value="">None</option>
                 {categories
                   .find((c) => c.name === formData.category)
-                  ?.subcategories?.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
+                  ?.subcategories?.map((s) => {
+                    const sName = typeof s === 'string' ? s : s.name;
+                    return (
+                      <option key={sName} value={sName}>
+                        {sName}
+                      </option>
+                    );
+                  })}
+              </select>
+            </div>
+            <div>
+              <label className="label">Sub-Sub-Category</label>
+              <select
+                name="subSubCategory"
+                className="input-field"
+                value={formData.subSubCategory}
+                onChange={handleChange}
+                disabled={(() => {
+                  const cat = categories.find((c) => c.name === formData.category);
+                  if (!cat) return true;
+                  const subCat = cat.subcategories?.find(
+                    (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
+                  );
+                  return !subCat?.subSubcategories?.length;
+                })()}
+              >
+                <option value="">None</option>
+                {(() => {
+                  const cat = categories.find((c) => c.name === formData.category);
+                  if (!cat) return null;
+                  const subCat = cat.subcategories?.find(
+                    (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
+                  );
+                  return subCat?.subSubcategories?.map((ss) => (
+                    <option key={ss} value={ss}>
+                      {ss}
                     </option>
-                  ))}
+                  ));
+                })()}
               </select>
             </div>
             <div>
