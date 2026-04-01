@@ -44,26 +44,10 @@ const ClothingCatalog = () => {
         if (cats && cats.length > 0) {
           setDbCategories(cats.map((c) => c.name));
         } else {
-          setDbCategories([
-            'Tops',
-            'Bottoms',
-            'Outerwear',
-            'Dresses & Skirts',
-            'Innerwear',
-            'Accessories',
-            'Special Collections',
-          ]);
+          setDbCategories(['Tops', 'Dress', 'Bags', 'Bottoms', 'Footwear']);
         }
       } catch (err) {
-        setDbCategories([
-          'Tops',
-          'Bottoms',
-          'Outerwear',
-          'Dresses & Skirts',
-          'Innerwear',
-          'Accessories',
-          'Special Collections',
-        ]);
+        setDbCategories(['Tops', 'Dress', 'Bags', 'Bottoms', 'Footwear']);
       }
     };
     fetchCategories();

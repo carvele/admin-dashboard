@@ -16,4 +16,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./migrateUserFields"), exports);
 __exportStar(require("./removeRedundantIds"), exports);
+__exportStar(require("./syncCategoryHierarchy"), exports);
 //# sourceMappingURL=index.js.map

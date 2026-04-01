@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
 
-export const migrateUserFields = functions.https.onRequest(async (req, res) => {
+export const migrateUserFields = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
   const db = admin.firestore();
   const batch = db.batch();
   const users = await db.collection('users').get();
@@ -54,7 +54,7 @@ export const migrateUserFields = functions.https.onRequest(async (req, res) => {
   res.json({ migratedCount, status: 'success' });
 });
 
-export const migrateReservationFields = functions.https.onRequest(async (req, res) => {
+export const migrateReservationFields = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
   const db = admin.firestore();
   const batch = db.batch();
   const reservations = await db.collection('reservations').get();

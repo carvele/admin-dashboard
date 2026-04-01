@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper to check if the user is an Admin
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email in ['admin@jezsy.com', 'admin@jezsycollection.com']
+      );
+    }
+
+    // Allow public read, but only Admins can upload product assets
+    match /catalog-assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin(); 
+    }
+
+    // Standard user avatars
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

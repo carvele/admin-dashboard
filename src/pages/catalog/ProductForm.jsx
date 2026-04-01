@@ -56,7 +56,8 @@ const ProductForm = () => {
         { name: 'Outerwear', subSubcategories: ['Sporty Top', 'Knitted Tops', 'Blazers', 'T-Shirt'] },
       ],
     },
-    { name: 'Dresses', subcategories: [] },
+    { name: 'Dress', subcategories: [] },
+    { name: 'Bags', subcategories: [] },
     {
       name: 'Bottoms',
       subcategories: [
@@ -66,7 +67,6 @@ const ProductForm = () => {
         { name: 'Shorts', subSubcategories: [] },
       ],
     },
-    { name: 'Bags', subcategories: [] },
     {
       name: 'Footwear',
       subcategories: [
