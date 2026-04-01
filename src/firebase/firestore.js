@@ -78,7 +78,8 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 export const getCollection = async (collectionName, includeDeleted = false, maxResults = 0) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
     let q = query(collection(db, collectionName));
-    if (!includeDeleted) {
+    const isExempt = ['reservations', 'inventory', 'logs'].includes(collectionName);
+    if (!includeDeleted && !isExempt) {
       q = query(q, where('deleted', '!=', true));
     }
     if (maxResults > 0) {
@@ -102,7 +103,8 @@ export const getPaginatedCollection = async (
 ) => {
   return withRetry(`getPaginatedCollection_${collectionName}`, async () => {
     let baseConstraints = [...queryConstraints];
-    if (!includeDeleted) {
+    const isExempt = ['reservations', 'inventory', 'logs', 'favorites'].includes(collectionName);
+    if (!includeDeleted && !isExempt) {
       baseConstraints.push(where('deleted', '!=', true));
     }
 
@@ -223,7 +225,8 @@ export const subscribeToCollection = (
   includeDeleted = false,
 ) => {
   let finalConstraints = [...queryConstraints];
-  if (!includeDeleted) {
+  const isExempt = ['reservations', 'inventory', 'logs'].includes(collectionName);
+  if (!includeDeleted && !isExempt) {
     finalConstraints.push(where('deleted', '!=', true));
   }
 

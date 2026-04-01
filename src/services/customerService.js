@@ -60,7 +60,6 @@ export const getCustomers = (maxResults = 0) => {
 export const getCustomerById = (id) => getDocument('users', id);
 
 export const getPaginatedCustomers = (pageSize, lastDoc = null, constraints = [], includeDeleted = false) => {
-  const { getPaginatedCollection } = require('../firebase/firestore');
   return getPaginatedCollection('users', pageSize, lastDoc, constraints, includeDeleted);
 };
 

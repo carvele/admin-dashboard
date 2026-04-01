@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Edit,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   subscribeToInventory,
@@ -16,6 +17,7 @@ import {
   getInventory,
   getProducts,
   updateProduct,
+  recalculateAllInventoryStock,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -26,9 +28,11 @@ const Inventory = () => {
   const { user, isAdminUnlocked } = useAuth();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
+      console.log('DEBUG: RAW INVENTORY FROM FIRESTORE:', data);
       setInventory(data);
       setLoading(false);
     });
@@ -176,6 +180,48 @@ const Inventory = () => {
     }
   };
 
+  const handleSyncStock = async () => {
+    setIsSyncing(true);
+    const toastId = toast.loading('Synchronizing inventory with reservations...');
+    try {
+      await recalculateAllInventoryStock();
+      await logAction(user, 'Manually triggered Inventory Sync');
+      toast.success('Inventory re-calculated and synchronized successfully!', { id: toastId });
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+      toast.error('Failed to synchronize inventory.', { id: toastId });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePublishProduct = async (inv) => {
+    if (inv.available <= 0) {
+      toast.error('Cannot add to end user app without available stock');
+      return;
+    }
+    try {
+      let productDocId = inv.productDocId;
+      if (!productDocId) {
+        const prods = await getProducts();
+        const match = prods.find((p) => p.id === inv.sku);
+        if (match) productDocId = match.docId;
+      }
+      if (!productDocId) {
+        toast.error('Product not found or unlinked');
+        return;
+      }
+      await updateProduct(productDocId, { visibility: 'Published' });
+      await logAction(user, 'Added product to user app', {
+        itemName: inv.item,
+        sku: inv.sku
+      });
+      toast.success(`Product ${inv.item} has been added/published`);
+    } catch (e) {
+      toast.error('Failed to add product to app');
+    }
+  };
+
   const openEditModal = (inv) => {
     setEditForm({ total: inv.total, reserved: inv.reserved, available: inv.available });
     setEditModal(inv);
@@ -208,6 +254,14 @@ const Inventory = () => {
           </p>
         </div>
         <div className="flex-center gap-2">
+          <button 
+            className="btn-outline flex-center gap-2" 
+            onClick={handleSyncStock}
+            disabled={isSyncing}
+          >
+            <RefreshCw size={18} className={isSyncing ? 'spin' : ''} />
+            {isSyncing ? 'Syncing...' : 'Fix & Sync Stock'}
+          </button>
           <button className="btn-outline flex-center gap-2" onClick={handleExportCSV}>
             <Download size={18} /> Export CSV
           </button>
@@ -352,6 +406,14 @@ const Inventory = () => {
                       </td>
                       <td className="text-right">
                         <div className="action-buttons justify-end">
+                          <button
+                            className="icon-btn-small"
+                            title="Add / Publish"
+                            onClick={() => handlePublishProduct(inv)}
+                            style={{ opacity: inv.available > 0 ? 1 : 0.4 }}
+                          >
+                            <Plus size={15} />
+                          </button>
                           <button
                             className="icon-btn-small restock-btn"
                             title="Restock"

@@ -54,18 +54,15 @@ const Dashboard = () => {
 
   const loadDashboard = async () => {
     try {
-      const [resData, cusData, invData, outData, arData] = await Promise.all([
-        getReservations(100), // Limit to recent 100 for dashboard
-        getCustomers(100),    // Limit to recent 100 
-        getInventory(100),    // Limit to recent 100
-        getSuggestedOutfits(50),
-        getARSessions(50),
+      const [resData, cusData, invData] = await Promise.all([
+        getReservations(100),
+        getCustomers(100),
+        getInventory(100),
       ]);
       setReservations(resData || []);
       setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
       setInventory(invData || []);
-      setSuggestedOutfits(outData || []);
-      setArSessionCount(arData?.length || 0);
+      setArSessionCount(0);
       setLastSynced(new Date());
     } catch (error) {
       console.error('Failed to load dashboard data:', error);

@@ -93,7 +93,7 @@ export const updateProduct = async (docId, updates) => {
 export const deleteProduct = async (docId) => {
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
-  return softDeleteDocument('products', docId);
+  return deleteDocument('products', docId);
 };
 
 // --- Inventory Layer ---
@@ -122,7 +122,7 @@ export const updateInventoryItem = (docId, updates) => {
 
 export const deleteInventoryItem = (docId) => {
   queryCache.invalidateByPrefix('inventory');
-  return softDeleteDocument('inventory', docId);
+  return deleteDocument('inventory', docId);
 };
 
 // --- Category Layer ---
@@ -152,4 +152,61 @@ export const updateCategory = (docId, updates) => {
 export const deleteCategory = (docId) => {
   queryCache.invalidateByPrefix('categories');
   return softDeleteDocument('categories', docId);
+};
+
+/**
+ * Force-recalculates all inventory reserved stock by scanning active reservations.
+ * This is a "healing" function to fix data mismatches.
+ */
+export const recalculateAllInventoryStock = async () => {
+  const { db } = await import('../firebase/config');
+  const { collection, getDocs, query, where, writeBatch, serverTimestamp } = await import('firebase/firestore');
+
+  // 1. Get all active reservations
+  const resQuery = query(
+    collection(db, 'reservations'),
+    where('status', 'in', ['Confirmed', 'Fitting'])
+  );
+  const resSnap = await getDocs(resQuery);
+  const activeRes = resSnap.docs.map(d => d.data());
+
+  // 2. Get all inventory items
+  const invSnap = await getDocs(collection(db, 'inventory'));
+  
+  const batch = writeBatch(db);
+  
+  // 3. Process each inventory item
+  invSnap.docs.forEach((invDoc) => {
+    const invData = invDoc.data();
+    const invDocId = invDoc.id;
+    
+    // Find matching reservations for this item+size
+    const matchingReservations = activeRes.filter(r => {
+      const productId = r.productId || '';
+      const productName = r.productName || r.outfit || '';
+      const resSize = r.size || '';
+      
+      return (
+        resSize === invData.size &&
+        (productId === invData.productDocId || 
+         productId === invData.sku || 
+         productName === invData.item)
+      );
+    });
+
+    const newReserved = matchingReservations.length;
+    const newAvailable = Math.max(0, (invData.total || 0) - newReserved);
+
+    // Only update if changed
+    if (invData.reserved !== newReserved || invData.available !== newAvailable) {
+      batch.update(invDoc.ref, {
+        reserved: newReserved,
+        available: newAvailable,
+        updatedAt: serverTimestamp()
+      });
+    }
+  });
+
+  await batch.commit();
+  queryCache.invalidateByPrefix('inventory');
 };

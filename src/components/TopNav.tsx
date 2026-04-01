@@ -210,7 +210,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
               <div className="search-results-list">
                 {searchResults.map((result, idx) => (
                   <button
-                    key={idx}
+                    key={`${result.type}-${result.path}-${idx}`}
                     className="search-result-item"
                     onClick={() => handleResultClick(result.path)}
                   >
@@ -268,9 +268,9 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                     </div>
                   </li>
                 ) : (
-                  notifications.map((n) => (
+                  notifications.map((n, idx) => (
                     <li
-                      key={n.id || n.docId}
+                      key={n.id || n.docId || `notification-${idx}`}
                       className={`notification-item ${!n.read ? 'unread' : ''}`}
                     >
                       <div className="noti-icon reservation">

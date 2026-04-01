@@ -20,11 +20,12 @@ import {
 import StatusBadge from '../../components/StatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import {
-  getPaginatedReservations,
+  subscribeToReservations,
   adjustInventoryForReservation,
   updateReservation,
   deleteReservation,
   createReservation,
+  repairReservationData,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -74,49 +75,37 @@ const Reservations = () => {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
 
-  const fetchReservations = async (loadMore = false, signal = null) => {
-    if (loadMore) setLoadingMore(true);
-    else setLoading(true);
-    try {
-      const PAGE_SIZE = 20;
-      const result = await getPaginatedReservations(PAGE_SIZE, loadMore ? lastDoc : null);
-
-      if (signal?.aborted) return;
-
-      setReservations((prev) => {
-        const d = loadMore ? [...prev, ...result.data] : result.data;
-        const unique = [];
-        const seen = new Set();
-        d.forEach((r) => {
-          if (!seen.has(r.id)) {
-            unique.push(r);
-            seen.add(r.id);
-          }
-        });
-        return unique;
-      });
-      setLastDoc(result.lastVisible);
-      setHasMore(result.hasMore);
-    } catch (e) {
-      toast.error('Failed to load reservations');
-    } finally {
-      if (loadMore) setLoadingMore(false);
-      else setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    const controller = new AbortController();
-    fetchReservations(false, controller.signal);
+    setLoading(true);
+    // Real-time Reservations Listener
+    const unsubR = subscribeToReservations((data) => {
+      console.log('DEBUG: REAL-TIME RESERVATIONS:', data);
+      
+      // Auto-healing for broken data (Names or Product Names)
+      data.forEach(res => {
+        const cName = res.customerName || res.customer || '';
+        const pName = res.productName || res.outfit || '';
+        const isId = (str) => /^[a-zA-Z0-9]{15,30}$/.test(str);
+        
+        if (isId(cName) || isId(pName) || !cName || !pName) {
+          repairReservationData(res);
+        }
+      });
+
+      setReservations(data);
+      setLoading(false);
+    });
+
     const unsubC = subscribeToCustomers((data) => {
-      // Filter for app customers only (exclude staff)
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
     });
+
     const unsubP = subscribeToProducts((data) => {
       setProducts(data);
     });
+
     return () => {
-      controller.abort();
+      unsubR();
       unsubC();
       unsubP();
     };
@@ -151,12 +140,18 @@ const Reservations = () => {
   });
   const [newDate, setNewDate] = useState('');
 
-  const filteredReservations = reservations.filter((r) => {
-    const cust = r.customerName || r.customer || '';
+  const filteredReservations = reservations.map(r => ({
+    ...r,
+    // Normalize status to Sentence Case for the UI filters
+    displayStatus: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) : 'Pending',
+    displayDate: parseDate(r.reservationDate || r.date),
+    displayName: r.customerName || r.customer || 'Unknown Customer'
+  })).filter((r) => {
     const matchesSearch =
-      cust.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+      r.displayName.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
       (r.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
-    const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
+    
+    const matchesStatus = statusFilter === 'All' || r.displayStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -179,7 +174,7 @@ const Reservations = () => {
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
-        await adjustStock(res.productName || res.outfit, res.size, -1); // Deduct stock on confirm
+        await adjustStock(res.productId || res.productName || res.outfit, res.size, -1); // Deduct stock on confirm
         toast.success(`Reservation ${id} confirmed — stock reserved`);
       } else if (action === 'fitting') {
         await updateReservation(res.docId, { status: 'Fitting' });
@@ -187,13 +182,13 @@ const Reservations = () => {
       } else if (action === 'complete') {
         await updateReservation(res.docId, { status: 'Completed' });
         // Release reserved stock (item returned or purchased)
-        await adjustStock(res.productName || res.outfit, res.size, 1);
+        await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
         toast.success(`Reservation ${id} completed — stock released`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Only restore stock if it was confirmed (stock was deducted)
         if (res.status === 'Confirmed' || res.status === 'Fitting') {
-          await adjustStock(res.productName || res.outfit, res.size, 1);
+          await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
       }
@@ -388,7 +383,6 @@ const Reservations = () => {
                   <th>Outfit & Size</th>
                   <th>Date & Time</th>
                   <th>Status</th>
-                  <th>Assigned Staff</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -398,24 +392,23 @@ const Reservations = () => {
                   return (
                     <tr key={res.id}>
                       <td className="font-mono text-sm">{res.id}</td>
-                      <td className="font-medium">{res.customerName || res.customer}</td>
+                      <td className="font-medium">{res.displayName}</td>
                       <td>
                         <div>{res.productName || res.outfit}</div>
                         <div className="text-secondary text-sm">Size: {res.size}</div>
                       </td>
                       <td>
-                        <div>{rDate.toLocaleDateString()}</div>
+                        <div>{res.displayDate.toLocaleDateString()}</div>
                         <div className="text-secondary text-sm">
-                          {rDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        {res.countdown && res.status === 'Pending' && (
+                        {res.countdown && res.displayStatus === 'Pending' && (
                           <CountdownTimer targetDate={res.reservationDate || res.date} />
                         )}
                       </td>
                       <td>
-                        <StatusBadge status={res.status} />
+                        <StatusBadge status={res.displayStatus} />
                       </td>
-                      <td className="text-secondary">{res.staff}</td>
                       <td>
                         <div className="action-buttons">
                           <button
@@ -426,7 +419,7 @@ const Reservations = () => {
                             <Eye size={16} />
                           </button>
                           {/* Lifecycle: Pending → Confirmed → Fitting → Completed */}
-                          {res.status === 'Pending' && (
+                          {res.displayStatus === 'Pending' && (
                             <>
                               <button
                                 className="action-icon approve"
@@ -444,7 +437,7 @@ const Reservations = () => {
                               </button>
                             </>
                           )}
-                          {res.status === 'Confirmed' && (
+                          {res.displayStatus === 'Confirmed' && (
                             <>
                               {products.find(
                                 (p) =>
@@ -476,7 +469,7 @@ const Reservations = () => {
                               </button>
                             </>
                           )}
-                          {res.status === 'Fitting' && (
+                          {res.displayStatus === 'Fitting' && (
                             <button
                               className="action-icon approve"
                               title="Mark Completed"
@@ -485,7 +478,7 @@ const Reservations = () => {
                               <CalendarCheck size={16} />
                             </button>
                           )}
-                          {(res.status === 'Pending' || res.status === 'Confirmed') && (
+                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Confirmed') && (
                             <button
                               className="action-icon reschedule"
                               title="Reschedule"
@@ -513,27 +506,14 @@ const Reservations = () => {
                 })}
                 {filteredReservations.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-secondary">
+                    <td colSpan="6" className="text-center py-8 text-secondary">
                       No reservations found
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-            {hasMore && (
-              <div
-                className="flex-center py-4"
-                style={{ borderTop: '1px solid var(--border-light)' }}
-              >
-                <button
-                  className="btn-outline"
-                  onClick={() => fetchReservations(true)}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? 'Loading...' : 'Load More'}
-                </button>
-              </div>
-            )}
+            {/* Pagination removed for Real-Time stream */}
           </div>
         ) : (
           <div className="calendar-placeholder-view">
@@ -770,7 +750,7 @@ const Reservations = () => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Customer</span>
-                <strong>{viewModal.customerName || viewModal.customer}</strong>
+                <strong>{viewModal.customerName || viewModal.customer || 'Unknown'}</strong>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Outfit</span>
@@ -786,11 +766,7 @@ const Reservations = () => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
-                <StatusBadge status={viewModal.status} />
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Staff</span>
-                {viewModal.staff || 'Unassigned'}
+                <StatusBadge status={viewModal.status ? (viewModal.status.charAt(0).toUpperCase() + viewModal.status.slice(1).toLowerCase()) : 'Pending'} />
               </div>
               {viewModal.deposit && (
                 <div className="detail-row">

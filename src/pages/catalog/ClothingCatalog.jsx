@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
 import ImageWithFallback from '../../components/ImageWithFallback';
+import { Logger } from '../../utils/Logger';
 import './ClothingCatalog.css';
 
 const ClothingCatalog = () => {

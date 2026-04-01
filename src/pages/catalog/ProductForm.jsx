@@ -39,7 +39,7 @@ const ProductForm = () => {
     styleCode: '',
     season: 'All-Season',
     occasion: '',
-    visibility: 'Published',
+    visibility: 'Draft',
     isFeatured: false,
     isAlterable: false,
     sizes: ['OS'],
@@ -125,7 +125,7 @@ const ProductForm = () => {
               styleCode: doc.styleCode || '',
               season: doc.season || 'All-Season',
               occasion: doc.occasion || '',
-              visibility: doc.visibility || 'Published',
+              visibility: doc.visibility || 'Draft',
               isFeatured: doc.isFeatured ?? doc.featured ?? false,
               isAlterable: doc.isAlterable || false,
               sizes: doc.sizes || ['OS'],
@@ -318,6 +318,7 @@ const ProductForm = () => {
       } else {
         payload.created_by = user?.email || 'admin';
         payload.stock = 0;
+        payload.visibility = 'Draft';
         payload.tags = ['New Arrival'];
 
         console.log('[DEBUG] Creating product in Firestore...', payload);
