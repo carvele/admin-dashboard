@@ -90,6 +90,18 @@ const ProductForm = () => {
   const [model3DFile, setModel3DFile] = useState(null);
   const [maskFile, setMaskFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const previewUrlsRef = React.useRef([]);
+
+  // Cleanup local image preview object URLs on component unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {}
+      });
+    };
+  }, []);
 
   useEffect(() => {
     // We could fetch dynamic categories here from DB
@@ -204,11 +216,20 @@ const ProductForm = () => {
     setSelectedFiles((prev) => [...prev, ...files]);
 
     // Create preview URLs
-    const newPreviews = files.map((file) => URL.createObjectURL(file));
+    const newPreviews = files.map((file) => {
+      const url = URL.createObjectURL(file);
+      previewUrlsRef.current.push(url);
+      return url;
+    });
     setPreviews((prev) => [...prev, ...newPreviews]);
   };
 
   const removeSelectedFile = (index) => {
+    if (previews[index]) {
+      try {
+        URL.revokeObjectURL(previews[index]);
+      } catch (e) {}
+    }
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviews((prev) => prev.filter((_, i) => i !== index));
   };
@@ -264,7 +285,7 @@ const ProductForm = () => {
           setUploadProgress({ current: i + 1, total: selectedFiles.length + (maskFile ? 1 : 0) + (model3DFile ? 1 : 0) });
           console.log(`[Storage] Uploading gallery image ${i + 1}...`);
           const url = await routeAndUploadFile(selectedFiles[i]);
-          uploadedImages.push(url);
+          if (url) uploadedImages.push(url);
         }
       }
 
@@ -347,7 +368,12 @@ const ProductForm = () => {
       success = true;
     } catch (err) {
       Logger.error('Error saving product:', err);
-      toast.error(`Error saving product: ${err.message}`);
+      toast.error(`Error saving product: ${err.message}`, {
+        duration: 5000,
+        description: err.message.includes('Network Error') 
+          ? 'Check your connection or disable ad-blockers like uBlock Origin' 
+          : 'Please check your inputs and try again'
+      });
     } finally {
       clearTimeout(safetyTimeout);
       setSaving(false);

@@ -23,8 +23,8 @@ import { measureAsync, trackError } from '../utils/analytics';
  * Syncs product changes (name, category) to all associated inventory records.
  */
 export const syncProductUpdateToInventory = async (productDocId, newData) => {
-  const { name, category } = newData;
-  if (!name && !category) return; // Nothing to sync
+  const { name, category, price, sku, imageUrl } = newData;
+  if (!name && !category && typeof price === 'undefined' && typeof sku === 'undefined' && typeof imageUrl === 'undefined') return;
 
   return withRetry(`syncProductUpdateToInventory`, async () => {
     const q = query(collection(db, 'inventory'), where('productDocId', '==', productDocId));
@@ -35,8 +35,12 @@ export const syncProductUpdateToInventory = async (productDocId, newData) => {
     const batch = writeBatch(db);
     snap.docs.forEach((d) => {
       const updates = {};
-      if (name) updates.item = name;
-      if (category) updates.category = category;
+      if (name !== undefined) updates.item = name;
+      if (category !== undefined) updates.category = category;
+      if (price !== undefined) updates.price = price;
+      if (sku !== undefined) updates.sku = sku;
+      if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+      
       batch.update(d.ref, { ...updates, updatedAt: serverTimestamp() });
     });
 
@@ -188,14 +192,30 @@ export const deleteDocument = async (collectionName, docId) => {
   });
 };
 
-/** Mark a document as deleted (soft delete) */
 export const softDeleteDocument = async (collectionName, docId) => {
   return withRetry(`softDeleteDocument_${collectionName}`, async () => {
-    await updateDoc(doc(db, collectionName, docId), {
+    const batch = writeBatch(db);
+    const mainDocRef = doc(db, collectionName, docId);
+    
+    batch.update(mainDocRef, {
       deleted: true,
       deletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    if (collectionName === 'products') {
+      const q = query(collection(db, 'inventory'), where('productDocId', '==', docId));
+      const snap = await getDocs(q);
+      snap.docs.forEach((d) => {
+        batch.update(d.ref, {
+          deleted: true,
+          deletedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      });
+    }
+
+    await batch.commit();
   });
 };
 

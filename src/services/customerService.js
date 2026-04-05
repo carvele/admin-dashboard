@@ -21,7 +21,18 @@ import {
  * @property {number} reservations
  * @property {string} lastOnline - ISO Date format
  * @property {Date} createdAt - Timestamp
- * @property {Object} measurements - Contains sizing dict (bust, waist, hips)
+* @property {Object} measurements - AI Scanning Result
+ * @property {number} measurements.bust
+ * @property {number} measurements.waist
+ * @property {number} measurements.hips
+ * @property {number} measurements.neckBase
+ * @property {number} measurements.shoulderWidth
+ * @property {number} measurements.chest
+ * @property {number} measurements.sleeveLength
+ * @property {number} measurements.height
+ * @property {number} measurements.inseam
+ * @property {number} measurements.outseam
+ * @property {number} measurements.armHole
  */
 
 /**

@@ -98,6 +98,16 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
 export const uploadToCloudinary = async (file, retries = 2) => {
   if (!file) throw new Error('No file provided');
 
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  // Validate configuration
+  if (!cloudName || !uploadPreset) {
+    const error = new Error('Cloudinary configuration missing. Please check VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your .env file.');
+    console.error('Cloudinary Config Error:', error);
+    throw error;
+  }
+
   let processedFile = file;
   try {
     processedFile = await compressImage(file);
@@ -110,16 +120,26 @@ export const uploadToCloudinary = async (file, retries = 2) => {
     try {
       const formData = new FormData();
       formData.append('file', processedFile);
-      formData.append('upload_preset', 'boutique_productDetails'); // Matches Android app
+      formData.append('upload_preset', uploadPreset);
 
-      const response = await fetch('https://api.cloudinary.com/v1_1/dlrlgp4bq/image/upload', {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Cloudinary upload failed');
+        const errorMessage = errorData.error?.message || response.statusText;
+        
+        // Provide specific guidance for common Cloudinary errors
+        if (errorMessage.includes('Invalid Cloud Name')) {
+          throw new Error(`Cloudinary Error: The cloud name "${cloudName}" is invalid. Please check your .env file.`);
+        }
+        if (errorMessage.includes('Upload preset')) {
+          throw new Error(`Cloudinary Error: The upload preset "${uploadPreset}" is invalid. Make sure it is an "Unsigned" preset.`);
+        }
+        
+        throw new Error(`Cloudinary Upload Failed: ${errorMessage}`);
       }
 
       const data = await response.json();
@@ -128,10 +148,21 @@ export const uploadToCloudinary = async (file, retries = 2) => {
         public_id: data.public_id,
       };
     } catch (error) {
+      // Distinguish between fetch failure (network) and API failure (handled above)
+      const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch';
+      
       if (attempt === retries) {
+        if (isNetworkError) {
+          const networkError = new Error(
+            'Network Error: Failed to reach Cloudinary. This may be caused by an ad-blocker (e.g., uBlock Origin), a firewall, or lack of internet connection. Please disable content blockers and try again.'
+          );
+          console.error('Cloudinary Network Error:', networkError);
+          throw networkError;
+        }
         console.error('Cloudinary upload error after retries:', error);
         throw error;
       }
+      
       console.warn(`Upload attempt ${attempt + 1} failed. Retrying...`, error);
       await new Promise((res) => setTimeout(res, 1000 * (attempt + 1))); // Incremental backoff
     }
