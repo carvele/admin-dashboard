@@ -54,33 +54,30 @@ export const AuthProvider = ({ children }) => {
       }
       setDeviceFingerprint(visitorId);
 
-      // --- 2. Register device & start live listener (non-blocking) ---
-      try {
-        await withTimeout(
-          registerDevice(
-            visitorId,
-            navigator.userAgent,
-            firebaseUser.email,
-            firebaseUser.displayName || '',
-          ),
-          5000,
-        );
-        deviceUnsubRef.current();
-        deviceUnsubRef.current = getDeviceStatus(visitorId, (docSnap) => {
-          if (docSnap) {
-            setDeviceData(docSnap);
-            setDeviceStatus(docSnap.status);
-            if (docSnap.status === 'revoked') setIsAdminUnlocked(false);
-          } else {
-            setDeviceStatus('error');
-          }
-        });
-      } catch {
-        console.warn(
-          'Device registration timed out or failed. Continuing without device tracking.',
-        );
-        setDeviceStatus('approved'); // Graceful fallback: let them in
-      }
+      // --- 2. Register device & start live listener ---
+      // Fire-and-forget registration: the Firestore write runs to completion regardless
+      // of network speed. On mobile, a 5s timeout was killing the write before it finished,
+      // so the device doc was never created and never appeared in Device Management.
+      registerDevice(
+        visitorId,
+        navigator.userAgent,
+        firebaseUser.email,
+        firebaseUser.displayName || '',
+      ).catch((err) => console.warn('[Device] Registration write failed:', err));
+
+      // Start the live listener immediately so the UI gets status as soon as the doc lands.
+      deviceUnsubRef.current();
+      deviceUnsubRef.current = getDeviceStatus(visitorId, (docSnap) => {
+        if (docSnap) {
+          setDeviceData(docSnap);
+          setDeviceStatus(docSnap.status);
+          if (docSnap.status === 'revoked') setIsAdminUnlocked(false);
+        } else {
+          // Doc not yet written (registration still in-flight on slow network).
+          // Default to 'approved' so the user isn't stuck on a loading spinner.
+          setDeviceStatus('approved');
+        }
+      });
 
       // --- 3. Staff role lookup ---
       let resolvedRole = null;
@@ -211,12 +208,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    // Preserve the device fingerprint so the same device doc is reused on next login.
+    // Clearing it would cause a new fingerprint (and a new pending device entry) every session.
+    const savedFingerprint = localStorage.getItem('_jz_fp_id');
     await signOut(auth);
     setUser(null);
     setIsAdminUnlocked(false);
     setDeviceStatus('checking');
     localStorage.clear();
     sessionStorage.clear();
+    if (savedFingerprint) localStorage.setItem('_jz_fp_id', savedFingerprint);
     toast.info('Logged out successfully');
   };
 

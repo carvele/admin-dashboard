@@ -14,7 +14,7 @@ import {
   Legend,
 } from 'recharts';
 import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye } from 'lucide-react';
-import { subscribeToCollection } from '../../firebase/firestore';
+import { subscribeToCollection, orderBy, limit } from '../../firebase/firestore';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -45,14 +45,20 @@ const Analytics = () => {
   const [dateRange, setDateRange] = useState('30d');
 
   useEffect(() => {
-    // Only listen to the most recent 500 records to save reads while keeping analytics relevant
-    const limitConstraint = [orderBy('createdAt', 'desc'), limit(500)];
-    
-    const unsubR = subscribeToCollection('reservations', setReservations, limitConstraint);
+    // Reservations come from BOTH admin dashboard (has createdAt) and Android app (may use
+    // timestamp/reservationDate instead). Using orderBy('createdAt') would silently exclude
+    // any doc without that field, so we use limit-only for reservations.
+    const reservationConstraint = [limit(500)];
+    // Users: Android-registered users may lack createdAt, so use limit-only to avoid silent exclusions.
+    const userConstraint = [limit(500)];
+    // Products are always created via addDocument so createdAt is guaranteed.
+    const productConstraint = [orderBy('createdAt', 'desc'), limit(500)];
+
+    const unsubR = subscribeToCollection('reservations', setReservations, reservationConstraint);
     const unsubC = subscribeToCollection('users', (data) => {
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
-    }, limitConstraint);
-    const unsubCat = subscribeToCollection('products', setCatalog, limitConstraint);
+    }, userConstraint);
+    const unsubCat = subscribeToCollection('products', setCatalog, productConstraint);
     const unsubConv = subscribeToCollection('analyticsConvRate', setConvRates, [limit(100)]);
     
     return () => {
@@ -63,31 +69,51 @@ const Analytics = () => {
     };
   }, []);
 
-  // Compute total revenue purely from reservation data (Completed OR Confirmed)
+  // Compute total revenue — Completed / Confirmed / Approved reservations
   let totalRev = 0;
   const completedOrConfirmed = reservations.filter(
     (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved',
   );
   completedOrConfirmed.forEach((r) => {
-    const item = catalog.find((c) => c.name === r.outfit);
-    if (item) totalRev += item.price || 0;
+    const outfitName = r.productName || r.outfit;
+    // 1. Try catalog lookup (exact doc id match, then name match)
+    const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
+    if (item) {
+      totalRev += item.price || 0;
+    } else {
+      // 2. Fallback: price stored directly on the reservation (Android app stores this)
+      totalRev += r.price || r.totalAmount || r.rentalFee || 0;
+    }
   });
 
-  // Compute month-over-month deltas
-  const getMonthDelta = (list, dateField) => {
+  // Unified date parser — covers both admin (reservationDate as Date/Timestamp) and
+  // Android (reservationDate as Timestamp, date as string, timestamp as millis)
+  const parseResDate = (r) => {
+    const raw = r.reservationDate || r.date || r.timestamp || r.createdAt;
+    if (!raw) return null;
+    if (raw?.toDate) return raw.toDate();               // Firestore Timestamp
+    if (raw?.seconds) return new Date(raw.seconds * 1000); // Firestore Timestamp (plain object)
+    return new Date(raw);                               // ISO string or millis
+  };
+
+  const getMonthDelta = (list, dateField, useResParser = false) => {
     const now = new Date();
+    const getDate = (item) => {
+      if (useResParser) return parseResDate(item);
+      const raw = item[dateField];
+      if (!raw) return null;
+      if (raw?.toDate) return raw.toDate();
+      if (raw?.seconds) return new Date(raw.seconds * 1000);
+      return new Date(raw);
+    };
     const thisMonth = list.filter((item) => {
-      const d = new Date(
-        item[dateField] || (item.createdAt?.seconds ? item.createdAt.seconds * 1000 : 0),
-      );
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      const d = getDate(item);
+      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     const lastMonth = list.filter((item) => {
-      const d = new Date(
-        item[dateField] || (item.createdAt?.seconds ? item.createdAt.seconds * 1000 : 0),
-      );
+      const d = getDate(item);
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+      return d && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
     }).length;
     if (lastMonth === 0 && thisMonth === 0) return { text: 'No data yet', trend: 'neutral' };
     if (lastMonth === 0) return { text: `+${thisMonth} this month`, trend: 'up' };
@@ -95,22 +121,23 @@ const Analytics = () => {
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs last month`, trend: pct >= 0 ? 'up' : 'down' };
   };
 
-  const revDelta = getMonthDelta(completedOrConfirmed, 'date');
+  const revDelta = getMonthDelta(completedOrConfirmed, null, true);
   const custDelta = getMonthDelta(customers, 'createdAt');
-  const resDelta = getMonthDelta(reservations, 'date');
+  const resDelta = getMonthDelta(reservations, null, true);
 
   const activeCustomers = customers.filter((c) => c.status === 'Active').length;
-  // Compute popular items
+  // Compute popular items — normalise outfit name across both field names
   const outfitCounts = {};
   reservations.forEach((r) => {
-    outfitCounts[r.outfit] = (outfitCounts[r.outfit] || 0) + 1;
+    const key = r.productName || r.outfit;
+    if (key) outfitCounts[key] = (outfitCounts[key] || 0) + 1;
   });
   const popularOutfits = Object.entries(outfitCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([name, count]) => {
       const item = catalog.find((c) => c.name === name);
-      return { name, value: count, revenue: item ? item.price * count : 0 };
+      return { name, value: count, revenue: item ? item.price * count : 0, category: item?.category || '' };
     });
   const actPopular =
     popularOutfits.length > 0 ? popularOutfits : [{ name: 'No data', value: 0, revenue: 0 }];
@@ -121,61 +148,38 @@ const Analytics = () => {
   const buildTrends = () => {
     const now = new Date();
     if (dateRange === '30d') {
-      // Group by week of the month
       const weeks = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0 };
       reservations.forEach((r) => {
-        if (r.date || r.createdAt) {
-          const d = new Date(
-            r.date || (r.createdAt?.seconds ? r.createdAt.seconds * 1000 : r.createdAt),
-          );
-          const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
-          if (diffDays <= 30) {
-            const weekNum = Math.min(Math.floor(diffDays / 7) + 1, 4);
-            weeks[`Week ${weekNum}`] = (weeks[`Week ${weekNum}`] || 0) + 1;
-          }
+        const d = parseResDate(r);
+        if (!d) return;
+        const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 30) {
+          const weekNum = Math.min(Math.floor(diffDays / 7) + 1, 4);
+          weeks[`Week ${weekNum}`] = (weeks[`Week ${weekNum}`] || 0) + 1;
         }
       });
       return Object.entries(weeks).map(([name, reservations]) => ({ name, reservations }));
     } else if (dateRange === 'quarter') {
       const months = {};
-      const monthNames = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       for (let i = 2; i >= 0; i--) {
         const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
         months[monthNames[m.getMonth()]] = 0;
       }
       reservations.forEach((r) => {
-        if (r.date || r.createdAt) {
-          const d = new Date(
-            r.date || (r.createdAt?.seconds ? r.createdAt.seconds * 1000 : r.createdAt),
-          );
-          const mName = monthNames[d.getMonth()];
-          if (months[mName] !== undefined) months[mName]++;
-        }
+        const d = parseResDate(r);
+        if (!d) return;
+        const mName = monthNames[d.getMonth()];
+        if (months[mName] !== undefined) months[mName]++;
       });
       return Object.entries(months).map(([name, reservations]) => ({ name, reservations }));
     } else {
       const quarters = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
       reservations.forEach((r) => {
-        if (r.date || r.createdAt) {
-          const d = new Date(
-            r.date || (r.createdAt?.seconds ? r.createdAt.seconds * 1000 : r.createdAt),
-          );
-          const q = Math.floor(d.getMonth() / 3) + 1;
-          quarters[`Q${q}`]++;
-        }
+        const d = parseResDate(r);
+        if (!d) return;
+        const q = Math.floor(d.getMonth() / 3) + 1;
+        quarters[`Q${q}`]++;
       });
       return Object.entries(quarters).map(([name, reservations]) => ({ name, reservations }));
     }
@@ -184,18 +188,22 @@ const Analytics = () => {
 
   const handleExportCSV = () => {
     if (reservations.length === 0) return;
-    const headers = ['ID', 'Customer', 'Outfit', 'Size', 'Date', 'Status', 'Total Price'];
+    const headers = ['ID', 'Customer', 'Product', 'Size', 'Date', 'Status', 'Rental Price'];
     const csvContent = [
       headers.join(','),
       ...reservations.map((r) =>
         [
           r.id || '',
-          `"${r.customer || ''}"`,
-          `"${r.outfit || ''}"`,
+          `"${r.customerName || r.customer || ''}"`,
+          `"${r.productName || r.outfit || ''}"`,
           r.size || '',
-          r.date ? new Date(r.date).toLocaleDateString() : '',
+          (() => {
+            const d = parseResDate(r);
+            return d ? d.toLocaleDateString() : '';
+          })(),
           r.status || '',
-          catalog.find((c) => c.name === r.outfit)?.price || 0,
+          r.rentalPrice || r.price || r.totalAmount || r.rentalFee ||
+            catalog.find((c) => c.name === (r.productName || r.outfit))?.price || 0,
         ].join(','),
       ),
     ].join('\n');

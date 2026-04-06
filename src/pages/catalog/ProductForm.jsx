@@ -7,6 +7,7 @@ import {
   getProductById,
   getCategories,
   createInventoryItem,
+  getInventory,
 } from '../../services/productService';
 import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
 import { useAuth } from '../../context/AuthContext';
@@ -320,6 +321,7 @@ const ProductForm = () => {
         fitAndSizing: formData.fitAndSizing,
         styleCode: formData.styleCode,
         season: formData.season,
+        occasion: formData.occasion,
         visibility: formData.visibility,
         isFeatured: formData.isFeatured,
         isAlterable: formData.isAlterable,
@@ -334,6 +336,37 @@ const ProductForm = () => {
       if (isEditing) {
         console.log('[DEBUG] Updating product in Firestore...', { id, payload });
         await updateProduct(id, payload);
+
+        // Fetch current inventory and check if any new sizes were added
+        try {
+          const allInv = await getInventory();
+          const existingSizesForProduct = allInv
+            .filter((inv) => (inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode)
+            .map((inv) => inv.size);
+          
+          const newSizes = payload.sizes.filter((size) => !existingSizesForProduct.includes(size));
+          
+          if (newSizes.length > 0) {
+            Logger.info(`Initializing missing inventory for updated sizes ${id}...`);
+            const inventoryPromises = newSizes.map((size) =>
+              createInventoryItem({
+                productDocId: id,
+                sku: payload.id || payload.styleCode,
+                item: payload.name,
+                category: payload.category,
+                size: size,
+                total: 0,
+                reserved: 0,
+                available: 0,
+              }),
+            );
+            await Promise.all(inventoryPromises);
+            console.log('[DEBUG] Missing inventory items created successfully');
+          }
+        } catch(invErr) {
+          console.error('[DEBUG] Checking/Adding missing sizes failed:', invErr);
+        }
+
         console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
@@ -504,24 +537,16 @@ const ProductForm = () => {
               />
             </div>
           </div>
-          <div className="flex gap-4 items-center mt-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                name="isFeatured"
-                checked={formData.isFeatured}
-                onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-              />
-              <span>Feature this product</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer px-4">
+          <div className="flex gap-4 items-center mt-4 p-4 border rounded" style={{ backgroundColor: 'var(--beige)', borderColor: 'var(--charcoal)' }}>
+            <label className="flex items-center gap-3 cursor-pointer w-full">
               <input
                 type="checkbox"
                 name="isAlterable"
                 checked={formData.isAlterable}
                 onChange={(e) => setFormData({ ...formData, isAlterable: e.target.checked })}
+                style={{ width: '20px', height: '20px', accentColor: 'var(--charcoal)' }}
               />
-              <span>Allow Alterations & Fitting</span>
+              <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--charcoal)' }}>Allow Alterations & Fitting for this Product</span>
             </label>
           </div>
         </section>
@@ -722,18 +747,6 @@ const ProductForm = () => {
                 <option value="Published">Published</option>
                 <option value="Draft">Draft</option>
               </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, isFeatured: e.target.checked }))}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-              <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Featured Product</span>
             </div>
           </div>
         </section>

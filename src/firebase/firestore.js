@@ -82,7 +82,7 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 export const getCollection = async (collectionName, includeDeleted = false, maxResults = 0) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
     let q = query(collection(db, collectionName));
-    const isExempt = ['reservations', 'inventory', 'logs'].includes(collectionName);
+    const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate'].includes(collectionName);
     if (!includeDeleted && !isExempt) {
       q = query(q, where('deleted', '!=', true));
     }
@@ -107,7 +107,7 @@ export const getPaginatedCollection = async (
 ) => {
   return withRetry(`getPaginatedCollection_${collectionName}`, async () => {
     let baseConstraints = [...queryConstraints];
-    const isExempt = ['reservations', 'inventory', 'logs', 'favorites'].includes(collectionName);
+    const isExempt = ['reservations', 'inventory', 'logs', 'favorites', 'users', 'analyticsConvRate'].includes(collectionName);
     if (!includeDeleted && !isExempt) {
       baseConstraints.push(where('deleted', '!=', true));
     }
@@ -245,7 +245,7 @@ export const subscribeToCollection = (
   includeDeleted = false,
 ) => {
   let finalConstraints = [...queryConstraints];
-  const isExempt = ['reservations', 'inventory', 'logs'].includes(collectionName);
+  const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate', 'devices'].includes(collectionName);
   if (!includeDeleted && !isExempt) {
     finalConstraints.push(where('deleted', '!=', true));
   }
@@ -280,6 +280,7 @@ export const registerDevice = async (fingerprint, userAgent, staffEmail = '', st
     await setDoc(docRef, {
       id: fingerprint,
       status: 'pending',
+      deleted: false,
       userAgent,
       lastSeen: new Date().toISOString(),
       name: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
@@ -329,4 +330,4 @@ export const updateDeviceSecurity = async (fingerprint, attempts, lockoutTime) =
 };
 
 // Re-export useful Firestore utilities for use in pages
-export { query, where, orderBy, serverTimestamp, collection, doc, onSnapshot };
+export { query, where, orderBy, limit, serverTimestamp, collection, doc, onSnapshot };

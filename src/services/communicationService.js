@@ -67,6 +67,6 @@ export const subscribeToNotifications = (callback) => {
 export const createNotification = (data) => addDocument('notifications', data);
 
 export const markNotificationRead = (docId) =>
-  updateDocument('notifications', docId, { read: true });
+  updateDocument('notifications', docId, { isRead: true, read: true });
 
 export const deleteNotification = (docId) => deleteDocument('notifications', docId);

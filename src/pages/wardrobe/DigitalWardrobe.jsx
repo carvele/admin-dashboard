@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
 import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
 import { subscribeToCollection } from '../../firebase/firestore';
+import { subscribeToProducts } from '../../services/productService';
 import { getAvatarColor, getUserDisplayName } from '../../utils/helpers';
 import './DigitalWardrobe.css';
 
@@ -24,6 +25,8 @@ const DigitalWardrobe = () => {
 
   const [viewMode, setViewMode] = useState('grid');
 
+  const [products, setProducts] = useState([]);
+  
   // Subscribe to wardrobeItems (normalized top-level collection)
   React.useEffect(() => {
     const unsubItems = subscribeToCollection('wardrobeItems', (data) => {
@@ -37,9 +40,13 @@ const DigitalWardrobe = () => {
         setActiveUserId(appUsers[0].id);
       }
     });
+    const unsubProducts = subscribeToProducts((data) => {
+      setProducts(data);
+    });
     return () => {
       unsubItems();
       unsubUsers();
+      unsubProducts();
     };
   }, []);
 
@@ -169,25 +176,32 @@ const DigitalWardrobe = () => {
           </div>
 
           <div className={`dw-items ${viewMode === 'grid' ? 'dw-grid' : 'dw-list'}`}>
-            {userItems.map((item) => (
-              <div key={item.id} className="dw-item-card card">
-                <div
-                  className="dw-img-placeholder"
-                  style={{
-                    overflow: 'hidden',
-                    padding: item.imageUrl?.startsWith('http') ? '0' : '2rem',
-                  }}
-                >
-                  {renderItemImage(item.imageUrl)}
-                </div>
-                <div className="dw-item-details">
-                  <div className="flex-between">
-                    <span className="dw-category">{item.category}</span>
+            {userItems.map((item) => {
+              const matchedProduct = products.find(p => p.id === item.productId);
+              const displayName = matchedProduct ? matchedProduct.name : (item.productId || 'Uploaded Item');
+              // Use matched product image if available and item doesn't have its own image URL
+              const displayImage = item.imageUrl || (matchedProduct?.images?.[0]) || null;
+              
+              return (
+                <div key={item.id} className="dw-item-card card">
+                  <div
+                    className="dw-img-placeholder"
+                    style={{
+                      overflow: 'hidden',
+                      padding: displayImage?.startsWith('http') ? '0' : '2rem',
+                    }}
+                  >
+                    {renderItemImage(displayImage)}
                   </div>
-                  <h4>{item.productId || 'Uploaded Item'}</h4>
+                  <div className="dw-item-details">
+                    <div className="flex-between">
+                      <span className="dw-category">{item.category || (matchedProduct?.category) || 'Clothing'}</span>
+                    </div>
+                    <h4>{displayName}</h4>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {userItems.length === 0 && (
               <div className="empty-state full-width mt-4">No items found in wardrobe.</div>
             )}

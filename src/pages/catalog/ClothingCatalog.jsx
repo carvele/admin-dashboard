@@ -92,7 +92,9 @@ const ClothingCatalog = () => {
       // 2. Cleanup Images (Only Firebase Storage, ignore Cloudinary/External)
       const isFirebaseUrl = (url) => url && url.includes('firebasestorage.googleapis.com');
 
-      const allImageUrls = [itemToDelete.imageUrl, ...(itemToDelete.images || [])].filter(
+      // Ensure we don't try to delete the exact same URL twice (imageUrl and images[0] usually overlap)
+      const rawImageUrls = [itemToDelete.imageUrl, ...(itemToDelete.images || [])];
+      const allImageUrls = [...new Set(rawImageUrls)].filter(
         (url) => url && typeof url === 'string',
       );
 
@@ -143,8 +145,20 @@ const ClothingCatalog = () => {
     const newTags = has ? currentTags.filter((t) => t !== tag) : [...currentTags, tag];
     try {
       await updateProduct(item.docId, { tags: newTags });
+      setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, tags: newTags } : c));
     } catch (e) {
       toast.error('Failed to update tags');
+    }
+  };
+
+  // --- TOGGLE FEATURED ---
+  const toggleFeature = async (item) => {
+    try {
+      await updateProduct(item.docId, { isFeatured: !item.isFeatured });
+      setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, isFeatured: !c.isFeatured } : c));
+      toast.success(`Product ${!item.isFeatured ? 'featured' : 'unfeatured'}`);
+    } catch (e) {
+      toast.error('Failed to update featured status');
     }
   };
 
@@ -250,7 +264,7 @@ const ClothingCatalog = () => {
                   ))}
                 </div>
 
-                {/* AR Tag Toggle */}
+                {/* AR Tag Toggle & Featured Toggle */}
                 <div className="product-tags mt-3">
                   {availableTags.map((tag) => (
                     <button
@@ -261,6 +275,18 @@ const ClothingCatalog = () => {
                       <TagIcon size={12} /> {tag}
                     </button>
                   ))}
+                  <button
+                    className={`catalog-tag-toggle ${item.isFeatured ? 'active' : ''}`}
+                    onClick={() => toggleFeature(item)}
+                    style={{ 
+                      borderColor: item.isFeatured ? '#ffd700' : 'transparent', 
+                      color: item.isFeatured ? '#b8860b' : 'var(--text-secondary)',
+                      backgroundColor: item.isFeatured ? '#fffcf0' : 'var(--bg-color)',
+                      boxShadow: item.isFeatured ? '0 0 5px rgba(255, 215, 0, 0.3)' : 'none'
+                    }}
+                  >
+                    <Sparkles size={12} /> Featured
+                  </button>
                 </div>
 
                 {/* CRUD Actions */}

@@ -3,11 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, Search, Menu, X, Sun, Moon } from 'lucide-react';
+import { Bell, LogOut, Search, Menu, X } from 'lucide-react';
 // @ts-ignore
 import { getAvatarColor, getInitials, formatRelativeTime, sanitizeForDisplay, } from '../utils/helpers';
 // @ts-ignore
-import { subscribeToCollection, updateDocument } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument, orderBy, limit } from '../firebase/firestore';
 import './TopNav.css';
 const TopNav = ({ user, onHamburger }) => {
     const { logout, isAdminUnlocked } = useAuth();
@@ -19,47 +19,94 @@ const TopNav = ({ user, onHamburger }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [showSearchResults, setShowSearchResults] = useState(false);
-    const [reservations, setReservations] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [products, setProducts] = useState([]);
     const searchRef = useRef(null);
-    const [isDark, setIsDark] = useState(localStorage.getItem('theme') === 'dark');
     const initials = getInitials(user?.name);
-    // ── Theme Management ──
+    // ── Manage search results on-demand ──
     useEffect(() => {
-        if (isDark) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        }
-        else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDark]);
-    // ── Subscribe to data for search ──
+        const handler = setTimeout(async () => {
+            if (!searchQuery.trim()) {
+                setSearchResults([]);
+                setShowSearchResults(false);
+                return;
+            }
+            // Instead of global subscriptions, we'd ideally search via a callable function or specific indices.
+            // Since this is a small-to-md shop, we search once when typing pauses.
+            try {
+                // @ts-ignore
+                const { getCollection } = await import('../firebase/firestore');
+                const q = sanitizeForDisplay(searchQuery).toLowerCase();
+                const results = [];
+                // Check if we already have data from active page-level listeners (optional optimization)
+                // Here we just fetch small chunks to reduce reads
+                const resSearch = await getCollection('reservations', false, 0);
+                const custSearch = await getCollection('users', false, 0);
+                const prodSearch = await getCollection('products', false, 0);
+                resSearch.forEach((r) => {
+                    const sCustomer = (r.customer || r.customerName || '').toLowerCase();
+                    if (sCustomer.includes(q) || (r.id && r.id.toLowerCase().includes(q))) {
+                        results.push({
+                            type: 'Reservation',
+                            label: `${r.id} — ${r.customer || r.customerName}`,
+                            sub: r.outfit || r.productName || 'Order',
+                            path: '/reservations',
+                        });
+                    }
+                });
+                custSearch.forEach((c) => {
+                    if ((c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)) {
+                        results.push({ type: 'Customer', label: c.name, sub: c.email, path: '/customers' });
+                    }
+                });
+                // Search products
+                prodSearch.forEach((p) => {
+                    if ((p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)) {
+                        results.push({
+                            type: 'Product',
+                            label: p.name,
+                            sub: `${p.category} · ₱${(p.price || 0).toLocaleString()}`,
+                            path: '/catalog',
+                        });
+                    }
+                });
+                // Quick nav items
+                const navItems = [
+                    { label: 'Dashboard', path: '/dashboard' },
+                    { label: 'Reservations', path: '/reservations' },
+                    { label: 'Customers', path: '/customers' },
+                    { label: 'Messages', path: '/messages' },
+                    { label: 'Inventory', path: '/inventory' },
+                    { label: 'Catalog', path: '/catalog' },
+                    { label: 'Analytics', path: '/analytics' },
+                    { label: 'Settings', path: '/settings' },
+                    { label: 'Staff Management', path: '/staff' },
+                    { label: 'Device Management', path: '/devices' },
+                ];
+                navItems.forEach((item) => {
+                    if (item.label.toLowerCase().includes(q)) {
+                        results.push({ type: 'Page', label: item.label, sub: 'Navigate', path: item.path });
+                    }
+                });
+                setSearchResults(results.slice(0, 10));
+                setShowSearchResults(true);
+            }
+            catch (err) {
+                console.error('Search failed:', err);
+            }
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
+    // ── Subscribe to notifications (Limited to 20 recent) ──
     useEffect(() => {
-        const unsubR = subscribeToCollection('reservations', setReservations);
-        const unsubC = subscribeToCollection('users', (data) => {
-            setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
-        });
-        const unsubP = subscribeToCollection('products', setProducts);
-        return () => {
-            unsubR();
-            unsubC();
-            unsubP();
-        };
-    }, []);
-    // ── Subscribe to notifications ──
-    useEffect(() => {
+        // Only listen to the most recent 20 notifications to save reads
         const unsub = subscribeToCollection('notifications', (data) => {
             const sorted = [...data].sort((a, b) => {
                 const aTime = a.createdAt?.seconds || 0;
                 const bTime = b.createdAt?.seconds || 0;
                 return bTime - aTime;
             });
-            setNotifications(sorted.slice(0, 10));
+            setNotifications(sorted);
             setUnreadCount(sorted.filter((n) => !n.read).length);
-        });
+        }, [orderBy('createdAt', 'desc'), limit(20)]);
         return () => unsub();
     }, []);
     // ── Close search on click outside ──
@@ -72,74 +119,6 @@ const TopNav = ({ user, onHamburger }) => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-    // ── Perform search ──
-    useEffect(() => {
-        if (!searchQuery.trim()) {
-            setSearchResults([]);
-            setShowSearchResults(false);
-            return;
-        }
-        const q = sanitizeForDisplay(searchQuery).toLowerCase();
-        const results = [];
-        // Search reservations
-        reservations.forEach((r) => {
-            const sanitizedCustomer = sanitizeForDisplay(r.customer || '');
-            const sanitizedId = sanitizeForDisplay(r.id || '');
-            const sanitizedOutfit = sanitizeForDisplay(r.outfit || '');
-            if (sanitizedCustomer.toLowerCase().includes(q) ||
-                sanitizedId.toLowerCase().includes(q) ||
-                sanitizedOutfit.toLowerCase().includes(q)) {
-                results.push({
-                    type: 'Reservation',
-                    label: `${sanitizedId} — ${sanitizedCustomer}`,
-                    sub: sanitizedOutfit,
-                    path: '/reservations',
-                });
-            }
-        });
-        // Search customers
-        customers.forEach((c) => {
-            const name = sanitizeForDisplay(c.name || c.email || '');
-            const sanitizedEmail = sanitizeForDisplay(c.email || '');
-            if (name.toLowerCase().includes(q) || sanitizedEmail.toLowerCase().includes(q)) {
-                results.push({ type: 'Customer', label: name, sub: sanitizedEmail, path: '/customers' });
-            }
-        });
-        // Search products
-        products.forEach((p) => {
-            const sanitizedName = sanitizeForDisplay(p.name || '');
-            const sanitizedCategory = sanitizeForDisplay(p.category || '');
-            const sanitizedPrice = sanitizeForDisplay((p.price || 0).toString());
-            if (sanitizedName.toLowerCase().includes(q) || sanitizedCategory.toLowerCase().includes(q)) {
-                results.push({
-                    type: 'Product',
-                    label: sanitizedName,
-                    sub: `${sanitizedCategory} · ₱${parseFloat(sanitizedPrice).toLocaleString()}`,
-                    path: '/catalog',
-                });
-            }
-        });
-        // Quick nav
-        const navItems = [
-            { label: 'Dashboard', path: '/dashboard' },
-            { label: 'Reservations', path: '/reservations' },
-            { label: 'Customers', path: '/customers' },
-            { label: 'Messages', path: '/messages' },
-            { label: 'Inventory', path: '/inventory' },
-            { label: 'Catalog', path: '/catalog' },
-            { label: 'Analytics', path: '/analytics' },
-            { label: 'Settings', path: '/settings' },
-            { label: 'Staff Management', path: '/staff' },
-            { label: 'Device Management', path: '/devices' },
-        ];
-        navItems.forEach((item) => {
-            if (item.label.toLowerCase().includes(q)) {
-                results.push({ type: 'Page', label: item.label, sub: 'Navigate', path: item.path });
-            }
-        });
-        setSearchResults(results.slice(0, 8));
-        setShowSearchResults(true);
-    }, [searchQuery, reservations, customers, products]);
     const handleResultClick = (path) => {
         navigate(path);
         setSearchQuery('');
@@ -173,9 +152,9 @@ const TopNav = ({ user, onHamburger }) => {
     return (_jsxs("header", { className: "topnav", children: [_jsxs("div", { className: "topnav-left", children: [_jsx("button", { className: "hamburger-btn", onClick: onHamburger, "aria-label": "Open menu", children: _jsx(Menu, { size: 22 }) }), _jsxs("div", { className: "topnav-search", ref: searchRef, children: [_jsx(Search, { size: 18, className: "search-icon" }), _jsx("input", { type: "text", placeholder: "Search orders, customers, or items...", value: searchQuery, onChange: (e) => setSearchQuery(e.target.value), onFocus: () => searchQuery.trim() && setShowSearchResults(true) }), searchQuery && (_jsx("button", { className: "search-clear-btn", onClick: () => {
                                     setSearchQuery('');
                                     setShowSearchResults(false);
-                                }, children: _jsx(X, { size: 14 }) })), showSearchResults && searchResults.length > 0 && (_jsx("div", { className: "search-dropdown card", children: _jsx("div", { className: "search-results-list", children: searchResults.map((result, idx) => (_jsxs("button", { className: "search-result-item", onClick: () => handleResultClick(result.path), children: [_jsx("span", { className: "search-result-type", style: { color: getTypeColor(result.type) }, children: result.type }), _jsxs("div", { className: "search-result-info", children: [_jsx("span", { className: "search-result-label", children: result.label }), _jsx("span", { className: "search-result-sub", children: result.sub })] })] }, idx))) }) })), showSearchResults && searchQuery.trim() && searchResults.length === 0 && (_jsx("div", { className: "search-dropdown card", children: _jsxs("div", { className: "search-no-results", children: ["No results found for \"", sanitizeForDisplay(searchQuery), "\""] }) }))] })] }), _jsxs("div", { className: "topnav-actions", children: [_jsx("button", { className: "icon-btn theme-toggle", onClick: () => setIsDark(!isDark), title: `Switch to ${isDark ? 'Light' : 'Dark'} Mode`, children: [isDark ? _jsx(Sun, { size: 20 }) : _jsx(Moon, { size: 20 })] }), _jsxs("div", { className: "sync-status", title: "Connected to Real-time Database", children: [_jsx("div", { className: "sync-indicator" }), _jsx("span", { className: "sync-text", children: "Live" })] }), _jsxs("div", { className: "notification-wrapper", children: [_jsxs("button", { className: "icon-btn", onClick: () => setShowNotifications(!showNotifications), children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && _jsx("span", { className: "notification-dot", children: unreadCount })] }), showNotifications && (_jsxs("div", { className: "notifications-dropdown card", children: [_jsxs("div", { className: "dropdown-header", children: [_jsx("h3", { children: "Notifications" }), _jsx("button", { className: "text-btn", onClick: markAllRead, children: "Mark all read" })] }), _jsx("ul", { className: "notification-list", children: notifications.length === 0 ? (_jsx("li", { className: "notification-item", children: _jsx("div", { className: "noti-content", style: { textAlign: 'center', width: '100%' }, children: _jsx("p", { className: "text-secondary", children: "No notifications yet" }) }) })) : (notifications.map((n) => (_jsxs("li", { className: `notification-item ${!n.read ? 'unread' : ''}`, children: [_jsx("div", { className: "noti-icon reservation", children: (n.type || 'N')[0].toUpperCase() }), _jsxs("div", { className: "noti-content", children: [_jsx("p", { children: n.message || 'New notification' }), _jsx("span", { children: n.createdAt?.seconds
+                                }, children: _jsx(X, { size: 14 }) })), showSearchResults && searchResults.length > 0 && (_jsx("div", { className: "search-dropdown card", children: _jsx("div", { className: "search-results-list", children: searchResults.map((result, idx) => (_jsxs("button", { className: "search-result-item", onClick: () => handleResultClick(result.path), children: [_jsx("span", { className: "search-result-type", style: { color: getTypeColor(result.type) }, children: result.type }), _jsxs("div", { className: "search-result-info", children: [_jsx("span", { className: "search-result-label", children: result.label }), _jsx("span", { className: "search-result-sub", children: result.sub })] })] }, `${result.type}-${result.path}-${idx}`))) }) })), showSearchResults && searchQuery.trim() && searchResults.length === 0 && (_jsx("div", { className: "search-dropdown card", children: _jsxs("div", { className: "search-no-results", children: ["No results found for \"", sanitizeForDisplay(searchQuery), "\""] }) }))] })] }), _jsxs("div", { className: "topnav-actions", children: [_jsxs("div", { className: "sync-status", title: "Connected to Real-time Database", children: [_jsx("div", { className: "sync-indicator" }), _jsx("span", { className: "sync-text", children: "Live" })] }), _jsxs("div", { className: "notification-wrapper", children: [_jsxs("button", { className: "icon-btn", onClick: () => setShowNotifications(!showNotifications), children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && _jsx("span", { className: "notification-dot", children: unreadCount })] }), showNotifications && (_jsxs("div", { className: "notifications-dropdown card", children: [_jsxs("div", { className: "dropdown-header", children: [_jsx("h3", { children: "Notifications" }), _jsx("button", { className: "text-btn", onClick: markAllRead, children: "Mark all read" })] }), _jsx("ul", { className: "notification-list", children: notifications.length === 0 ? (_jsx("li", { className: "notification-item", children: _jsx("div", { className: "noti-content", style: { textAlign: 'center', width: '100%' }, children: _jsx("p", { className: "text-secondary", children: "No notifications yet" }) }) })) : (notifications.map((n, idx) => (_jsxs("li", { className: `notification-item ${!n.read ? 'unread' : ''}`, children: [_jsx("div", { className: "noti-icon reservation", children: (n.type || 'N')[0].toUpperCase() }), _jsxs("div", { className: "noti-content", children: [_jsx("p", { children: n.message || 'New notification' }), _jsx("span", { children: n.createdAt?.seconds
                                                                 ? formatRelativeTime(n.createdAt.seconds * 1000)
-                                                                : 'Just now' })] })] }, n.id || n.docId)))) })] }))] }), _jsxs("div", { className: "user-menu", children: [_jsx("div", { className: "avatar", style: { backgroundColor: getAvatarColor(user?.name || 'A') }, children: initials }), _jsxs("div", { className: "user-info", children: [_jsx("span", { className: "user-name", children: user?.name || 'Staff Member' }), _jsx("span", { className: "user-role-top", style: {
+                                                                : 'Just now' })] })] }, n.id || n.docId || `notification-${idx}`)))) })] }))] }), _jsxs("div", { className: "user-menu", children: [_jsx("div", { className: "avatar", style: { backgroundColor: getAvatarColor(user?.name || 'A') }, children: initials }), _jsxs("div", { className: "user-info", children: [_jsx("span", { className: "user-name", children: user?.name || 'Staff Member' }), _jsx("span", { className: "user-role-top", style: {
                                             fontSize: '0.75rem',
                                             color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)',
                                             fontWeight: 500,

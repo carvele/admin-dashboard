@@ -18,7 +18,7 @@ import {
   deleteDocument,
   logAction,
 } from '../../firebase/firestore';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { auth, firebaseConfig } from '../../firebase/config';
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { toast } from 'sonner';
@@ -55,10 +55,12 @@ const StaffManagement = () => {
       return;
     }
 
+    let secondaryApp;
+    let secondaryAuth;
     try {
       // 1. Initialize a secondary Firebase instance so we don't log out the Admin
-      const secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp_' + Date.now());
-      const secondaryAuth = getAuth(secondaryApp);
+      secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp_' + Date.now());
+      secondaryAuth = getAuth(secondaryApp);
 
       // 2. Create the new Firebase Auth account using the secondary instance
       const cred = await createUserWithEmailAndPassword(
@@ -100,6 +102,10 @@ const StaffManagement = () => {
         toast.error('This email is already registered in Firebase Auth.');
       } else {
         toast.error('Failed to create staff account: ' + err.message);
+      }
+    } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp).catch(console.error);
       }
     }
   };

@@ -230,6 +230,7 @@ const Reservations = () => {
     try {
       await updateReservation(rescheduleModal.docId, {
         reservationDate: new Date(newDate),
+        date: new Date(newDate), // Fallback for Android which parses 'date'
         countdown: true,
       });
       await logAction(user, 'Rescheduled reservation', {
@@ -296,6 +297,7 @@ const Reservations = () => {
         productId: matchedProduct?.id || '',
         imageUrl: matchedProduct?.images?.[0] || '',
         reservationDate: new Date(newRes.date),
+        date: new Date(newRes.date), // Fallback for Android which parses 'date'
         status: 'Pending',
         staff: 'Unassigned',
         assigned_staff_id: '', // Will be set on Confirm

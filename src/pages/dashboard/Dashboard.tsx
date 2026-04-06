@@ -54,15 +54,18 @@ const Dashboard = () => {
 
   const loadDashboard = async () => {
     try {
-      const [resData, cusData, invData] = await Promise.all([
+      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
         getReservations(100),
         getCustomers(100),
         getInventory(100),
+        getARSessions(),
+        getSuggestedOutfits(),
       ]);
       setReservations(resData || []);
       setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
       setInventory(invData || []);
-      setArSessionCount(0);
+      setArSessionCount(arCount || 0);
+      setSuggestedOutfits(outfitsData || []);
       setLastSynced(new Date());
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -111,6 +114,7 @@ const Dashboard = () => {
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   reservations.forEach((r) => {
+    // Android writes 'reservationDate'; admin uses 'date'
     const rawDate = r.reservationDate || r.date;
     if (rawDate) {
       const resDate = parseDate(rawDate);

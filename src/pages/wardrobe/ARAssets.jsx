@@ -20,8 +20,9 @@ import {
 } from '../../firebase/firestore';
 import './ARAssets.css';
 
-const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/demo/upload';
-const CLOUDINARY_UPLOAD_PRESET = 'docs_upload_example_us_preset';
+const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 const ARAssets = () => {
   const [activeTab, setActiveTab] = useState('assets');

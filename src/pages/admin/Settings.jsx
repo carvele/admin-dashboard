@@ -651,24 +651,26 @@ const Settings = () => {
                               marginBottom: '0.75rem',
                             }}
                           >
-                            {(cat.subcategories || []).map((sub) => (
-                              <div
-                                key={sub}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.25rem',
-                                  padding: '0.2rem 0.5rem',
-                                  backgroundColor: 'var(--white)',
-                                  border: '1px solid var(--border-color)',
-                                  borderRadius: '6px',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                <span>{sub}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSubCategory(cat.id, sub)}
+                            {(cat.subcategories || []).map((sub) => {
+                              const subName = typeof sub === 'object' ? sub.name : sub;
+                              return (
+                                <div
+                                  key={subName}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.2rem 0.5rem',
+                                    backgroundColor: 'var(--white)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                  }}
+                                >
+                                  <span>{subName}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubCategory(cat.id, subName)}
                                   style={{
                                     background: 'none',
                                     border: 'none',
@@ -679,9 +681,10 @@ const Settings = () => {
                                   }}
                                 >
                                   <X size={12} />
-                                </button>
-                              </div>
-                            ))}
+                                  </button>
+                                </div>
+                              );
+                            })}
                             {(!cat.subcategories || cat.subcategories.length === 0) && (
                               <p
                                 style={{

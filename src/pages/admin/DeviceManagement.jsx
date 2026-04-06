@@ -25,7 +25,7 @@ import {
 import './DeviceManagement.css';
 
 const DeviceManagement = () => {
-  const { user } = useAuth();
+  const { user, deviceFingerprint } = useAuth();
   const [devices, setDevices] = useState([]);
   const [filter, setFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
@@ -43,10 +43,13 @@ const DeviceManagement = () => {
     const unsub = subscribeToCollection('devices', (data) => {
       // Sort so pending devices are at the top
       setDevices(
-        data.sort((a, b) => {
+        [...data].sort((a, b) => {
           if (a.status === 'pending' && b.status !== 'pending') return -1;
           if (a.status !== 'pending' && b.status === 'pending') return 1;
-          return (b.lastAccess?.seconds || 0) - (a.lastAccess?.seconds || 0);
+          // Normalize: some docs use lastSeen, some use lastAccess
+          const aTime = (a.lastSeen?.seconds || a.lastAccess?.seconds || 0);
+          const bTime = (b.lastSeen?.seconds || b.lastAccess?.seconds || 0);
+          return bTime - aTime;
         }),
       );
     });
@@ -237,9 +240,14 @@ const DeviceManagement = () => {
                       </button>
                     </div>
                   ) : (
-                    <div className="device-name-row">
+                    <div className="device-name-row flex-center gap-2">
                       <h4>{device.name}</h4>
-                      <button className="edit-icon-btn" onClick={() => startEditing(device)}>
+                      {device.id === deviceFingerprint && (
+                        <span className="badge badge-success text-xs px-2 py-1 flex-center gap-1" style={{ backgroundColor: 'var(--color-gold)', color: '#000' }}>
+                          ⭐ Current
+                        </span>
+                      )}
+                      <button className="edit-icon-btn ml-2" onClick={() => startEditing(device)}>
                         <Edit2 size={12} />
                       </button>
                     </div>
@@ -247,7 +255,7 @@ const DeviceManagement = () => {
                   <p className="device-meta">
                     {detectPlatform(device.userAgent)} ·{' '}
                     {(device.userAgent || 'Unknown device').substring(0, 50)} · Last seen{' '}
-                    {formatLastAccess(device.lastAccess)}
+                    {formatLastAccess(device.lastSeen)}
                   </p>
                   <p className="device-meta" style={{ color: 'var(--accent)', fontWeight: 500 }}>
                     👤 Owned by: {device.staffName || device.staffEmail || 'Unknown staff'}

@@ -6,6 +6,7 @@ import {
   deleteDocument,
   softDeleteDocument,
   subscribeToCollection,
+  getPaginatedCollection,
 } from '../firebase/firestore';
 
 /**

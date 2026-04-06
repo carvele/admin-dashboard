@@ -47,15 +47,16 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
       // Instead of global subscriptions, we'd ideally search via a callable function or specific indices.
       // Since this is a small-to-md shop, we search once when typing pauses.
       try {
+        // @ts-ignore
         const { getCollection } = await import('../firebase/firestore');
         const q = sanitizeForDisplay(searchQuery).toLowerCase();
         const results: any[] = [];
 
         // Check if we already have data from active page-level listeners (optional optimization)
         // Here we just fetch small chunks to reduce reads
-        const resSearch = await getCollection('reservations', false); 
-        const custSearch = await getCollection('users', false);
-        const prodSearch = await getCollection('products', false);
+        const resSearch = await getCollection('reservations', false, 0); 
+        const custSearch = await getCollection('users', false, 0);
+        const prodSearch = await getCollection('products', false, 0);
 
         resSearch.forEach((r: any) => {
           const sCustomer = (r.customer || r.customerName || '').toLowerCase();
@@ -128,7 +129,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           return bTime - aTime;
         });
         setNotifications(sorted);
-        setUnreadCount(sorted.filter((n) => !n.read).length);
+        setUnreadCount(sorted.filter((n) => !n.isRead).length);
       },
       [orderBy('createdAt', 'desc'), limit(20)],
     );
@@ -154,9 +155,9 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
 
   const markAllRead = async () => {
     try {
-      const unread = notifications.filter((n) => !n.read);
+      const unread = notifications.filter((n) => !n.isRead);
       for (const n of unread) {
-        await updateDocument('notifications', n.docId, { read: true });
+        await updateDocument('notifications', n.docId, { isRead: true });
       }
     } catch (err) {
       console.error('Failed to mark notifications as read:', err);
@@ -271,7 +272,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                   notifications.map((n, idx) => (
                     <li
                       key={n.id || n.docId || `notification-${idx}`}
-                      className={`notification-item ${!n.read ? 'unread' : ''}`}
+                      className={`notification-item ${!n.isRead ? 'unread' : ''}`}
                     >
                       <div className="noti-icon reservation">
                         {(n.type || 'N')[0].toUpperCase()}

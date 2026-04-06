@@ -72,7 +72,8 @@ const Customers = () => {
       setLastDoc(result.lastVisible);
       setHasMore(result.hasMore);
     } catch (e) {
-      toast.error('Failed to load customers');
+      console.error('Failed to load customers API Error:', e);
+      toast.error('Failed to load customers: ' + e.message);
     } finally {
       if (loadMore) setLoadingMore(false);
       else setLoading(false);
@@ -116,9 +117,11 @@ const Customers = () => {
   const totalCustomers = customers.length;
   const activeCount = customers.filter((c) => isOnline(c.lastOnline)).length;
   const newThisMonth = customers.filter((c) => {
+    // Android writes 'createdAt'; admin-created users may have 'joinedAt'
+    const rawTs = c.createdAt || c.joinedAt;
     const joined =
-      c.joinedAt?.toDate?.() ||
-      (c.joinedAt?.seconds ? new Date(c.joinedAt.seconds * 1000) : new Date(c.joinedAt || 0));
+      rawTs?.toDate?.() ||
+      (rawTs?.seconds ? new Date(rawTs.seconds * 1000) : new Date(rawTs || 0));
     const now = new Date();
     return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
   }).length;
@@ -141,7 +144,7 @@ const Customers = () => {
       underBust: m.underBust || '',
       waist: m.waist || '',
       hip: m.hip || m.hips || '',
-      neck: m.neck || '',
+      neck: m.neckBase || m.neck || '',
       shoulderWidth: m.shoulderWidth || '',
       armLength: m.armLength || '',
       backLength: m.backLength || '',
@@ -167,6 +170,7 @@ const Customers = () => {
         underBust: toNum(editForm.underBust),
         waist: toNum(editForm.waist),
         hip: toNum(editForm.hip),
+        neckBase: toNum(editForm.neck),
         neck: toNum(editForm.neck),
         shoulderWidth: toNum(editForm.shoulderWidth),
         armLength: toNum(editForm.armLength),
@@ -502,7 +506,7 @@ const Customers = () => {
                       {selectedCustomer.status || 'Active'}
                     </span>
                     <p className="member-since">
-                      <Calendar size={13} /> Member since {formatDate(selectedCustomer.joinedAt)}
+                      <Calendar size={13} /> Member since {formatDate(selectedCustomer.createdAt || selectedCustomer.joinedAt)}
                     </p>
                     <p className="last-seen-tag">
                       <Clock size={13} /> Last seen{' '}
@@ -739,24 +743,20 @@ const Customers = () => {
                   ) : (
                     (() => {
                       const m = selectedCustomer.measurements || {};
-                      const hasMeasurements =
-                        m.topBust ||
-                        m.bust ||
-                        m.waist ||
-                        m.hip ||
-                        m.hips ||
-                        m.neck ||
-                        m.shoulderWidth ||
-                        selectedCustomer.height ||
-                        selectedCustomer.user_height_cm;
-                      if (!hasMeasurements)
-                        return <div className="empty-state">No measurements saved yet.</div>;
+                      const hasMeasurements = 
+                        selectedCustomer.measurements !== undefined && 
+                        selectedCustomer.measurements !== null &&
+                        Object.keys(selectedCustomer.measurements).length > 0;
+                        
+                      if (!hasMeasurements && !selectedCustomer.user_height_cm && !selectedCustomer.user_weight_kg) {
+                        return <div className="empty-state">No AI scan or measurements saved yet.</div>;
+                      }
 
                       const rows = [
-                        { label: 'Bust (Top)', value: m.topBust || m.bust },
+                        { label: 'Bust (Top)', value: m.topBust ?? m.bust },
                         { label: 'Under Bust', value: m.underBust },
                         { label: 'Waist', value: m.waist },
-                        { label: 'Hips', value: m.hip || m.hips },
+                        { label: 'Hips', value: m.hip ?? m.hips },
                         { label: 'Neck', value: m.neck },
                         { label: 'Neck Base', value: m.neckBase },
                         { label: 'Shoulder', value: m.shoulderWidth },
@@ -766,12 +766,11 @@ const Customers = () => {
                         { label: 'Inside Leg', value: m.insideLegLength },
                         {
                           label: 'Height',
-                          value:
-                            selectedCustomer.user_height_cm || selectedCustomer.height || m.height,
+                          value: selectedCustomer.user_height_cm ?? selectedCustomer.height ?? m.height,
                           unit: 'cm',
                         },
                         { label: 'Weight', value: selectedCustomer.user_weight_kg, unit: 'kg' },
-                      ].filter((r) => r.value);
+                      ].filter((r) => r.value !== undefined && r.value !== null && r.value !== '');
 
                       return (
                         <div className="measurements-grid">
