@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   Users,
   MessageSquare,
+  MessageSquarePlus,
   Shirt,
   Layers,
   Grid,
@@ -57,6 +58,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
+    { to: '/feedbacks', icon: MessageSquarePlus, label: 'Feedback & Suggestions', admin: false },
     {
       to: '/messages',
       icon: MessageSquare,

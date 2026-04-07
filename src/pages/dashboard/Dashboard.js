@@ -88,6 +88,7 @@ const Dashboard = () => {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     reservations.forEach((r) => {
+        // Android writes 'reservationDate'; admin uses 'date'
         const rawDate = r.reservationDate || r.date;
         if (rawDate) {
             const resDate = parseDate(rawDate);

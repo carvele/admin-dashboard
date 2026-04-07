@@ -11,6 +11,7 @@ const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazy(() => import('../pages/customers/Reservations'));
 const Customers = lazy(() => import('../pages/customers/Customers'));
+const Feedbacks = lazy(() => import('../pages/customers/Feedbacks'));
 const Messages = lazy(() => import('../pages/messaging/Messages'));
 const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
 const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions'));
@@ -157,6 +158,16 @@ const AnimatedRoutes = () => {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <Customers />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="feedbacks"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Feedbacks />
                 </Suspense>
               </ProtectedRoute>
             }

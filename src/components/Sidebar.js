@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, CalendarCheck, Users, MessageSquare, Shirt, Layers, Grid, View, PackageSearch, BarChart3, Settings, X, Shield, } from 'lucide-react';
+import { LayoutDashboard, CalendarCheck, Users, MessageSquare, MessageSquarePlus, Shirt, Layers, Grid, View, PackageSearch, BarChart3, Settings, X, Shield, } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
 // @ts-ignore
@@ -33,6 +33,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false },
         { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
         { to: '/customers', icon: Users, label: 'Customers', admin: false },
+        { to: '/feedbacks', icon: MessageSquarePlus, label: 'Feedback & Suggestions', admin: false },
         {
             to: '/messages',
             icon: MessageSquare,
