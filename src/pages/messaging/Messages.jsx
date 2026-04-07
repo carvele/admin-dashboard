@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Search,
@@ -11,6 +11,11 @@ import {
   Plus,
   X,
   MessageSquare,
+  User,
+  Calendar,
+  Clock,
+  Tag,
+  ChevronRight,
 } from 'lucide-react';
 import {
   subscribeToConversations,
@@ -19,9 +24,10 @@ import {
   updateConversation,
   sendMessage,
 } from '../../services/communicationService';
+import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
-import { getAvatarColor } from '../../utils/helpers';
+import { getAvatarColor, getInitials } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -29,11 +35,13 @@ import './Messages.css';
 
 const Messages = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [allReservations, setAllReservations] = useState([]);
   
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
@@ -53,6 +61,7 @@ const Messages = () => {
   );
   const messagesEndRef = useRef(null);
   const location = useLocation();
+  const autoSendFiredRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,10 +71,28 @@ const Messages = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Subscribe to all active reservations for the banner
+  useEffect(() => {
+    const unsub = subscribeToReservations((data) => {
+      const active = data.filter((r) => {
+        const s = (r.status || '').toLowerCase();
+        return s === 'pending' || s === 'confirmed' || s === 'fitting';
+      });
+      setAllReservations(active);
+    });
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     const unsub = subscribeToConversations((data) => {
-      setConversations(data);
-      if (data.length > 0) setActiveChat((prev) => prev || data[0]);
+      // Sort by the latest timestamp (updatedAt from new messages or createdAt)
+      const sortedConv = [...data].sort((a, b) => {
+        const timeA = Math.max(a.updatedAt?.seconds || 0, a.createdAt?.seconds || 0);
+        const timeB = Math.max(b.updatedAt?.seconds || 0, b.createdAt?.seconds || 0);
+        return timeB - timeA; // Descending (newest first)
+      });
+      setConversations(sortedConv);
+      if (sortedConv.length > 0) setActiveChat((prev) => prev || sortedConv[0]);
     });
     return () => unsub();
   }, []);
@@ -159,26 +186,90 @@ const Messages = () => {
     }
   };
 
+  // Sends a formatted reservation card as a message
+  const sendReservationCard = useCallback(async (conv, resContext) => {
+    if (!conv || !resContext) return;
+    try {
+      const convKey = conv.customId || conv.id;
+      await sendMessage({
+        id: Date.now(),
+        conversationId: convKey,
+        sender: 'staff',
+        isReservationSummary: true,
+        reservationData: resContext,
+        text: `Reservation Summary: ${resContext.productName} on ${resContext.date}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      await updateConversation(conv.docId, {
+        lastMessage: `📋 Reservation: ${resContext.productName}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: new Date(),
+      });
+      await logAction(user, 'Sent reservation summary to customer', {
+        customerName: conv.customerName,
+        reservationId: resContext.id,
+      });
+    } catch (err) {
+      console.error('Failed to send reservation card:', err);
+    }
+  }, [user]);
+
   useEffect(() => {
-    if (location.state?.prefillMessage && conversations.length > 0) {
-      const { buyerId, buyerName, prefillMessage } = location.state;
+    if (!location.state) return;
+    const { buyerId, buyerName, autoSendReservation, reservationContext } = location.state;
+
+    // Handle both auto-send and plain prefill cases
+    if ((autoSendReservation || location.state.prefillMessage) && conversations.length > 0) {
+      if (autoSendFiredRef.current) return; // prevent double-fire
+
       const existing = conversations.find(
         (c) => c.customerId === buyerId || c.customerName === buyerName,
       );
 
-      if (existing) {
-        setActiveChat(existing);
-        setNewMessage(prefillMessage);
+      const proceed = async (conv) => {
+        setActiveChat(conv);
+        autoSendFiredRef.current = true;
+        if (autoSendReservation && reservationContext) {
+          await sendReservationCard(conv, reservationContext);
+        } else if (location.state.prefillMessage) {
+          setNewMessage(location.state.prefillMessage);
+        }
         window.history.replaceState({}, document.title);
+      };
+
+      if (existing) {
+        proceed(existing);
       } else {
-        // Conversation doesn't exist, create it via existing function
-        startNewConversation({ name: buyerName, id: buyerId }).then(() => {
-          setNewMessage(prefillMessage);
-          window.history.replaceState({}, document.title);
+        // Create conversation then send
+        const customerName = buyerName;
+        const customerId = buyerId;
+        createConversation({
+          id: `conv_${Date.now()}`,
+          customerName,
+          customerId,
+          lastMessage: 'Conversation started by staff',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          unread: 0,
+        }).then(() => {
+          // Wait for the subscription to pick up the new conversation
+          const waitForConv = setInterval(() => {
+            setConversations((prev) => {
+              const found = prev.find(
+                (c) => c.customerId === buyerId || c.customerName === buyerName,
+              );
+              if (found) {
+                clearInterval(waitForConv);
+                proceed(found);
+              }
+              return prev;
+            });
+          }, 300);
+          // Clear interval after 5s failsafe
+          setTimeout(() => clearInterval(waitForConv), 5000);
         });
       }
     }
-  }, [location.state, conversations]);
+  }, [location.state, conversations, sendReservationCard]);
 
   // Filter messages for active chat and sort by time
   // Use customId (the conv_ string) for filtering — matches what Android writes as conversationId
@@ -265,6 +356,42 @@ const Messages = () => {
       <div className="chat-area card">
         {activeChat ? (
           <>
+            {/* Active Reservation Banner */}
+            {(() => {
+              const activeRes = allReservations.find(
+                (r) =>
+                  r.customerId === activeChat?.customerId ||
+                  (r.customerName || r.customer) === activeChat?.customerName,
+              );
+              if (!activeRes) return null;
+              const resDate = activeRes.reservationDate?.toDate
+                ? activeRes.reservationDate.toDate()
+                : activeRes.reservationDate?.seconds
+                ? new Date(activeRes.reservationDate.seconds * 1000)
+                : activeRes.date?.toDate
+                ? activeRes.date.toDate()
+                : activeRes.date?.seconds
+                ? new Date(activeRes.date.seconds * 1000)
+                : new Date(activeRes.date);
+              const statusColor = {
+                pending: '#f59e0b',
+                confirmed: '#10b981',
+                fitting: '#8b5cf6',
+              }[(activeRes.status || '').toLowerCase()] || '#6b7280';
+              return (
+                <div className="reservation-banner">
+                  <div className="res-banner-dot" style={{ background: statusColor }} />
+                  <div className="res-banner-info">
+                    <strong>{activeRes.productName || activeRes.outfit}</strong>
+                    <span>Size {activeRes.size} · {resDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} · {resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <span className="res-banner-badge" style={{ background: statusColor + '22', color: statusColor }}>
+                    {(activeRes.status || '').toUpperCase()}
+                  </span>
+                </div>
+              );
+            })()}
+
             <div className="chat-header">
               <div className="flex-center gap-3">
                 <div
@@ -278,11 +405,16 @@ const Messages = () => {
                 </div>
                 <div>
                   <h3>{activeChat.customerName}</h3>
-                  <p className="status-text online">● Online</p>
+                  <p className="status-text online">● Active</p>
                 </div>
               </div>
-              <button className="btn-outline small flex-center gap-2" disabled={!activeChat}>
-                View Profile
+              <button
+                className="btn-outline small flex-center gap-2"
+                onClick={() =>
+                  navigate(`/customers?search=${encodeURIComponent(activeChat.customerName || '')}`)
+                }
+              >
+                <User size={14} /> View Profile
               </button>
             </div>
 
@@ -303,7 +435,35 @@ const Messages = () => {
                   <div
                     className={`message-bubble ${msg.sender === 'staff' ? 'bubbles-sent' : 'bubbles-received'}`}
                   >
-                    {msg.isOutfitSuggestion ? (
+                    {msg.isReservationSummary && msg.reservationData ? (
+                      <div className="reservation-card">
+                        <div className="res-card-header">
+                          <Calendar size={15} />
+                          <span>Reservation Summary</span>
+                        </div>
+                        {msg.reservationData.imageUrl && (
+                          <img
+                            src={msg.reservationData.imageUrl}
+                            alt={msg.reservationData.productName}
+                            className="res-card-img"
+                          />
+                        )}
+                        <div className="res-card-body">
+                          <div className="res-card-product">{msg.reservationData.productName}</div>
+                          <div className="res-card-rows">
+                            <div className="res-card-row"><Tag size={12} /><span>Size {msg.reservationData.size}</span></div>
+                            <div className="res-card-row"><Calendar size={12} /><span>{msg.reservationData.date}</span></div>
+                            <div className="res-card-row"><Clock size={12} /><span>{msg.reservationData.time}</span></div>
+                          </div>
+                          <div className="res-card-status">
+                            <span className="res-status-dot" />
+                            {msg.reservationData.status}
+                          </div>
+                          <div className="res-card-deposit">Deposit: {msg.reservationData.deposit}</div>
+                        </div>
+                        <div className="res-card-footer">📌 Ref #{msg.reservationData.id?.slice(-6)}</div>
+                      </div>
+                    ) : msg.isOutfitSuggestion ? (
                       <div className="outfit-suggestion-card">
                         <div className="os-icon">
                           <Shirt size={20} />
@@ -314,7 +474,7 @@ const Messages = () => {
                         </div>
                       </div>
                     ) : (
-                      <p>{msg.text}</p>
+                      <p style={{ whiteSpace: 'pre-line' }}>{msg.text}</p>
                     )}
                     <span className="msg-time">
                       {msg.time ||

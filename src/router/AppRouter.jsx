@@ -102,10 +102,9 @@ const AnimatedRoutes = () => {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route
-          path="/login"
+    <Routes location={location}>
+      <Route
+        path="/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <Login />
@@ -300,7 +299,6 @@ const AnimatedRoutes = () => {
           />
         </Route>
       </Routes>
-    </AnimatePresence>
   );
 };
 

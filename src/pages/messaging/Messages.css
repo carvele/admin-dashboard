@@ -277,3 +277,120 @@
     display: none;
   }
 }
+
+/* Reservation Banner */
+.reservation-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--cream);
+  border-bottom: 1px solid var(--border-color);
+}
+.res-banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.res-banner-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.res-banner-info strong {
+  font-size: 0.875rem;
+  color: var(--charcoal);
+  font-weight: 600;
+}
+.res-banner-info span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.res-banner-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+/* Reservation Card */
+.reservation-card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 260px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--charcoal);
+  text-align: left;
+}
+.res-card-header {
+  background-color: var(--cream);
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+}
+.res-card-img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border-color);
+}
+.res-card-body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.res-card-product {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.res-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.res-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.res-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.5rem;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+.res-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent);
+}
+.res-card-deposit {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--stock-high);
+}
+.res-card-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px dashed var(--border-color);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background-color: #fafafa;
+}

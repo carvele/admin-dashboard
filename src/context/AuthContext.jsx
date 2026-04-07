@@ -19,7 +19,6 @@ export const AuthProvider = ({ children }) => {
   const [deviceStatus, setDeviceStatus] = useState('checking');
   const [deviceFingerprint, setDeviceFingerprint] = useState(null);
   const [deviceData, setDeviceData] = useState(null);
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const deviceUnsubRef = useRef(() => {});
 
@@ -71,7 +70,6 @@ export const AuthProvider = ({ children }) => {
         if (docSnap) {
           setDeviceData(docSnap);
           setDeviceStatus(docSnap.status);
-          if (docSnap.status === 'revoked') setIsAdminUnlocked(false);
         } else {
           // Doc not yet written (registration still in-flight on slow network).
           // Default to 'approved' so the user isn't stuck on a loading spinner.
@@ -122,8 +120,6 @@ export const AuthProvider = ({ children }) => {
         email: firebaseUser.email,
         role: resolvedRole,
       });
-
-      setIsAdminUnlocked(resolvedRole === 'Admin' || resolvedRole === 'Owner');
     } catch (err) {
       console.error('Auth check failed:', err);
       setDeviceStatus('error');
@@ -213,7 +209,6 @@ export const AuthProvider = ({ children }) => {
     const savedFingerprint = localStorage.getItem('_jz_fp_id');
     await signOut(auth);
     setUser(null);
-    setIsAdminUnlocked(false);
     setDeviceStatus('checking');
     localStorage.clear();
     sessionStorage.clear();
@@ -221,14 +216,7 @@ export const AuthProvider = ({ children }) => {
     toast.info('Logged out successfully');
   };
 
-  const unlockAdmin = async () => {
-    toast.error('The manual PIN system has been retired. Access is managed via Staff Roles.');
-    return false;
-  };
-
-  const lockAdmin = () => {
-    toast.info('Access is permanently managed by your staff role.');
-  };
+  const isAdminUnlocked = user?.role === 'Admin' || user?.role === 'Owner';
 
   if (isLoading) {
     return (
@@ -253,8 +241,6 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAdminUnlocked,
-        unlockAdmin,
-        lockAdmin,
         deviceStatus,
         deviceFingerprint,
         deviceData,

@@ -1,12 +1,9 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-// @ts-ignore
 import { useAuth } from '../context/AuthContext';
 import { Bell, LogOut, Search, Menu, X } from 'lucide-react';
-// @ts-ignore
 import { getAvatarColor, getInitials, formatRelativeTime, sanitizeForDisplay, } from '../utils/helpers';
-// @ts-ignore
 import { subscribeToCollection, updateDocument, orderBy, limit } from '../firebase/firestore';
 import './TopNav.css';
 const TopNav = ({ user, onHamburger }) => {
@@ -32,15 +29,14 @@ const TopNav = ({ user, onHamburger }) => {
             // Instead of global subscriptions, we'd ideally search via a callable function or specific indices.
             // Since this is a small-to-md shop, we search once when typing pauses.
             try {
-                // @ts-ignore
                 const { getCollection } = await import('../firebase/firestore');
                 const q = sanitizeForDisplay(searchQuery).toLowerCase();
                 const results = [];
                 // Check if we already have data from active page-level listeners (optional optimization)
-                // Here we just fetch small chunks to reduce reads
-                const resSearch = await getCollection('reservations', false, 0);
-                const custSearch = await getCollection('users', false, 0);
-                const prodSearch = await getCollection('products', false, 0);
+                // Here we fetch max 50 documents to reduce reads
+                const resSearch = await getCollection('reservations', false, 50);
+                const custSearch = await getCollection('users', false, 50);
+                const prodSearch = await getCollection('products', false, 50);
                 resSearch.forEach((r) => {
                     const sCustomer = (r.customer || r.customerName || '').toLowerCase();
                     if (sCustomer.includes(q) || (r.id && r.id.toLowerCase().includes(q))) {

@@ -43,7 +43,7 @@ const ProductForm = () => {
     visibility: 'Draft',
     isFeatured: false,
     isAlterable: false,
-    sizes: ['OS'],
+    sizes: ['M'],
     images: [], // Array of image URLs/Maps
     model3DURL: '',
     maskURL: '',
@@ -77,7 +77,7 @@ const ProductForm = () => {
       ],
     },
   ]);
-  const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'OS'];
+  const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
   const SEASONS = [
     'All-Season',
     'Dry Season (Summer)',
@@ -141,7 +141,7 @@ const ProductForm = () => {
               visibility: doc.visibility || 'Draft',
               isFeatured: doc.isFeatured ?? doc.featured ?? false,
               isAlterable: doc.isAlterable || false,
-              sizes: doc.sizes || ['OS'],
+              sizes: doc.sizes || ['M'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
               model3DURL: doc.model3DURL || '',
               maskURL: doc.maskURL || '',

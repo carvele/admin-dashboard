@@ -245,6 +245,21 @@ const Reservations = () => {
     }
   };
 
+  const handleToggleDeposit = async (res) => {
+    try {
+      const newDepositValue = !res.deposit;
+      await updateReservation(res.docId, { deposit: newDepositValue });
+      setViewModal((prev) => prev ? { ...prev, deposit: newDepositValue } : prev);
+      await logAction(user, newDepositValue ? 'Marked deposit as paid' : 'Marked deposit as unpaid', {
+        reservationId: res.id,
+        customer: res.customerName || res.customer,
+      });
+      toast.success(newDepositValue ? 'Deposit marked as paid' : 'Deposit marked as unpaid');
+    } catch (e) {
+      toast.error('Failed to update deposit status');
+    }
+  };
+
   const handleDelete = async () => {
     try {
       await deleteReservation(deleteConfirm.docId);
@@ -770,12 +785,23 @@ const Reservations = () => {
                 <span className="detail-label">Status</span>
                 <StatusBadge status={viewModal.status ? (viewModal.status.charAt(0).toUpperCase() + viewModal.status.slice(1).toLowerCase()) : 'Pending'} />
               </div>
-              {viewModal.deposit && (
-                <div className="detail-row">
-                  <span className="detail-label">Deposit</span>
-                  <span className="text-success">Paid ✓</span>
+              <div className="detail-row">
+                <span className="detail-label">Deposit</span>
+                <div className="flex-center gap-2">
+                  <span className={viewModal.deposit ? 'text-success' : 'text-secondary'}>
+                    {viewModal.deposit ? 'Paid ✓' : 'Unpaid ✗'}
+                  </span>
+                  {viewModal.status !== 'Completed' && viewModal.status !== 'Cancelled' && (
+                    <button
+                      className={viewModal.deposit ? 'btn-outline small' : 'btn-primary small'}
+                      style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                      onClick={() => handleToggleDeposit(viewModal)}
+                    >
+                      {viewModal.deposit ? 'Mark Unpaid' : 'Mark as Paid'}
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <button
@@ -783,38 +809,33 @@ const Reservations = () => {
                 onClick={() => {
                   const cName = viewModal.customerName || viewModal.customer;
                   const pName = viewModal.productName || viewModal.outfit;
-                  const dDate = parseDate(
-                    viewModal.reservationDate || viewModal.date,
-                  ).toLocaleDateString();
-                  const resId = (viewModal.id || viewModal.docId || '').slice(-6).toUpperCase();
-                  const size = viewModal.size || 'N/A';
+                  const resDate = parseDate(viewModal.reservationDate || viewModal.date);
+                  const resId = (viewModal.id || viewModal.docId || '').toUpperCase();
                   const status =
                     (viewModal.status || 'Pending').charAt(0).toUpperCase() +
-                    (viewModal.status || 'pending').slice(1);
-                  const deposit = viewModal.deposit ? '✓ Paid' : '✗ Unpaid';
-                  const prefill = [
-                    `Hi ${cName}! 👋`,
-                    ``,
-                    `Here's a summary of your reservation:`,
-                    `━━━━━━━━━━━━━━━━━━`,
-                    `📋 Reservation #${resId}`,
-                    `👗 Item: ${pName}`,
-                    `📐 Size: ${size}`,
-                    `📅 Date: ${dDate}`,
-                    `📊 Status: ${status}`,
-                    `💰 Deposit: ${deposit}`,
-                    `━━━━━━━━━━━━━━━━━━`,
-                    ``,
-                    `Please let us know if you have any questions!`,
-                    `— JezSy Collection`,
-                  ].join('\n');
+                    (viewModal.status || 'pending').slice(1).toLowerCase();
+
                   navigate('/messages', {
                     state: {
                       buyerId: viewModal.customerId || '',
                       buyerName: cName,
-                      prefillMessage: prefill,
+                      autoSendReservation: true,
+                      reservationContext: {
+                        id: resId,
+                        productName: pName,
+                        size: viewModal.size || 'N/A',
+                        date: resDate.toLocaleDateString('en-PH', {
+                          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                        }),
+                        time: resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        status,
+                        deposit: viewModal.deposit ? 'Paid ✓' : 'Unpaid',
+                        imageUrl: viewModal.imageUrl || '',
+                        customerName: cName,
+                      },
                     },
                   });
+                  setViewModal(null);
                 }}
               >
                 <MessageSquare size={16} /> Message Buyer

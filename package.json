@@ -30,11 +30,7 @@
     "recharts": "^2.12.0",
     "sonner": "^1.4.3"
   },
-  "devDependencies": {
-    "@modelcontextprotocol/server-brave-search": "^0.6.2",
-    "@modelcontextprotocol/server-everything": "^2026.1.26",
-    "@modelcontextprotocol/server-github": "^2025.4.8",
-    "@modelcontextprotocol/server-memory": "^2026.1.26",
+    "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

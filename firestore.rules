@@ -71,13 +71,15 @@ service cloud.firestore {
     // ── CONVERSATIONS ──
     match /conversations/{convId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow create: if request.auth != null; 
+      allow update: if request.auth != null; 
+      allow delete: if isAdmin();
       
       // MESSAGES subcollection
       match /messages/{messageId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null &&
-                         request.resource.data.sender == request.auth.uid &&
+                         request.resource.data.sender in ['customer', 'staff', request.auth.uid] &&
                          request.resource.data.text is string &&
                          request.resource.data.text.size() > 0;
         allow update: if false;  // Immutable
@@ -89,7 +91,7 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null &&
-                       request.resource.data.sender == request.auth.uid &&
+                       request.resource.data.sender in ['customer', 'staff', request.auth.uid] &&
                        request.resource.data.text is string;
     }
     
@@ -129,7 +131,8 @@ service cloud.firestore {
 
     // ── NOTIFICATIONS ──
     match /notifications/{docId} {
-      allow read, create, update, delete: if request.auth != null;
+      allow read, create: if request.auth != null;
+      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin());
     }
 
     // ── CATEGORIES ──
@@ -140,7 +143,8 @@ service cloud.firestore {
 
     // ── SUGGESTED OUTFITS & AR ──
     match /suggestedOutfits/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
     match /ar_sessions/{docId} {
       allow read, write: if request.auth != null;
