@@ -533,7 +533,7 @@ input:checked + .toggle-slider:before {
   background: #e2e8f0;
   color: #475569;
 }
-.status-pending {
+.status-pending, .status-request-approval {
   background: var(--status-pending-bg);
   color: var(--status-pending-text);
 }

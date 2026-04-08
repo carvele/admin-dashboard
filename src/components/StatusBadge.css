@@ -8,7 +8,7 @@
   text-transform: capitalize;
 }
 
-.status-pending {
+.status-pending, .status-request-approval {
   background-color: var(--status-pending-bg);
   color: var(--status-pending-text);
 }

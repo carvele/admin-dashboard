@@ -143,7 +143,7 @@ const Reservations = () => {
   const filteredReservations = reservations.map(r => ({
     ...r,
     // Normalize status to Sentence Case for the UI filters
-    displayStatus: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) : 'Pending',
+    displayStatus: r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending',
     displayDate: parseDate(r.reservationDate || r.date),
     displayName: r.customerName || r.customer || 'Unknown Customer'
   })).filter((r) => {
@@ -379,6 +379,7 @@ const Reservations = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="All">All Statuses</option>
+              <option value="Request Approval">Request Approval</option>
               <option value="Pending">Pending</option>
               <option value="Confirmed">Confirmed</option>
               <option value="Fitting">Fitting</option>
@@ -419,7 +420,7 @@ const Reservations = () => {
                         <div className="text-secondary text-sm">
                           {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        {res.countdown && res.displayStatus === 'Pending' && (
+                        {res.countdown && (res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval') && (
                           <CountdownTimer targetDate={res.reservationDate || res.date} />
                         )}
                       </td>
@@ -436,7 +437,7 @@ const Reservations = () => {
                             <Eye size={16} />
                           </button>
                           {/* Lifecycle: Pending → Confirmed → Fitting → Completed */}
-                          {res.displayStatus === 'Pending' && (
+                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval') && (
                             <>
                               <button
                                 className="action-icon approve"
@@ -495,7 +496,7 @@ const Reservations = () => {
                               <CalendarCheck size={16} />
                             </button>
                           )}
-                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Confirmed') && (
+                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval' || res.displayStatus === 'Confirmed') && (
                             <button
                               className="action-icon reschedule"
                               title="Reschedule"
@@ -783,7 +784,7 @@ const Reservations = () => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
-                <StatusBadge status={viewModal.status ? (viewModal.status.charAt(0).toUpperCase() + viewModal.status.slice(1).toLowerCase()) : 'Pending'} />
+                <StatusBadge status={viewModal.status ? viewModal.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending'} />
               </div>
               <div className="detail-row">
                 <span className="detail-label">Deposit</span>
