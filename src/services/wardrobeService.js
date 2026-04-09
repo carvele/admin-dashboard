@@ -26,6 +26,23 @@ export const deleteSuggestedOutfit = (docId) => {
   return deleteDocument('suggestedOutfits', docId);
 };
 
+/**
+ * Subscribe to Android customer wardrobe items.
+ * This is the canonical collection that the Android app writes to
+ * via FirebaseCollections.WARDROBE_ITEMS ("wardrobeItems").
+ */
+export const subscribeToWardrobeItems = (callback) => {
+  return subscribeToCollection('wardrobeItems', callback);
+};
+
+export const getWardrobeItems = (maxResults = 0) => {
+  return getCollection('wardrobeItems', false, maxResults);
+};
+
+/**
+ * AR-session digital wardrobe (separate from the customer wardrobe panel).
+ * @deprecated Use `subscribeToWardrobeItems` for customer wardrobe data.
+ */
 export const subscribeToDigitalWardrobe = (callback) => {
   return subscribeToCollection('digital_wardrobe', callback);
 };

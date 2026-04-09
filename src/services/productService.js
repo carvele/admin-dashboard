@@ -162,10 +162,10 @@ export const recalculateAllInventoryStock = async () => {
   const { db } = await import('../firebase/config');
   const { collection, getDocs, query, where, writeBatch, serverTimestamp } = await import('firebase/firestore');
 
-  // 1. Get all active reservations
+  // 1. Get all active reservations (any status that still holds inventory)
   const resQuery = query(
     collection(db, 'reservations'),
-    where('status', 'in', ['Confirmed', 'Fitting'])
+    where('status', 'in', ['Pending', 'To Pay', 'To Pickup', 'Confirmed', 'Fitting'])
   );
   const resSnap = await getDocs(resQuery);
   const activeRes = resSnap.docs.map(d => d.data());

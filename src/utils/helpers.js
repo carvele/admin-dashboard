@@ -71,9 +71,20 @@ export const formatCurrency = (amount) => {
 };
 
 // ── Date formatter ──────────────────────────────────────────
-export const formatDate = (dateStr) => {
-  if (!dateStr) return 'Unknown';
-  return new Date(dateStr).toLocaleDateString('en-US', {
+export const formatDate = (ts) => {
+  if (!ts) return 'Unknown';
+  
+  // Handle Firebase Timestamp (has seconds/nanoseconds)
+  let d;
+  if (typeof ts.toDate === 'function') d = ts.toDate();
+  else if (ts.seconds) d = new Date(ts.seconds * 1000);
+  else if (ts._seconds) d = new Date(ts._seconds * 1000);
+  else d = new Date(ts);
+
+  // Validate the date strictly to avoid "Invalid Date"
+  if (!(d instanceof Date) || isNaN(d.getTime())) return 'Unknown';
+
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',

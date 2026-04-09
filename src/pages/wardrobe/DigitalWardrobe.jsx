@@ -183,21 +183,35 @@ const DigitalWardrobe = () => {
               const displayImage = item.imageUrl || (matchedProduct?.images?.[0]) || null;
               
               return (
-                <div key={item.id} className="dw-item-card card">
+                <div key={item.id || Math.random()} className="dw-item-card card" style={{ minHeight: '280px', display: 'flex', flexDirection: 'column' }}>
                   <div
                     className="dw-img-placeholder"
                     style={{
                       overflow: 'hidden',
-                      padding: displayImage?.startsWith('http') ? '0' : '2rem',
+                      padding: displayImage?.startsWith && displayImage.startsWith('http') ? '0' : '2rem',
+                      minHeight: '200px',
+                      backgroundColor: '#f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%'
                     }}
                   >
                     {renderItemImage(displayImage)}
                   </div>
-                  <div className="dw-item-details">
-                    <div className="flex-between">
-                      <span className="dw-category">{item.category || (matchedProduct?.category) || 'Clothing'}</span>
+                  <div className="dw-item-details" style={{ flex: 1, padding: '1rem', color: '#0f172a' }}>
+                    <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
+                      <span className="dw-category" style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                        {item.category || (matchedProduct?.category) || 'Clothing'}
+                      </span>
                     </div>
-                    <h4>{displayName}</h4>
+                    <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+                      {displayName}
+                    </h4>
+                    {/* Safe fallback display just in case data structure differs from expected */}
+                    <div style={{ fontSize: '0.7rem', color: '#ef4444', wordBreak: 'break-all' }}>
+                      {!item.productId && !item.imageUrl && JSON.stringify(item)}
+                    </div>
                   </div>
                 </div>
               );

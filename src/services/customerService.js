@@ -40,16 +40,19 @@ import {
  * @typedef {Object} Reservation
  * @property {string} docId
  * @property {string} id - Display string 'RES-001'
- * @property {string} customer - Reference normalized name
- * @property {string} customer_id - Reference identifier
- * @property {string} outfit - Reference to Product.name
+ * @property {string} customerName - Canonical customer display name
+ * @property {string} customerId - Reference identifier
+ * @property {string} productName - Canonical product name (use instead of legacy `outfit`)
+ * @property {string} productId - Reference to the product document
  * @property {string} size - Selected sizing
  * @property {string} date - ISO format string
- * @property {string} status - 'Pending', 'Confirmed', 'Fitting', 'Completed', 'Cancelled'
- * @property {string} staff - Assigned staff member UI string
- * @property {string} assigned_staff_id - Staff unique ID
+ * @property {string} status - 'Pending' | 'To Pay' | 'To Pickup' | 'Confirmed' | 'Fitting' | 'Completed' | 'Cancelled'
+ * @property {string} staffId - Assigned staff member ID
  * @property {boolean} countdown - Is approaching urgency
  * @property {boolean} deposit - Paid deposit flag
+ * @property {string} paymentStatus - GCash / Cash payment tracking
+ * @property {string} paymentType - 'GCash' | 'Cash'
+ * @property {string} receiptUrl - Firebase Storage URL for payment proof
  */
 
 /**

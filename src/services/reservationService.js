@@ -115,7 +115,7 @@ export const repairReservationData = async (reservation, signal = null) => {
                           'User';
         if (realName && realName !== currentCustomerName) {
           updates.customerName = realName;
-          updates.customer = realName;
+          // Note: do NOT write legacy `customer` alias — standardised on `customerName`
         }
       }
     }
@@ -126,7 +126,7 @@ export const repairReservationData = async (reservation, signal = null) => {
       if (prodDoc) {
         if (prodDoc.name && prodDoc.name !== currentProductName) {
           updates.productName = prodDoc.name;
-          updates.outfit = prodDoc.name;
+          // Note: do NOT write legacy `outfit` alias — standardised on `productName`
           // Also repair image if missing
           if (!reservation.imageUrl && prodDoc.images?.[0]) {
             updates.imageUrl = prodDoc.images[0];

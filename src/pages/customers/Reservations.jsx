@@ -140,18 +140,33 @@ const Reservations = () => {
   });
   const [newDate, setNewDate] = useState('');
 
-  const filteredReservations = reservations.map(r => ({
-    ...r,
-    // Normalize status to Sentence Case for the UI filters
-    displayStatus: r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending',
-    displayDate: parseDate(r.reservationDate || r.date),
-    displayName: r.customerName || r.customer || 'Unknown Customer'
-  })).filter((r) => {
+  const filteredReservations = reservations.map(r => {
+    // Normalize status to Sentence Case, mapping legacy states to new ones for display if desired
+    let displayStatus = r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending';
+    if (displayStatus === 'Request Approval') displayStatus = 'Pending';
+    if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
+    if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+
+    return {
+      ...r,
+      displayStatus: displayStatus,
+      displayDate: parseDate(r.reservationDate || r.date),
+      displayName: r.customerName || r.customer || 'Unknown Customer'
+    };
+  }).filter((r) => {
     const matchesSearch =
       r.displayName.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
       (r.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     
-    const matchesStatus = statusFilter === 'All' || r.displayStatus === statusFilter;
+    // Status filter logic
+    let matchesStatus = false;
+    if (statusFilter === 'All') matchesStatus = true;
+    else if (statusFilter.startsWith('Pending')) matchesStatus = r.displayStatus === 'Pending';
+    else if (statusFilter.startsWith('To Pickup')) matchesStatus = r.displayStatus === 'To Pickup';
+    else if (statusFilter.startsWith('Completed')) matchesStatus = r.displayStatus === 'Completed';
+    else if (statusFilter.startsWith('Active')) matchesStatus = r.displayStatus === 'Active';
+    else matchesStatus = r.displayStatus === statusFilter;
+
     return matchesSearch && matchesStatus;
   });
 
@@ -161,40 +176,45 @@ const Reservations = () => {
   };
 
   // --- LIFECYCLE ACTIONS ---
-  // Lifecycle: Pending → Confirmed → Fitting → Completed | Cancelled
+  // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
+  // Also backwards compatible with Confirmed and Fitting
   const handleAction = async (id, action) => {
     const res = reservations.find((r) => r.id === id);
     if (!res) return;
 
     try {
-      if (action === 'confirm') {
+      if (action === 'approve_pay') {
+        await updateReservation(res.docId, { status: 'To Pay' });
+        toast.success(`Reservation ${id} approved for payment`);
+      } else if (action === 'ready_pickup') {
         await updateReservation(res.docId, {
-          status: 'Confirmed',
+          status: 'To Pickup',
           staff: user?.name || 'Staff',
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
-        await adjustStock(res.productId || res.productName || res.outfit, res.size, -1); // Deduct stock on confirm
-        toast.success(`Reservation ${id} confirmed — stock reserved`);
-      } else if (action === 'fitting') {
-        await updateReservation(res.docId, { status: 'Fitting' });
-        toast.success(`Reservation ${id} — fitting session started`);
+        await adjustStock(res.productId || res.productName || res.outfit, res.size, -1);
+        toast.success(`Reservation ${id} payment received — stock reserved and ready for pickup`);
+      } else if (action === 'make_active') {
+        await updateReservation(res.docId, { status: 'Active' });
+        toast.success(`Reservation ${id} is now Active (Handed over)`);
       } else if (action === 'complete') {
         await updateReservation(res.docId, { status: 'Completed' });
         // Release reserved stock (item returned or purchased)
         await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
-        toast.success(`Reservation ${id} completed — stock released`);
+        toast.success(`Reservation ${id} returned/completed — stock released`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Only restore stock if it was confirmed (stock was deducted)
-        if (res.status === 'Confirmed' || res.status === 'Fitting') {
+        // Only restore stock if it was confirmed/to-pickup/active (stock was deducted)
+        if (res.status === 'Confirmed' || res.status === 'Fitting' || res.status === 'To Pickup' || res.status === 'Active') {
           await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
       }
       const actionLabels = {
-        confirm: 'Confirmed',
-        fitting: 'Started Fitting',
+        approve_pay: 'Approved for Payment',
+        ready_pickup: 'Confirmed & To Pickup',
+        make_active: 'Made Active',
         complete: 'Completed',
         cancel: 'Cancelled',
       };
@@ -257,6 +277,20 @@ const Reservations = () => {
       toast.success(newDepositValue ? 'Deposit marked as paid' : 'Deposit marked as unpaid');
     } catch (e) {
       toast.error('Failed to update deposit status');
+    }
+  };
+
+  const handleVerifyPayment = async (res) => {
+    try {
+      await updateReservation(res.docId, { paymentStatus: 'Paid' });
+      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Paid' } : prev);
+      await logAction(user, 'Verified GCash Payment', {
+        reservationId: res.id,
+        customer: res.customerName || res.customer,
+      });
+      toast.success('Payment verified successfully');
+    } catch (e) {
+      toast.error('Failed to verify payment');
     }
   };
 
@@ -379,11 +413,11 @@ const Reservations = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="All">All Statuses</option>
-              <option value="Request Approval">Request Approval</option>
-              <option value="Pending">Pending</option>
-              <option value="Confirmed">Confirmed</option>
-              <option value="Fitting">Fitting</option>
-              <option value="Completed">Completed</option>
+              <option value="Pending">Pending / Requests</option>
+              <option value="To Pay">To Pay</option>
+              <option value="To Pickup">To Pickup (Confirmed)</option>
+              <option value="Active">Active (In use)</option>
+              <option value="Completed">Completed / Returned</option>
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
@@ -436,13 +470,13 @@ const Reservations = () => {
                           >
                             <Eye size={16} />
                           </button>
-                          {/* Lifecycle: Pending → Confirmed → Fitting → Completed */}
-                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval') && (
+                          {/* Lifecycle: Pending → To Pay → To Pickup → Active → Completed */}
+                          {res.displayStatus === 'Pending' && (
                             <>
                               <button
                                 className="action-icon approve"
-                                title="Confirm Booking"
-                                onClick={() => handleAction(res.id, 'confirm')}
+                                title="Approve & Request Payment"
+                                onClick={() => handleAction(res.id, 'approve_pay')}
                               >
                                 <CheckCircle size={16} />
                               </button>
@@ -455,29 +489,15 @@ const Reservations = () => {
                               </button>
                             </>
                           )}
-                          {res.displayStatus === 'Confirmed' && (
+                          {res.displayStatus === 'To Pay' && (
                             <>
-                              {products.find(
-                                (p) =>
-                                  p.id === res.productId ||
-                                  p.name === (res.productName || res.outfit),
-                              )?.isAlterable ? (
-                                <button
-                                  className="action-icon approve"
-                                  title="Start Fitting"
-                                  onClick={() => handleAction(res.id, 'fitting')}
-                                >
-                                  <Shirt size={16} />
-                                </button>
-                              ) : (
-                                <button
-                                  className="action-icon approve"
-                                  title="Mark Completed"
-                                  onClick={() => handleAction(res.id, 'complete')}
-                                >
-                                  <CalendarCheck size={16} />
-                                </button>
-                              )}
+                              <button
+                                className="action-icon approve"
+                                title="Mark Paid & Ready for Pickup"
+                                onClick={() => handleAction(res.id, 'ready_pickup')}
+                              >
+                                <CheckCircle size={16} />
+                              </button>
                               <button
                                 className="action-icon reject"
                                 title="Cancel"
@@ -487,16 +507,34 @@ const Reservations = () => {
                               </button>
                             </>
                           )}
-                          {res.displayStatus === 'Fitting' && (
+                          {res.displayStatus === 'To Pickup' && (
+                            <>
+                              <button
+                                className="action-icon approve"
+                                title="Hand over / Set to Active"
+                                onClick={() => handleAction(res.id, 'make_active')}
+                              >
+                                <Shirt size={16} />
+                              </button>
+                              <button
+                                className="action-icon reject"
+                                title="Cancel"
+                                onClick={() => handleAction(res.id, 'cancel')}
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            </>
+                          )}
+                          {res.displayStatus === 'Active' && (
                             <button
                               className="action-icon approve"
-                              title="Mark Completed"
+                              title="Mark Returned / Completed"
                               onClick={() => handleAction(res.id, 'complete')}
                             >
                               <CalendarCheck size={16} />
                             </button>
                           )}
-                          {(res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval' || res.displayStatus === 'Confirmed') && (
+                          {(res.displayStatus === 'Pending' || res.displayStatus === 'To Pay' || res.displayStatus === 'To Pickup') && (
                             <button
                               className="action-icon reschedule"
                               title="Reschedule"
@@ -721,15 +759,15 @@ const Reservations = () => {
                       p.name === (viewModal.productName || viewModal.outfit),
                   )?.isAlterable;
                   const steps = isAlterable
-                    ? ['Pending', 'Confirmed', 'Fitting', 'Completed']
-                    : ['Pending', 'Confirmed', 'Completed'];
+                    ? ['Pending', 'To Pay', 'To Pickup', 'Active', 'Completed']
+                    : ['Pending', 'To Pay', 'To Pickup', 'Completed'];
                   const statusOrder = isAlterable
-                    ? { Pending: 0, Confirmed: 1, Fitting: 2, Completed: 3, Cancelled: -1 }
-                    : { Pending: 0, Confirmed: 1, Completed: 2, Cancelled: -1 };
+                    ? { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Active: 3, Completed: 4, Cancelled: -1, Returned: -1 }
+                    : { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
                   return steps.map((step, i) => {
-                    const current = statusOrder[viewModal.status] ?? -1;
+                    const current = statusOrder[viewModal.displayStatus] ?? -1;
                     const stepIdx = statusOrder[step];
-                    const isCancelled = viewModal.status === 'Cancelled';
+                    const isCancelled = viewModal.displayStatus === 'Cancelled';
                     const isActive = !isCancelled && stepIdx <= current;
                     return (
                       <div
@@ -750,7 +788,7 @@ const Reservations = () => {
                   });
                 })()}
               </div>
-              {viewModal.status === 'Cancelled' && (
+              {viewModal.displayStatus === 'Cancelled' && (
                 <div
                   style={{
                     textAlign: 'center',
@@ -784,7 +822,7 @@ const Reservations = () => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
-                <StatusBadge status={viewModal.status ? viewModal.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending'} />
+                <StatusBadge status={viewModal.displayStatus || 'Pending'} />
               </div>
               <div className="detail-row">
                 <span className="detail-label">Deposit</span>
@@ -792,7 +830,7 @@ const Reservations = () => {
                   <span className={viewModal.deposit ? 'text-success' : 'text-secondary'}>
                     {viewModal.deposit ? 'Paid ✓' : 'Unpaid ✗'}
                   </span>
-                  {viewModal.status !== 'Completed' && viewModal.status !== 'Cancelled' && (
+                  {viewModal.displayStatus !== 'Completed' && viewModal.displayStatus !== 'Cancelled' && (
                     <button
                       className={viewModal.deposit ? 'btn-outline small' : 'btn-primary small'}
                       style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
@@ -803,6 +841,40 @@ const Reservations = () => {
                   )}
                 </div>
               </div>
+              <div className="detail-row">
+                <span className="detail-label">Payment</span>
+                <div>
+                  <div className={`font-medium ${viewModal.paymentStatus === 'Processing' ? 'text-gold' : viewModal.paymentStatus === 'Paid' ? 'text-success' : 'text-danger'}`}>
+                    {viewModal.paymentStatus || 'Unpaid'}
+                  </div>
+                  {viewModal.paymentType && (
+                    <div className="text-secondary text-sm">{viewModal.paymentType}</div>
+                  )}
+                </div>
+              </div>
+              {viewModal.receiptUrl && (
+                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: '8px' }}>
+                    <span className="detail-label">Receipt Uploaded</span>
+                    {viewModal.paymentStatus === 'Processing' && (
+                      <button
+                        className="btn-primary small"
+                        style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                        onClick={() => handleVerifyPayment(viewModal)}
+                      >
+                        Verify Payment
+                      </button>
+                    )}
+                  </div>
+                  <a href={viewModal.receiptUrl} target="_blank" rel="noopener noreferrer">
+                    <img 
+                      src={viewModal.receiptUrl} 
+                      alt="Receipt" 
+                      style={{ height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border)' }} 
+                    />
+                  </a>
+                </div>
+              )}
             </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <button
@@ -812,9 +884,7 @@ const Reservations = () => {
                   const pName = viewModal.productName || viewModal.outfit;
                   const resDate = parseDate(viewModal.reservationDate || viewModal.date);
                   const resId = (viewModal.id || viewModal.docId || '').toUpperCase();
-                  const status =
-                    (viewModal.status || 'Pending').charAt(0).toUpperCase() +
-                    (viewModal.status || 'pending').slice(1).toLowerCase();
+                  const status = viewModal.displayStatus || 'Pending';
 
                   navigate('/messages', {
                     state: {

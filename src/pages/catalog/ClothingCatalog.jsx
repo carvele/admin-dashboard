@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles, Star } from 'lucide-react';
+import ProductReviewsModal from './ProductReviewsModal';
 import {
   getProducts,
   updateProduct,
@@ -58,6 +59,7 @@ const ClothingCatalog = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
 
   const categories = ['All', ...dbCategories];
   const availableTags = ['AR Try-On'];
@@ -162,6 +164,12 @@ const ClothingCatalog = () => {
     }
   };
 
+  const handleReviewsChanged = (docId, newAvg, newCount) => {
+    setCatalog(catalog.map(c => 
+      c.docId === docId ? { ...c, rating: newAvg, reviewCount: newCount } : c
+    ));
+  };
+
   return (
     <div className="catalog-container">
       <div className="page-header d-flex justify-between align-center">
@@ -254,6 +262,19 @@ const ClothingCatalog = () => {
                     </p>
                   </div>
                   <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>
+                </div>
+
+                <div className="flex align-center gap-1 mb-2" style={{ fontSize: '0.85rem' }}>
+                  <Star fill="var(--warning)" color="var(--warning)" size={14} />
+                  <span style={{ fontWeight: 600 }}>{(item.rating || 0).toFixed(1)}</span>
+                  <span className="text-secondary ml-1">({item.reviewCount || 0} reviews)</span>
+                  <button 
+                    className="btn-link p-0 ml-2" 
+                    style={{ fontSize: '0.85rem', textDecoration: 'underline' }}
+                    onClick={() => setSelectedProductForReviews(item)}
+                  >
+                    View
+                  </button>
                 </div>
 
                 <div className="product-sizes mt-3">
@@ -368,6 +389,14 @@ const ClothingCatalog = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedProductForReviews && (
+        <ProductReviewsModal 
+          product={selectedProductForReviews}
+          onClose={() => setSelectedProductForReviews(null)}
+          onReviewsChanged={handleReviewsChanged}
+        />
       )}
     </div>
   );

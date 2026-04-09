@@ -13,7 +13,7 @@ import {
   Area,
   Legend,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X } from 'lucide-react';
 import { subscribeToCollection, orderBy, limit } from '../../firebase/firestore';
 import './Analytics.css';
 
@@ -43,6 +43,33 @@ const Analytics = () => {
   const [convRates, setConvRates] = useState([]);
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [widgetPrefs, setWidgetPrefs] = useState(() => {
+    const savedPrefs = localStorage.getItem('analytics_widget_prefs');
+    if (savedPrefs) {
+      try {
+        return JSON.parse(savedPrefs);
+      } catch (e) {
+        console.error('Error parsing widget preferences', e);
+      }
+    }
+    return {
+      showTopStats: true,
+      showRevenueTrends: true,
+      showARConversions: true,
+      showTopItems: true,
+      showMetrics: true,
+    };
+  });
+
+  // Save prefs to local storage automatically
+  useEffect(() => {
+    localStorage.setItem('analytics_widget_prefs', JSON.stringify(widgetPrefs));
+  }, [widgetPrefs]);
+  
+  const handleTogglePref = (key) => {
+    setWidgetPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     // Reservations come from BOTH admin dashboard (has createdAt) and Android app (may use
@@ -69,10 +96,10 @@ const Analytics = () => {
     };
   }, []);
 
-  // Compute total revenue — Completed / Confirmed / Approved reservations
+  // Compute total revenue — Completed / Confirmed / Approved reservations / To Pay
   let totalRev = 0;
   const completedOrConfirmed = reservations.filter(
-    (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved',
+    (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
   );
   completedOrConfirmed.forEach((r) => {
     const outfitName = r.productName || r.outfit;
@@ -244,245 +271,359 @@ const Analytics = () => {
               <option value="ytd">Year to Date</option>
             </select>
           </div>
+          <button className="btn-outline small flex-center gap-1" onClick={() => setShowPreferences(true)}>
+            <Settings2 size={18} /> Customize View
+          </button>
           <button className="btn-primary flex-center gap-2" onClick={handleExportCSV}>
             <Download size={18} /> Export Report
           </button>
         </div>
       </div>
 
-      <div className="analytics-grid-4">
-        <StatCard
-          title="Total Revenue"
-          value={`₱${totalRev.toLocaleString()}`}
-          change={revDelta.text}
-          trend={revDelta.trend}
-          icon={TrendingUp}
-          tooltip={`Derived from ${completedOrConfirmed.length} completed/confirmed reservations`}
-        />
-        <StatCard
-          title="New Customers"
-          value={customers.length || 0}
-          change={custDelta.text}
-          trend={custDelta.trend}
-          icon={Users}
-          tooltip={`${customers.length} registered customers`}
-        />
-        <StatCard
-          title="Reservations"
-          value={reservations.length || 0}
-          change={resDelta.text}
-          trend={resDelta.trend}
-          icon={ShoppingBag}
-          tooltip={`${reservations.length} total reservations`}
-        />
-        <StatCard
-          title="AR Try-Ons"
-          value={catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length}
-          change={`${catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length} products`}
-          trend="up"
-          icon={Eye}
-        />
-      </div>
-
-      <div className="analytics-layout mt-4">
-        {/* Main Chart */}
-        <div className="card analytics-main-chart">
-          <div className="card-header border-none">
-            <h3>Reservation & Revenue Trends</h3>
-          </div>
-          <div className="chart-container" style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={reservationTrends}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#64748B', fontSize: 12 }}
-                />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                <RechartsTooltip
-                  contentStyle={{
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="reservations"
-                  stroke="var(--accent)"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRes)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {widgetPrefs.showTopStats && (
+        <div className="analytics-grid-4">
+          <StatCard
+            title="Total Revenue"
+            value={`₱${totalRev.toLocaleString()}`}
+            change={revDelta.text}
+            trend={revDelta.trend}
+            icon={TrendingUp}
+            tooltip={`Derived from ${completedOrConfirmed.length} completed/confirmed reservations`}
+          />
+          <StatCard
+            title="New Customers"
+            value={customers.length || 0}
+            change={custDelta.text}
+            trend={custDelta.trend}
+            icon={Users}
+            tooltip={`${customers.length} registered customers`}
+          />
+          <StatCard
+            title="Reservations"
+            value={reservations.length || 0}
+            change={resDelta.text}
+            trend={resDelta.trend}
+            icon={ShoppingBag}
+            tooltip={`${reservations.length} total reservations`}
+          />
+          <StatCard
+            title="AR Try-Ons"
+            value={catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length}
+            change={`${catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length} products`}
+            trend="up"
+            icon={Eye}
+          />
         </div>
+      )}
+
+      {(widgetPrefs.showRevenueTrends || widgetPrefs.showARConversions) && (
+        <div className="analytics-layout mt-4" style={{ gridTemplateColumns: widgetPrefs.showRevenueTrends && widgetPrefs.showARConversions ? '2fr 1fr' : '1fr' }}>
+        {/* Main Chart */}
+        {widgetPrefs.showRevenueTrends && (
+          <div className="card analytics-main-chart">
+            <div className="card-header border-none">
+              <h3>Reservation & Revenue Trends</h3>
+            </div>
+            <div className="chart-container" style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={reservationTrends}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#64748B', fontSize: 12 }}
+                  />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                  <RechartsTooltip
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="reservations"
+                    stroke="var(--accent)"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorRes)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Conversion Chart */}
-        <div className="card">
-          <div className="card-header border-none">
-            <h3>AR Try-On vs Conversions</h3>
+        {widgetPrefs.showARConversions && (
+          <div className="card">
+            <div className="card-header border-none">
+              <h3>AR Try-On vs Conversions</h3>
+            </div>
+            <div className="chart-container" style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sortedConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#64748B', fontSize: 12 }}
+                  />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'transparent' }}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  <Legend iconType="circle" />
+                  <Bar
+                    dataKey="tryOn"
+                    name="AR Try-Ons"
+                    fill="var(--charcoal)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
+                  <Bar
+                    dataKey="reserved"
+                    name="Reservations"
+                    fill="var(--beige)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="chart-container" style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sortedConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis
-                  dataKey="month"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#64748B', fontSize: 12 }}
-                />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                <RechartsTooltip
-                  cursor={{ fill: 'transparent' }}
-                  contentStyle={{
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                  }}
-                />
-                <Legend iconType="circle" />
-                <Bar
-                  dataKey="tryOn"
-                  name="AR Try-Ons"
-                  fill="var(--charcoal)"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={40}
-                />
-                <Bar
-                  dataKey="reserved"
-                  name="Reservations"
-                  fill="var(--beige)"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={40}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        )}
       </div>
+      )}
 
-      <div className="analytics-layout mt-4">
-        <div className="card">
-          <div className="card-header border-none">
-            <h3>Top Performing Items</h3>
-          </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th className="text-right">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {actPopular.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="font-medium">{item.name}</td>
-                    <td className="text-secondary">{item.category || 'Uncategorized'}</td>
-                    <td className="text-right font-medium">
-                      ₱{(item.revenue || 0).toLocaleString()}
-                    </td>
+      {(widgetPrefs.showTopItems || widgetPrefs.showMetrics) && (
+        <div className="analytics-layout mt-4" style={{ gridTemplateColumns: widgetPrefs.showTopItems && widgetPrefs.showMetrics ? '2fr 1fr' : '1fr' }}>
+        {widgetPrefs.showTopItems && (
+          <div className="card">
+            <div className="card-header border-none">
+              <h3>Top Performing Items</h3>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th className="text-right">Revenue</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {actPopular.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="font-medium">{item.name}</td>
+                      <td className="text-secondary">{item.category || 'Uncategorized'}</td>
+                      <td className="text-right font-medium">
+                        ₱{(item.revenue || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="card">
-          <div className="card-header border-none">
-            <h3>Customer & Reservation Metrics</h3>
+        {widgetPrefs.showMetrics && (
+          <div className="card">
+            <div className="card-header border-none">
+              <h3>Customer & Reservation Metrics</h3>
+            </div>
+            <div className="p-4 pt-0">
+              <div className="demo-bar-group">
+                <div className="flex-between text-sm mb-1">
+                  <span>New vs Returning Customers</span>
+                  <span className="font-medium">
+                    {customers.length > 0
+                      ? Math.round(
+                          ((customers.length - Object.keys(outfitCounts).length) / customers.length) *
+                            100,
+                        ) || 50
+                      : 0}
+                    % /
+                    {customers.length > 0
+                      ? Math.round((Object.keys(outfitCounts).length / customers.length) * 100) || 50
+                      : 0}
+                    %
+                  </span>
+                </div>
+                <div className="demo-bar">
+                  <div
+                    className="demo-fill"
+                    style={{
+                      width: `${customers.length > 0 ? Math.round(((customers.length - Object.keys(outfitCounts).length) / customers.length) * 100) || 50 : 50}%`,
+                      backgroundColor: 'var(--accent)',
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="demo-bar-group mt-4">
+                <div className="flex-between text-sm mb-1">
+                  <span>Completed Reservation Rate</span>
+                  <span className="font-medium">
+                    {reservations.length > 0
+                      ? Math.round(
+                          (reservations.filter((r) => r.status === 'Completed').length /
+                            reservations.length) *
+                            100,
+                        )
+                      : 0}
+                    %
+                  </span>
+                </div>
+                <div className="demo-bar">
+                  <div
+                    className="demo-fill"
+                    style={{
+                      width: `${reservations.length > 0 ? Math.round((reservations.filter((r) => r.status === 'Completed').length / reservations.length) * 100) : 0}%`,
+                      backgroundColor: 'var(--charcoal)',
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="demo-bar-group mt-4">
+                <div className="flex-between text-sm mb-1">
+                  <span>Active Customer Growth</span>
+                  <span className="font-medium">
+                    {customers.length > 0
+                      ? Math.round((activeCustomers / customers.length) * 100)
+                      : 0}
+                    %
+                  </span>
+                </div>
+                <div className="demo-bar">
+                  <div
+                    className="demo-fill"
+                    style={{
+                      width: `${customers.length > 0 ? Math.round((activeCustomers / customers.length) * 100) : 0}%`,
+                      backgroundColor: '#D97706',
+                    }}
+                  ></div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="p-4 pt-0">
-            <div className="demo-bar-group">
-              <div className="flex-between text-sm mb-1">
-                <span>New vs Returning Customers</span>
-                <span className="font-medium">
-                  {customers.length > 0
-                    ? Math.round(
-                        ((customers.length - Object.keys(outfitCounts).length) / customers.length) *
-                          100,
-                      ) || 50
-                    : 0}
-                  % /
-                  {customers.length > 0
-                    ? Math.round((Object.keys(outfitCounts).length / customers.length) * 100) || 50
-                    : 0}
-                  %
-                </span>
-              </div>
-              <div className="demo-bar">
-                <div
-                  className="demo-fill"
-                  style={{
-                    width: `${customers.length > 0 ? Math.round(((customers.length - Object.keys(outfitCounts).length) / customers.length) * 100) || 50 : 50}%`,
-                    backgroundColor: 'var(--accent)',
-                  }}
-                ></div>
-              </div>
+        )}
+      </div>
+      )}
+
+      {/* Analytics Preferences Modal */}
+      {showPreferences && (
+        <div className="modal-overlay" onClick={() => setShowPreferences(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Customize Analytics Dashboard</h2>
+              <button className="close-btn" onClick={() => setShowPreferences(false)}>
+                <X size={24} />
+              </button>
             </div>
-            <div className="demo-bar-group mt-4">
-              <div className="flex-between text-sm mb-1">
-                <span>Completed Reservation Rate</span>
-                <span className="font-medium">
-                  {reservations.length > 0
-                    ? Math.round(
-                        (reservations.filter((r) => r.status === 'Completed').length /
-                          reservations.length) *
-                          100,
-                      )
-                    : 0}
-                  %
-                </span>
+            
+            <div className="modal-body p-6">
+              <p className="text-secondary mb-6 leading-relaxed">
+                Choose which analytical sections you want to display on your view. Your choices are automatically saved locally.
+              </p>
+              
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Top Statistics</h4>
+                  <p className="text-sm text-secondary">Summary cards for Revenue, Customers, etc.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showTopStats}
+                    onChange={() => handleTogglePref('showTopStats')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
               </div>
-              <div className="demo-bar">
-                <div
-                  className="demo-fill"
-                  style={{
-                    width: `${reservations.length > 0 ? Math.round((reservations.filter((r) => r.status === 'Completed').length / reservations.length) * 100) : 0}%`,
-                    backgroundColor: 'var(--charcoal)',
-                  }}
-                ></div>
+
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Trends Chart</h4>
+                  <p className="text-sm text-secondary">Reservation & Revenue area trends.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showRevenueTrends}
+                    onChange={() => handleTogglePref('showRevenueTrends')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
               </div>
-            </div>
-            <div className="demo-bar-group mt-4">
-              <div className="flex-between text-sm mb-1">
-                <span>Active Customer Growth</span>
-                <span className="font-medium">
-                  {customers.length > 0
-                    ? Math.round((activeCustomers / customers.length) * 100)
-                    : 0}
-                  %
-                </span>
+              
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Conversion Chart</h4>
+                  <p className="text-sm text-secondary">AR Try-On vs Reservation comparisons.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showARConversions}
+                    onChange={() => handleTogglePref('showARConversions')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
               </div>
-              <div className="demo-bar">
-                <div
-                  className="demo-fill"
-                  style={{
-                    width: `${customers.length > 0 ? Math.round((activeCustomers / customers.length) * 100) : 0}%`,
-                    backgroundColor: '#D97706',
-                  }}
-                ></div>
+
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Top Performing Items</h4>
+                  <p className="text-sm text-secondary">Table showing the most generated revenue list.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showTopItems}
+                    onChange={() => handleTogglePref('showTopItems')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
               </div>
+
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Customer Metrics</h4>
+                  <p className="text-sm text-secondary">Breakdowns for Returning rates, Active growth, etc.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showMetrics}
+                    onChange={() => handleTogglePref('showMetrics')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
             </div>
           </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 };

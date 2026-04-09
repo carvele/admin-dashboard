@@ -55,12 +55,12 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
         const prodSearch = await getCollection('products', false, 50);
 
         resSearch.forEach((r: any) => {
-          const sCustomer = (r.customer || r.customerName || '').toLowerCase();
+          const sCustomer = (r.customerName || r.customer || '').toLowerCase();
           if (sCustomer.includes(q) || (r.id && r.id.toLowerCase().includes(q))) {
             results.push({
               type: 'Reservation',
-              label: `${r.id} — ${r.customer || r.customerName}`,
-              sub: r.outfit || r.productName || 'Order',
+              label: `${r.id} — ${r.customerName || r.customer}`,
+              sub: r.productName || r.outfit || 'Order',  // prefer canonical `productName`
               path: '/reservations',
             });
           }
@@ -114,14 +114,20 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   }, [searchQuery]);
 
   // ── Subscribe to notifications (Limited to 20 recent) ──
+  // Handles both web-created docs (createdAt: Timestamp) and
+  // Android-created docs (timestamp: epoch-ms long).
   useEffect(() => {
-    // Only listen to the most recent 20 notifications to save reads
     const unsub = subscribeToCollection(
       'notifications',
       (data: any[]) => {
         const sorted = [...data].sort((a, b) => {
-          const aTime = a.createdAt?.seconds || 0;
-          const bTime = b.createdAt?.seconds || 0;
+          // Prefer Firestore Timestamp; fall back to Android epoch-ms `timestamp`
+          const aTime = a.createdAt?.seconds
+            ? a.createdAt.seconds
+            : (a.timestamp || 0) / 1000;
+          const bTime = b.createdAt?.seconds
+            ? b.createdAt.seconds
+            : (b.timestamp || 0) / 1000;
           return bTime - aTime;
         });
         setNotifications(sorted);
@@ -274,10 +280,12 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                         {(n.type || 'N')[0].toUpperCase()}
                       </div>
                       <div className="noti-content">
-                        <p>{n.message || 'New notification'}</p>
+                        <p>{n.title ? <strong>{n.title}:</strong> : null} {n.message || 'New notification'}</p>
                         <span>
                           {n.createdAt?.seconds
                             ? formatRelativeTime(n.createdAt.seconds * 1000)
+                            : n.timestamp
+                            ? formatRelativeTime(n.timestamp)  // Android epoch-ms fallback
                             : 'Just now'}
                         </span>
                       </div>

@@ -5,7 +5,6 @@ import {
   Search,
   Send,
   Paperclip,
-  CheckSquare,
   Image as ImageIcon,
   Shirt,
   Plus,
@@ -15,7 +14,6 @@ import {
   Calendar,
   Clock,
   Tag,
-  ChevronRight,
 } from 'lucide-react';
 import {
   subscribeToConversations,
@@ -23,6 +21,8 @@ import {
   createConversation,
   updateConversation,
   sendMessage,
+  uploadChatImage,
+  addReaction,
 } from '../../services/communicationService';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
@@ -33,6 +33,8 @@ import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import './Messages.css';
 
+const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
 const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -42,17 +44,21 @@ const Messages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
-  
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Reaction popover: { msgId, anchorRect }
+  const [reactionPopover, setReactionPopover] = useState(null);
+
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
   const debouncedConvSearch = useCallback(
     debounce((val) => setConvSearchTerm(val), 300),
     []
   );
-  
+
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [allCustomers, setAllCustomers] = useState([]);
-  
+
   const [custSearchInput, setCustSearchInput] = useState('');
   const [custSearchTerm, setCustSearchTerm] = useState('');
   const debouncedCustSearch = useCallback(
@@ -60,6 +66,7 @@ const Messages = () => {
     []
   );
   const messagesEndRef = useRef(null);
+  const imageInputRef = useRef(null);
   const location = useLocation();
   const autoSendFiredRef = useRef(false);
 
@@ -71,7 +78,13 @@ const Messages = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Subscribe to all active reservations for the banner
+  // Close reaction popover on outside click
+  useEffect(() => {
+    const handler = () => setReactionPopover(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
   useEffect(() => {
     const unsub = subscribeToReservations((data) => {
       const active = data.filter((r) => {
@@ -85,11 +98,10 @@ const Messages = () => {
 
   useEffect(() => {
     const unsub = subscribeToConversations((data) => {
-      // Sort by the latest timestamp (updatedAt from new messages or createdAt)
       const sortedConv = [...data].sort((a, b) => {
         const timeA = Math.max(a.updatedAt?.seconds || 0, a.createdAt?.seconds || 0);
         const timeB = Math.max(b.updatedAt?.seconds || 0, b.createdAt?.seconds || 0);
-        return timeB - timeA; // Descending (newest first)
+        return timeB - timeA;
       });
       setConversations(sortedConv);
       if (sortedConv.length > 0) setActiveChat((prev) => prev || sortedConv[0]);
@@ -98,12 +110,10 @@ const Messages = () => {
   }, []);
 
   useEffect(() => {
-    // Filter messages by active conversation
     if (!activeChat) {
       setMessages([]);
       return;
     }
-    // Use customId (the 'conv_...' string) for filtering — Android sets this as conversationId on messages
     const convKey = activeChat.customId || activeChat.id;
     const unsub = subscribeToMessages((data) => {
       const filtered = data.filter((m) => m.conversationId === convKey);
@@ -117,24 +127,25 @@ const Messages = () => {
     return () => unsub();
   }, [activeChat?.id, activeChat?.customId]);
 
+  // ── Send text ──────────────────────────────────────────────────────────
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
+    const convKey = activeChat.customId || activeChat.id;
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     try {
-      // Use the custom conv_ ID so Android can find this message via .whereEqualTo("conversationId", convId)
-      const convKey = activeChat.customId || activeChat.id;
       await sendMessage({
         id: Date.now(),
         conversationId: convKey,
         sender: 'staff',
         text: newMessage,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        messageType: 'text',
+        time,
       });
-      // sendMessage auto-adds createdAt — needed for Android's .orderBy("createdAt")
       await updateConversation(activeChat.docId, {
         lastMessage: newMessage,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time,
       });
       await logAction(user, 'Sent message to customer', { customerName: activeChat.customerName });
       setNewMessage('');
@@ -143,6 +154,63 @@ const Messages = () => {
     }
   };
 
+  // ── Send image ─────────────────────────────────────────────────────────
+  const handleImageFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChat) return;
+
+    setShowAttachMenu(false);
+    setIsUploadingImage(true);
+
+    const convKey = activeChat.customId || activeChat.id;
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const imageUrl = await uploadChatImage(file, convKey);
+      await sendMessage({
+        id: Date.now(),
+        conversationId: convKey,
+        sender: 'staff',
+        text: '',
+        imageUrl,
+        messageType: 'image',
+        time,
+      });
+      await updateConversation(activeChat.docId, {
+        lastMessage: '📷 Photo',
+        time,
+      });
+      await logAction(user, 'Sent image to customer', { customerName: activeChat.customerName });
+    } catch (err) {
+      console.error('Image send failed:', err);
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  // ── Add reaction ───────────────────────────────────────────────────────
+  const handleReaction = async (msg, emoji) => {
+    setReactionPopover(null);
+    if (!msg.docId) return;
+    try {
+      await addReaction(msg.docId, user?.uid || 'admin', emoji);
+    } catch (err) {
+      console.error('Reaction failed:', err);
+    }
+  };
+
+  // ── Reaction helpers ───────────────────────────────────────────────────
+  const getGroupedReactions = (reactions) => {
+    if (!reactions) return [];
+    const counts = {};
+    for (const emoji of Object.values(reactions)) {
+      counts[emoji] = (counts[emoji] || 0) + 1;
+    }
+    return Object.entries(counts);
+  };
+
+  // ── New conversation ───────────────────────────────────────────────────
   const loadCustomers = async () => {
     try {
       const users = await getCustomers();
@@ -171,10 +239,10 @@ const Messages = () => {
         `${customer.first_name || ''} ${customer.last_name || ''}`.trim() ||
         customer.email;
       const customerId = customer.docId || customer.id || '';
-      const convId = await createConversation({
+      await createConversation({
         id: `conv_${Date.now()}`,
         customerName,
-        customerId, // FK to users collection
+        customerId,
         lastMessage: 'Conversation started by staff',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         unread: 0,
@@ -186,41 +254,43 @@ const Messages = () => {
     }
   };
 
-  // Sends a formatted reservation card as a message
-  const sendReservationCard = useCallback(async (conv, resContext) => {
-    if (!conv || !resContext) return;
-    try {
-      const convKey = conv.customId || conv.id;
-      await sendMessage({
-        id: Date.now(),
-        conversationId: convKey,
-        sender: 'staff',
-        isReservationSummary: true,
-        reservationData: resContext,
-        text: `Reservation Summary: ${resContext.productName} on ${resContext.date}`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      });
-      await updateConversation(conv.docId, {
-        lastMessage: `📋 Reservation: ${resContext.productName}`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        updatedAt: new Date(),
-      });
-      await logAction(user, 'Sent reservation summary to customer', {
-        customerName: conv.customerName,
-        reservationId: resContext.id,
-      });
-    } catch (err) {
-      console.error('Failed to send reservation card:', err);
-    }
-  }, [user]);
+  // ── Reservation card auto-send ─────────────────────────────────────────
+  const sendReservationCard = useCallback(
+    async (conv, resContext) => {
+      if (!conv || !resContext) return;
+      try {
+        const convKey = conv.customId || conv.id;
+        await sendMessage({
+          id: Date.now(),
+          conversationId: convKey,
+          sender: 'staff',
+          isReservationSummary: true,
+          reservationData: resContext,
+          text: `Reservation Summary: ${resContext.productName} on ${resContext.date}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+        await updateConversation(conv.docId, {
+          lastMessage: `📋 Reservation: ${resContext.productName}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          updatedAt: new Date(),
+        });
+        await logAction(user, 'Sent reservation summary to customer', {
+          customerName: conv.customerName,
+          reservationId: resContext.id,
+        });
+      } catch (err) {
+        console.error('Failed to send reservation card:', err);
+      }
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!location.state) return;
     const { buyerId, buyerName, autoSendReservation, reservationContext } = location.state;
 
-    // Handle both auto-send and plain prefill cases
     if ((autoSendReservation || location.state.prefillMessage) && conversations.length > 0) {
-      if (autoSendFiredRef.current) return; // prevent double-fire
+      if (autoSendFiredRef.current) return;
 
       const existing = conversations.find(
         (c) => c.customerId === buyerId || c.customerName === buyerName,
@@ -240,7 +310,6 @@ const Messages = () => {
       if (existing) {
         proceed(existing);
       } else {
-        // Create conversation then send
         const customerName = buyerName;
         const customerId = buyerId;
         createConversation({
@@ -251,7 +320,6 @@ const Messages = () => {
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           unread: 0,
         }).then(() => {
-          // Wait for the subscription to pick up the new conversation
           const waitForConv = setInterval(() => {
             setConversations((prev) => {
               const found = prev.find(
@@ -264,15 +332,12 @@ const Messages = () => {
               return prev;
             });
           }, 300);
-          // Clear interval after 5s failsafe
           setTimeout(() => clearInterval(waitForConv), 5000);
         });
       }
     }
   }, [location.state, conversations, sendReservationCard]);
 
-  // Filter messages for active chat and sort by time
-  // Use customId (the conv_ string) for filtering — matches what Android writes as conversationId
   const convKey = activeChat?.customId || activeChat?.id;
   const activeMessages = messages
     .filter((m) => activeChat && m.conversationId === convKey)
@@ -282,8 +347,166 @@ const Messages = () => {
       return timeA - timeB;
     });
 
+  // ── Message bubble renderer ────────────────────────────────────────────
+  const renderBubble = (msg, index) => {
+    const isSent = msg.sender === 'staff';
+    const groupedReactions = getGroupedReactions(msg.reactions);
+
+    return (
+      <div
+        key={msg.id || msg.docId || `msg-${index}`}
+        className={`message-bubble-wrapper ${isSent ? 'sent' : 'received'}`}
+      >
+        {!isSent && activeChat && (
+          <div
+            className="avatar small-av"
+            style={{ backgroundColor: getAvatarColor(activeChat.customerName || 'User') }}
+          >
+            {getInitials(activeChat.customerName || 'User')[0]}
+          </div>
+        )}
+
+        <div className="bubble-col">
+          {/* Reservation card */}
+          {msg.isReservationSummary && msg.reservationData ? (
+            <div className="message-bubble bubbles-received">
+              <div className="reservation-card">
+                <div className="res-card-header">
+                  <Calendar size={15} />
+                  <span>Reservation Summary</span>
+                </div>
+                {msg.reservationData.imageUrl && (
+                  <img
+                    src={msg.reservationData.imageUrl}
+                    alt={msg.reservationData.productName}
+                    className="res-card-img"
+                  />
+                )}
+                <div className="res-card-body">
+                  <div className="res-card-product">{msg.reservationData.productName}</div>
+                  <div className="res-card-rows">
+                    <div className="res-card-row"><Tag size={12} /><span>Size {msg.reservationData.size}</span></div>
+                    <div className="res-card-row"><Calendar size={12} /><span>{msg.reservationData.date}</span></div>
+                    <div className="res-card-row"><Clock size={12} /><span>{msg.reservationData.time}</span></div>
+                  </div>
+                  <div className="res-card-status">
+                    <span className="res-status-dot" />
+                    {msg.reservationData.status}
+                  </div>
+                  <div className="res-card-deposit">Deposit: {msg.reservationData.deposit}</div>
+                </div>
+                <div className="res-card-footer">📌 Ref #{msg.reservationData.id?.slice(-6)}</div>
+              </div>
+              <span className="msg-time">{msg.time}</span>
+            </div>
+
+          ) : (
+            /* Normal text / image bubble */
+            <div
+              className={`message-bubble ${isSent ? 'bubbles-sent' : 'bubbles-received'} bubble-hoverable`}
+              onMouseEnter={(e) => {
+                const btn = e.currentTarget.querySelector('.reaction-trigger');
+                if (btn) btn.style.opacity = '1';
+              }}
+              onMouseLeave={(e) => {
+                const btn = e.currentTarget.querySelector('.reaction-trigger');
+                if (btn) btn.style.opacity = '0';
+              }}
+            >
+              {/* Image */}
+              {msg.imageUrl && (
+                <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={msg.imageUrl}
+                    alt="Chat image"
+                    className="chat-image-thumb"
+                  />
+                </a>
+              )}
+
+              {/* Text */}
+              {msg.text && (
+                <p style={{ whiteSpace: 'pre-line', margin: msg.imageUrl ? '6px 0 0' : 0 }}>
+                  {msg.text}
+                </p>
+              )}
+
+              <span className="msg-time">
+                {msg.time ||
+                  (msg.createdAt?.seconds
+                    ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '')}
+              </span>
+
+              {/* Reaction trigger button (visible on hover) */}
+              <button
+                className="reaction-trigger"
+                style={{ opacity: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReactionPopover((prev) =>
+                    prev?.msgId === (msg.id || msg.docId) ? null : { msgId: msg.id || msg.docId, msg }
+                  );
+                }}
+                title="React"
+              >
+                😊
+              </button>
+
+              {/* Inline emoji popover */}
+              {reactionPopover?.msgId === (msg.id || msg.docId) && (
+                <div
+                  className={`emoji-popover ${isSent ? 'popover-left' : 'popover-right'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {EMOJI_LIST.map((emoji) => (
+                    <button
+                      key={emoji}
+                      className="emoji-btn"
+                      onClick={() => handleReaction(msg, emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Reaction chips */}
+          {groupedReactions.length > 0 && (
+            <div className={`reaction-chips ${isSent ? 'chips-sent' : 'chips-received'}`}>
+              {groupedReactions.map(([emoji, count]) => (
+                <span
+                  key={emoji}
+                  className="reaction-chip"
+                  onClick={() => handleReaction(msg, emoji)}
+                  title="Click to react"
+                >
+                  {emoji} {count > 1 ? count : ''}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="messages-layout">
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        accept="image/*"
+        ref={imageInputRef}
+        style={{ display: 'none' }}
+        onChange={handleImageFileChange}
+      />
+
       {/* Sidebar Conversation List */}
       <div className="messages-sidebar card">
         <div className="ms-header">
@@ -332,10 +555,7 @@ const Messages = () => {
                   className="avatar"
                   style={{ backgroundColor: getAvatarColor(conv.customerName || 'User') }}
                 >
-                  {(conv.customerName || 'User')
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')}
+                  {(conv.customerName || 'User').split(' ').map((n) => n[0]).join('')}
                 </div>
                 <div className="conv-details">
                   <div className="conv-header">
@@ -373,19 +593,25 @@ const Messages = () => {
                 : activeRes.date?.seconds
                 ? new Date(activeRes.date.seconds * 1000)
                 : new Date(activeRes.date);
-              const statusColor = {
-                pending: '#f59e0b',
-                confirmed: '#10b981',
-                fitting: '#8b5cf6',
-              }[(activeRes.status || '').toLowerCase()] || '#6b7280';
+              const statusColor =
+                { pending: '#f59e0b', confirmed: '#10b981', fitting: '#8b5cf6' }[
+                  (activeRes.status || '').toLowerCase()
+                ] || '#6b7280';
               return (
                 <div className="reservation-banner">
                   <div className="res-banner-dot" style={{ background: statusColor }} />
                   <div className="res-banner-info">
                     <strong>{activeRes.productName || activeRes.outfit}</strong>
-                    <span>Size {activeRes.size} · {resDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} · {resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>
+                      Size {activeRes.size} ·{' '}
+                      {resDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} ·{' '}
+                      {resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                  <span className="res-banner-badge" style={{ background: statusColor + '22', color: statusColor }}>
+                  <span
+                    className="res-banner-badge"
+                    style={{ background: statusColor + '22', color: statusColor }}
+                  >
                     {(activeRes.status || '').toUpperCase()}
                   </span>
                 </div>
@@ -398,10 +624,7 @@ const Messages = () => {
                   className="avatar"
                   style={{ backgroundColor: getAvatarColor(activeChat.customerName || 'User') }}
                 >
-                  {(activeChat.customerName || 'User')
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')}
+                  {(activeChat.customerName || 'User').split(' ').map((n) => n[0]).join('')}
                 </div>
                 <div>
                   <h3>{activeChat.customerName}</h3>
@@ -419,75 +642,7 @@ const Messages = () => {
             </div>
 
             <div className="chat-history">
-              {activeMessages.map((msg, index) => (
-                <div
-                  key={msg.id || msg.docId || `msg-${index}`}
-                  className={`message-bubble-wrapper ${msg.sender === 'staff' ? 'sent' : 'received'}`}
-                >
-                  {msg.sender === 'customer' && activeChat && (
-                    <div
-                      className="avatar small-av"
-                      style={{ backgroundColor: getAvatarColor(activeChat.customerName || 'User') }}
-                    >
-                      {getInitials(activeChat.customerName || 'User')[0]}
-                    </div>
-                  )}
-                  <div
-                    className={`message-bubble ${msg.sender === 'staff' ? 'bubbles-sent' : 'bubbles-received'}`}
-                  >
-                    {msg.isReservationSummary && msg.reservationData ? (
-                      <div className="reservation-card">
-                        <div className="res-card-header">
-                          <Calendar size={15} />
-                          <span>Reservation Summary</span>
-                        </div>
-                        {msg.reservationData.imageUrl && (
-                          <img
-                            src={msg.reservationData.imageUrl}
-                            alt={msg.reservationData.productName}
-                            className="res-card-img"
-                          />
-                        )}
-                        <div className="res-card-body">
-                          <div className="res-card-product">{msg.reservationData.productName}</div>
-                          <div className="res-card-rows">
-                            <div className="res-card-row"><Tag size={12} /><span>Size {msg.reservationData.size}</span></div>
-                            <div className="res-card-row"><Calendar size={12} /><span>{msg.reservationData.date}</span></div>
-                            <div className="res-card-row"><Clock size={12} /><span>{msg.reservationData.time}</span></div>
-                          </div>
-                          <div className="res-card-status">
-                            <span className="res-status-dot" />
-                            {msg.reservationData.status}
-                          </div>
-                          <div className="res-card-deposit">Deposit: {msg.reservationData.deposit}</div>
-                        </div>
-                        <div className="res-card-footer">📌 Ref #{msg.reservationData.id?.slice(-6)}</div>
-                      </div>
-                    ) : msg.isOutfitSuggestion ? (
-                      <div className="outfit-suggestion-card">
-                        <div className="os-icon">
-                          <Shirt size={20} />
-                        </div>
-                        <div className="os-info">
-                          <strong>Outfit Suggestion: Midnight Gala</strong>
-                          <button className="btn-primary small mt-2">View Details</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p style={{ whiteSpace: 'pre-line' }}>{msg.text}</p>
-                    )}
-                    <span className="msg-time">
-                      {msg.time ||
-                        (msg.createdAt?.seconds
-                          ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : '')}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {activeMessages.map((msg, index) => renderBubble(msg, index))}
               <div ref={messagesEndRef} />
             </div>
           </>
@@ -504,9 +659,7 @@ const Messages = () => {
               textAlign: 'center',
             }}
           >
-            <div
-              style={{ padding: '1.5rem', borderRadius: '50%', background: 'var(--surface-hover)' }}
-            >
+            <div style={{ padding: '1.5rem', borderRadius: '50%', background: 'var(--surface-hover)' }}>
               <MessageSquare size={48} strokeWidth={1} style={{ opacity: 0.5 }} />
             </div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>No conversation selected</h3>
@@ -516,7 +669,13 @@ const Messages = () => {
           </div>
         )}
 
+        {/* Input area */}
         <div className="chat-input-area">
+          {isUploadingImage && (
+            <div className="upload-progress">
+              <span>📤 Uploading image...</span>
+            </div>
+          )}
           <form onSubmit={handleSend} className="chat-form">
             <div className="attach-wrapper">
               <button
@@ -532,7 +691,14 @@ const Messages = () => {
                   <button type="button" className="attach-item">
                     <Shirt size={16} /> Suggest Outfit
                   </button>
-                  <button type="button" className="attach-item">
+                  <button
+                    type="button"
+                    className="attach-item"
+                    onClick={() => {
+                      setShowAttachMenu(false);
+                      imageInputRef.current?.click();
+                    }}
+                  >
                     <ImageIcon size={16} /> Send Image
                   </button>
                 </div>
@@ -554,7 +720,7 @@ const Messages = () => {
         </div>
       </div>
 
-      {/* ===== NEW CONVERSATION MODAL ===== */}
+      {/* New Conversation Modal */}
       {showNewConvModal && (
         <div className="modal-overlay" onClick={() => setShowNewConvModal(false)}>
           <div
@@ -585,9 +751,7 @@ const Messages = () => {
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 {allCustomers
                   .filter((c) => {
-                    const name = (
-                      c.name || `${c.first_name || ''} ${c.last_name || ''}`
-                    ).toLowerCase();
+                    const name = (c.name || `${c.first_name || ''} ${c.last_name || ''}`).toLowerCase();
                     const email = (c.email || '').toLowerCase();
                     return (
                       name.includes(custSearchTerm.toLowerCase()) ||

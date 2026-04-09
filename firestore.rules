@@ -112,6 +112,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── PRODUCT REVIEWS ──
+    match /product_reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.auth != null && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.reservationId is string &&
+                      get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.customerId == request.auth.uid &&
+                      get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.productId == request.resource.data.productId &&
+                      get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.status == 'Completed';
+      allow update: if request.auth != null && 
+                      request.resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
     // ── ANALYTICS ──
     match /analyticsConvRate/{docId} {
       allow read, write: if request.auth != null;

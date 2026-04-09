@@ -21,6 +21,7 @@ import {
   updateCustomer,
   deleteCustomer,
 } from '../../services/customerService';
+import { orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
 import {
   getAvatarColor,
@@ -52,11 +53,19 @@ const Customers = () => {
 
     try {
       const PAGE_SIZE = 20;
+      // Fetch without orderBy so Firestore doesn't drop legacy documents missing the field
       const result = await getPaginatedCustomers(PAGE_SIZE, loadMore ? lastDoc : null);
 
       if (signal?.aborted) return;
 
       const appUsers = result.data.filter((u) => !u.role || u.role === 'customer');
+      
+      // Sort newly joined users to the top locally
+      appUsers.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || a.joinedAt?.toMillis?.() || a.lastOnline || 0;
+        const timeB = b.createdAt?.toMillis?.() || b.joinedAt?.toMillis?.() || b.lastOnline || 0;
+        return timeB - timeA;
+      });
       setCustomers((prev) => {
         const d = loadMore ? [...prev, ...appUsers] : appUsers;
         const unique = [];
@@ -300,17 +309,26 @@ const Customers = () => {
                       <td>
                         <div className="flex-center gap-3 customer-cell">
                           <div className="avatar-wrap">
-                            <div
-                              className="avatar"
-                              style={{ backgroundColor: getAvatarColor(getUserDisplayName(cust)) }}
-                            >
-                              {getUserDisplayName(cust)
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .substring(0, 2)
-                                .toUpperCase()}
-                            </div>
+                            {cust.profileImageUrl ? (
+                              <img 
+                                src={cust.profileImageUrl} 
+                                alt="avatar" 
+                                className="avatar" 
+                                style={{ objectFit: 'cover' }} 
+                              />
+                            ) : (
+                              <div
+                                className="avatar"
+                                style={{ backgroundColor: getAvatarColor(getUserDisplayName(cust)) }}
+                              >
+                                {getUserDisplayName(cust)
+                                  .split(' ')
+                                  .map((n) => n[0])
+                                  .join('')
+                                  .substring(0, 2)
+                                  .toUpperCase()}
+                              </div>
+                            )}
                             <span
                               className={`online-dot ${isOnline(cust.lastOnline) ? 'online' : 'offline'}`}
                             ></span>
@@ -469,17 +487,26 @@ const Customers = () => {
             </div>
             <div className="profile-body">
               <div className="profile-sidebar">
-                <div
-                  className="profile-avatar-large"
-                  style={{ backgroundColor: getAvatarColor(getUserDisplayName(selectedCustomer)) }}
-                >
-                  {getUserDisplayName(selectedCustomer)
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .substring(0, 2)
-                    .toUpperCase()}
-                </div>
+                {selectedCustomer.profileImageUrl ? (
+                  <img 
+                    src={selectedCustomer.profileImageUrl} 
+                    alt="avatar" 
+                    className="profile-avatar-large" 
+                    style={{ objectFit: 'cover' }} 
+                  />
+                ) : (
+                  <div
+                    className="profile-avatar-large"
+                    style={{ backgroundColor: getAvatarColor(getUserDisplayName(selectedCustomer)) }}
+                  >
+                    {getUserDisplayName(selectedCustomer)
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .substring(0, 2)
+                      .toUpperCase()}
+                  </div>
+                )}
                 {isEditing ? (
                   <>
                     <input

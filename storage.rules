@@ -15,10 +15,10 @@ service firebase.storage {
       allow write: if isAdmin(); 
     }
 
-    // Standard user avatars
-    match /avatars/{userId}/{allPaths=**} {
+    // Standard user avatars (matches avatars/UID.jpg)
+    match /avatars/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && fileName.matches(request.auth.uid + "\\..*");
     }
   }
 }

@@ -21,9 +21,23 @@ import {
   TrendingUp,
   RefreshCw,
   CheckCircle2,
+  Settings2,
+  X,
 } from 'lucide-react';
 // @ts-ignore
 import { getReservations } from '../../services/reservationService';
+
+const defaultPreferences = {
+  statTotalReservations: true,
+  statActiveCustomers: true,
+  statPendingRequests: true,
+  statARUsage: true,
+  chartReservationTrends: true,
+  chartPopularOutfits: true,
+  widgetLowStock: true,
+  widgetRecentCustomers: true,
+};
+
 // @ts-ignore
 import { getCustomers } from '../../services/customerService';
 // @ts-ignore
@@ -51,6 +65,18 @@ const Dashboard = () => {
   const [arSessionCount, setArSessionCount] = useState(0);
   const [trendFilter, setTrendFilter] = useState('This Week');
   const [lastSynced, setLastSynced] = useState(new Date());
+
+  const [widgetPrefs, setWidgetPrefs] = useState(() => {
+    const saved = localStorage.getItem('dashboard_widget_prefs');
+    return saved ? JSON.parse(saved) : defaultPreferences;
+  });
+  const [showPreferences, setShowPreferences] = useState(false);
+
+  const togglePref = (key: keyof typeof defaultPreferences) => {
+    const nextPrefs = { ...widgetPrefs, [key]: !widgetPrefs[key] };
+    setWidgetPrefs(nextPrefs);
+    localStorage.setItem('dashboard_widget_prefs', JSON.stringify(nextPrefs));
+  };
 
   const loadDashboard = async () => {
     try {
@@ -81,7 +107,9 @@ const Dashboard = () => {
 
   const totalReservations = reservations.length;
   const activeCustomers = customers.filter((c) => c.status === 'Active').length;
-  const pendingRequests = reservations.filter((r) => r.status === 'Pending').length;
+  const pendingRequests = reservations.filter(
+    (r) => r.status === 'Pending' || r.status === 'Request Approval' || r.status === 'To Pay'
+  ).length;
   const lowStockItems = inventory
     .filter((i) => i.total === 0 || i.available / i.total <= 0.2)
     .slice(0, 3);
@@ -160,6 +188,9 @@ const Dashboard = () => {
           <div className="sync-status flex-center gap-1 text-secondary text-xs">
             <RefreshCw size={12} className="cursor-pointer" onClick={loadDashboard} style={{ cursor: 'pointer' }} /> Last synced: {lastSynced.toLocaleTimeString()}
           </div>
+          <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
+            <Settings2 size={14} /> Customize Dashboard
+          </button>
         </div>
       </div>
 
@@ -169,6 +200,7 @@ const Dashboard = () => {
         initial="hidden"
         animate="show"
       >
+        {widgetPrefs.statTotalReservations && (
         <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
           <div className="stat-icon calendar">
             <Calendar size={24} />
@@ -181,7 +213,9 @@ const Dashboard = () => {
             </span>
           </div>
         </motion.div>
+        )}
 
+        {widgetPrefs.statActiveCustomers && (
         <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
           <div className="stat-icon users">
             <Users size={24} />
@@ -194,7 +228,9 @@ const Dashboard = () => {
             </span>
           </div>
         </motion.div>
+        )}
 
+        {widgetPrefs.statPendingRequests && (
         <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
           <div className="stat-icon clock">
             <Clock size={24} />
@@ -207,7 +243,9 @@ const Dashboard = () => {
             </span>
           </div>
         </motion.div>
+        )}
 
+        {widgetPrefs.statARUsage && (
         <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
           <div className="stat-icon ar">
             <Shirt size={24} />
@@ -220,12 +258,17 @@ const Dashboard = () => {
             </span>
           </div>
         </motion.div>
+        )}
       </motion.div>
 
-      <div className="charts-grid">
+      <div className="charts-grid" style={{
+        gridTemplateColumns: (!widgetPrefs.chartReservationTrends || !widgetPrefs.chartPopularOutfits) ? '1fr' : '2fr 1fr'
+      }}>
+        {widgetPrefs.chartReservationTrends && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
+
           transition={{ delay: 0.3 }}
           className="chart-card card"
         >
@@ -273,7 +316,9 @@ const Dashboard = () => {
             </ResponsiveContainer>
           </div>
         </motion.div>
+        )}
 
+        {widgetPrefs.chartPopularOutfits && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -319,9 +364,13 @@ const Dashboard = () => {
             </div>
           </div>
         </motion.div>
+        )}
       </div>
 
-      <div className="widgets-grid">
+      <div className="widgets-grid" style={{
+        gridTemplateColumns: (!widgetPrefs.widgetLowStock || !widgetPrefs.widgetRecentCustomers) ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))'
+      }}>
+        {widgetPrefs.widgetLowStock && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -354,7 +403,9 @@ const Dashboard = () => {
             ))}
           </div>
         </motion.div>
+        )}
 
+        {widgetPrefs.widgetRecentCustomers && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -390,7 +441,96 @@ const Dashboard = () => {
             ))}
           </div>
         </motion.div>
+        )}
       </div>
+
+      {showPreferences && (
+        <div className="modal-overlay" onClick={() => setShowPreferences(false)}>
+          <div className="preferences-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="preferences-header">
+              <h3>Customize Dashboard</h3>
+              <button className="icon-btn" onClick={() => setShowPreferences(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="preferences-body">
+              <div className="pref-section">
+                <h4>Top Statistics</h4>
+                <div className="pref-list">
+                  <div className="pref-item">
+                    <span className="pref-label">Total Reservations</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statTotalReservations} onChange={() => togglePref('statTotalReservations')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Active Customers</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statActiveCustomers} onChange={() => togglePref('statActiveCustomers')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Pending Requests</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statPendingRequests} onChange={() => togglePref('statPendingRequests')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">AR Try-On Usage</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statARUsage} onChange={() => togglePref('statARUsage')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="pref-section">
+                <h4>Charts</h4>
+                <div className="pref-list">
+                  <div className="pref-item">
+                    <span className="pref-label">Reservation Trends</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartReservationTrends} onChange={() => togglePref('chartReservationTrends')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Popular Outfits</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartPopularOutfits} onChange={() => togglePref('chartPopularOutfits')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pref-section">
+                <h4>Widgets</h4>
+                <div className="pref-list">
+                  <div className="pref-item">
+                    <span className="pref-label">Low Stock Alerts</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLowStock} onChange={() => togglePref('widgetLowStock')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Recent Customers</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
