@@ -160,7 +160,7 @@ export const deleteCategory = (docId) => {
  */
 export const recalculateAllInventoryStock = async () => {
   const { db } = await import('../firebase/config');
-  const { collection, getDocs, query, where, writeBatch, serverTimestamp } = await import('firebase/firestore');
+  const { collection, getDocs, query, where, writeBatch, serverTimestamp, doc } = await import('firebase/firestore');
 
   // 1. Get all active reservations (any status that still holds inventory)
   const resQuery = query(
@@ -208,5 +208,40 @@ export const recalculateAllInventoryStock = async () => {
   });
 
   await batch.commit();
+
+  // 4. Aggregate by Product and sync status/stock
+  const updatedInvSnap = await getDocs(collection(db, 'inventory'));
+  const productMap = {}; // productDocId -> { available, reserved }
+
+  updatedInvSnap.docs.forEach(doc => {
+    const data = doc.data();
+    const pId = data.productDocId;
+    if (pId) {
+      if (!productMap[pId]) productMap[pId] = { available: 0, reserved: 0 };
+      productMap[pId].available += (data.available || 0);
+      productMap[pId].reserved += (data.reserved || 0);
+    }
+  });
+
+  const productEntries = Object.entries(productMap);
+  for (let i = 0; i < productEntries.length; i += 450) {
+    const chunk = productEntries.slice(i, i + 450);
+    const finalBatch = writeBatch(db);
+    
+    for (const [pId, stats] of chunk) {
+      let status = 'In Boutique';
+      if (stats.available <= 0) {
+        status = stats.reserved > 0 ? 'Reserved' : 'Out of Stock';
+      }
+
+      finalBatch.update(doc(db, 'products', pId), {
+        stock: stats.available,
+        status: status
+      });
+    }
+    await finalBatch.commit();
+  }
+
   queryCache.invalidateByPrefix('inventory');
+  queryCache.invalidateByPrefix('products');
 };

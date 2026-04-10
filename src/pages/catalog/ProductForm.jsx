@@ -380,6 +380,7 @@ const ProductForm = () => {
       } else {
         payload.created_by = user?.email || 'admin';
         payload.stock = 0;
+        payload.status = 'Out of Stock';
         payload.visibility = 'Draft';
         payload.tags = ['New Arrival'];
 

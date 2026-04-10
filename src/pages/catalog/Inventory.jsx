@@ -86,11 +86,13 @@ const Inventory = () => {
         (i) => (i.productDocId || i.sku) === (productDocId || sku),
       );
 
-      let newTotalStock = 0;
+      let newTotalStock = 0; // Total Available
+      let totalReserved = 0;
       let actualProdDocId = productDocId;
 
       allSizes.forEach((s) => {
         newTotalStock += s.available || 0;
+        totalReserved += s.reserved || 0;
         if (!actualProdDocId && s.productDocId) actualProdDocId = s.productDocId;
       });
 
@@ -101,7 +103,15 @@ const Inventory = () => {
       }
 
       if (actualProdDocId) {
-        await updateProduct(actualProdDocId, { stock: newTotalStock });
+        let status = 'In Boutique';
+        if (newTotalStock <= 0) {
+          status = totalReserved > 0 ? 'Reserved' : 'Out of Stock';
+        }
+
+        await updateProduct(actualProdDocId, { 
+          stock: newTotalStock,
+          status: status 
+        });
       }
     } catch (err) {
       console.error('Failed to sync total stock to product:', err);
