@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
 import ImageWithFallback from '../../components/ImageWithFallback';
+import { COLOR_CATEGORIES } from '../../utils/constants';
 import { Logger } from '../../utils/Logger';
 import './ClothingCatalog.css';
 
@@ -60,6 +61,7 @@ const ClothingCatalog = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
+  const [activeColor, setActiveColor] = useState('All Colors');
 
   const categories = ['All', ...dbCategories];
   const availableTags = ['AR Try-On'];
@@ -77,7 +79,8 @@ const ClothingCatalog = () => {
       .toLowerCase()
       .includes((searchTerm || '').toLowerCase());
     const matchesCat = activeCategory === 'All' || item.category === activeCategory;
-    return matchesSearch && matchesCat;
+    const matchesColor = activeColor === 'All Colors' || item.baseColor === activeColor;
+    return matchesSearch && matchesCat && matchesColor;
   });
 
   // --- DELETE PRODUCT ---
@@ -209,6 +212,19 @@ const ClothingCatalog = () => {
             className="input-field pl-10"
           />
         </div>
+        <div className="color-filter ml-4">
+          <select 
+            className="input-field" 
+            style={{ width: 'auto', minWidth: '150px' }}
+            value={activeColor}
+            onChange={(e) => setActiveColor(e.target.value)}
+          >
+            <option value="All Colors">All Colors</option>
+            {COLOR_CATEGORIES.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="catalog-grid-display">
@@ -239,7 +255,9 @@ const ClothingCatalog = () => {
                   </div>
                 )}
                 {(item.tags || []).includes('AR Try-On') && (
-                  <div className="ar-badge">AR Ready</div>
+                  <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
+                    {item.model3DURL ? 'AR Ready' : 'AR Missing'}
+                  </div>
                 )}
               </div>
 

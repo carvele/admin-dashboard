@@ -62,3 +62,10 @@ export const subscribeToARAssets = (callback) => {
 export const getARAssets = () => {
   return getCollection('ar_assets');
 };
+
+export const createARAsset = (data) => {
+  return addDocument('ar_assets', {
+    ...data,
+    timestamp: Date.now()
+  });
+};

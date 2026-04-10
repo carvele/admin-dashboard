@@ -12,8 +12,14 @@ import {
   AreaChart,
   Area,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X, ChevronDown, Filter, PieChart as PieIcon, Activity } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { subscribeToCollection, orderBy, limit } from '../../firebase/firestore';
 import './Analytics.css';
 
@@ -41,9 +47,19 @@ const Analytics = () => {
   const [customers, setCustomers] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [convRates, setConvRates] = useState([]);
+  const [feedback, setFeedback] = useState([]);
+  
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  
   const [showPreferences, setShowPreferences] = useState(false);
+  const [exportRef, setExportRef] = useState(false);
   const [widgetPrefs, setWidgetPrefs] = useState(() => {
     const savedPrefs = localStorage.getItem('analytics_widget_prefs');
     if (savedPrefs) {
@@ -57,6 +73,7 @@ const Analytics = () => {
       showTopStats: true,
       showRevenueTrends: true,
       showARConversions: true,
+      showCategoryShare: true,
       showTopItems: true,
       showMetrics: true,
     };
@@ -72,13 +89,8 @@ const Analytics = () => {
   };
 
   useEffect(() => {
-    // Reservations come from BOTH admin dashboard (has createdAt) and Android app (may use
-    // timestamp/reservationDate instead). Using orderBy('createdAt') would silently exclude
-    // any doc without that field, so we use limit-only for reservations.
-    const reservationConstraint = [limit(500)];
-    // Users: Android-registered users may lack createdAt, so use limit-only to avoid silent exclusions.
-    const userConstraint = [limit(500)];
-    // Products are always created via addDocument so createdAt is guaranteed.
+    const reservationConstraint = [limit(1000)];
+    const userConstraint = [limit(1000)];
     const productConstraint = [orderBy('createdAt', 'desc'), limit(500)];
 
     const unsubR = subscribeToCollection('reservations', setReservations, reservationConstraint);
@@ -87,168 +99,215 @@ const Analytics = () => {
     }, userConstraint);
     const unsubCat = subscribeToCollection('products', setCatalog, productConstraint);
     const unsubConv = subscribeToCollection('analyticsConvRate', setConvRates, [limit(100)]);
+    const unsubFeed = subscribeToCollection('feedback', setFeedback, [limit(200)]);
     
     return () => {
       unsubR();
       unsubC();
       unsubCat();
       unsubConv();
+      unsubFeed();
     };
   }, []);
 
-  // Compute total revenue — Completed / Confirmed / Approved reservations / To Pay
+  const handleDatePresetChange = (preset) => {
+    setDateRange(preset);
+    const now = new Date();
+    let start = new Date();
+    
+    if (preset === '7d') start.setDate(now.getDate() - 7);
+    else if (preset === '30d') start.setDate(now.getDate() - 30);
+    else if (preset === 'quarter') start.setMonth(now.getMonth() - 3);
+    else if (preset === 'ytd') start = new Date(now.getFullYear(), 0, 1);
+    
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(now.toISOString().split('T')[0]);
+  };
+
+  const parseResDate = (item, overrideField = null) => {
+    const raw = overrideField ? item[overrideField] : (item.reservationDate || item.date || item.timestamp || item.createdAt || item.joinedAt);
+    if (!raw) return null;
+    if (raw?.toDate) return raw.toDate();
+    if (raw?.seconds) return new Date(raw.seconds * 1000);
+    return new Date(raw);
+  };
+
+  const isInRange = (date) => {
+    if (!date) return false;
+    const d = new Date(date);
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    e.setHours(23, 59, 59, 999);
+    return d >= s && d <= e;
+  };
+
+  // Filter Data
+  const filteredReservations = reservations.filter(r => isInRange(parseResDate(r)));
+  const filteredCustomers = customers.filter(c => isInRange(parseResDate(c)));
+  const currentTotalCustomers = customers.length; // Absolute total
+
+  // Compute Revenue and Growth
   let totalRev = 0;
-  const completedOrConfirmed = reservations.filter(
+  const completedOrConfirmed = filteredReservations.filter(
     (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
   );
   completedOrConfirmed.forEach((r) => {
     const outfitName = r.productName || r.outfit;
-    // 1. Try catalog lookup (exact doc id match, then name match)
     const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-    if (item) {
-      totalRev += item.price || 0;
-    } else {
-      // 2. Fallback: price stored directly on the reservation (Android app stores this)
-      totalRev += r.price || r.totalAmount || r.rentalFee || 0;
-    }
+    if (item) totalRev += item.price || 0;
+    else totalRev += r.price || r.totalAmount || r.rentalFee || 0;
   });
 
-  // Unified date parser — covers both admin (reservationDate as Date/Timestamp) and
-  // Android (reservationDate as Timestamp, date as string, timestamp as millis)
-  const parseResDate = (r) => {
-    const raw = r.reservationDate || r.date || r.timestamp || r.createdAt;
-    if (!raw) return null;
-    if (raw?.toDate) return raw.toDate();               // Firestore Timestamp
-    if (raw?.seconds) return new Date(raw.seconds * 1000); // Firestore Timestamp (plain object)
-    return new Date(raw);                               // ISO string or millis
-  };
+  const getGrowth = (list, dateField = null) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const duration = end - start;
+    const prevStart = new Date(start.getTime() - duration);
+    const prevEnd = new Date(start.getTime() - 1);
 
-  const getMonthDelta = (list, dateField, useResParser = false) => {
-    const now = new Date();
-    const getDate = (item) => {
-      if (useResParser) return parseResDate(item);
-      const raw = item[dateField];
-      if (!raw) return null;
-      if (raw?.toDate) return raw.toDate();
-      if (raw?.seconds) return new Date(raw.seconds * 1000);
-      return new Date(raw);
+    const isPrevRange = (date) => {
+      const d = new Date(date);
+      return d >= prevStart && d <= prevEnd;
     };
-    const thisMonth = list.filter((item) => {
-      const d = getDate(item);
-      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
-    const lastMonth = list.filter((item) => {
-      const d = getDate(item);
-      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return d && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
-    }).length;
-    if (lastMonth === 0 && thisMonth === 0) return { text: 'No data yet', trend: 'neutral' };
-    if (lastMonth === 0) return { text: `+${thisMonth} this month`, trend: 'up' };
-    const pct = Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
-    return { text: `${pct >= 0 ? '+' : ''}${pct}% vs last month`, trend: pct >= 0 ? 'up' : 'down' };
+
+    const currentCount = list.filter(item => isInRange(parseResDate(item, dateField))).length;
+    const prevCount = list.filter(item => isPrevRange(parseResDate(item, dateField))).length;
+
+    if (prevCount === 0) return { text: `+${currentCount} this period`, trend: 'up' };
+    const pct = Math.round(((currentCount - prevCount) / prevCount) * 100);
+    return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
   };
 
-  const revDelta = getMonthDelta(completedOrConfirmed, null, true);
-  const custDelta = getMonthDelta(customers, 'createdAt');
-  const resDelta = getMonthDelta(reservations, null, true);
+  const revDelta = getGrowth(completedOrConfirmed);
+  const custDelta = getGrowth(customers);
+  const resDelta = getGrowth(reservations);
 
-  const activeCustomers = customers.filter((c) => c.status === 'Active').length;
-  // Compute popular items — normalise outfit name across both field names
+  // New Visualization: Revenue by Category
+  const categoryRev = {};
+  completedOrConfirmed.forEach(r => {
+    const outfitName = r.productName || r.outfit;
+    const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
+    const cat = item?.category || 'Uncategorized';
+    const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
+    categoryRev[cat] = (categoryRev[cat] || 0) + val;
+  });
+
+  const categoryShareData = Object.entries(categoryRev)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a,b) => b.value - a.value);
+
+  const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
+
+  // Status Funnel
+  const statusCounts = {};
+  filteredReservations.forEach(r => {
+    statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+  });
+  const funnelData = Object.entries(statusCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a,b) => b.count - a.count);
+
+  // Avg Rating
+  const avgRating = feedback.length > 0 
+    ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
+    : 0;
+
+  // Inventory Health
+  const inStock = catalog.filter(p => (p.stock || 0) > 0).length;
+  const outOfStock = catalog.filter(p => (p.stock || 0) <= 0).length;
+
+  // Build dynamic trends from actual reservation data
+  const buildTrends = () => {
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    const diffDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 14) {
+      // Day by day
+      const days = {};
+      for(let i=0; i <= diffDays; i++) {
+        const d = new Date(s);
+        d.setDate(s.getDate() + i);
+        days[d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })] = 0;
+      }
+      filteredReservations.forEach(r => {
+        const d = parseResDate(r);
+        const k = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if(days[k] !== undefined) days[k]++;
+      });
+      return Object.entries(days).map(([name, reservations]) => ({ name, reservations }));
+    } else {
+      // Group by weeks or months
+      const weeks = {};
+      filteredReservations.forEach(r => {
+        const d = parseResDate(r);
+        const weekNum = `Week ${Math.ceil((d - s) / (1000 * 60 * 60 * 24 * 7)) || 1}`;
+        weeks[weekNum] = (weeks[weekNum] || 0) + 1;
+      });
+      return Object.entries(weeks).map(([name, reservations]) => ({ name, reservations }));
+    }
+  };
+  const reservationTrends = buildTrends();
+
+  // Compute popular items for the selected range
   const outfitCounts = {};
-  reservations.forEach((r) => {
+  filteredReservations.forEach((r) => {
     const key = r.productName || r.outfit;
     if (key) outfitCounts[key] = (outfitCounts[key] || 0) + 1;
   });
   const popularOutfits = Object.entries(outfitCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
+    .slice(0, 5)
     .map(([name, count]) => {
       const item = catalog.find((c) => c.name === name);
-      return { name, value: count, revenue: item ? item.price * count : 0, category: item?.category || '' };
+      return { 
+        name, 
+        value: count, 
+        revenue: (item?.price || 0) * count, 
+        category: item?.category || '' 
+      };
     });
-  const actPopular =
-    popularOutfits.length > 0 ? popularOutfits : [{ name: 'No data', value: 0, revenue: 0 }];
 
-  const sortedConvRates = [...convRates].sort((a, b) => (a.id > b.id ? 1 : -1));
-
-  // Build dynamic trends from actual reservation data
-  const buildTrends = () => {
-    const now = new Date();
-    if (dateRange === '30d') {
-      const weeks = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0 };
-      reservations.forEach((r) => {
-        const d = parseResDate(r);
-        if (!d) return;
-        const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
-        if (diffDays <= 30) {
-          const weekNum = Math.min(Math.floor(diffDays / 7) + 1, 4);
-          weeks[`Week ${weekNum}`] = (weeks[`Week ${weekNum}`] || 0) + 1;
-        }
-      });
-      return Object.entries(weeks).map(([name, reservations]) => ({ name, reservations }));
-    } else if (dateRange === 'quarter') {
-      const months = {};
-      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      for (let i = 2; i >= 0; i--) {
-        const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        months[monthNames[m.getMonth()]] = 0;
-      }
-      reservations.forEach((r) => {
-        const d = parseResDate(r);
-        if (!d) return;
-        const mName = monthNames[d.getMonth()];
-        if (months[mName] !== undefined) months[mName]++;
-      });
-      return Object.entries(months).map(([name, reservations]) => ({ name, reservations }));
-    } else {
-      const quarters = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
-      reservations.forEach((r) => {
-        const d = parseResDate(r);
-        if (!d) return;
-        const q = Math.floor(d.getMonth() / 3) + 1;
-        quarters[`Q${q}`]++;
-      });
-      return Object.entries(quarters).map(([name, reservations]) => ({ name, reservations }));
-    }
-  };
-  const reservationTrends = buildTrends();
-
-  const handleExportCSV = () => {
+  const handleExport = (type) => {
     if (reservations.length === 0) return;
-    const headers = ['ID', 'Customer', 'Product', 'Size', 'Date', 'Status', 'Rental Price'];
-    const csvContent = [
-      headers.join(','),
-      ...reservations.map((r) =>
-        [
-          r.id || '',
-          `"${r.customerName || r.customer || ''}"`,
-          `"${r.productName || r.outfit || ''}"`,
-          r.size || '',
-          (() => {
-            const d = parseResDate(r);
-            return d ? d.toLocaleDateString() : '';
-          })(),
-          r.status || '',
-          r.rentalPrice || r.price || r.totalAmount || r.rentalFee ||
-            catalog.find((c) => c.name === (r.productName || r.outfit))?.price || 0,
-        ].join(','),
-      ),
-    ].join('\n');
+    
+    const data = filteredReservations.map(r => ({
+      ID: r.id || '',
+      Customer: r.customerName || r.customer || '',
+      Product: r.productName || r.outfit || '',
+      Size: r.size || '',
+      Date: parseResDate(r)?.toLocaleDateString() || '',
+      Status: r.status || '',
+      Price: r.rentalPrice || r.price || r.totalAmount || 0
+    }));
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
+    if (type === 'xlsx') {
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Reservations");
+      XLSX.writeFile(wb, `JezSy_Report_${startDate}_to_${endDate}.xlsx`);
+    } else if (type === 'pdf') {
+      const doc = new jsPDF();
+      doc.text("JezSy Collection Analytics Report", 14, 15);
+      doc.text(`Period: ${startDate} to ${endDate}`, 14, 25);
+      
+      const tableColumn = ["Customer", "Product", "Date", "Status", "Price"];
+      const tableRows = data.map(r => [r.Customer, r.Product, r.Date, r.Status, `P${r.Price}`]);
+      
+      doc.autoTable(tableColumn, tableRows, { startY: 30 });
+      doc.save(`JezSy_Report_${startDate}_to_${endDate}.pdf`);
+    } else {
+      // Default CSV
+      const headers = Object.keys(data[0]);
+      const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${row[h]}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute(
-        'download',
-        `reservations_export_${new Date().toISOString().split('T')[0]}.csv`,
-      );
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `JezSy_Report_${startDate}.csv`;
       link.click();
-      document.body.removeChild(link);
     }
+    setExportRef(false);
   };
 
   return (
@@ -259,24 +318,55 @@ const Analytics = () => {
           <p className="page-subtitle">Comprehensive performance metrics for JezSy Collection</p>
         </div>
         <div className="flex-center gap-3">
-          <div className="search-box">
-            <Calendar size={18} className="search-icon" />
-            <select
-              className="input-field pl-10 bg-transparent border-none font-medium"
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-            >
-              <option value="30d">Last 30 Days</option>
-              <option value="quarter">Last Quarter</option>
-              <option value="ytd">Year to Date</option>
-            </select>
+          <div className="date-picker-group">
+            <div className="search-box">
+              <Calendar size={18} className="search-icon" />
+              <select
+                className="input-field pl-10 bg-transparent border-none font-medium"
+                value={dateRange}
+                onChange={(e) => handleDatePresetChange(e.target.value)}
+              >
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="quarter">Last Quarter</option>
+                <option value="ytd">Year to Date</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+            
+            <div className="flex-center gap-2 ml-4">
+              <input 
+                type="date" 
+                className="input-field small-date" 
+                value={startDate} 
+                onChange={(e) => { setStartDate(e.target.value); setDateRange('custom'); }}
+              />
+              <span className="text-secondary">to</span>
+              <input 
+                type="date" 
+                className="input-field small-date" 
+                value={endDate} 
+                onChange={(e) => { setEndDate(e.target.value); setDateRange('custom'); }}
+              />
+            </div>
           </div>
+          
           <button className="btn-outline small flex-center gap-1" onClick={() => setShowPreferences(true)}>
             <Settings2 size={18} /> Customize View
           </button>
-          <button className="btn-primary flex-center gap-2" onClick={handleExportCSV}>
-            <Download size={18} /> Export Report
-          </button>
+          
+          <div className="dropdown-container">
+            <button className="btn-primary flex-center gap-2" onClick={() => setExportRef(!exportRef)}>
+              <Download size={18} /> Export <ChevronDown size={14} />
+            </button>
+            {exportRef && (
+              <div className="dropdown-menu">
+                <button onClick={() => handleExport('csv')}>Excel (CSV)</button>
+                <button onClick={() => handleExport('xlsx')}>Excel (.xlsx)</button>
+                <button onClick={() => handleExport('pdf')}>PDF Report</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -288,43 +378,43 @@ const Analytics = () => {
             change={revDelta.text}
             trend={revDelta.trend}
             icon={TrendingUp}
-            tooltip={`Derived from ${completedOrConfirmed.length} completed/confirmed reservations`}
+            tooltip={`Revenue from ${completedOrConfirmed.length} records in this period.`}
           />
           <StatCard
-            title="New Customers"
-            value={customers.length || 0}
+            title="Total Customers"
+            value={currentTotalCustomers}
             change={custDelta.text}
             trend={custDelta.trend}
             icon={Users}
-            tooltip={`${customers.length} registered customers`}
+            tooltip={`${custDelta.text} within the selected range.`}
           />
           <StatCard
             title="Reservations"
-            value={reservations.length || 0}
+            value={filteredReservations.length}
             change={resDelta.text}
             trend={resDelta.trend}
             icon={ShoppingBag}
-            tooltip={`${reservations.length} total reservations`}
+            tooltip={`Total bookings in this period.`}
           />
           <StatCard
-            title="AR Try-Ons"
-            value={catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length}
-            change={`${catalog.filter((p) => p.tags && p.tags.includes('AR Try-On')).length} products`}
+            title="Customer Satisfaction"
+            value={`${avgRating} / 5`}
+            change={`${feedback.length} reviews`}
             trend="up"
-            icon={Eye}
+            icon={Activity}
           />
         </div>
       )}
 
-      {(widgetPrefs.showRevenueTrends || widgetPrefs.showARConversions) && (
-        <div className="analytics-layout mt-4" style={{ gridTemplateColumns: widgetPrefs.showRevenueTrends && widgetPrefs.showARConversions ? '2fr 1fr' : '1fr' }}>
-        {/* Main Chart */}
+      <div className="analytics-layout mt-6">
+        {/* Main Trends */}
         {widgetPrefs.showRevenueTrends && (
-          <div className="card analytics-main-chart">
-            <div className="card-header border-none">
-              <h3>Reservation & Revenue Trends</h3>
+          <div className="card">
+            <div className="card-header border-none flex-between">
+              <h3>Reservation & Growth Trends</h3>
+              <div className="badge accent">Daily Volume</div>
             </div>
-            <div className="chart-container" style={{ height: 300 }}>
+            <div className="chart-container" style={{ height: 350 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={reservationTrends}
@@ -332,109 +422,125 @@ const Analytics = () => {
                 >
                   <defs>
                     <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#1F2937" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#1F2937" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#64748B', fontSize: 12 }}
-                  />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                  <RechartsTooltip
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: 'none',
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="reservations"
-                    stroke="var(--accent)"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#colorRes)"
-                  />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <RechartsTooltip />
+                  <Area type="monotone" dataKey="reservations" stroke="#1F2937" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRes)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
         )}
 
-        {/* Conversion Chart */}
-        {widgetPrefs.showARConversions && (
+        {/* Category Share */}
+        {widgetPrefs.showCategoryShare && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>AR Try-On vs Conversions</h3>
+              <h3>Revenue by Category</h3>
             </div>
-            <div className="chart-container" style={{ height: 300 }}>
+            <div className="chart-container flex-center" style={{ height: 350 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sortedConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis
-                    dataKey="month"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#64748B', fontSize: 12 }}
-                  />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                  <RechartsTooltip
-                    cursor={{ fill: 'transparent' }}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: 'none',
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                    }}
-                  />
-                  <Legend iconType="circle" />
-                  <Bar
-                    dataKey="tryOn"
-                    name="AR Try-Ons"
-                    fill="var(--charcoal)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
-                  />
-                  <Bar
-                    dataKey="reserved"
-                    name="Reservations"
-                    fill="var(--beige)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
-                  />
-                </BarChart>
+                <PieChart>
+                  <Pie
+                    data={categoryShareData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {categoryShareData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(val) => `₱${val.toLocaleString()}`} />
+                  <Legend verticalAlign="bottom" height={36}/>
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
         )}
       </div>
-      )}
 
-      {(widgetPrefs.showTopItems || widgetPrefs.showMetrics) && (
-        <div className="analytics-layout mt-4" style={{ gridTemplateColumns: widgetPrefs.showTopItems && widgetPrefs.showMetrics ? '2fr 1fr' : '1fr' }}>
+      <div className="analytics-grid-3 mt-6">
+        {/* Order Funnel */}
+        <div className="card">
+          <div className="card-header border-none">
+             <h3>Reservation Status Breakdown</h3>
+          </div>
+          <div className="p-4 pt-0">
+             {funnelData.map((item, i) => (
+               <div key={i} className="demo-bar-group mt-3">
+                 <div className="flex-between text-xs mb-1">
+                   <span className="font-semibold">{item.name}</span>
+                   <span>{item.count} orders</span>
+                 </div>
+                 <div className="demo-bar">
+                   <div 
+                    className="demo-fill" 
+                    style={{ 
+                      width: `${(item.count / filteredReservations.length) * 100}%`,
+                      backgroundColor: COLORS[i % COLORS.length]
+                    }}
+                    ></div>
+                 </div>
+               </div>
+             ))}
+          </div>
+        </div>
+
+        {/* Inventory Health */}
+        <div className="card">
+           <div className="card-header border-none">
+             <h3>Inventory Health</h3>
+           </div>
+           <div className="flex-center flex-column gap-6 p-6">
+              <div className="flex-center gap-10">
+                <div className="text-center">
+                   <div className="stat-value small text-success">{inStock}</div>
+                   <div className="text-xs text-secondary font-bold uppercase tracking-wider">In Stock</div>
+                </div>
+                <div className="text-center">
+                   <div className="stat-value small text-danger">{outOfStock}</div>
+                   <div className="text-xs text-secondary font-bold uppercase tracking-wider">Out of Stock</div>
+                </div>
+              </div>
+              <div className="demo-bar-group">
+                 <div className="demo-bar">
+                   <div className="demo-fill" style={{ width: `${(inStock / catalog.length) * 100}%`, backgroundColor: '#059669' }}></div>
+                 </div>
+              </div>
+              <p className="text-xs text-secondary text-center">
+                Total Catalog size: <span className="text-charcoal font-bold">{catalog.length} items</span>
+              </p>
+           </div>
+        </div>
+
+        {/* Top performing items */}
         {widgetPrefs.showTopItems && (
           <div className="card">
             <div className="card-header border-none">
               <h3>Top Performing Items</h3>
             </div>
-            <div className="table-container">
-              <table className="table">
+            <div className="table-container pt-0">
+              <table className="table compact">
                 <thead>
                   <tr>
                     <th>Product</th>
-                    <th>Category</th>
                     <th className="text-right">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {actPopular.map((item, idx) => (
+                  {(popularOutfits.length > 0 ? popularOutfits : []).slice(0, 5).map((item, idx) => (
                     <tr key={idx}>
-                      <td className="font-medium">{item.name}</td>
-                      <td className="text-secondary">{item.category || 'Uncategorized'}</td>
-                      <td className="text-right font-medium">
+                      <td className="font-medium text-sm">{item.name}</td>
+                      <td className="text-right font-bold text-sm">
                         ₱{(item.revenue || 0).toLocaleString()}
                       </td>
                     </tr>
@@ -444,89 +550,68 @@ const Analytics = () => {
             </div>
           </div>
         )}
+      </div>
 
+      <div className="analytics-layout mt-6">
+        {/* AR Conversions */}
+        {widgetPrefs.showARConversions && (
+          <div className="card">
+            <div className="card-header border-none">
+              <h3>AR Try-On Performance</h3>
+            </div>
+            <div className="chart-container" style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={convRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                  <RechartsTooltip cursor={{ fill: 'transparent' }} />
+                  <Bar dataKey="tryOn" name="AR Try-Ons" fill="#1F2937" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="reserved" name="Reservations" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Customer Engagement Metrics */}
         {widgetPrefs.showMetrics && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>Customer & Reservation Metrics</h3>
+              <h3>Platform Metrics</h3>
             </div>
             <div className="p-4 pt-0">
-              <div className="demo-bar-group">
-                <div className="flex-between text-sm mb-1">
-                  <span>New vs Returning Customers</span>
-                  <span className="font-medium">
-                    {customers.length > 0
-                      ? Math.round(
-                          ((customers.length - Object.keys(outfitCounts).length) / customers.length) *
-                            100,
-                        ) || 50
-                      : 0}
-                    % /
-                    {customers.length > 0
-                      ? Math.round((Object.keys(outfitCounts).length / customers.length) * 100) || 50
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <div className="demo-bar">
-                  <div
-                    className="demo-fill"
-                    style={{
-                      width: `${customers.length > 0 ? Math.round(((customers.length - Object.keys(outfitCounts).length) / customers.length) * 100) || 50 : 50}%`,
-                      backgroundColor: 'var(--accent)',
-                    }}
-                  ></div>
-                </div>
+              <div className="metric-row">
+                 <div className="flex-between mb-1">
+                   <span className="text-sm">New Registered Users</span>
+                   <span className="font-bold">{filteredCustomers.length}</span>
+                 </div>
+                 <p className="text-xs text-secondary mb-4">{custDelta.text}</p>
               </div>
-              <div className="demo-bar-group mt-4">
-                <div className="flex-between text-sm mb-1">
-                  <span>Completed Reservation Rate</span>
-                  <span className="font-medium">
-                    {reservations.length > 0
-                      ? Math.round(
-                          (reservations.filter((r) => r.status === 'Completed').length /
-                            reservations.length) *
-                            100,
-                        )
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <div className="demo-bar">
-                  <div
-                    className="demo-fill"
-                    style={{
-                      width: `${reservations.length > 0 ? Math.round((reservations.filter((r) => r.status === 'Completed').length / reservations.length) * 100) : 0}%`,
-                      backgroundColor: 'var(--charcoal)',
-                    }}
-                  ></div>
-                </div>
+              
+              <div className="metric-row">
+                 <div className="flex-between mb-1">
+                   <span className="text-sm">Returning Customer Rate</span>
+                   <span className="font-bold">
+                    {filteredCustomers.length > 0 
+                      ? Math.round((filteredReservations.length / filteredCustomers.length) * 10) 
+                      : 0}%
+                   </span>
+                 </div>
+                 <div className="demo-bar"><div className="demo-fill" style={{ width: '45%', backgroundColor: '#D97706' }}></div></div>
               </div>
-              <div className="demo-bar-group mt-4">
-                <div className="flex-between text-sm mb-1">
-                  <span>Active Customer Growth</span>
-                  <span className="font-medium">
-                    {customers.length > 0
-                      ? Math.round((activeCustomers / customers.length) * 100)
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <div className="demo-bar">
-                  <div
-                    className="demo-fill"
-                    style={{
-                      width: `${customers.length > 0 ? Math.round((activeCustomers / customers.length) * 100) : 0}%`,
-                      backgroundColor: '#D97706',
-                    }}
-                  ></div>
-                </div>
+
+              <div className="metric-row mt-6">
+                 <div className="flex-between mb-1">
+                   <span className="text-sm">Avg Reservation Value</span>
+                   <span className="font-bold">₱{ (totalRev / (completedOrConfirmed.length || 1)).toLocaleString() }</span>
+                 </div>
+                 <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: '#1F2937' }}></div></div>
               </div>
             </div>
           </div>
         )}
       </div>
-      )}
 
       {/* Analytics Preferences Modal */}
       {showPreferences && (
@@ -584,6 +669,21 @@ const Analytics = () => {
                     type="checkbox"
                     checked={widgetPrefs.showARConversions}
                     onChange={() => handleTogglePref('showARConversions')}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
+                <div>
+                  <h4 className="font-medium mb-1">Category Breakdown</h4>
+                  <p className="text-sm text-secondary">Pie chart showing category profit distribution.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={widgetPrefs.showCategoryShare}
+                    onChange={() => handleTogglePref('showCategoryShare')}
                   />
                   <span className="toggle-slider"></span>
                 </label>

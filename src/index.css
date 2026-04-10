@@ -771,3 +771,58 @@ input:checked + .toggle-slider:before {
     max-width: 100%;
   }
 }
+
+/* ── Garment Measurement Table ───────────────────────────── */
+.bg-light {
+  background-color: var(--beige) !important;
+  opacity: 0.8;
+}
+
+.measurement-table-container {
+  background: var(--white);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.measurement-table-container .table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.measurement-table-container th {
+  background-color: var(--beige);
+  color: var(--charcoal);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  padding: 1rem;
+}
+
+.measurement-table-container td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.measurement-table-container tr:last-child td {
+  border-bottom: none;
+}
+
+.measurement-table-container input[type="text"] {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.5rem;
+  width: 100%;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.measurement-table-container input[type="text"]:focus {
+  border-color: var(--accent);
+  background: var(--white);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}

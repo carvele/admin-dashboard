@@ -46,9 +46,16 @@ export const routeAndUploadFile = async (file, folderPath = 'catalog-assets') =>
     console.log(`[Storage] Routing ${file.name} to Firebase Storage...`);
     return await uploadFile(file, folderPath);
   } else {
-    console.log(`[Storage] Routing ${file.name} to Cloudinary...`);
-    const { secure_url } = await uploadToCloudinary(file);
-    return secure_url;
+    const provider = import.meta.env.VITE_UPLOAD_PROVIDER || 'cloudinary';
+    
+    if (provider === 'firebase') {
+      console.log(`[Storage] Routing ${file.name} to Firebase Storage (Provider: firebase)...`);
+      return await uploadFile(file, folderPath);
+    } else {
+      console.log(`[Storage] Routing ${file.name} to Cloudinary (Provider: ${provider})...`);
+      const { secure_url } = await uploadToCloudinary(file);
+      return secure_url;
+    }
   }
 };
 

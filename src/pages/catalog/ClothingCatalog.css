@@ -118,9 +118,19 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #7e22ce;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.ar-badge.ready {
+  color: #047857; /* Emerald 700 */
+  border: 1px solid #10b981;
+}
+
+.ar-badge.missing {
+  color: #b91c1c; /* Red 700 */
+  border: 1px solid #ef4444;
 }
 
 .new-arrival-badge {

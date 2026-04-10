@@ -18,6 +18,7 @@ import {
   addDocument,
   deleteDocument,
 } from '../../firebase/firestore';
+import { routeAndUploadFile } from '../../firebase/storage';
 import './ARAssets.css';
 
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
@@ -29,9 +30,13 @@ const ARAssets = () => {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [configAsset, setConfigAsset] = useState(null);
   const [assets, setAssets] = useState([]);
+  const [pendingProducts, setPendingProducts] = useState([]);
+  const [globalLibrary, setGlobalLibrary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [poses, setPoses] = useState([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [productToLink, setProductToLink] = useState(null);
   const [isPoseModalOpen, setIsPoseModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -49,14 +54,17 @@ const ARAssets = () => {
 
   useEffect(() => {
     const unsub = subscribeToCollection('products', (data) => {
-      const arProducts = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
-      setAssets(arProducts);
+      const arTagged = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
+      setAssets(arTagged.filter(p => p.model3DURL));
+      setPendingProducts(arTagged.filter(p => !p.model3DURL));
       setLoading(false);
     });
     const unsubPoses = subscribeToCollection('poseGuides', setPoses);
+    const unsubLibrary = subscribeToCollection('ar_assets', setGlobalLibrary);
     return () => {
       unsub();
       unsubPoses();
+      unsubLibrary();
     };
   }, []);
 
@@ -97,22 +105,39 @@ const ARAssets = () => {
 
   const handleUploadARAsset = async () => {
     if (!selectedFile) {
-      toast.error('Select a 3D model file');
+      toast.error('Select a file to upload');
       return;
     }
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-      formData.append('resource_type', 'auto');
+      // Use Firebase Storage for consistency with ProductForm
+      console.log('[Storage] Uploading asset to Firebase...');
+      const downloadURL = await routeAndUploadFile(selectedFile, selectedFile.name.endsWith('.glb') ? 'catalog-assets/models' : 'catalog-assets/masks');
+      
+      const assetType = selectedFile.name.endsWith('.glb') ? '3D Model' : 'Segmentation Mask';
+      
+      // 1. Register in Global Library
+      await addDocument('ar_assets', {
+        name: selectedFile.name,
+        url: downloadURL,
+        type: assetType,
+        source: 'ar_hub_upload',
+        timestamp: Date.now()
+      });
 
-      const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: 'POST', body: formData });
-      const data = await res.json();
+      // 2. If we were uploading for a specific product, link it now
+      if (window._targetProduct) {
+        const updateData = assetType === '3D Model' 
+          ? { model3DURL: downloadURL, arStatus: 'Active' } 
+          : { maskURL: downloadURL };
+        
+        await updateDocument('products', window._targetProduct.docId, updateData);
+        toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
+        window._targetProduct = null;
+      } else {
+        toast.success(`${assetType} uploaded to global library.`);
+      }
 
-      toast.success(
-        `AR asset "${selectedFile.name}" uploaded to cloud storage! Tag a product with "AR Try-On" in Catalog to associate it.`,
-      );
       setIsUploadModalOpen(false);
       setSelectedFile(null);
     } catch (e) {
@@ -171,10 +196,25 @@ const ARAssets = () => {
         </div>
         <div className="tab-switcher card p-1">
           <button
+            className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
+            onClick={() => setActiveTab('pending')}
+          >
+            <Plus size={16} /> Pending Setup
+            {pendingProducts.length > 0 && (
+              <span className="count-badge">{pendingProducts.length}</span>
+            )}
+          </button>
+          <button
             className={`tab-btn ${activeTab === 'assets' ? 'active' : ''}`}
             onClick={() => setActiveTab('assets')}
           >
-            <View size={16} /> Asset Library
+            <Check size={16} /> Linked Products
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'library' ? 'active' : ''}`}
+            onClick={() => setActiveTab('library')}
+          >
+            <Shirt size={16} /> Global Library
           </button>
           <button
             className={`tab-btn ${activeTab === 'poses' ? 'active' : ''}`}
@@ -185,7 +225,61 @@ const ARAssets = () => {
         </div>
       </div>
 
-      {activeTab === 'assets' ? (
+      {activeTab === 'pending' && (
+        <div className="card">
+          <div className="card-header">
+            <h3>Production Line: Items Needing AR Setup</h3>
+            <p className="text-secondary text-sm">Products tagged "AR Try-On" in the Catalog waiting for 3D Assets.</p>
+          </div>
+          <table className="table mt-4">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingProducts.map((p) => (
+                <tr key={p.docId}>
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <div className="avatar bg-light text-primary flex-center text-lg">{p.imageUrl || '👗'}</div>
+                      <span className="font-medium">{p.name}</span>
+                    </div>
+                  </td>
+                  <td>{p.category}</td>
+                  <td>
+                    <span className="align-status pending">Missing Assets</span>
+                  </td>
+                  <td>
+                    <button 
+                      className="btn-primary small"
+                      onClick={() => {
+                        setProductToLink(p);
+                        setIsLinkModalOpen(true);
+                      }}
+                    >
+                      Setup AR
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {pendingProducts.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="text-center p-12 text-secondary">
+                    <Check size={48} className="mx-auto block opacity-20 mb-2" />
+                    No pending products. All AR items are configured!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'assets' && (
         <div className="card">
           <div className="card-header">
             <h3>Clothing AR Assets</h3>
@@ -213,8 +307,8 @@ const ARAssets = () => {
                 const alignments = asset.arAlignments || 'Pending';
 
                 return (
-                  <tr key={asset.id}>
-                    <td className="font-mono text-sm">{asset.id}</td>
+                  <tr key={asset.docId}>
+                    <td className="font-mono text-sm">{asset.docId.substring(0, 8)}...</td>
                     <td className="font-medium">{asset.name}</td>
                     <td className="text-secondary">3D Model (.glb)</td>
                     <td>
@@ -249,62 +343,151 @@ const ARAssets = () => {
 
               {assets.length === 0 && !loading && (
                 <tr>
-                  <td colSpan="6">
-                    <div className="empty-state flex-col flex-center gap-3 p-8">
-                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                        <View size={48} opacity={0.5} />
-                      </div>
-                      <h3 className="text-lg font-medium">No AR-enabled products found</h3>
-                      <p className="text-secondary text-center max-w-sm">
-                        Add the 'AR Try-On' tag to a product in the Catalog module to use this
-                        feature.
-                      </p>
-                      <button className="btn-outline mt-2" onClick={() => setActiveTab('poses')}>
-                        View Pose Guides
-                      </button>
-                    </div>
+                  <td colSpan="6" className="text-center p-8 text-secondary">
+                    No active AR assets linked yet.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      ) : (
-        <div className="pose-guide-section">
-          <div className="card-header mb-4">
-            <h3>Pose Guide Library</h3>
-            <button
-              className="btn-primary flex-center gap-2"
-              onClick={() => setIsPoseModalOpen(true)}
-            >
-              <Plus size={16} /> Add Pose Reference
-            </button>
+      )}
+
+      {activeTab === 'library' && (
+        <div className="card">
+          <div className="card-header">
+            <h3>Global 3D Asset Library</h3>
+            <div className="flex gap-2">
+              <button className="btn-outline" onClick={() => window.location.href='/catalog/new'}>
+                Create AR Product
+              </button>
+              <button
+                className="btn-primary flex-center gap-2"
+                onClick={() => {
+                  window._targetProduct = null;
+                  setIsUploadModalOpen(true);
+                }}
+              >
+                <Upload size={16} /> Upload New File
+              </button>
+            </div>
           </div>
-          <div className="pose-grid">
-            {displayPoses.map((pose) => (
-              <div key={pose.id || pose.docId} className="pose-card card">
-                <div className="pose-img-placeholder">
-                  <Camera size={48} className="text-secondary opacity-50" />
-                </div>
-                <div className="pose-info">
-                  <div className="flex-between">
-                    <span className="text-xs font-mono text-secondary">{pose.id}</span>
-                    <span className="tag-badge">{pose.category}</span>
-                  </div>
-                  <h4>{pose.name}</h4>
-                  <div className="mt-3 flex gap-2">
-                    {pose.docId && (
-                      <button
-                        className="btn-outline small text-danger flex-1"
-                        onClick={() => handleDeletePose(pose)}
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
-                    )}
+          <p className="text-secondary text-sm p-4 border-b">
+            These files can be linked to any product. 
+            Usage reflects how many clothing items currently use this specific model.
+            {window._targetProduct && (
+              <span className="text-accent font-semibold block mt-1">
+                👉 Click "Link to Product" to assign to {window._targetProduct.name}
+              </span>
+            )}
+          </p>
+          <table className="table mt-4">
+            <thead>
+              <tr>
+                <th>Asset Name</th>
+                <th>Type</th>
+                <th>Uploaded</th>
+                <th>Linked Products</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {globalLibrary.map((item, idx) => {
+                const usage = assets.filter(p => p.model3DURL === item.url || p.maskURL === item.url).length;
+                return (
+                  <tr key={idx}>
+                    <td className="font-medium">{item.name}</td>
+                    <td>{item.type}</td>
+                    <td className="text-secondary">{new Date(item.timestamp).toLocaleDateString()}</td>
+                    <td>
+                      <span className={`tag-badge ${usage > 0 ? 'success' : 'warning'}`}>
+                        {usage} products
+                      </span>
+                    </td>
+                    <td>
+                      <div className="action-buttons">
+                        {window._targetProduct ? (
+                          <button 
+                            className="btn-primary small"
+                            onClick={async () => {
+                              const updateData = item.type === '3D Model' 
+                                ? { model3DURL: item.url, arStatus: 'Active' } 
+                                : { maskURL: item.url };
+                              await updateDocument('products', window._targetProduct.docId, updateData);
+                              toast.success(`Linked ${item.name} to ${window._targetProduct.name}`);
+                              window._targetProduct = null;
+                              setActiveTab('assets');
+                            }}
+                          >
+                            Link to Product
+                          </button>
+                        ) : (
+                          <button className="btn-outline small">Preview</button>
+                        )}
+                        <button className="btn-outline small text-danger">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {globalLibrary.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="text-center p-8 text-secondary">
+                    No files found in the global library.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Link Assets Modal */}
+      {isLinkModalOpen && productToLink && (
+        <div className="modal-overlay" onClick={() => setIsLinkModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>Setup AR: {productToLink.name}</h2>
+              <button type="button" className="close-btn" onClick={() => setIsLinkModalOpen(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="flex flex-col gap-6">
+                <div>
+                  <h4 className="text-sm font-semibold mb-3">Quick Actions</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      className="btn-outline flex-col py-8 gap-3 h-auto"
+                      onClick={() => {
+                        setIsLinkModalOpen(false);
+                        setIsUploadModalOpen(true);
+                        window._targetProduct = productToLink;
+                      }}
+                    >
+                      <Upload size={32} />
+                      <div className="text-center">
+                        <p className="font-semibold">Upload Asset</p>
+                        <p className="text-xs text-secondary">New .glb or mask</p>
+                      </div>
+                    </button>
+                    <button 
+                      className="btn-outline flex-col py-8 gap-3 h-auto"
+                      onClick={() => {
+                        setActiveTab('library');
+                        setIsLinkModalOpen(false);
+                        toast.info(`Select an asset for ${productToLink.name}`);
+                        window._targetProduct = productToLink;
+                      }}
+                    >
+                      <Shirt size={32} />
+                      <div className="text-center">
+                        <p className="font-semibold">Pick from Library</p>
+                        <p className="text-xs text-secondary">Reuse existing</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       )}

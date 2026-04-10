@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Save, Shirt } from 'lucide-react';
+import { ArrowLeft, Upload, X, Save, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler } from 'lucide-react';
 import {
   createProduct,
   updateProduct,
@@ -10,8 +10,13 @@ import {
   getInventory,
 } from '../../services/productService';
 import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
+import {
+  subscribeToSuggestedOutfits,
+} from '../../services/wardrobeService';
+import MeasurementTable from '../../components/catalog/MeasurementTable';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
+import { COLOR_CATEGORIES, AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
 import { Logger } from '../../utils/Logger';
 import { toast } from 'sonner';
 
@@ -35,6 +40,7 @@ const ProductForm = () => {
     description: '',
     material: '',
     color: '',
+    baseColor: 'White', // Default category for filtering
     careInstructions: '',
     fitAndSizing: '',
     styleCode: '',
@@ -47,6 +53,7 @@ const ProductForm = () => {
     images: [], // Array of image URLs/Maps
     model3DURL: '',
     maskURL: '',
+    measurements: {}, // size-based grid
   });
 
   const [categories, setCategories] = useState([
@@ -77,19 +84,9 @@ const ProductForm = () => {
       ],
     },
   ]);
-  const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
-  const SEASONS = [
-    'All-Season',
-    'Dry Season (Summer)',
-    'Wet Season (Rainy)',
-    'Cool Season (-Ber Months)',
-  ];
-
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
-  const [model3DFile, setModel3DFile] = useState(null);
-  const [maskFile, setMaskFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const previewUrlsRef = React.useRef([]);
 
@@ -145,6 +142,7 @@ const ProductForm = () => {
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
               model3DURL: doc.model3DURL || '',
               maskURL: doc.maskURL || '',
+              measurements: doc.measurements || {},
             };
             setFormData(data);
             setOldData(data);
@@ -242,6 +240,28 @@ const ProductForm = () => {
     }));
   };
 
+  const moveExistingImage = (index, direction) => {
+    const newImages = [...formData.images];
+    const newPos = index + direction;
+    if (newPos < 0 || newPos >= newImages.length) return;
+    
+    [newImages[index], newImages[newPos]] = [newImages[newPos], newImages[index]];
+    setFormData(prev => ({ ...prev, images: newImages }));
+  };
+
+  const moveSelectedFile = (index, direction) => {
+    const newFiles = [...selectedFiles];
+    const newPrev = [...previews];
+    const newPos = index + direction;
+    if (newPos < 0 || newPos >= newFiles.length) return;
+
+    [newFiles[index], newFiles[newPos]] = [newFiles[newPos], newFiles[index]];
+    [newPrev[index], newPrev[newPos]] = [newPrev[newPos], newPrev[index]];
+
+    setSelectedFiles(newFiles);
+    setPreviews(newPrev);
+  };
+
   const toggleSize = (size) => {
     const currentSizes = formData.sizes;
     const newSizes = currentSizes.includes(size)
@@ -283,28 +303,14 @@ const ProductForm = () => {
 
       if (selectedFiles.length > 0) {
         for (let i = 0; i < selectedFiles.length; i++) {
-          setUploadProgress({ current: i + 1, total: selectedFiles.length + (maskFile ? 1 : 0) + (model3DFile ? 1 : 0) });
+          setUploadProgress({ current: i + 1, total: selectedFiles.length });
           console.log(`[Storage] Uploading gallery image ${i + 1}...`);
           const url = await routeAndUploadFile(selectedFiles[i]);
           if (url) uploadedImages.push(url);
         }
       }
 
-      // 3. Upload Mask if any
-      let finalMaskURL = formData.maskURL;
-      if (maskFile) {
-        console.log('[Storage] Uploading segmentation mask...');
-        finalMaskURL = await routeAndUploadFile(maskFile);
-      }
-
-      // 4. Upload 3D Model if any
-      let finalModel3DURL = formData.model3DURL;
-      if (model3DFile) {
-        console.log('[Storage] Uploading 3D model to Firebase...');
-        finalModel3DURL = await routeAndUploadFile(model3DFile, 'catalog-assets/models');
-      }
-
-      console.log('[DEBUG] All assets handled. Preparing payload...');
+      console.log('[DEBUG] All images handled. Preparing payload...');
       const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
@@ -328,8 +334,10 @@ const ProductForm = () => {
         updated_by: user?.email || 'admin',
         images: finalImages,
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
-        model3DURL: finalModel3DURL,
-        maskURL: finalMaskURL,
+        // Note: model3DURL and maskURL are preserved from existing data if editing,
+        // but can no longer be updated here.
+        model3DURL: formData.model3DURL || '',
+        maskURL: formData.maskURL || '',
         timestamp: Date.now(),
       };
 
@@ -556,31 +564,84 @@ const ProductForm = () => {
           <div className="flex flex-wrap gap-4 mb-4">
             {/* Existing Images */}
             {formData.images.map((url, idx) => (
-              <div key={idx} className="relative w-24 h-24 border rounded overflow-hidden">
+              <div key={`exist-${idx}`} className="relative w-28 h-28 border rounded overflow-hidden group">
                 <img src={url} alt={`img-${idx}`} className="w-full h-full object-cover" loading="lazy" />
-                <button
-                  type="button"
-                  onClick={() => removeExistingImage(idx)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
-                >
-                  <X size={12} />
-                </button>
+                
+                {/* Visual indicator for primary image */}
+                {idx === 0 && (
+                  <div className="absolute top-0 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold z-10">
+                    PRIMARY
+                  </div>
+                )}
+
+                {/* Sorting Controls */}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveExistingImage(idx, -1)}
+                    disabled={idx === 0}
+                    title="Move Left"
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                     type="button"
+                     onClick={() => removeExistingImage(idx)}
+                     title="Remove"
+                     className="p-1 bg-red-500/80 hover:bg-red-500 rounded text-white"
+                   >
+                     <X size={16} />
+                   </button>
+                  <button
+                    type="button"
+                    onClick={() => moveExistingImage(idx, 1)}
+                    disabled={idx === formData.images.length - 1}
+                    title="Move Right"
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
             ))}
             {/* New Previews */}
             {previews.map((preview, idx) => (
               <div
                 key={`prev-${idx}`}
-                className="relative w-24 h-24 border border-dashed border-primary rounded overflow-hidden opacity-70"
+                className="relative w-28 h-28 border border-dashed border-primary rounded overflow-hidden group"
               >
-                <img src={preview} alt="preview" className="w-full h-full object-cover" loading="lazy" />
-                <button
-                  type="button"
-                  onClick={() => removeSelectedFile(idx)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
-                >
-                  <X size={12} />
-                </button>
+                <img src={preview} alt="preview" className="w-full h-full object-cover opacity-70" loading="lazy" />
+                
+                {/* Sorting Controls for new files */}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveSelectedFile(idx, -1)}
+                    disabled={idx === 0}
+                    title="Move Left"
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedFile(idx)}
+                    title="Remove"
+                    className="p-1 bg-red-500/80 hover:bg-red-500 rounded text-white"
+                  >
+                    <X size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveSelectedFile(idx, 1)}
+                    disabled={idx === previews.length - 1}
+                    title="Move Right"
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -609,49 +670,26 @@ const ProductForm = () => {
           </p>
         </section>
 
-        {/* 3D & AI Assets */}
-        <section className="p-4 border rounded-lg bg-gray-50/50">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2 flex items-center gap-2">
-            <Shirt size={20} className="text-primary" /> 3D Virtual Try-On Assets
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Images section ends */}
+        
+        {/* AR Notice */}
+        <section className="p-4 border border-dashed rounded-lg bg-indigo-50/30">
+          <div className="flex justify-between items-center">
             <div>
-              <label className="label">3D Model (.glb / .obj)</label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="file"
-                  accept=".glb,.obj"
-                  className="input-field"
-                  onChange={(e) => setModel3DFile(e.target.files?.[0] || null)}
-                />
-                {formData.model3DURL && (
-                  <p className="text-xs text-success break-all">Current: {formData.model3DURL}</p>
-                )}
-                <p className="text-xs text-secondary mt-1">
-                  Required for Virtual Try-On. Upload 3D files here. Serving from Firebase Storage.
-                </p>
-              </div>
+              <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
+                <Shirt size={18} /> Virtual Try-On Configuration
+              </h3>
+              <p className="text-sm text-indigo-700 mt-1">
+                3D models and AI masks are now managed centrally. To activate AR for this product, tag it as "AR Try-On" below and visit the AR Hub.
+              </p>
             </div>
-            <div>
-              <label className="label">Segmentation Mask (AI)</label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="input-field"
-                  onChange={(e) => setMaskFile(e.target.files?.[0] || null)}
-                />
-                {formData.maskURL && (
-                  <div className="flex items-center gap-2">
-                    <img src={formData.maskURL} className="w-10 h-10 object-contain border rounded" alt="mask preview" />
-                    <p className="text-xs text-success truncate">{formData.maskURL}</p>
-                  </div>
-                )}
-                <p className="text-xs text-secondary mt-1">
-                  AI-generated mask for precise garment overlay. Serving from Cloudinary.
-                </p>
-              </div>
-            </div>
+            <button 
+              type="button" 
+              className="btn-outline small text-indigo-700 border-indigo-300"
+              onClick={() => window.open('/ar-assets', '_blank')}
+            >
+              Open AR Hub
+            </button>
           </div>
         </section>
 
@@ -700,6 +738,22 @@ const ProductForm = () => {
               />
             </div>
             <div>
+              <label className="label">Color Category (Filter) *</label>
+              <select
+                name="baseColor"
+                className="input-field"
+                value={formData.baseColor}
+                onChange={handleChange}
+                required
+              >
+                {COLOR_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="label">Fit & Sizing</label>
               <select
                 name="fitAndSizing"
@@ -731,6 +785,22 @@ const ProductForm = () => {
               </select>
             </div>
           </div>
+
+          <div className="mt-6 border-t pt-4">
+            <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+              <Ruler size={18} /> Garment Measurements (Size Chart)
+            </h3>
+            <p className="text-sm text-secondary mb-4">
+              Upload specific dimensions for each size to help customers find their perfect fit.
+              Metrics added here will override generic size recommendations.
+            </p>
+            <MeasurementTable 
+              sizes={formData.sizes} 
+              measurements={formData.measurements} 
+              onChange={(m) => setFormData({ ...formData, measurements: m })} 
+            />
+          </div>
+
           {/* Visibility & Featured */}
           <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

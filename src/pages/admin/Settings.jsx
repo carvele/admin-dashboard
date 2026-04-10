@@ -57,7 +57,9 @@ const Settings = () => {
   const [uploadingCatId, setUploadingCatId] = useState(null);
   const [expandedCatId, setExpandedCatId] = useState(null);
   const [newSubCategory, setNewSubCategory] = useState('');
-  const [seedProgress, setSeedProgress] = useState(null); // { step, totalSteps, message }
+  const [expandedSubCatIdx, setExpandedSubCatIdx] = useState(null);
+  const [newSubSubCategory, setNewSubSubCategory] = useState('');
+  const [seedProgress, setSeedProgress] = useState(null);
 
   const handleAddSubCategory = async (catId) => {
     if (!newSubCategory.trim()) return;
@@ -65,21 +67,31 @@ const Settings = () => {
       setIsLoading(true);
       const category = categories.find((c) => c.id === catId);
       const subcategories = category.subcategories || [];
-      if (subcategories.includes(newSubCategory.trim())) {
+      
+      // Check if exists (handle string or object)
+      const exists = subcategories.some(s => 
+        (typeof s === 'string' ? s : s.name).toLowerCase() === newSubCategory.trim().toLowerCase()
+      );
+      
+      if (exists) {
         toast.error('Sub-category already exists!');
         return;
       }
-      const updatedSubs = [...subcategories, newSubCategory.trim()];
+
+      const newSubObj = {
+        name: newSubCategory.trim(),
+        imageUrl: '',
+        subSubcategories: []
+      };
+
+      const updatedSubs = [...subcategories, newSubObj];
       await updateDocument('categories', catId, { subcategories: updatedSubs });
       setCategories((prev) =>
         prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
       );
       setNewSubCategory('');
       toast.success('Sub-category added!');
-      await logAction(
-        user,
-        'Added sub-category to ' + category.name + ': ' + newSubCategory.trim(),
-      );
+      await logAction(user, 'Added sub-category to ' + category.name + ': ' + newSubCategory.trim());
     } catch (err) {
       toast.error('Failed to add sub-category: ' + err.message);
     } finally {
@@ -87,20 +99,81 @@ const Settings = () => {
     }
   };
 
-  const handleDeleteSubCategory = async (catId, subName) => {
-    if (!window.confirm(`Remove sub-category "${subName}"?`)) return;
+  const handleAddSubSubCategory = async (catId, subIdx) => {
+    if (!newSubSubCategory.trim()) return;
     try {
       setIsLoading(true);
       const category = categories.find((c) => c.id === catId);
-      const updatedSubs = (category.subcategories || []).filter((s) => s !== subName);
+      const updatedSubs = [...(category.subcategories || [])];
+      
+      // Ensure target sub is an object
+      if (typeof updatedSubs[subIdx] === 'string') {
+        updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: '', subSubcategories: [] };
+      }
+      
+      if (!updatedSubs[subIdx].subSubcategories) updatedSubs[subIdx].subSubcategories = [];
+      
+      if (updatedSubs[subIdx].subSubcategories.includes(newSubSubCategory.trim())) {
+        toast.error('Level 3 category already exists!');
+        return;
+      }
+
+      updatedSubs[subIdx].subSubcategories.push(newSubSubCategory.trim());
+      
+      await updateDocument('categories', catId, { subcategories: updatedSubs });
+      setCategories((prev) =>
+        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
+      );
+      setNewSubSubCategory('');
+      toast.success('Level 3 category added!');
+    } catch (err) {
+      toast.error('Failed to add Level 3: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteSubSubCategory = async (catId, subIdx, subSubName) => {
+    if (!window.confirm(`Remove "${subSubName}"?`)) return;
+    try {
+      setIsLoading(true);
+      const category = categories.find((c) => c.id === catId);
+      const updatedSubs = [...(category.subcategories || [])];
+      
+      if (updatedSubs[subIdx]?.subSubcategories) {
+        updatedSubs[subIdx].subSubcategories = updatedSubs[subIdx].subSubcategories.filter(s => s !== subSubName);
+      }
+
+      await updateDocument('categories', catId, { subcategories: updatedSubs });
+      setCategories((prev) =>
+        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
+      );
+      toast.success('Category removed!');
+    } catch (err) {
+      toast.error('Failed to remove: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteSubCategory = async (catId, subIdx) => {
+    const category = categories.find((c) => c.id === catId);
+    const subName = typeof category.subcategories[subIdx] === 'string' 
+      ? category.subcategories[subIdx] 
+      : category.subcategories[subIdx].name;
+
+    if (!window.confirm(`Remove sub-category "${subName}"?`)) return;
+    try {
+      setIsLoading(true);
+      const updatedSubs = (category.subcategories || []).filter((_, i) => i !== subIdx);
       await updateDocument('categories', catId, { subcategories: updatedSubs });
       setCategories((prev) =>
         prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
       );
       toast.success('Sub-category removed!');
-      await logAction(user, 'Removed sub-category from ' + category.name + ': ' + subName);
+      await logAction(user, 'Removed sub-category: ' + subName);
     } catch (err) {
-      toast.error('Failed to remove sub-category: ' + err.message);
+      toast.error('Failed to remove: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -292,17 +365,33 @@ const Settings = () => {
     }
   };
 
-  const handleCategoryImageUpload = async (catId, file) => {
+  const handleCategoryImageUpload = async (catId, file, subIdx = null) => {
     if (!file) return;
-    setUploadingCatId(catId);
+    setUploadingCatId(subIdx !== null ? `${catId}-${subIdx}` : catId);
     try {
       const result = await uploadToCloudinary(file);
       if (result?.secure_url) {
-        await updateDocument('categories', catId, { imageUrl: result.secure_url });
-        setCategories((prev) =>
-          prev.map((c) => (c.id === catId ? { ...c, imageUrl: result.secure_url } : c)),
-        );
-        toast.success('Category image updated!');
+        if (subIdx === null) {
+          // Level 1 main category
+          await updateDocument('categories', catId, { imageUrl: result.secure_url });
+          setCategories((prev) =>
+            prev.map((c) => (c.id === catId ? { ...c, imageUrl: result.secure_url } : c)),
+          );
+        } else {
+          // Level 2 sub category
+          const category = categories.find(c => c.id === catId);
+          const updatedSubs = [...(category.subcategories || [])];
+          if (typeof updatedSubs[subIdx] === 'string') {
+            updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: result.secure_url, subSubcategories: [] };
+          } else {
+            updatedSubs[subIdx] = { ...updatedSubs[subIdx], imageUrl: result.secure_url };
+          }
+          await updateDocument('categories', catId, { subcategories: updatedSubs });
+          setCategories((prev) =>
+            prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
+          );
+        }
+        toast.success('Image updated!');
       } else {
         toast.error('Upload failed — please try again.');
       }
@@ -667,91 +756,118 @@ const Settings = () => {
                           >
                             Sub-categories
                           </p>
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: '0.375rem',
-                              marginBottom: '0.75rem',
-                            }}
-                          >
-                            {(cat.subcategories || []).map((sub) => {
-                              const subName = typeof sub === 'object' ? sub.name : sub;
+                          <div className="category-tree">
+                            {(cat.subcategories || []).map((sub, sIdx) => {
+                              const isObj = typeof sub === 'object';
+                              const sName = isObj ? sub.name : sub;
+                              const sImg = isObj ? sub.imageUrl : null;
+                              const sSubs = isObj ? (sub.subSubcategories || []) : [];
+                              const isExpanded = expandedSubCatIdx === sIdx;
+
                               return (
-                                <div
-                                  key={subName}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    padding: '0.2rem 0.5rem',
-                                    backgroundColor: 'var(--white)',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '6px',
-                                    fontSize: '0.75rem',
-                                  }}
-                                >
-                                  <span>{subName}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteSubCategory(cat.id, subName)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                    color: '#DC2626',
-                                    display: 'flex',
-                                  }}
-                                >
-                                  <X size={12} />
-                                  </button>
+                                <div key={sName} className="category-node">
+                                  <div className="subcat-row" onClick={() => setExpandedSubCatIdx(isExpanded ? null : sIdx)}>
+                                    <button type="button" className="p-0 border-0 bg-transparent flex items-center">
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </button>
+
+                                    {/* Sub-category Image */}
+                                    <div className="image-upload-wrapper">
+                                      {sImg ? (
+                                        <img src={sImg} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="flex-center-vh w-full h-full opacity-30 h-auto">
+                                          <Image size={14} />
+                                        </div>
+                                      )}
+                                      <label onClick={(e) => e.stopPropagation()}>
+                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleCategoryImageUpload(cat.id, e.target.files[0], sIdx)} />
+                                      </label>
+                                      {uploadingCatId === `${cat.id}-${sIdx}` && (
+                                        <div className="upload-overlay">
+                                          <Loader2 size={12} className="animate-spin" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <span style={{ fontWeight: 600, fontSize: '0.8rem', flex: 1 }}>{sName}</span>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteSubCategory(cat.id, sIdx); }}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626' }}
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+
+                                  {/* Level 3 items */}
+                                  {isExpanded && (
+                                    <div className="level3-container">
+                                      <div className="level3-grid">
+                                        {sSubs.map(ssName => (
+                                          <div key={ssName} className="level3-tag">
+                                            <span>{ssName}</span>
+                                            <button type="button" onClick={() => handleDeleteSubSubCategory(cat.id, sIdx, ssName)}>
+                                              <X size={10} className="text-red-500" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                        {sSubs.length === 0 && <span className="text-[10px] italic opacity-50">No sub-sub categories yet.</span>}
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="text"
+                                          placeholder="Add sub-sub category..."
+                                          className="input-field"
+                                          style={{ height: '30px', fontSize: '11px', flex: 1 }}
+                                          value={newSubSubCategory}
+                                          onChange={(e) => setNewSubSubCategory(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleAddSubSubCategory(cat.id, sIdx);
+                                            }
+                                          }}
+                                        />
+                                        <button 
+                                          type="button" 
+                                          onClick={(e) => { e.stopPropagation(); handleAddSubSubCategory(cat.id, sIdx); }}
+                                          className="btn-primary" 
+                                          style={{ padding: '0 0.5rem', height: '30px' }}
+                                        >
+                                          <PlusCircle size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
                             {(!cat.subcategories || cat.subcategories.length === 0) && (
-                              <p
-                                style={{
-                                  fontSize: '0.75rem',
-                                  fontStyle: 'italic',
-                                  color: 'var(--text-secondary)',
-                                  opacity: 0.7,
-                                }}
-                              >
+                              <p style={{ fontSize: '0.75rem', fontStyle: 'italic', color: 'var(--text-secondary)', opacity: 0.7, padding: '0.5rem' }}>
                                 No sub-categories yet.
                               </p>
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', gap: '0.375rem' }}>
+                          <div style={{ display: 'flex', gap: '0.375rem', padding: '0.5rem', backgroundColor: 'var(--cream)', borderRadius: '6px' }}>
                             <input
                               type="text"
                               className="input-field"
                               placeholder="New sub-category..."
                               value={newSubCategory}
                               onChange={(e) => setNewSubCategory(e.target.value)}
-                              style={{
-                                flex: 1,
-                                padding: '0.3rem 0.6rem',
-                                fontSize: '0.75rem',
-                                height: 'auto',
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleAddSubCategory(cat.id);
-                                }
-                              }}
+                              style={{ flex: 1, padding: '0.3rem 0.6rem', fontSize: '0.75rem', height: '32px' }}
+                              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubCategory(cat.id))}
                             />
                             <button
                               type="button"
                               className="btn-primary"
                               onClick={() => handleAddSubCategory(cat.id)}
-                              style={{
-                                padding: '0.3rem 0.6rem',
-                                fontSize: '0.75rem',
-                                borderRadius: '6px',
-                              }}
+                              style={{ padding: '0 0.75rem', height: '32px', borderRadius: '6px' }}
                               disabled={isLoading || !newSubCategory.trim()}
                             >
                               <PlusCircle size={14} />

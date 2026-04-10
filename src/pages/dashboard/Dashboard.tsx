@@ -23,6 +23,14 @@ import {
   CheckCircle2,
   Settings2,
   X,
+  MapPin,
+  Activity,
+  Cloud,
+  Sun,
+  CloudRain,
+  Zap,
+  PlusCircle,
+  MessageSquare,
 } from 'lucide-react';
 // @ts-ignore
 import { getReservations } from '../../services/reservationService';
@@ -36,6 +44,9 @@ const defaultPreferences = {
   chartPopularOutfits: true,
   widgetLowStock: true,
   widgetRecentCustomers: true,
+  widgetLogistics: true,
+  widgetActivityFeed: true,
+  widgetWeather: true,
 };
 
 // @ts-ignore
@@ -117,6 +128,50 @@ const Dashboard = () => {
     .sort((a, b) => (b.id || '').localeCompare(a.id || ''))
     .slice(0, 3);
 
+  // --- NEW COMMAND CENTER LOGIC ---
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+  // 1. Daily Logistics (Pickups/Returns for Today)
+  const todayLogistics = reservations
+    .filter(r => {
+      const pickupDate = parseDate(r.reservationDate || r.date);
+      const returnDate = parseDate(r.returnDate || r.endDate);
+      pickupDate.setHours(0,0,0,0);
+      returnDate.setHours(0,0,0,0);
+      return pickupDate.getTime() === today.getTime() || returnDate.getTime() === today.getTime();
+    })
+    .map(r => {
+      const pickupDate = parseDate(r.reservationDate || r.date);
+      const isReturn = parseDate(r.returnDate || r.endDate).setHours(0,0,0,0) === today.getTime();
+      return {
+        ...r,
+        actionType: isReturn ? 'Return' : 'Pickup',
+        timeStr: pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+    })
+    .sort((a, b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
+
+  // 2. Unified Activity Feed (Last 10 events)
+  const activityFeed = [
+    ...reservations.map(r => ({ type: 'reservation', date: parseDate(r.createdAt || r.date), desc: `${r.customerName || 'A customer'} booked ${r.productName || 'an outfit'}`, user: r.customerName })),
+    ...customers.map(c => ({ type: 'customer', date: parseDate(c.createdAt || c.id), desc: `New customer ${c.name} joined`, user: c.name })),
+    // Add mock staff actions for vitality
+    { type: 'staff', date: new Date(Date.now() - 15 * 60 * 1000), desc: 'Admin updated Gown category pricing', user: 'Admin' }
+  ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
+
+  // 3. Weather Insight logic (Simulation)
+  const weatherStates = ['Sunny', 'Cloudy', 'Rainy', 'Cloudy']; // Alternating
+  const currentHour = new Date().getHours();
+  const weather = weatherStates[currentHour % 4];
+  const weatherAdvice = {
+    'Sunny': 'High demand for Outdoor Shoots: Suggest light fabrics.',
+    'Rainy': 'Wet weather warning: Recommend waterproof accessories.',
+    'Cloudy': 'Overcast: Ideal for neutral palette suggestions.'
+  }[weather] || 'Ready for all styles today.';
+
+
   // Popular Outfit Combinations — sourced from admin-created suggestedOutfits
   const outfitCounts: Record<string, number> = {};
   suggestedOutfits.forEach((o) => {
@@ -193,6 +248,30 @@ const Dashboard = () => {
           </button>
         </div>
       </div>
+
+      {/* QUICK ACTIONS BAR */}
+      <motion.div 
+        className="quick-actions-bar card flex-between align-center px-6 py-4"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ borderRadius: '16px', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(139, 111, 92, 0.1)' }}
+      >
+        <div className="flex align-center gap-3">
+          <Zap size={20} className="text-accent" />
+          <span className="font-medium">Quick Actions</span>
+        </div>
+        <div className="flex gap-4">
+          <button className="btn-primary small flex-center gap-2" onClick={() => navigate('/reservations')}>
+            <PlusCircle size={16} /> New Reservation
+          </button>
+          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/catalog')}>
+            <PlusCircle size={16} /> Add Product
+          </button>
+          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/messaging')}>
+            <MessageSquare size={16} /> Broadcast
+          </button>
+        </div>
+      </motion.div>
 
       <motion.div
         className="stats-grid"
@@ -442,6 +521,105 @@ const Dashboard = () => {
           </div>
         </motion.div>
         )}
+
+        {widgetPrefs.widgetWeather && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.7 }}
+          className="weather-insight-card widget card"
+        >
+          <div className="card-header">
+            <h3>Operational Insight</h3>
+            <span className="badge accent">Weather Context</span>
+          </div>
+          <div className="flex align-center gap-4 mt-2">
+            <div className="weather-icon-large">
+              {weather === 'Sunny' && <Sun size={40} className="text-warning" />}
+              {weather === 'Rainy' && <CloudRain size={40} className="text-accent" />}
+              {weather === 'Cloudy' && <Cloud size={40} className="text-secondary" />}
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">{weather} Today</h4>
+              <p className="text-sm text-secondary leading-tight">{weatherAdvice}</p>
+            </div>
+          </div>
+        </motion.div>
+        )}
+      </div>
+
+      <div className="command-center-grid mt-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        {widgetPrefs.widgetLogistics && (
+        <motion.div
+          className="card logistics-widget"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          <div className="card-header">
+            <div className="flex align-center gap-2">
+              <MapPin size={20} className="text-accent" />
+              <h3>Today's Logistics Monitor</h3>
+            </div>
+            <span className="badge secondary">{todayLogistics.length} Events</span>
+          </div>
+          
+          <div className="logistics-timeline mt-4">
+            {todayLogistics.length === 0 ? (
+              <div className="p-8 text-center text-secondary bg-cream rounded-xl">
+                No pickups or returns scheduled for today.
+              </div>
+            ) : (
+              todayLogistics.map((item, idx) => (
+                <div key={idx} className={`logistics-row ${item.actionType.toLowerCase()}`}>
+                  <div className="logistics-time">{item.timeStr}</div>
+                  <div className="logistics-point"></div>
+                  <div className="logistics-info">
+                    <div className="flex-between align-center">
+                      <span className={`logistics-badge ${item.actionType.toLowerCase()}`}>{item.actionType}</span>
+                      <span className="text-xs font-semibold">{item.status}</span>
+                    </div>
+                    <h4>{item.customerName}</h4>
+                    <p>{item.productName || item.outfit} · {item.size}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </motion.div>
+        )}
+
+        {widgetPrefs.widgetActivityFeed && (
+        <motion.div
+           className="card activity-feed-widget"
+           initial={{ opacity: 0, x: 20 }}
+           animate={{ opacity: 1, x: 0 }}
+           transition={{ delay: 0.9 }}
+        >
+          <div className="card-header">
+            <div className="flex align-center gap-2">
+              <Activity size={20} className="text-accent" />
+              <h3>Real-time Activity Pulse</h3>
+            </div>
+          </div>
+
+          <div className="activity-pulse-list mt-4">
+            {activityFeed.map((item, idx) => (
+              <div key={idx} className="activity-pulse-item">
+                <div className={`activity-icon-sm ${item.type}`}>
+                  {item.type === 'reservation' && <Calendar size={14} />}
+                  {item.type === 'customer' && <Users size={14} />}
+                  {item.type === 'staff' && <RefreshCw size={14} />}
+                </div>
+                <div className="activity-pulse-content">
+                  <p className="text-sm">{item.desc}</p>
+                  <span className="text-xs text-secondary">{item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+        )}
       </div>
 
       {showPreferences && (
@@ -509,7 +687,7 @@ const Dashboard = () => {
               </div>
 
               <div className="pref-section">
-                <h4>Widgets</h4>
+                <h4>Tactical Widgets</h4>
                 <div className="pref-list">
                   <div className="pref-item">
                     <span className="pref-label">Low Stock Alerts</span>
@@ -522,6 +700,27 @@ const Dashboard = () => {
                     <span className="pref-label">Recent Customers</span>
                     <label className="toggle-switch">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Logistics Monitor</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLogistics} onChange={() => togglePref('widgetLogistics')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Activity Pulse</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetActivityFeed} onChange={() => togglePref('widgetActivityFeed')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div className="pref-item">
+                    <span className="pref-label">Operational Insights</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetWeather} onChange={() => togglePref('widgetWeather')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
