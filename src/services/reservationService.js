@@ -36,7 +36,7 @@ export const deleteReservation = (docId) => {
   return deleteDocument('reservations', docId);
 };
 
-export const adjustInventoryForReservation = async (productIdOrName, size, delta) => {
+export const adjustInventoryForReservation = async (productIdOrName, size, delta, isConsume = false) => {
   try {
     // 1. Try to find by productId (Doc ID or SKU)
     let q = query(
@@ -69,15 +69,21 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     if (!snap.empty) {
       const invDoc = snap.docs[0];
       const data = invDoc.data();
-      // Increase reserved, decrease available (delta is -1 for new reservation)
-      // When confirming: delta = -1, so available - 1, reserved + 1
-      // Wait! The previous logic was: available + delta, reserved - delta. 
-      // If delta is -1 (deduct), then available - 1, reserved + 1. CORRECT.
-      await updateDocument('inventory', invDoc.id, {
-        available: Math.max(0, (data.available || 0) + delta),
-        reserved: Math.max(0, (data.reserved || 0) - delta),
-      });
-      console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): ${delta}`);
+      
+      if (isConsume) {
+        const amount = Math.abs(delta);
+        await updateDocument('inventory', invDoc.id, {
+          total: Math.max(0, (data.total || 0) - amount),
+          reserved: Math.max(0, (data.reserved || 0) - amount),
+        });
+        console.log(`[Inventory] Consumed stock for ${productIdOrName} (${size}): ${amount}`);
+      } else {
+        await updateDocument('inventory', invDoc.id, {
+          available: Math.max(0, (data.available || 0) + delta),
+          reserved: Math.max(0, (data.reserved || 0) - delta),
+        });
+        console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): ${delta}`);
+      }
     } else {
       console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size})`);
     }

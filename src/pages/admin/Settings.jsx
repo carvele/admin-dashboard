@@ -110,6 +110,9 @@ const Settings = () => {
     email: 'admin@jezsycollection.com',
     phone: '+63 912 345 6789',
     address: '123 Fashion Street, Makati City, Philippines',
+    gcashName: '',
+    gcashNumber: '',
+    gcashQrUrl: '',
     // Reservation Rules
     maxBookingDays: 30,
     depositRequired: 50,
@@ -164,6 +167,9 @@ const Settings = () => {
           email: formData.email,
           phone: formData.phone,
           address: formData.address,
+          gcashName: formData.gcashName || '',
+          gcashNumber: formData.gcashNumber || '',
+          gcashQrUrl: formData.gcashQrUrl || '',
         });
       } else if (activeTab === 'reservation') {
         await setDocument('settings', 'reservations', {
@@ -263,6 +269,24 @@ const Settings = () => {
       await logAction(user, 'Renamed category to: ' + editingCatName.trim());
     } catch (err) {
       toast.error('Failed to rename category: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGcashQrUpload = async (file) => {
+    if (!file) return;
+    setIsLoading(true);
+    try {
+      const result = await uploadToCloudinary(file);
+      if (result?.secure_url) {
+        setFormData((prev) => ({ ...prev, gcashQrUrl: result.secure_url }));
+        toast.success('GCash QR Code uploaded! Please save settings to apply.');
+      } else {
+        toast.error('Upload failed — please try again.');
+      }
+    } catch (err) {
+      toast.error('Image upload error: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -792,6 +816,84 @@ const Settings = () => {
                   value={formData.address}
                   onChange={handleChange}
                 />
+              </div>
+
+              <div className="form-group max-w-lg mt-6 pt-4 border-t">
+                <div className="section-header-icon" style={{ marginBottom: '1rem' }}>
+                  <Shield size={18} className="text-secondary" />
+                  <h3 className="section-title mb-0">Payment Information (GCash)</h3>
+                </div>
+                <div className="form-row">
+                  <div className="form-group flex-1">
+                    <label className="label">GCash Name</label>
+                    <input
+                      type="text"
+                      name="gcashName"
+                      className="input-field"
+                      placeholder="e.g. Carl Vener Wee"
+                      value={formData.gcashName || ''}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="form-group flex-1">
+                    <label className="label">GCash Number</label>
+                    <input
+                      type="text"
+                      name="gcashNumber"
+                      className="input-field"
+                      placeholder="e.g. 0912 365 9917"
+                      value={formData.gcashNumber || ''}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group mt-3 mb-6">
+                  <label className="label">GCash QR Code</label>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div 
+                      style={{ 
+                        width: '120px', 
+                        height: '120px', 
+                        background: 'var(--cream)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        flexShrink: 0
+                      }}
+                    >
+                      {formData.gcashQrUrl ? (
+                        <img src={formData.gcashQrUrl} alt="GCash QR Code" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <Image size={24} style={{ opacity: 0.5 }} />
+                      )}
+                      {isLoading && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)' }}>
+                          <Loader2 size={20} className="animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="btn-outline flex-center gap-2" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                        <Upload size={16} /> Upload QR Image
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }} 
+                          onChange={(e) => handleGcashQrUpload(e.target.files[0])}
+                          disabled={isLoading}
+                        />
+                      </label>
+                      <p className="text-secondary text-sm mt-2">
+                        Upload the QR Code that the Android app will display to users. Make sure to click "Save Settings" to apply changes!
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="form-group max-w-lg mt-6 pt-4 border-t">

@@ -146,6 +146,7 @@ const Reservations = () => {
     if (displayStatus === 'Request Approval') displayStatus = 'Pending';
     if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
     if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+    if (displayStatus === 'Active') displayStatus = 'Completed';
 
     return {
       ...r,
@@ -164,15 +165,14 @@ const Reservations = () => {
     else if (statusFilter.startsWith('Pending')) matchesStatus = r.displayStatus === 'Pending';
     else if (statusFilter.startsWith('To Pickup')) matchesStatus = r.displayStatus === 'To Pickup';
     else if (statusFilter.startsWith('Completed')) matchesStatus = r.displayStatus === 'Completed';
-    else if (statusFilter.startsWith('Active')) matchesStatus = r.displayStatus === 'Active';
     else matchesStatus = r.displayStatus === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
 
   // --- Stock adjustment helper ---
-  const adjustStock = async (outfit, size, delta) => {
-    await adjustInventoryForReservation(outfit, size, delta);
+  const adjustStock = async (outfit, size, delta, isConsume = false) => {
+    await adjustInventoryForReservation(outfit, size, delta, isConsume);
   };
 
   // --- LIFECYCLE ACTIONS ---
@@ -195,14 +195,11 @@ const Reservations = () => {
         });
         await adjustStock(res.productId || res.productName || res.outfit, res.size, -1);
         toast.success(`Reservation ${id} payment received — stock reserved and ready for pickup`);
-      } else if (action === 'make_active') {
-        await updateReservation(res.docId, { status: 'Active' });
-        toast.success(`Reservation ${id} is now Active (Handed over)`);
       } else if (action === 'complete') {
         await updateReservation(res.docId, { status: 'Completed' });
-        // Release reserved stock (item returned or purchased)
-        await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
-        toast.success(`Reservation ${id} returned/completed — stock released`);
+        // Consume reserved stock (item purchased/picked up forever)
+        await adjustStock(res.productId || res.productName || res.outfit, res.size, 1, true);
+        toast.success(`Reservation ${id} completed — stock consumed permanently`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Only restore stock if it was confirmed/to-pickup/active (stock was deducted)
@@ -214,7 +211,6 @@ const Reservations = () => {
       const actionLabels = {
         approve_pay: 'Approved for Payment',
         ready_pickup: 'Confirmed & To Pickup',
-        make_active: 'Made Active',
         complete: 'Completed',
         cancel: 'Cancelled',
       };
@@ -416,7 +412,6 @@ const Reservations = () => {
               <option value="Pending">Pending / Requests</option>
               <option value="To Pay">To Pay</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>
-              <option value="Active">Active (In use)</option>
               <option value="Completed">Completed / Returned</option>
               <option value="Cancelled">Cancelled</option>
             </select>
@@ -460,6 +455,11 @@ const Reservations = () => {
                       </td>
                       <td>
                         <StatusBadge status={res.displayStatus} />
+                        {res.paymentStatus === 'Processing' && res.receiptUrl && (
+                          <div className="text-gold text-xs mt-1 font-medium bg-cream p-1 rounded inline-block border" style={{ borderColor: 'var(--border-color)' }}>
+                            Receipt Uploaded
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div className="action-buttons">
@@ -470,7 +470,7 @@ const Reservations = () => {
                           >
                             <Eye size={16} />
                           </button>
-                          {/* Lifecycle: Pending → To Pay → To Pickup → Active → Completed */}
+                          {/* Lifecycle: Pending → To Pay → To Pickup → Completed */}
                           {res.displayStatus === 'Pending' && (
                             <>
                               <button
@@ -511,10 +511,10 @@ const Reservations = () => {
                             <>
                               <button
                                 className="action-icon approve"
-                                title="Hand over / Set to Active"
-                                onClick={() => handleAction(res.id, 'make_active')}
+                                title="Complete / Hand over"
+                                onClick={() => handleAction(res.id, 'complete')}
                               >
-                                <Shirt size={16} />
+                                <CheckCircle size={16} />
                               </button>
                               <button
                                 className="action-icon reject"
@@ -524,15 +524,6 @@ const Reservations = () => {
                                 <XCircle size={16} />
                               </button>
                             </>
-                          )}
-                          {res.displayStatus === 'Active' && (
-                            <button
-                              className="action-icon approve"
-                              title="Mark Returned / Completed"
-                              onClick={() => handleAction(res.id, 'complete')}
-                            >
-                              <CalendarCheck size={16} />
-                            </button>
                           )}
                           {(res.displayStatus === 'Pending' || res.displayStatus === 'To Pay' || res.displayStatus === 'To Pickup') && (
                             <button
@@ -758,12 +749,8 @@ const Reservations = () => {
                       p.id === viewModal.productId ||
                       p.name === (viewModal.productName || viewModal.outfit),
                   )?.isAlterable;
-                  const steps = isAlterable
-                    ? ['Pending', 'To Pay', 'To Pickup', 'Active', 'Completed']
-                    : ['Pending', 'To Pay', 'To Pickup', 'Completed'];
-                  const statusOrder = isAlterable
-                    ? { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Active: 3, Completed: 4, Cancelled: -1, Returned: -1 }
-                    : { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
+                  const steps = ['Pending', 'To Pay', 'To Pickup', 'Completed'];
+                  const statusOrder = { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
                   return steps.map((step, i) => {
                     const current = statusOrder[viewModal.displayStatus] ?? -1;
                     const stepIdx = statusOrder[step];
