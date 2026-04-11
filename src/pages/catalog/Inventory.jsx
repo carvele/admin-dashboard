@@ -9,6 +9,7 @@ import {
   Edit,
   Trash2,
   RefreshCw,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   subscribeToInventory,
@@ -18,6 +19,7 @@ import {
   getProducts,
   updateProduct,
   recalculateAllInventoryStock,
+  recordBoutiqueSale,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -44,6 +46,7 @@ const Inventory = () => {
   // Modals
   const [restockModal, setRestockModal] = useState(null); // inv item or null
   const [editModal, setEditModal] = useState(null);
+  const [sellModal, setSellModal] = useState(null); // Added for POS
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   // Form state
@@ -142,6 +145,31 @@ const Inventory = () => {
       setRestockQty('');
     } catch (e) {
       toast.error('Failed to restock items');
+    }
+  };
+
+  const handleSell = async (e) => {
+    e.preventDefault();
+    const qty = parseInt(restockQty);
+    if (!qty || qty <= 0) {
+      toast.error('Enter a valid quantity');
+      return;
+    }
+    if (qty > sellModal.available) {
+      toast.error('Cannot sell more than available stock');
+      return;
+    }
+
+    const toastId = toast.loading('Recording in-store sale...');
+    try {
+      await recordBoutiqueSale(sellModal, qty, user);
+      await syncProductStock(sellModal.productDocId, sellModal.sku);
+      
+      toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
+      setSellModal(null);
+      setRestockQty('');
+    } catch (e) {
+      toast.error('Failed to record sale: ' + e.message, { id: toastId });
     }
   };
 
@@ -434,6 +462,18 @@ const Inventory = () => {
                           >
                             <Package size={15} />
                           </button>
+                          <button
+                            className="icon-btn-small"
+                            title="Record Boutique Sale"
+                            onClick={() => {
+                              setSellModal(inv);
+                              setRestockQty('1');
+                            }}
+                            style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
+                            disabled={inv.available <= 0}
+                          >
+                            <ShoppingCart size={15} />
+                          </button>
                           {isAdminUnlocked && (
                             <>
                               <button
@@ -623,6 +663,73 @@ const Inventory = () => {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== SELL / POS MODAL ===== */}
+      {sellModal && (
+        <div className="modal-overlay" onClick={() => setSellModal(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 400 }}
+          >
+            <div className="modal-header">
+              <div className="flex-center gap-2">
+                <ShoppingCart size={20} className="text-secondary" />
+                <h2>Record In-Store Sale</h2>
+              </div>
+              <button className="close-btn" onClick={() => setSellModal(null)}>
+                &times;
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleSell}>
+              <div className="restock-item-info">
+                <strong>{sellModal.item}</strong>
+                <span className="size-badge">{sellModal.size}</span>
+              </div>
+              <div className="p-3 bg-light rounded-lg mt-2 mb-4">
+                <div className="d-flex justify-between text-sm mb-1">
+                  <span className="text-secondary">Available Stock:</span>
+                  <span className="font-bold">{sellModal.available} units</span>
+                </div>
+                <div className="d-flex justify-between text-sm">
+                  <span className="text-secondary">Price:</span>
+                  <span className="font-bold text-success">${sellModal.price || '--'}</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Quantity Sold</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  min="1"
+                  max={sellModal.available}
+                  placeholder="Enter quantity"
+                  value={restockQty}
+                  onChange={(e) => setRestockQty(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              {restockQty && parseInt(restockQty) > 0 && (
+                <div className="restock-preview mt-4" style={{ backgroundColor: 'rgba(52, 211, 153, 0.1)', color: '#059669' }}>
+                  Remaining Stock: <strong>{sellModal.available - parseInt(restockQty)}</strong>
+                </div>
+              )}
+
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setSellModal(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" style={{ backgroundColor: 'var(--stock-high)' }}>
+                  Confirm Sale
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

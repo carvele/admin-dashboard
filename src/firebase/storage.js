@@ -82,13 +82,14 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
       canvas.toBlob(
         (blob) => {
           if (!blob) return reject(new Error('Canvas is empty'));
-          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
-            type: 'image/jpeg',
+          // Use webp to preserve transparency instead of jpeg
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.webp'), {
+            type: 'image/webp',
             lastModified: Date.now(),
           });
           resolve(compressedFile);
         },
-        'image/jpeg',
+        'image/webp',
         quality
       );
     };

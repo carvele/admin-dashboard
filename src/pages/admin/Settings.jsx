@@ -12,7 +12,9 @@ import {
   ChevronDown,
   ChevronRight,
   PlusCircle,
+  GripVertical,
 } from 'lucide-react';
+import { motion, Reorder } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   getDocument,
@@ -31,6 +33,7 @@ import {
   updateDoc,
   deleteField,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { uploadToCloudinary } from '../../firebase/storage';
@@ -51,6 +54,7 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('boutique');
   const [isLoading, setIsLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [initialCategories, setInitialCategories] = useState([]); // To compare for changes
   const [newCategory, setNewCategory] = useState('');
   const [editingCatId, setEditingCatId] = useState(null);
   const [editingCatName, setEditingCatName] = useState('');
@@ -61,122 +65,84 @@ const Settings = () => {
   const [newSubSubCategory, setNewSubSubCategory] = useState('');
   const [seedProgress, setSeedProgress] = useState(null);
 
-  const handleAddSubCategory = async (catId) => {
+  const handleAddSubCategory = (catId) => {
     if (!newSubCategory.trim()) return;
-    try {
-      setIsLoading(true);
-      const category = categories.find((c) => c.id === catId);
-      const subcategories = category.subcategories || [];
-      
-      // Check if exists (handle string or object)
-      const exists = subcategories.some(s => 
-        (typeof s === 'string' ? s : s.name).toLowerCase() === newSubCategory.trim().toLowerCase()
-      );
-      
-      if (exists) {
-        toast.error('Sub-category already exists!');
-        return;
-      }
-
-      const newSubObj = {
-        name: newSubCategory.trim(),
-        imageUrl: '',
-        subSubcategories: []
-      };
-
-      const updatedSubs = [...subcategories, newSubObj];
-      await updateDocument('categories', catId, { subcategories: updatedSubs });
-      setCategories((prev) =>
-        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
-      );
-      setNewSubCategory('');
-      toast.success('Sub-category added!');
-      await logAction(user, 'Added sub-category to ' + category.name + ': ' + newSubCategory.trim());
-    } catch (err) {
-      toast.error('Failed to add sub-category: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === catId) {
+          const subcategories = c.subcategories || [];
+          const exists = subcategories.some(s => 
+            (typeof s === 'string' ? s : s.name).toLowerCase() === newSubCategory.trim().toLowerCase()
+          );
+          if (exists) {
+            toast.error('Sub-category already exists!');
+            return c;
+          }
+          const newSubObj = {
+            name: newSubCategory.trim(),
+            imageUrl: '',
+            subSubcategories: []
+          };
+          return { ...c, subcategories: [...subcategories, newSubObj] };
+        }
+        return c;
+      }),
+    );
+    setNewSubCategory('');
+    toast.success('Added to pending changes.');
   };
 
-  const handleAddSubSubCategory = async (catId, subIdx) => {
+  const handleAddSubSubCategory = (catId, subIdx) => {
     if (!newSubSubCategory.trim()) return;
-    try {
-      setIsLoading(true);
-      const category = categories.find((c) => c.id === catId);
-      const updatedSubs = [...(category.subcategories || [])];
-      
-      // Ensure target sub is an object
-      if (typeof updatedSubs[subIdx] === 'string') {
-        updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: '', subSubcategories: [] };
-      }
-      
-      if (!updatedSubs[subIdx].subSubcategories) updatedSubs[subIdx].subSubcategories = [];
-      
-      if (updatedSubs[subIdx].subSubcategories.includes(newSubSubCategory.trim())) {
-        toast.error('Level 3 category already exists!');
-        return;
-      }
-
-      updatedSubs[subIdx].subSubcategories.push(newSubSubCategory.trim());
-      
-      await updateDocument('categories', catId, { subcategories: updatedSubs });
-      setCategories((prev) =>
-        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
-      );
-      setNewSubSubCategory('');
-      toast.success('Level 3 category added!');
-    } catch (err) {
-      toast.error('Failed to add Level 3: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === catId) {
+          const updatedSubs = [...(c.subcategories || [])];
+          if (typeof updatedSubs[subIdx] === 'string') {
+            updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: '', subSubcategories: [] };
+          }
+          if (!updatedSubs[subIdx].subSubcategories) updatedSubs[subIdx].subSubcategories = [];
+          if (updatedSubs[subIdx].subSubcategories.includes(newSubSubCategory.trim())) {
+            toast.error('Tag already exists!');
+            return c;
+          }
+          updatedSubs[subIdx].subSubcategories = [...updatedSubs[subIdx].subSubcategories, newSubSubCategory.trim()];
+          return { ...c, subcategories: updatedSubs };
+        }
+        return c;
+      }),
+    );
+    setNewSubSubCategory('');
+    toast.success('Tag added.');
   };
 
-  const handleDeleteSubSubCategory = async (catId, subIdx, subSubName) => {
-    if (!window.confirm(`Remove "${subSubName}"?`)) return;
-    try {
-      setIsLoading(true);
-      const category = categories.find((c) => c.id === catId);
-      const updatedSubs = [...(category.subcategories || [])];
-      
-      if (updatedSubs[subIdx]?.subSubcategories) {
-        updatedSubs[subIdx].subSubcategories = updatedSubs[subIdx].subSubcategories.filter(s => s !== subSubName);
-      }
-
-      await updateDocument('categories', catId, { subcategories: updatedSubs });
-      setCategories((prev) =>
-        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
-      );
-      toast.success('Category removed!');
-    } catch (err) {
-      toast.error('Failed to remove: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDeleteSubSubCategory = (catId, subIdx, subSubName) => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === catId) {
+          const updatedSubs = [...(c.subcategories || [])];
+          if (updatedSubs[subIdx]?.subSubcategories) {
+            updatedSubs[subIdx].subSubcategories = updatedSubs[subIdx].subSubcategories.filter(s => s !== subSubName);
+          }
+          return { ...c, subcategories: updatedSubs };
+        }
+        return c;
+      }),
+    );
   };
 
-  const handleDeleteSubCategory = async (catId, subIdx) => {
-    const category = categories.find((c) => c.id === catId);
-    const subName = typeof category.subcategories[subIdx] === 'string' 
-      ? category.subcategories[subIdx] 
-      : category.subcategories[subIdx].name;
-
-    if (!window.confirm(`Remove sub-category "${subName}"?`)) return;
-    try {
-      setIsLoading(true);
-      const updatedSubs = (category.subcategories || []).filter((_, i) => i !== subIdx);
-      await updateDocument('categories', catId, { subcategories: updatedSubs });
-      setCategories((prev) =>
-        prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
-      );
-      toast.success('Sub-category removed!');
-      await logAction(user, 'Removed sub-category: ' + subName);
-    } catch (err) {
-      toast.error('Failed to remove: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDeleteSubCategory = (catId, subIdx) => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === catId) {
+          const updatedSubs = (c.subcategories || []).filter((_, i) => i !== subIdx);
+          return { ...c, subcategories: updatedSubs };
+        }
+        return c;
+      }),
+    );
   };
   const [formData, setFormData] = useState({
     storeName: 'JezSy Collection',
@@ -211,7 +177,11 @@ const Settings = () => {
         const catSnap = await getDocs(collection(db, 'categories'));
         const cats = [];
         catSnap.forEach((snapDoc) => cats.push({ id: snapDoc.id, ...snapDoc.data() }));
-        setCategories(cats);
+        
+        // Sort by order
+        const sortedCats = cats.sort((a, b) => (a.order || 0) - (b.order || 0));
+        setCategories(sortedCats);
+        setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
 
         setFormData((prev) => ({
           ...prev,
@@ -234,7 +204,53 @@ const Settings = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      if (activeTab === 'boutique') {
+      if (activeTab === 'categories') {
+        const batch = writeBatch(db);
+        
+        // Find changed categories
+        for (let i = 0; i < categories.length; i++) {
+          const cat = categories[i];
+          const initial = initialCategories.find(ic => ic.id === cat.id);
+          const needsUpdate = !initial || 
+                             JSON.stringify(cat) !== JSON.stringify(initial) || 
+                             cat.order !== i;
+          
+          if (needsUpdate) {
+            // New category?
+            let catRef;
+            if (cat.id.startsWith('temp-')) {
+              catRef = doc(collection(db, 'categories')); // Auto ID
+            } else {
+              catRef = doc(db, 'categories', cat.id);
+            }
+            
+            const updateData = { ...cat, order: i, updatedAt: serverTimestamp() };
+            // Ensure internal Firestore ID isn't in fields if not wanted
+            delete updateData.id; 
+            batch.set(catRef, updateData, { merge: true });
+          }
+        }
+        
+        // Find deleted categories
+        for (const initial of initialCategories) {
+          if (!categories.find(c => c.id === initial.id)) {
+            const catRef = doc(db, 'categories', initial.id);
+            batch.delete(catRef);
+          }
+        }
+        
+        await batch.commit();
+        
+        // Refresh to get real IDs
+        const catSnap = await getDocs(collection(db, 'categories'));
+        const cats = [];
+        catSnap.forEach((snapDoc) => cats.push({ id: snapDoc.id, ...snapDoc.data() }));
+        const sortedCats = cats.sort((a, b) => (a.order || 0) - (b.order || 0));
+        setCategories(sortedCats);
+        setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
+        
+        toast.success('Categories saved successfully!');
+      } else if (activeTab === 'boutique') {
         await setDocument('settings', 'storeInfo', {
           storeName: formData.storeName,
           email: formData.email,
@@ -244,26 +260,27 @@ const Settings = () => {
           gcashNumber: formData.gcashNumber || '',
           gcashQrUrl: formData.gcashQrUrl || '',
         });
+        toast.success('Boutique settings saved!');
       } else if (activeTab === 'reservation') {
         await setDocument('settings', 'reservations', {
           maxBookingDays: formData.maxBookingDays,
           depositRequired: formData.depositRequired,
           cancellationWindow: formData.cancellationWindow,
         });
+        toast.success('Reservation rules saved!');
       } else if (activeTab === 'ar') {
         await setDocument('settings', 'ar', {
           enableGlobalAR: formData.enableGlobalAR,
           autoApproveAR: formData.autoApproveAR,
           maxFileSize: formData.maxFileSize,
         });
+        toast.success('AR settings saved!');
       }
-      // Note: 'account' does not directly save to settings doc, and notifications is a mock for now.
 
       await logAction(user, 'Updated ' + activeTab + ' settings');
-      toast.success(`${activeTab} settings saved successfully!`);
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save settings.');
+      toast.error('Failed to save settings: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -293,58 +310,44 @@ const Settings = () => {
     }
   };
 
-  const handleAddCategory = async (e) => {
+  const handleAddCategory = (e) => {
     e.preventDefault();
     if (!newCategory.trim()) return;
-    try {
-      setIsLoading(true);
-      if (categories.some((c) => c.name.toLowerCase() === newCategory.trim().toLowerCase())) {
-        toast.error('Category already exists!');
-        return;
-      }
-      const newDocId = await addDocument('categories', { name: newCategory.trim() });
-      setCategories((prev) => [...prev, { id: newDocId, name: newCategory.trim() }]);
-      setNewCategory('');
-      toast.success('Category added successfully!');
-      await logAction(user, 'Added new category: ' + newCategory.trim());
-    } catch (err) {
-      toast.error('Failed to add category: ' + err.message);
-    } finally {
-      setIsLoading(false);
+    
+    if (categories.some((c) => c.name.toLowerCase() === newCategory.trim().toLowerCase())) {
+      toast.error('Category already exists!');
+      return;
     }
+    
+    // Create local temp ID
+    const tempId = 'temp-' + Date.now();
+    const newCatObj = { 
+      id: tempId, 
+      name: newCategory.trim(), 
+      order: categories.length,
+      subcategories: [] 
+    };
+    
+    setCategories((prev) => [...prev, newCatObj]);
+    setNewCategory('');
+    toast.success('Category added to pending list.');
   };
 
-  const handleDeleteCategory = async (catId, catName) => {
-    if (!window.confirm(`Are you sure you want to delete the category "${catName}"?`)) return;
-    try {
-      setIsLoading(true);
-      await deleteDoc(doc(db, 'categories', catId));
-      setCategories((prev) => prev.filter((c) => c.id !== catId));
-      toast.success('Category deleted successfully!');
-      await logAction(user, 'Deleted category: ' + catName);
-    } catch (err) {
-      toast.error('Failed to delete category: ' + err.message);
-    } finally {
-      setIsLoading(false);
+  const handleDeleteCategory = (catId, catName) => {
+    if (PROTECTED_CATEGORIES.includes(catName)) {
+      toast.error('This category is protected and cannot be deleted.');
+      return;
     }
+    if (!window.confirm(`Are you sure you want to remove "${catName}"? This will only take effect once you click Save Changes.`)) return;
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
   };
 
-  const handleRenameCategory = async (catId) => {
+  const handleRenameCategory = (catId) => {
     if (!editingCatName.trim()) return;
-    try {
-      setIsLoading(true);
-      await updateDocument('categories', catId, { name: editingCatName.trim() });
-      setCategories((prev) =>
-        prev.map((c) => (c.id === catId ? { ...c, name: editingCatName.trim() } : c)),
-      );
-      setEditingCatId(null);
-      toast.success('Category renamed!');
-      await logAction(user, 'Renamed category to: ' + editingCatName.trim());
-    } catch (err) {
-      toast.error('Failed to rename category: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    setCategories((prev) =>
+      prev.map((c) => (c.id === catId ? { ...c, name: editingCatName.trim() } : c)),
+    );
+    setEditingCatId(null);
   };
 
   const handleGcashQrUpload = async (file) => {
@@ -371,27 +374,25 @@ const Settings = () => {
     try {
       const result = await uploadToCloudinary(file);
       if (result?.secure_url) {
-        if (subIdx === null) {
-          // Level 1 main category
-          await updateDocument('categories', catId, { imageUrl: result.secure_url });
-          setCategories((prev) =>
-            prev.map((c) => (c.id === catId ? { ...c, imageUrl: result.secure_url } : c)),
-          );
-        } else {
-          // Level 2 sub category
-          const category = categories.find(c => c.id === catId);
-          const updatedSubs = [...(category.subcategories || [])];
-          if (typeof updatedSubs[subIdx] === 'string') {
-            updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: result.secure_url, subSubcategories: [] };
-          } else {
-            updatedSubs[subIdx] = { ...updatedSubs[subIdx], imageUrl: result.secure_url };
-          }
-          await updateDocument('categories', catId, { subcategories: updatedSubs });
-          setCategories((prev) =>
-            prev.map((c) => (c.id === catId ? { ...c, subcategories: updatedSubs } : c)),
-          );
-        }
-        toast.success('Image updated!');
+        setCategories((prev) =>
+          prev.map((c) => {
+            if (c.id === catId) {
+              if (subIdx === null) {
+                return { ...c, imageUrl: result.secure_url };
+              } else {
+                const updatedSubs = [...(c.subcategories || [])];
+                if (typeof updatedSubs[subIdx] === 'string') {
+                  updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: result.secure_url, subSubcategories: [] };
+                } else {
+                  updatedSubs[subIdx] = { ...updatedSubs[subIdx], imageUrl: result.secure_url };
+                }
+                return { ...c, subcategories: updatedSubs };
+              }
+            }
+            return c;
+          }),
+        );
+        toast.success('Image uploaded (remember to Save Changes)');
       } else {
         toast.error('Upload failed — please try again.');
       }
@@ -495,10 +496,16 @@ const Settings = () => {
                   No custom categories found. Default categories will be used.
                 </p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <Reorder.Group
+                  axis="y"
+                  values={categories}
+                  onReorder={setCategories}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+                >
                   {categories.map((cat) => (
-                    <div
+                    <Reorder.Item
                       key={cat.id}
+                      value={cat}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -517,6 +524,11 @@ const Settings = () => {
                           padding: '0.75rem 1rem',
                         }}
                       >
+                        {/* Drag Handle */}
+                        <div style={{ cursor: 'grab', color: 'var(--text-secondary)', opacity: 0.5 }}>
+                          <GripVertical size={16} />
+                        </div>
+
                         {/* Expand/Collapse */}
                         <button
                           type="button"
@@ -667,9 +679,45 @@ const Settings = () => {
 
                         {/* Actions */}
                         <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            title="Rename"
+                            onClick={() => {
+                              setEditingCatId(cat.id);
+                              setEditingCatName(cat.name);
+                            }}
+                            style={{
+                              color: 'var(--text-secondary)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '0.35rem',
+                            }}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <label
+                            title="Upload image"
+                            style={{
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              padding: '0.35rem',
+                              display: 'flex',
+                            }}
+                          >
+                            <Upload size={14} />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) =>
+                                handleCategoryImageUpload(cat.id, e.target.files[0])
+                              }
+                            />
+                          </label>
                           {PROTECTED_CATEGORIES.includes(cat.name) ? (
                             <div
-                              title="System Protected"
+                              title="System Protected (Cannot Delete)"
                               style={{
                                 color: 'var(--text-secondary)',
                                 padding: '0.35rem',
@@ -679,58 +727,20 @@ const Settings = () => {
                               <Lock size={14} />
                             </div>
                           ) : (
-                            <>
-                              <button
-                                type="button"
-                                title="Rename"
-                                onClick={() => {
-                                  setEditingCatId(cat.id);
-                                  setEditingCatName(cat.name);
-                                }}
-                                style={{
-                                  color: 'var(--text-secondary)',
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  padding: '0.35rem',
-                                }}
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <label
-                                title="Upload image"
-                                style={{
-                                  color: 'var(--text-secondary)',
-                                  cursor: 'pointer',
-                                  padding: '0.35rem',
-                                  display: 'flex',
-                                }}
-                              >
-                                <Upload size={14} />
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  style={{ display: 'none' }}
-                                  onChange={(e) =>
-                                    handleCategoryImageUpload(cat.id, e.target.files[0])
-                                  }
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                title="Delete"
-                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                                style={{
-                                  color: '#DC2626',
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  padding: '0.35rem',
-                                }}
-                              >
-                                <X size={14} />
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              title="Delete"
+                              onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                              style={{
+                                color: '#DC2626',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '0.35rem',
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -756,96 +766,137 @@ const Settings = () => {
                           >
                             Sub-categories
                           </p>
-                          <div className="category-tree">
-                            {(cat.subcategories || []).map((sub, sIdx) => {
-                              const isObj = typeof sub === 'object';
-                              const sName = isObj ? sub.name : sub;
-                              const sImg = isObj ? sub.imageUrl : null;
-                              const sSubs = isObj ? (sub.subSubcategories || []) : [];
-                              const isExpanded = expandedSubCatIdx === sIdx;
+                          <div className="category-tree" style={{ padding: '0.5rem 0' }}>
+                            <Reorder.Group 
+                              axis="y" 
+                              values={cat.subcategories || []} 
+                              onReorder={(newVal) => {
+                                setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, subcategories: newVal } : c));
+                              }}
+                            >
+                              {(cat.subcategories || []).map((sub, sIdx) => {
+                                const isObj = typeof sub === 'object';
+                                const sName = isObj ? sub.name : sub;
+                                const sImg = isObj ? sub.imageUrl : null;
+                                const sSubs = isObj ? (sub.subSubcategories || []) : [];
+                                const isExpanded = expandedSubCatIdx === sIdx;
 
-                              return (
-                                <div key={sName} className="category-node">
-                                  <div className="subcat-row" onClick={() => setExpandedSubCatIdx(isExpanded ? null : sIdx)}>
-                                    <button type="button" className="p-0 border-0 bg-transparent flex items-center">
-                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                    </button>
+                                return (
+                                  <Reorder.Item key={sName} value={sub} className="category-node">
+                                    <div className="subcat-row" onClick={() => setExpandedSubCatIdx(isExpanded ? null : sIdx)}>
+                                      <div style={{ cursor: 'grab', opacity: 0.3, paddingRight: '0.5rem' }}>
+                                        <GripVertical size={12} />
+                                      </div>
+                                      <button type="button" className="p-0 border-0 bg-transparent flex items-center">
+                                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                      </button>
 
-                                    {/* Sub-category Image */}
-                                    <div className="image-upload-wrapper">
-                                      {sImg ? (
-                                        <img src={sImg} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="flex-center-vh w-full h-full opacity-30 h-auto">
-                                          <Image size={14} />
-                                        </div>
-                                      )}
-                                      <label onClick={(e) => e.stopPropagation()}>
-                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleCategoryImageUpload(cat.id, e.target.files[0], sIdx)} />
-                                      </label>
-                                      {uploadingCatId === `${cat.id}-${sIdx}` && (
-                                        <div className="upload-overlay">
-                                          <Loader2 size={12} className="animate-spin" />
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <span style={{ fontWeight: 600, fontSize: '0.8rem', flex: 1 }}>{sName}</span>
-                                    
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleDeleteSubCategory(cat.id, sIdx); }}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626' }}
-                                    >
-                                      <X size={14} />
-                                    </button>
-                                  </div>
-
-                                  {/* Level 3 items */}
-                                  {isExpanded && (
-                                    <div className="level3-container">
-                                      <div className="level3-grid">
-                                        {sSubs.map(ssName => (
-                                          <div key={ssName} className="level3-tag">
-                                            <span>{ssName}</span>
-                                            <button type="button" onClick={() => handleDeleteSubSubCategory(cat.id, sIdx, ssName)}>
-                                              <X size={10} className="text-red-500" />
-                                            </button>
+                                      {/* Sub-category Image */}
+                                      <div className="image-upload-wrapper">
+                                        {sImg ? (
+                                          <img src={sImg} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="flex-center-vh w-full h-full opacity-30 h-auto">
+                                            <Image size={14} />
                                           </div>
-                                        ))}
-                                        {sSubs.length === 0 && <span className="text-[10px] italic opacity-50">No sub-sub categories yet.</span>}
+                                        )}
+                                        <label onClick={(e) => e.stopPropagation()}>
+                                          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleCategoryImageUpload(cat.id, e.target.files[0], sIdx)} />
+                                        </label>
+                                        {uploadingCatId === `${cat.id}-${sIdx}` && (
+                                          <div className="upload-overlay">
+                                            <Loader2 size={12} className="animate-spin" />
+                                          </div>
+                                        )}
                                       </div>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="text"
-                                          placeholder="Add sub-sub category..."
-                                          className="input-field"
-                                          style={{ height: '30px', fontSize: '11px', flex: 1 }}
-                                          value={newSubSubCategory}
-                                          onChange={(e) => setNewSubSubCategory(e.target.value)}
-                                          onClick={(e) => e.stopPropagation()}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleAddSubSubCategory(cat.id, sIdx);
-                                            }
-                                          }}
-                                        />
-                                        <button 
-                                          type="button" 
-                                          onClick={(e) => { e.stopPropagation(); handleAddSubSubCategory(cat.id, sIdx); }}
-                                          className="btn-primary" 
-                                          style={{ padding: '0 0.5rem', height: '30px' }}
-                                        >
-                                          <PlusCircle size={14} />
-                                        </button>
-                                      </div>
+
+                                      <span style={{ fontWeight: 600, fontSize: '0.8rem', flex: 1 }}>{sName}</span>
+                                      
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteSubCategory(cat.id, sIdx); }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626' }}
+                                      >
+                                        <X size={14} />
+                                      </button>
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+
+                                    {/* Level 3 items (Tags) */}
+                                    {isExpanded && (
+                                      <div className="level3-container">
+                                        <div className="level3-header">
+                                          <span className="text-[10px] font-bold uppercase opacity-50">Tags & Descriptors</span>
+                                        </div>
+                                        <Reorder.Group 
+                                          axis="x"
+                                          layoutScroll
+                                          values={sSubs}
+                                          onReorder={(newVal) => {
+                                            setCategories(prev => prev.map(c => {
+                                              if (c.id === cat.id) {
+                                                const updatedSubs = [...c.subcategories];
+                                                updatedSubs[sIdx] = { ...updatedSubs[sIdx], subSubcategories: newVal };
+                                                return { ...c, subcategories: updatedSubs };
+                                              }
+                                              return c;
+                                            }));
+                                          }}
+                                          className="level3-grid"
+                                          style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}
+                                        >
+                                          {sSubs.map(ssName => (
+                                            <Reorder.Item 
+                                              key={ssName} 
+                                              value={ssName} 
+                                              className="level3-tag" 
+                                              style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '4px',
+                                                cursor: 'grab' 
+                                              }}
+                                            >
+                                              <GripVertical size={8} style={{ opacity: 0.5 }} />
+                                              <span>{ssName}</span>
+                                              <button type="button" onClick={() => handleDeleteSubSubCategory(cat.id, sIdx, ssName)}>
+                                                <X size={10} className="text-red-500" />
+                                              </button>
+                                            </Reorder.Item>
+                                          ))}
+                                          {sSubs.length === 0 && <span className="text-[10px] italic opacity-50">No tags yet.</span>}
+                                        </Reorder.Group>
+                                        <div className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            placeholder="Add tag (e.g. Slim Fit)..."
+                                            className="input-field"
+                                            style={{ height: '30px', fontSize: '11px', flex: 1 }}
+                                            value={newSubSubCategory}
+                                            onChange={(e) => setNewSubSubCategory(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleAddSubSubCategory(cat.id, sIdx);
+                                              }
+                                            }}
+                                          />
+                                          <button 
+                                            type="button" 
+                                            onClick={(e) => { e.stopPropagation(); handleAddSubSubCategory(cat.id, sIdx); }}
+                                            className="btn-primary" 
+                                            style={{ padding: '0 0.5rem', height: '30px' }}
+                                          >
+                                            <PlusCircle size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Reorder.Item>
+                                );
+                              })}
+                            </Reorder.Group>
                             {(!cat.subcategories || cat.subcategories.length === 0) && (
                               <p style={{ fontSize: '0.75rem', fontStyle: 'italic', color: 'var(--text-secondary)', opacity: 0.7, padding: '0.5rem' }}>
                                 No sub-categories yet.
@@ -875,12 +926,12 @@ const Settings = () => {
                           </div>
                         </div>
                       )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    </Reorder.Item>
+                    ))}
+                  </Reorder.Group>
+                )}
+              </div>
+            )}
 
           {activeTab === 'boutique' && (
             <div className="animate-fade-in">

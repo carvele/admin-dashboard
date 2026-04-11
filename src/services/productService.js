@@ -125,6 +125,45 @@ export const deleteInventoryItem = (docId) => {
   return deleteDocument('inventory', docId);
 };
 
+export const recordBoutiqueSale = async (inventoryItem, quantity, user) => {
+  const { db } = await import('../firebase/config');
+  const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+  const { logAction } = await import('./staffService');
+
+  if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
+
+  // 1. Update Inventory Stock
+  await updateInventoryItem(inventoryItem.docId, {
+    total: inventoryItem.total - quantity,
+    available: inventoryItem.available - quantity
+  });
+
+  // 2. Create a "Virtual" completed reservation for tracking/revenue
+  await addDoc(collection(db, 'reservations'), {
+    productId: inventoryItem.productDocId || inventoryItem.sku || '',
+    productName: inventoryItem.item,
+    size: inventoryItem.size,
+    quantity: quantity,
+    status: 'Completed',
+    platform: 'Boutique',
+    customerName: 'Walk-in Customer',
+    staffId: user?.uid || 'unknown',
+    staffName: user?.name || user?.email || 'Staff',
+    createdAt: serverTimestamp(),
+    completedAt: serverTimestamp(),
+    isBoutiqueSale: true
+  });
+
+  // 3. Log Audit Trail
+  await logAction(user, 'Recorded In-Store Sale', {
+    itemName: inventoryItem.item,
+    size: inventoryItem.size,
+    quantitySold: quantity
+  });
+
+  return { success: true };
+};
+
 // --- Category Layer ---
 
 export const subscribeToCategories = (callback) => {
@@ -135,8 +174,9 @@ export const getCategories = async () => {
   const cacheKey = 'categories';
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
   const data = await getCollection('categories');
-  queryCache.set(cacheKey, data, CACHE_TTL.LONG);
-  return data;
+  const sortedData = data.sort((a, b) => (a.order || 0) - (b.order || 0));
+  queryCache.set(cacheKey, sortedData, CACHE_TTL.LONG);
+  return sortedData;
 };
 
 export const createCategory = (categoryData) => {

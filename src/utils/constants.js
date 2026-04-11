@@ -24,3 +24,12 @@ export const SEASONS = [
   'Wet Season (Rainy)',
   'Cool Season (-Ber Months)',
 ];
+
+export const DEFAULT_MEASUREMENT_METRICS = {
+  'Tops': ['Shoulder', 'Chest', 'Sleeve Length', 'Body Length'],
+  'Bottoms': ['Waist', 'Hip', 'Thigh', 'Inseam', 'Outseam', 'Total Length'],
+  'Dress': ['Bust', 'Waist', 'Hip', 'Shoulder', 'Total Length'],
+  'Footwear': ['Foot Length', 'Foot Width'],
+  'Outerwear': ['Shoulder', 'Chest', 'Sleeve Length', 'Total Length', 'Cuff'],
+  'Bags': ['Width', 'Height', 'Depth', 'Strap Length'],
+};

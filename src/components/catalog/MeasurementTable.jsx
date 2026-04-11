@@ -1,9 +1,47 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Ruler } from 'lucide-react';
+import { Plus, Trash2, Ruler, RefreshCw, Copy } from 'lucide-react';
+import { DEFAULT_MEASUREMENT_METRICS } from '../../utils/constants';
 
-const MeasurementTable = ({ sizes, measurements, onChange }) => {
+const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory, subSubCategory }) => {
   const [newMetric, setNewMetric] = useState('');
-  
+  const [unit, setUnit] = useState('cm'); // 'cm' | 'in'
+
+  // Smart template matching logic
+  const findSmartTemplate = () => {
+    const templateKeys = Object.keys(DEFAULT_MEASUREMENT_METRICS);
+    const searchTerms = [
+      subSubCategory, 
+      subCategory, 
+      category
+    ].filter(Boolean).map(s => s.toLowerCase());
+
+    if (searchTerms.length === 0) return null;
+
+    // 1. Exact/Hierarchical match
+    for (const term of searchTerms) {
+      const match = templateKeys.find(key => key.toLowerCase() === term);
+      if (match) return DEFAULT_MEASUREMENT_METRICS[match];
+    }
+
+    // 2. Fuzzy/Substring match
+    for (const term of searchTerms) {
+      const match = templateKeys.find(key => {
+        const k = key.toLowerCase();
+        // Remove trailing 's' for simple plural matching
+        const singularK = k.endsWith('s') ? k.slice(0, -1) : k;
+        const singularTerm = term.endsWith('s') ? term.slice(0, -1) : term;
+        
+        return term.includes(k) || k.includes(term) || 
+               term.includes(singularK) || singularK.includes(singularTerm);
+      });
+      if (match) return DEFAULT_MEASUREMENT_METRICS[match];
+    }
+
+    return null;
+  };
+
+  const suggestedMetrics = findSmartTemplate();
+
   // Unique metrics across all sizes
   const metrics = Array.from(new Set(
     Object.values(measurements || {}).flatMap(sizeObj => Object.keys(sizeObj))
@@ -14,7 +52,8 @@ const MeasurementTable = ({ sizes, measurements, onChange }) => {
     
     const updated = { ...measurements };
     sizes.forEach(size => {
-      if (!updated[size]) updated[size] = {};
+      // Create a fresh clone of the size object to avoid mutating previous state
+      updated[size] = { ...(updated[size] || {}) };
       updated[size][newMetric.trim()] = '';
     });
     
@@ -24,8 +63,8 @@ const MeasurementTable = ({ sizes, measurements, onChange }) => {
 
   const handleValueChange = (size, metric, value) => {
     const updated = { ...measurements };
-    if (!updated[size]) updated[size] = {};
-    updated[size][metric] = value;
+    // Clone the specific size object before updating its metric value
+    updated[size] = { ...(updated[size] || {}), [metric]: value };
     onChange(updated);
   };
 
@@ -33,10 +72,76 @@ const MeasurementTable = ({ sizes, measurements, onChange }) => {
     const updated = { ...measurements };
     sizes.forEach(size => {
       if (updated[size]) {
-        delete updated[size][metric];
+        const sizeObj = { ...updated[size] };
+        delete sizeObj[metric];
+        updated[size] = sizeObj;
       }
     });
     onChange(updated);
+  };
+
+  const handleLoadRecommended = () => {
+    const recommended = suggestedMetrics || [];
+    if (recommended.length === 0) return;
+    
+    const updated = { ...measurements };
+    sizes.forEach(size => {
+      updated[size] = { ...(updated[size] || {}) };
+      recommended.forEach(metric => {
+        if (updated[size][metric] === undefined) {
+          updated[size][metric] = '';
+        }
+      });
+    });
+    onChange(updated);
+  };
+
+  const handleCopyToAll = () => {
+    if (sizes.length <= 1) return;
+    const firstSize = sizes[0];
+    const sourceData = measurements[firstSize] || {};
+    
+    if (Object.keys(sourceData).length === 0) return;
+
+    const updated = { ...measurements };
+    sizes.slice(1).forEach(size => {
+      updated[size] = { ...sourceData };
+    });
+    onChange(updated);
+  };
+
+  const toggleUnit = () => {
+    const newUnit = unit === 'cm' ? 'in' : 'cm';
+    const factor = newUnit === 'in' ? 1 / 2.54 : 2.54;
+    
+    const updated = { ...measurements };
+    sizes.forEach(size => {
+      if (updated[size]) {
+        const converted = {};
+        Object.entries(updated[size]).forEach(([metric, val]) => {
+          if (val && !isNaN(val)) {
+            // Convert and round to 1 decimal place
+            converted[metric] = (parseFloat(val) * factor).toFixed(1);
+          } else {
+            converted[metric] = val;
+          }
+        });
+        updated[size] = converted;
+      }
+    });
+    
+    setUnit(newUnit);
+    onChange(updated);
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm('Clear all measurements?')) {
+      const updated = {};
+      sizes.forEach(size => {
+        updated[size] = {};
+      });
+      onChange(updated);
+    }
   };
 
   if (!sizes || sizes.length === 0) {
@@ -45,26 +150,82 @@ const MeasurementTable = ({ sizes, measurements, onChange }) => {
 
   return (
     <div className="measurement-table-container mt-4">
-      <div className="flex gap-2 mb-4 items-center">
-        <div className="relative flex-1">
-          <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
-          <input
-            type="text"
-            className="input-field pl-10"
-            placeholder="Add metric (e.g. Chest Width, Length)"
-            value={newMetric}
-            onChange={(e) => setNewMetric(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddField())}
-          />
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex gap-2 flex-1 max-w-sm">
+          <div className="relative flex-1">
+            <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
+            <input
+              type="text"
+              className="input-field pl-10"
+              placeholder="Add metric (e.g. Chest Width)"
+              value={newMetric}
+              onChange={(e) => setNewMetric(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddField())}
+            />
+          </div>
+          <button 
+            type="button" 
+            className="btn-primary flex items-center gap-2" 
+            onClick={handleAddField}
+            disabled={!newMetric.trim()}
+          >
+            <Plus size={18} /> Add
+          </button>
         </div>
-        <button 
-          type="button" 
-          className="btn-primary flex items-center gap-2" 
-          onClick={handleAddField}
-          disabled={!newMetric.trim()}
-        >
-          <Plus size={18} /> Add Metric
-        </button>
+
+        <div className="flex items-center gap-3">
+          {suggestedMetrics && (
+            <button
+              type="button"
+              className="btn-outline small flex items-center gap-2"
+              onClick={handleLoadRecommended}
+              title="Load standard metrics for this category"
+            >
+              <RefreshCw size={14} />
+              <span className="hidden sm:inline">Load Suggested</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="btn-outline small flex items-center gap-2"
+            onClick={handleCopyToAll}
+            disabled={sizes.length <= 1 || metrics.length === 0}
+            title="Copy first size values to all other sizes"
+          >
+            <Copy size={14} />
+            <span className="hidden sm:inline">Sync All Sizes</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-outline small flex items-center gap-2 text-danger hover:bg-red-50"
+            onClick={handleClearAll}
+            disabled={metrics.length === 0}
+          >
+            <Trash2 size={14} />
+            <span className="hidden lg:inline">Clear</span>
+          </button>
+
+          <div className="flex rounded-lg p-1 border" style={{ backgroundColor: 'var(--beige)' }}>
+            <button
+              type="button"
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${unit === 'cm' ? 'bg-charcoal text-white shadow-sm' : 'text-secondary hover:text-charcoal'}`}
+              style={unit === 'cm' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
+              onClick={() => unit !== 'cm' && toggleUnit()}
+            >
+              CM
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${unit === 'in' ? 'bg-charcoal text-white shadow-sm' : 'text-secondary hover:text-charcoal'}`}
+              style={unit === 'in' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
+              onClick={() => unit !== 'in' && toggleUnit()}
+            >
+              IN
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="overflow-x-auto border rounded-lg">
@@ -95,13 +256,19 @@ const MeasurementTable = ({ sizes, measurements, onChange }) => {
                 <td className="p-3 border-b font-bold bg-light/30">{size}</td>
                 {metrics.map(metric => (
                   <td key={`${size}-${metric}`} className="p-2 border-b">
-                    <input
-                      type="text"
-                      className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1"
-                      placeholder="--"
-                      value={measurements?.[size]?.[metric] || ''}
-                      onChange={(e) => handleValueChange(size, metric, e.target.value)}
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1"
+                        placeholder="--"
+                        value={measurements?.[size]?.[metric] || ''}
+                        onChange={(e) => handleValueChange(size, metric, e.target.value)}
+                      />
+                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-secondary pointer-events-none font-bold opacity-30 uppercase">
+                        {unit}
+                      </span>
+                    </div>
                   </td>
                 ))}
                 {metrics.length === 0 && <td className="p-3 border-b text-secondary italic">--</td>}

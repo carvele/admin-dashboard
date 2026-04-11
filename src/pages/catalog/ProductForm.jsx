@@ -49,6 +49,9 @@ const ProductForm = () => {
     visibility: 'Draft',
     isFeatured: false,
     isAlterable: false,
+    onSale: false,
+    discountPercentage: 0,
+    salePrice: '',
     sizes: ['M'],
     images: [], // Array of image URLs/Maps
     model3DURL: '',
@@ -138,6 +141,9 @@ const ProductForm = () => {
               visibility: doc.visibility || 'Draft',
               isFeatured: doc.isFeatured ?? doc.featured ?? false,
               isAlterable: doc.isAlterable || false,
+              onSale: doc.onSale || false,
+              discountPercentage: doc.discountPercentage || 0,
+              salePrice: doc.salePrice || '',
               sizes: doc.sizes || ['M'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
               model3DURL: doc.model3DURL || '',
@@ -533,31 +539,65 @@ const ProductForm = () => {
                 })()}
               </select>
             </div>
-            <div>
-              <label className="label">Style Code / SKU (Auto-Generated)</label>
-              <input
-                type="text"
-                name="styleCode"
-                className="input-field"
-                value={formData.styleCode}
-                readOnly
-                style={{ backgroundColor: 'var(--beige)', cursor: 'default' }}
-                placeholder="Auto-generated from product name"
-              />
+           </div>
+        </section>
+
+        {/* SALE DETAILS SECTION */}
+        <section className="p-4 border-2 rounded-lg transition-all" style={{ 
+          borderColor: formData.onSale ? '#ef4444' : 'var(--charcoal)',
+          backgroundColor: formData.onSale ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
+        }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TagIcon size={20} className={formData.onSale ? 'text-red-600' : 'text-gray-500'} />
+              <h2 className="text-xl font-semibold" style={{ color: formData.onSale ? '#b91c1c' : 'inherit' }}>Sale Details</h2>
             </div>
-          </div>
-          <div className="flex gap-4 items-center mt-4 p-4 border rounded" style={{ backgroundColor: 'var(--beige)', borderColor: 'var(--charcoal)' }}>
-            <label className="flex items-center gap-3 cursor-pointer w-full">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm font-medium">ON SALE</span>
               <input
                 type="checkbox"
-                name="isAlterable"
-                checked={formData.isAlterable}
-                onChange={(e) => setFormData({ ...formData, isAlterable: e.target.checked })}
-                style={{ width: '20px', height: '20px', accentColor: 'var(--charcoal)' }}
+                name="onSale"
+                checked={formData.onSale}
+                onChange={handleChange}
+                style={{ width: '18px', height: '18px', accentColor: '#ef4444' }}
               />
-              <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--charcoal)' }}>Allow Alterations & Fitting for this Product</span>
             </label>
           </div>
+
+          {formData.onSale && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2">
+              <div>
+                <label className="label">Discount Percentage (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    name="discountPercentage"
+                    className="input-field pr-10"
+                    placeholder="e.g. 10"
+                    value={formData.discountPercentage}
+                    onChange={handleChange}
+                    min="1"
+                    max="99"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-red-600">%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">This will auto-calculate the sale price.</p>
+              </div>
+              <div>
+                <label className="label">Final Sale Price (₱)</label>
+                <input
+                  type="number"
+                  name="salePrice"
+                  className="input-field font-bold text-red-600 border-red-200"
+                  style={{ backgroundColor: 'white' }}
+                  value={formData.salePrice}
+                  onChange={handleChange}
+                  placeholder="Final price"
+                />
+                <p className="text-xs text-gray-500 mt-1">Rounded to nearest whole number.</p>
+              </div>
+            </div>
+          )}
         </section>
 
         <section>
@@ -798,7 +838,10 @@ const ProductForm = () => {
             <MeasurementTable 
               sizes={formData.sizes} 
               measurements={formData.measurements} 
-              onChange={(m) => setFormData({ ...formData, measurements: m })} 
+              category={formData.category}
+              subCategory={formData.subCategory}
+              subSubCategory={formData.subSubCategory}
+              onChange={(m) => setFormData(prev => ({ ...prev, measurements: m }))} 
             />
           </div>
 

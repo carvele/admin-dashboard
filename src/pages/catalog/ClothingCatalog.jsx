@@ -254,9 +254,25 @@ const ClothingCatalog = () => {
                     <Sparkles size={10} /> New Arrival
                   </div>
                 )}
-                {(item.tags || []).includes('AR Try-On') && (
                   <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
                     {item.model3DURL ? 'AR Ready' : 'AR Missing'}
+                  </div>
+                )}
+                {item.onSale && (
+                  <div className="sale-badge" style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)',
+                    zIndex: 10
+                  }}>
+                    -{item.discountPercentage}% OFF
                   </div>
                 )}
               </div>
@@ -279,7 +295,29 @@ const ClothingCatalog = () => {
                       )}
                     </p>
                   </div>
-                  <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>
+                  <div className="product-price-container" style={{ textAlign: 'right' }}>
+                    {item.onSale ? (
+                      <>
+                        <div className="original-price" style={{ 
+                          fontSize: '0.8rem', 
+                          textDecoration: 'line-through', 
+                          opacity: 0.5,
+                          marginBottom: '-2px'
+                        }}>
+                          ₱{(item.price || 0).toLocaleString()}
+                        </div>
+                        <div className="sale-price" style={{ 
+                          color: '#ef4444', 
+                          fontWeight: 'bold',
+                          fontSize: '1.2rem'
+                        }}>
+                          ₱{(item.salePrice || 0).toLocaleString()}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex align-center gap-1 mb-2" style={{ fontSize: '0.85rem' }}>
