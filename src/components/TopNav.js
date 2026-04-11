@@ -38,12 +38,12 @@ const TopNav = ({ user, onHamburger }) => {
                 const custSearch = await getCollection('users', false, 50);
                 const prodSearch = await getCollection('products', false, 50);
                 resSearch.forEach((r) => {
-                    const sCustomer = (r.customer || r.customerName || '').toLowerCase();
+                    const sCustomer = (r.customerName || r.customer || '').toLowerCase();
                     if (sCustomer.includes(q) || (r.id && r.id.toLowerCase().includes(q))) {
                         results.push({
                             type: 'Reservation',
-                            label: `${r.id} — ${r.customer || r.customerName}`,
-                            sub: r.outfit || r.productName || 'Order',
+                            label: `${r.id} — ${r.customerName || r.customer}`,
+                            sub: r.productName || r.outfit || 'Order', // prefer canonical `productName`
                             path: '/reservations',
                         });
                     }
@@ -92,16 +92,22 @@ const TopNav = ({ user, onHamburger }) => {
         return () => clearTimeout(handler);
     }, [searchQuery]);
     // ── Subscribe to notifications (Limited to 20 recent) ──
+    // Handles both web-created docs (createdAt: Timestamp) and
+    // Android-created docs (timestamp: epoch-ms long).
     useEffect(() => {
-        // Only listen to the most recent 20 notifications to save reads
         const unsub = subscribeToCollection('notifications', (data) => {
             const sorted = [...data].sort((a, b) => {
-                const aTime = a.createdAt?.seconds || 0;
-                const bTime = b.createdAt?.seconds || 0;
+                // Prefer Firestore Timestamp; fall back to Android epoch-ms `timestamp`
+                const aTime = a.createdAt?.seconds
+                    ? a.createdAt.seconds
+                    : (a.timestamp || 0) / 1000;
+                const bTime = b.createdAt?.seconds
+                    ? b.createdAt.seconds
+                    : (b.timestamp || 0) / 1000;
                 return bTime - aTime;
             });
             setNotifications(sorted);
-            setUnreadCount(sorted.filter((n) => !n.read).length);
+            setUnreadCount(sorted.filter((n) => !n.isRead).length);
         }, [orderBy('createdAt', 'desc'), limit(20)]);
         return () => unsub();
     }, []);
@@ -122,9 +128,9 @@ const TopNav = ({ user, onHamburger }) => {
     };
     const markAllRead = async () => {
         try {
-            const unread = notifications.filter((n) => !n.read);
+            const unread = notifications.filter((n) => !n.isRead);
             for (const n of unread) {
-                await updateDocument('notifications', n.docId, { read: true });
+                await updateDocument('notifications', n.docId, { isRead: true });
             }
         }
         catch (err) {
@@ -148,9 +154,11 @@ const TopNav = ({ user, onHamburger }) => {
     return (_jsxs("header", { className: "topnav", children: [_jsxs("div", { className: "topnav-left", children: [_jsx("button", { className: "hamburger-btn", onClick: onHamburger, "aria-label": "Open menu", children: _jsx(Menu, { size: 22 }) }), _jsxs("div", { className: "topnav-search", ref: searchRef, children: [_jsx(Search, { size: 18, className: "search-icon" }), _jsx("input", { type: "text", placeholder: "Search orders, customers, or items...", value: searchQuery, onChange: (e) => setSearchQuery(e.target.value), onFocus: () => searchQuery.trim() && setShowSearchResults(true) }), searchQuery && (_jsx("button", { className: "search-clear-btn", onClick: () => {
                                     setSearchQuery('');
                                     setShowSearchResults(false);
-                                }, children: _jsx(X, { size: 14 }) })), showSearchResults && searchResults.length > 0 && (_jsx("div", { className: "search-dropdown card", children: _jsx("div", { className: "search-results-list", children: searchResults.map((result, idx) => (_jsxs("button", { className: "search-result-item", onClick: () => handleResultClick(result.path), children: [_jsx("span", { className: "search-result-type", style: { color: getTypeColor(result.type) }, children: result.type }), _jsxs("div", { className: "search-result-info", children: [_jsx("span", { className: "search-result-label", children: result.label }), _jsx("span", { className: "search-result-sub", children: result.sub })] })] }, `${result.type}-${result.path}-${idx}`))) }) })), showSearchResults && searchQuery.trim() && searchResults.length === 0 && (_jsx("div", { className: "search-dropdown card", children: _jsxs("div", { className: "search-no-results", children: ["No results found for \"", sanitizeForDisplay(searchQuery), "\""] }) }))] })] }), _jsxs("div", { className: "topnav-actions", children: [_jsxs("div", { className: "sync-status", title: "Connected to Real-time Database", children: [_jsx("div", { className: "sync-indicator" }), _jsx("span", { className: "sync-text", children: "Live" })] }), _jsxs("div", { className: "notification-wrapper", children: [_jsxs("button", { className: "icon-btn", onClick: () => setShowNotifications(!showNotifications), children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && _jsx("span", { className: "notification-dot", children: unreadCount })] }), showNotifications && (_jsxs("div", { className: "notifications-dropdown card", children: [_jsxs("div", { className: "dropdown-header", children: [_jsx("h3", { children: "Notifications" }), _jsx("button", { className: "text-btn", onClick: markAllRead, children: "Mark all read" })] }), _jsx("ul", { className: "notification-list", children: notifications.length === 0 ? (_jsx("li", { className: "notification-item", children: _jsx("div", { className: "noti-content", style: { textAlign: 'center', width: '100%' }, children: _jsx("p", { className: "text-secondary", children: "No notifications yet" }) }) })) : (notifications.map((n, idx) => (_jsxs("li", { className: `notification-item ${!n.read ? 'unread' : ''}`, children: [_jsx("div", { className: "noti-icon reservation", children: (n.type || 'N')[0].toUpperCase() }), _jsxs("div", { className: "noti-content", children: [_jsx("p", { children: n.message || 'New notification' }), _jsx("span", { children: n.createdAt?.seconds
+                                }, children: _jsx(X, { size: 14 }) })), showSearchResults && searchResults.length > 0 && (_jsx("div", { className: "search-dropdown card", children: _jsx("div", { className: "search-results-list", children: searchResults.map((result, idx) => (_jsxs("button", { className: "search-result-item", onClick: () => handleResultClick(result.path), children: [_jsx("span", { className: "search-result-type", style: { color: getTypeColor(result.type) }, children: result.type }), _jsxs("div", { className: "search-result-info", children: [_jsx("span", { className: "search-result-label", children: result.label }), _jsx("span", { className: "search-result-sub", children: result.sub })] })] }, `${result.type}-${result.path}-${idx}`))) }) })), showSearchResults && searchQuery.trim() && searchResults.length === 0 && (_jsx("div", { className: "search-dropdown card", children: _jsxs("div", { className: "search-no-results", children: ["No results found for \"", sanitizeForDisplay(searchQuery), "\""] }) }))] })] }), _jsxs("div", { className: "topnav-actions", children: [_jsxs("div", { className: "sync-status", title: "Connected to Real-time Database", children: [_jsx("div", { className: "sync-indicator" }), _jsx("span", { className: "sync-text", children: "Live" })] }), _jsxs("div", { className: "notification-wrapper", children: [_jsxs("button", { className: "icon-btn", onClick: () => setShowNotifications(!showNotifications), children: [_jsx(Bell, { size: 20 }), unreadCount > 0 && _jsx("span", { className: "notification-dot", children: unreadCount })] }), showNotifications && (_jsxs("div", { className: "notifications-dropdown card", children: [_jsxs("div", { className: "dropdown-header", children: [_jsx("h3", { children: "Notifications" }), _jsx("button", { className: "text-btn", onClick: markAllRead, children: "Mark all read" })] }), _jsx("ul", { className: "notification-list", children: notifications.length === 0 ? (_jsx("li", { className: "notification-item", children: _jsx("div", { className: "noti-content", style: { textAlign: 'center', width: '100%' }, children: _jsx("p", { className: "text-secondary", children: "No notifications yet" }) }) })) : (notifications.map((n, idx) => (_jsxs("li", { className: `notification-item ${!n.isRead ? 'unread' : ''}`, children: [_jsx("div", { className: "noti-icon reservation", children: (n.type || 'N')[0].toUpperCase() }), _jsxs("div", { className: "noti-content", children: [_jsxs("p", { children: [n.title ? _jsxs("strong", { children: [n.title, ":"] }) : null, " ", n.message || 'New notification'] }), _jsx("span", { children: n.createdAt?.seconds
                                                                 ? formatRelativeTime(n.createdAt.seconds * 1000)
-                                                                : 'Just now' })] })] }, n.id || n.docId || `notification-${idx}`)))) })] }))] }), _jsxs("div", { className: "user-menu", children: [_jsx("div", { className: "avatar", style: { backgroundColor: getAvatarColor(user?.name || 'A') }, children: initials }), _jsxs("div", { className: "user-info", children: [_jsx("span", { className: "user-name", children: user?.name || 'Staff Member' }), _jsx("span", { className: "user-role-top", style: {
+                                                                : n.timestamp
+                                                                    ? formatRelativeTime(n.timestamp) // Android epoch-ms fallback
+                                                                    : 'Just now' })] })] }, n.id || n.docId || `notification-${idx}`)))) })] }))] }), _jsxs("div", { className: "user-menu", children: [_jsx("div", { className: "avatar", style: { backgroundColor: getAvatarColor(user?.name || 'A') }, children: initials }), _jsxs("div", { className: "user-info", children: [_jsx("span", { className: "user-name", children: user?.name || 'Staff Member' }), _jsx("span", { className: "user-role-top", style: {
                                             fontSize: '0.75rem',
                                             color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)',
                                             fontWeight: 500,

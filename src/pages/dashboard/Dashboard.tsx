@@ -131,7 +131,6 @@ const Dashboard = () => {
   // --- NEW COMMAND CENTER LOGIC ---
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
   // 1. Daily Logistics (Pickups/Returns for Today)
   const todayLogistics = reservations
@@ -151,7 +150,7 @@ const Dashboard = () => {
         timeStr: pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
     })
-    .sort((a, b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
+    .sort((a, _b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
 
   // 2. Unified Activity Feed (Last 10 events)
   const activityFeed = [

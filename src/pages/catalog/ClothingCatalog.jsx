@@ -257,7 +257,6 @@ const ClothingCatalog = () => {
                   <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
                     {item.model3DURL ? 'AR Ready' : 'AR Missing'}
                   </div>
-                )}
                 {item.onSale && (
                   <div className="sale-badge" style={{
                     position: 'absolute',
