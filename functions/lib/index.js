@@ -32,6 +32,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validators = exports.scheduled = exports.migrations = void 0;
 const admin = __importStar(require("firebase-admin"));
@@ -39,4 +42,6 @@ admin.initializeApp();
 exports.migrations = __importStar(require("./migrations"));
 exports.scheduled = __importStar(require("./scheduled/cleanupOldData"));
 exports.validators = __importStar(require("./validators/validateWrites"));
+// Export Triggers
+__exportStar(require("./triggers/syncInventory"), exports);
 //# sourceMappingURL=index.js.map

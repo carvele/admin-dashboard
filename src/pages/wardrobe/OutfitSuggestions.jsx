@@ -266,7 +266,7 @@ const OutfitSuggestions = () => {
             <PackageOpen size={48} style={{ opacity: 0.35, marginBottom: '1rem', color: '#e17fa0' }} />
             <h3>No Outfit Combinations Yet</h3>
             <p className="text-secondary" style={{ marginTop: '0.5rem' }}>
-              Click <strong>"New Outfit"</strong> above to create your first suggestion.
+              Click <strong>&quot;New Outfit&quot;</strong> above to create your first suggestion.
             </p>
           </div>
         ) : (
@@ -380,7 +380,14 @@ const OutfitSuggestions = () => {
 
       {/* ── MODAL ── */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeModal()}>
+        <div 
+          className="modal-overlay" 
+          onClick={(e) => e.target === e.currentTarget && closeModal()}
+          onKeyDown={(e) => e.key === 'Escape' && closeModal()}
+          role="button"
+          tabIndex={0}
+          aria-label="Close modal"
+        >
           <div className="modal-content modal-lg outfit-modal">
 
             {/* Header */}
@@ -412,8 +419,15 @@ const OutfitSuggestions = () => {
               <div className="modal-body">
                 {/* Outfit Image Upload */}
                 <div className="form-group">
-                  <label className="label">Outfit Cover Image</label>
-                  <div className="image-upload-zone" onClick={() => fileInputRef.current?.click()}>
+                  <label className="label" htmlFor="outfit-image-upload">Outfit Cover Image</label>
+                  <div 
+                    className="image-upload-zone" 
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Upload outfit photo"
+                  >
                     {form.imagePreview ? (
                       <>
                         <img src={form.imagePreview} alt="preview" className="image-preview" />
@@ -435,6 +449,7 @@ const OutfitSuggestions = () => {
                   </div>
                   <input
                     ref={fileInputRef}
+                    id="outfit-image-upload"
                     type="file"
                     accept="image/*"
                     style={{ display: 'none' }}
@@ -444,19 +459,19 @@ const OutfitSuggestions = () => {
 
                 <div className="form-row">
                   <div className="form-group flex-2">
-                    <label className="label">Outfit Name *</label>
+                    <label className="label" htmlFor="outfit-name">Outfit Name *</label>
                     <input
+                      id="outfit-name"
                       type="text"
                       className="input-field"
                       placeholder="e.g., Blush Garden Brunch"
                       value={form.outfitName}
                       onChange={(e) => setForm((f) => ({ ...f, outfitName: e.target.value }))}
-                      autoFocus
                     />
                   </div>
                   <div className="form-group flex-1">
-                    <label className="label">Occasion</label>
-                    <select className="input-field" value={form.occasionTag} onChange={(e) => setForm((f) => ({ ...f, occasionTag: e.target.value }))}>
+                    <label className="label" htmlFor="outfit-occasion">Occasion</label>
+                    <select id="outfit-occasion" className="input-field" value={form.occasionTag} onChange={(e) => setForm((f) => ({ ...f, occasionTag: e.target.value }))}>
                       <option>Casual</option>
                       <option>Formal</option>
                       <option>Work</option>
@@ -470,8 +485,9 @@ const OutfitSuggestions = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="label">Style Description / Styling Tips</label>
+                  <label className="label" htmlFor="outfit-desc">Style Description / Styling Tips</label>
                   <textarea
+                    id="outfit-desc"
                     className="input-field"
                     rows="2"
                     placeholder="e.g., Perfect for garden parties, pairs beautifully with strappy heels..."
@@ -482,8 +498,8 @@ const OutfitSuggestions = () => {
 
                 <div className="form-row">
                   <div className="form-group flex-1">
-                    <label className="label">Season</label>
-                    <select className="input-field" value={form.outfitSeason} onChange={(e) => setForm((f) => ({ ...f, outfitSeason: e.target.value }))}>
+                    <label className="label" htmlFor="outfit-season">Season</label>
+                    <select id="outfit-season" className="input-field" value={form.outfitSeason} onChange={(e) => setForm((f) => ({ ...f, outfitSeason: e.target.value }))}>
                       <option>All-Season</option>
                       <option>Dry Season (Summer)</option>
                       <option>Wet Season (Rainy)</option>
@@ -491,8 +507,8 @@ const OutfitSuggestions = () => {
                     </select>
                   </div>
                   <div className="form-group flex-1">
-                    <label className="label">Gender</label>
-                    <select className="input-field" value={form.outfitGender} onChange={(e) => setForm((f) => ({ ...f, outfitGender: e.target.value }))}>
+                    <label className="label" htmlFor="outfit-gender">Gender</label>
+                    <select id="outfit-gender" className="input-field" value={form.outfitGender} onChange={(e) => setForm((f) => ({ ...f, outfitGender: e.target.value }))}>
                       <option>Women</option>
                       <option>Men</option>
                       <option>Unisex</option>
@@ -502,8 +518,8 @@ const OutfitSuggestions = () => {
 
                 <div className="form-row">
                   <div className="form-group flex-1">
-                    <label className="label">Style Vibe</label>
-                    <select className="input-field" value={form.styleVibe} onChange={(e) => setForm((f) => ({ ...f, styleVibe: e.target.value }))}>
+                    <label className="label" htmlFor="outfit-vibe">Style Vibe</label>
+                    <select id="outfit-vibe" className="input-field" value={form.styleVibe} onChange={(e) => setForm((f) => ({ ...f, styleVibe: e.target.value }))}>
                       <option>Chic</option>
                       <option>Minimalist</option>
                       <option>Romantic</option>
@@ -515,8 +531,8 @@ const OutfitSuggestions = () => {
                     </select>
                   </div>
                   <div className="form-group flex-1">
-                    <label className="label">Color Palette</label>
-                    <select className="input-field" value={form.colorPalette} onChange={(e) => setForm((f) => ({ ...f, colorPalette: e.target.value }))}>
+                    <label className="label" htmlFor="outfit-color">Color Palette</label>
+                    <select id="outfit-color" className="input-field" value={form.colorPalette} onChange={(e) => setForm((f) => ({ ...f, colorPalette: e.target.value }))}>
                       <option>Pastels</option>
                       <option>Neutrals</option>
                       <option>Earth Tones</option>
@@ -596,6 +612,10 @@ const OutfitSuggestions = () => {
                             key={item.id}
                             className={`available-item-card ${isSelected ? 'selected' : ''}`}
                             onClick={() => toggleItemSelection(item)}
+                            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleItemSelection(item)}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={isSelected}
                           >
                             <div className="avail-icon">
                               {renderItemImage(item.imageUrl || item.image)}

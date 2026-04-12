@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
+    "noEmit": true,
 
     "strict": true,
     "noImplicitAny": true,

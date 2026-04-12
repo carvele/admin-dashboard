@@ -558,7 +558,7 @@ const Dashboard = () => {
           <div className="card-header">
             <div className="flex align-center gap-2">
               <MapPin size={20} className="text-accent" />
-              <h3>Today's Logistics Monitor</h3>
+              <h3>Today&apos;s Logistics Monitor</h3>
             </div>
             <span className="badge secondary">{todayLogistics.length} Events</span>
           </div>
@@ -622,8 +622,15 @@ const Dashboard = () => {
       </div>
 
       {showPreferences && (
-        <div className="modal-overlay" onClick={() => setShowPreferences(false)}>
-          <div className="preferences-modal" onClick={(e) => e.stopPropagation()}>
+        <div 
+          className="modal-overlay" 
+          onClick={() => setShowPreferences(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setShowPreferences(false)}
+          role="button"
+          tabIndex={0}
+          aria-label="Close preferences"
+        >
+          <div className="preferences-modal" onClick={(e) => e.stopPropagation()} role="presentation">
             <div className="preferences-header">
               <h3>Customize Dashboard</h3>
               <button className="icon-btn" onClick={() => setShowPreferences(false)}>
@@ -635,30 +642,30 @@ const Dashboard = () => {
                 <h4>Top Statistics</h4>
                 <div className="pref-list">
                   <div className="pref-item">
-                    <span className="pref-label">Total Reservations</span>
+                    <label className="pref-label" htmlFor="pref-total-reservations">Total Reservations</label>
                     <label className="toggle-switch">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statTotalReservations} onChange={() => togglePref('statTotalReservations')} />
+                      <input type="checkbox" id="pref-total-reservations" className="toggle-input" checked={widgetPrefs.statTotalReservations} onChange={() => togglePref('statTotalReservations')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">Active Customers</span>
+                    <label className="pref-label" htmlFor="pref-active-customers">Active Customers</label>
                     <label className="toggle-switch">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statActiveCustomers} onChange={() => togglePref('statActiveCustomers')} />
+                      <input type="checkbox" id="pref-active-customers" className="toggle-input" checked={widgetPrefs.statActiveCustomers} onChange={() => togglePref('statActiveCustomers')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">Pending Requests</span>
+                    <label className="pref-label" htmlFor="pref-pending-requests">Pending Requests</label>
                     <label className="toggle-switch">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statPendingRequests} onChange={() => togglePref('statPendingRequests')} />
+                      <input type="checkbox" id="pref-pending-requests" className="toggle-input" checked={widgetPrefs.statPendingRequests} onChange={() => togglePref('statPendingRequests')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">AR Try-On Usage</span>
+                    <label className="pref-label" htmlFor="pref-ar-usage">AR Try-On Usage</label>
                     <label className="toggle-switch">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.statARUsage} onChange={() => togglePref('statARUsage')} />
+                      <input type="checkbox" id="pref-ar-usage" className="toggle-input" checked={widgetPrefs.statARUsage} onChange={() => togglePref('statARUsage')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>

@@ -103,6 +103,10 @@ const DigitalWardrobe = () => {
                   key={user.id}
                   className={`dw-customer-item ${activeUserId === user.id ? 'active' : ''}`}
                   onClick={() => setActiveUserId(user.id)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setActiveUserId(user.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={activeUserId === user.id}
                 >
                   <div
                     className="avatar small-av"
@@ -139,7 +143,7 @@ const DigitalWardrobe = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-lg">
-                    {getUserDisplayName(activeUser)}'s Wardrobe
+                    {getUserDisplayName(activeUser)}&apos;s Wardrobe
                   </h3>
                 </div>
               </div>

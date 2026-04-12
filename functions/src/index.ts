@@ -5,3 +5,6 @@ admin.initializeApp();
 export * as migrations from './migrations';
 export * as scheduled from './scheduled/cleanupOldData';
 export * as validators from './validators/validateWrites';
+
+// Export Triggers
+export * from './triggers/syncInventory';

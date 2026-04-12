@@ -72,7 +72,7 @@ const DeviceProtectedRoute = ({ children }) => {
       <div className="flex-center-vh">
         <div className="card text-center" style={{ maxWidth: '400px' }}>
           <h2 style={{ color: 'var(--stock-low)', marginBottom: '1rem' }}>Connection Issue</h2>
-          <p>We couldn't verify your device or connect to the server.</p>
+          <p>We couldn&apos;t verify your device or connect to the server.</p>
           <p style={{ fontSize: '0.85rem', marginTop: '1rem' }}>
             Please check your internet and refresh the page.
           </p>
