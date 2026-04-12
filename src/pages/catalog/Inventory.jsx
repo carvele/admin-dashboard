@@ -20,6 +20,8 @@ import {
   updateProduct,
   recalculateAllInventoryStock,
   recordBoutiqueSale,
+  getCategories,
+  subscribeToCategories,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -42,6 +44,17 @@ const Inventory = () => {
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [dbCategories, setDbCategories] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: 'item', direction: 'ascending' });
+
+  // Fetch dynamic categories
+  // Subscribe to dynamic categories for real-time filter sync
+  React.useEffect(() => {
+    const unsub = subscribeToCategories((data) => {
+      setDbCategories(data.map(c => c.name));
+    });
+    return () => unsub();
+  }, []);
 
   // Modals
   const [restockModal, setRestockModal] = useState(null); // inv item or null
@@ -51,6 +64,7 @@ const Inventory = () => {
 
   // Form state
   const [restockQty, setRestockQty] = useState('');
+  const [salePriceInput, setSalePriceInput] = useState('');
   const [editForm, setEditForm] = useState({ total: '', reserved: '', available: '' });
 
   // Derived stats
@@ -61,10 +75,28 @@ const Inventory = () => {
     (i) => i.available === 0 || i.available / i.total <= 0.2,
   ).length;
 
-  // Extract unique categories for filter
-  const uniqueCategories = ['All', ...new Set(inventory.map((i) => i.category).filter(Boolean))];
+  // Extract unique categories for filter - Sync with DB categories
+  const dropdownCategories = ['All', ...dbCategories];
 
-  const filteredInv = inventory.filter((item) => {
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedInv = [...inventory].sort((a, b) => {
+    if (a[sortConfig.key] < b[sortConfig.key]) {
+      return sortConfig.direction === 'ascending' ? -1 : 1;
+    }
+    if (a[sortConfig.key] > b[sortConfig.key]) {
+      return sortConfig.direction === 'ascending' ? 1 : -1;
+    }
+    return 0;
+  });
+
+  const filteredInv = sortedInv.filter((item) => {
     const matchesSearch =
       (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
       (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
@@ -162,12 +194,14 @@ const Inventory = () => {
 
     const toastId = toast.loading('Recording in-store sale...');
     try {
-      await recordBoutiqueSale(sellModal, qty, user);
+      const price = parseFloat(salePriceInput) || 0;
+      await recordBoutiqueSale(sellModal, qty, user, price);
       await syncProductStock(sellModal.productDocId, sellModal.sku);
       
       toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
       setSellModal(null);
       setRestockQty('');
+      setSalePriceInput('');
     } catch (e) {
       toast.error('Failed to record sale: ' + e.message, { id: toastId });
     }
@@ -363,7 +397,7 @@ const Inventory = () => {
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{ width: 'auto', minWidth: '150px' }}
           >
-            {uniqueCategories.map((cat) => (
+            {dropdownCategories.map((cat) => (
               <option key={cat} value={cat}>
                 {cat === 'All' ? 'All Categories' : cat}
               </option>
@@ -375,13 +409,23 @@ const Inventory = () => {
           <table className="table inv-table">
             <thead>
               <tr>
-                <th>SKU</th>
-                <th>Product Name</th>
-                <th>Category</th>
+                <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer' }}>
+                  SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
+                <th onClick={() => handleSort('item')} style={{ cursor: 'pointer' }}>
+                  Product Name {sortConfig.key === 'item' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
+                <th onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
+                  Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
                 <th>Size</th>
-                <th className="text-right">Total</th>
+                <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer' }}>
+                  Total {sortConfig.key === 'total' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
                 <th className="text-right">Reserved</th>
-                <th className="text-right">Available</th>
+                <th className="text-right" onClick={() => handleSort('available')} style={{ cursor: 'pointer' }}>
+                  Available {sortConfig.key === 'available' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
                 <th>Stock Level</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -468,6 +512,7 @@ const Inventory = () => {
                             onClick={() => {
                               setSellModal(inv);
                               setRestockQty('1');
+                              setSalePriceInput(inv.price || '');
                             }}
                             style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
                             disabled={inv.available <= 0}
@@ -695,29 +740,49 @@ const Inventory = () => {
                   <span className="font-bold">{sellModal.available} units</span>
                 </div>
                 <div className="d-flex justify-between text-sm">
-                  <span className="text-secondary">Price:</span>
-                  <span className="font-bold text-success">${sellModal.price || '--'}</span>
+                  <span className="text-secondary">Expected Price:</span>
+                  <span className="font-bold text-success">₱{sellModal.price?.toLocaleString() || '--'}</span>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="label">Quantity Sold</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  min="1"
-                  max={sellModal.available}
-                  placeholder="Enter quantity"
-                  value={restockQty}
-                  onChange={(e) => setRestockQty(e.target.value)}
-                  autoFocus
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="label">Actual Unit Price (₱)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    placeholder="UnitPrice"
+                    value={salePriceInput}
+                    onChange={(e) => setSalePriceInput(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="label">Quantity Sold</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    min="1"
+                    max={sellModal.available}
+                    placeholder="Qty"
+                    value={restockQty}
+                    onChange={(e) => setRestockQty(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
 
               {restockQty && parseInt(restockQty) > 0 && (
-                <div className="restock-preview mt-4" style={{ backgroundColor: 'rgba(52, 211, 153, 0.1)', color: '#059669' }}>
-                  Remaining Stock: <strong>{sellModal.available - parseInt(restockQty)}</strong>
+                <div className="p-3 bg-emerald-50 rounded-lg mt-2 mb-4 border border-emerald-100">
+                  <div className="d-flex justify-between text-base">
+                    <span className="font-semibold text-emerald-900">Total Transaction:</span>
+                    <span className="font-bold text-emerald-700">
+                      ₱{((parseFloat(salePriceInput) || 0) * parseInt(restockQty || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-xs text-emerald-600 mt-1">
+                    Remaining Stock: {sellModal.available - parseInt(restockQty)} units
+                  </div>
                 </div>
               )}
 

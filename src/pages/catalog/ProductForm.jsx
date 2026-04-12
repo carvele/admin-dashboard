@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Save, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler } from 'lucide-react';
+import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles } from 'lucide-react';
 import {
   createProduct,
   updateProduct,
@@ -13,12 +13,14 @@ import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
 import {
   subscribeToSuggestedOutfits,
 } from '../../services/wardrobeService';
+import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { COLOR_CATEGORIES, AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
 import { Logger } from '../../utils/Logger';
 import { toast } from 'sonner';
+import './ProductForm.css';
 
 const ProductForm = () => {
   const { id } = useParams();
@@ -35,7 +37,6 @@ const ProductForm = () => {
     name: '',
     category: 'Tops',
     subCategory: '',
-    subSubCategory: '',
     price: '',
     description: '',
     material: '',
@@ -49,44 +50,17 @@ const ProductForm = () => {
     visibility: 'Draft',
     isFeatured: false,
     isAlterable: false,
+    isNewArrival: false,
     onSale: false,
     discountPercentage: 0,
     salePrice: '',
     sizes: ['M'],
     images: [], // Array of image URLs/Maps
-    model3DURL: '',
-    maskURL: '',
     measurements: {}, // size-based grid
+    tags: [],
   });
 
-  const [categories, setCategories] = useState([
-    {
-      name: 'Tops',
-      subcategories: [
-        { name: 'Innerwear', subSubcategories: ['Sports Bra', 'Bra'] },
-        { name: 'Outerwear', subSubcategories: ['Sporty Top', 'Knitted Tops', 'Blazers', 'T-Shirt'] },
-      ],
-    },
-    { name: 'Dress', subcategories: [] },
-    { name: 'Bags', subcategories: [] },
-    {
-      name: 'Bottoms',
-      subcategories: [
-        { name: 'Skirts', subSubcategories: [] },
-        { name: 'Jeans', subSubcategories: [] },
-        { name: 'Pants', subSubcategories: [] },
-        { name: 'Shorts', subSubcategories: [] },
-      ],
-    },
-    {
-      name: 'Footwear',
-      subcategories: [
-        { name: 'Shoes', subSubcategories: [] },
-        { name: 'Heels', subSubcategories: [] },
-        { name: 'Sandals', subSubcategories: [] },
-      ],
-    },
-  ]);
+  const [categories, setCategories] = useState([]);
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -105,21 +79,23 @@ const ProductForm = () => {
   }, []);
 
   useEffect(() => {
-    // We could fetch dynamic categories here from DB
-    const fetchCategories = async () => {
-      try {
-        const cats = await getCategories();
-        if (cats && cats.length > 0) {
-          setCategories(cats);
-        }
-      } catch (err) {
-        console.error('No custom categories found, using defaults.', err);
+    const unsubscribeCategories = subscribeToCategories((cats) => {
+      if (cats && cats.length > 0) {
+        setCategories(cats);
+        // If current category is not in the new list, reset it
+        setFormData(prev => {
+           if (!cats.some(c => c.name === prev.category)) {
+             return { ...prev, category: cats[0].name };
+           }
+           return prev;
+        });
       }
-    };
-    fetchCategories();
+    });
 
-    // If editing, load product data
-    if (isEditing) {
+    return () => unsubscribeCategories();
+  }, []);
+
+  useEffect(() => {
       const loadProduct = async () => {
         try {
           const doc = await getProductById(id);
@@ -128,14 +104,12 @@ const ProductForm = () => {
               name: doc.name || '',
               category: doc.category || categories[0]?.name || 'Tops',
               subCategory: doc.subCategory || '',
-              subSubCategory: doc.subSubCategory || '',
               price: doc.price || '',
               description: doc.description || '',
               material: doc.material || '',
               color: doc.color || '',
               careInstructions: doc.careInstructions || '',
               fitAndSizing: doc.fitAndSizing || '',
-              styleCode: doc.styleCode || '',
               season: doc.season || 'All-Season',
               occasion: doc.occasion || '',
               visibility: doc.visibility || 'Draft',
@@ -146,9 +120,10 @@ const ProductForm = () => {
               salePrice: doc.salePrice || '',
               sizes: doc.sizes || ['M'],
               images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
-              model3DURL: doc.model3DURL || '',
-              maskURL: doc.maskURL || '',
               measurements: doc.measurements || {},
+              tags: doc.tags || [],
+              baseColor: doc.baseColor || 'White',
+              styleCode: doc.styleCode || '',
             };
             setFormData(data);
             setOldData(data);
@@ -161,8 +136,9 @@ const ProductForm = () => {
           setLoading(false);
         }
       };
-      loadProduct();
-    }
+      if (isEditing) {
+        loadProduct();
+      }
   }, [id, isEditing]);
 
   // Auto-generate SKU from product name
@@ -180,6 +156,8 @@ const ProductForm = () => {
     }
   }, [formData.name, isEditing]);
 
+
+
   // Handle subcategory logic when category changes
   useEffect(() => {
     const selectedCat = categories.find((c) => c.name === formData.category);
@@ -191,30 +169,12 @@ const ProductForm = () => {
       );
 
       if (!isValidSubCategory) {
-         setFormData((prev) => ({ ...prev, subCategory: subCatName, subSubCategory: '' }));
+         setFormData((prev) => ({ ...prev, subCategory: subCatName }));
       }
     } else {
-      setFormData((prev) => ({ ...prev, subCategory: '', subSubCategory: '' }));
+      setFormData((prev) => ({ ...prev, subCategory: '' }));
     }
   }, [formData.category, categories]);
-
-  // Handle subSubCategory logic when subCategory changes
-  useEffect(() => {
-    const selectedCat = categories.find((c) => c.name === formData.category);
-    if (!selectedCat) return;
-
-    const selectedSubCat = selectedCat.subcategories?.find(
-      (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
-    );
-
-    if (selectedSubCat && selectedSubCat.subSubcategories && selectedSubCat.subSubcategories.length > 0) {
-      if (!selectedSubCat.subSubcategories.includes(formData.subSubCategory)) {
-        setFormData((prev) => ({ ...prev, subSubCategory: selectedSubCat.subSubcategories[0] }));
-      }
-    } else {
-      setFormData((prev) => ({ ...prev, subSubCategory: '' }));
-    }
-  }, [formData.subCategory, formData.category, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -276,9 +236,53 @@ const ProductForm = () => {
     setFormData({ ...formData, sizes: newSizes });
   };
 
+  const setAsPrimary = (index) => {
+    const newImages = [...formData.images];
+    const item = newImages.splice(index, 1)[0];
+    newImages.unshift(item);
+    setFormData(prev => ({ ...prev, images: newImages }));
+    toast.success('Main image updated');
+  };
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    let val = type === 'checkbox' ? checked : value;
+
+    setFormData((prev) => {
+      let newData = { ...prev, [name]: val };
+
+      // Pricing Sync Logic
+      if (['price', 'salePrice', 'onSale'].includes(name)) {
+        const basePrice = parseFloat(name === 'price' ? val : prev.price) || 0;
+        const manualSalePrice = parseFloat(name === 'salePrice' ? val : prev.salePrice) || 0;
+        
+        if (basePrice > 0 && manualSalePrice > 0) {
+          if (manualSalePrice > basePrice) {
+            newData.salePrice = basePrice.toString();
+            newData.discountPercentage = 0;
+          } else {
+            newData.discountPercentage = Math.round(((basePrice - manualSalePrice) / basePrice) * 100);
+          }
+        } else {
+          newData.discountPercentage = 0;
+        }
+
+        if (name === 'onSale') {
+          if (val) {
+            // Turning ON: Default to 10% discount if no sale price set
+            if (!prev.salePrice) {
+              newData.salePrice = Math.round(basePrice * 0.9).toString();
+              newData.discountPercentage = 10;
+            }
+          } else {
+            newData.discountPercentage = 0;
+            newData.salePrice = '';
+          }
+        }
+      }
+
+      return newData;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -323,7 +327,6 @@ const ProductForm = () => {
         name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
-        subSubCategory: formData.subSubCategory,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
@@ -340,11 +343,15 @@ const ProductForm = () => {
         updated_by: user?.email || 'admin',
         images: finalImages,
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
-        // Note: model3DURL and maskURL are preserved from existing data if editing,
-        // but can no longer be updated here.
-        model3DURL: formData.model3DURL || '',
-        maskURL: formData.maskURL || '',
+        // Sale Fields
+        onSale: formData.onSale,
+        discountPercentage: parseInt(formData.discountPercentage) || 0,
+        salePrice: formData.onSale ? parseFloat(formData.salePrice) : null,
+        // New Categorization
+        baseColor: formData.baseColor,
+        measurements: formData.measurements,
         timestamp: Date.now(),
+        tags: formData.tags || [],
       };
 
       if (isEditing) {
@@ -427,490 +434,386 @@ const ProductForm = () => {
       setSaving(false);
       if (success) navigate('/catalog');
     }
-  };
-
-  if (loading) return <div className="p-8">Loading product data...</div>;
+  };  if (loading) return <div className="p-8">Loading product data...</div>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {/* ── Page Header ── */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => navigate('/catalog')} className="btn-secondary p-2">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+             <h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1>
+             {formData.styleCode && (
+                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">
+                  SKU: {formData.styleCode}
+                </span>
+             )}
+          </div>
+          <p className="text-sm text-secondary mt-0.5">Fill in the details below — required fields are marked with *</p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card p-6 space-y-6">
-        {/* Core Info */}
-        <section>
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Basic Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Product Name *</label>
-              <input
-                type="text"
-                name="name"
-                className="input-field"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Price (₱) *</label>
-              <input
-                type="number"
-                name="price"
-                className="input-field"
-                value={formData.price}
-                onChange={handleChange}
-                required
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className="label">Category</label>
-              <select
-                name="category"
-                className="input-field"
-                value={formData.category}
-                onChange={handleChange}
-              >
-                {categories.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Sub-Category</label>
-              <select
-                name="subCategory"
-                className="input-field"
-                value={formData.subCategory}
-                onChange={handleChange}
-                disabled={
-                  !categories.find((c) => c.name === formData.category)?.subcategories?.length
-                }
-              >
-                <option value="">None</option>
-                {categories
-                  .find((c) => c.name === formData.category)
-                  ?.subcategories?.map((s) => {
-                    const sName = typeof s === 'string' ? s : s.name;
-                    return (
-                      <option key={sName} value={sName}>
-                        {sName}
-                      </option>
-                    );
-                  })}
-              </select>
-            </div>
-            <div>
-              <label className="label">Sub-Sub-Category</label>
-              <select
-                name="subSubCategory"
-                className="input-field"
-                value={formData.subSubCategory}
-                onChange={handleChange}
-                disabled={(() => {
-                  const cat = categories.find((c) => c.name === formData.category);
-                  if (!cat) return true;
-                  const subCat = cat.subcategories?.find(
-                    (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
-                  );
-                  return !subCat?.subSubcategories?.length;
-                })()}
-              >
-                <option value="">None</option>
-                {(() => {
-                  const cat = categories.find((c) => c.name === formData.category);
-                  if (!cat) return null;
-                  const subCat = cat.subcategories?.find(
-                    (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
-                  );
-                  return subCat?.subSubcategories?.map((ss) => (
-                    <option key={ss} value={ss}>
-                      {ss}
-                    </option>
-                  ));
-                })()}
-              </select>
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+
+        {/* ══════════════════════════════════════════════
+            ZONE A — Identity & Quick Status
+            (Product Name, Style Code, Category, Status Toggles)
+        ══════════════════════════════════════════════ */}
+        <section className="card p-6">
+          <div className="flex flex-col md:flex-row justify-between gap-6">
+             <div className="flex-1 space-y-4">
+                <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-2 flex items-center gap-2">
+                   <Layers size={14} /> Identity & Classification
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="label">Product Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      className="input-field"
+                      placeholder="e.g. Silk Evening Dress"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Category *</label>
+                    <select name="category" className="input-field" value={formData.category} onChange={handleChange}>
+                      {categories.map((c) => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Sub-Category</label>
+                    <select
+                      name="subCategory"
+                      className="input-field"
+                      value={formData.subCategory}
+                      onChange={handleChange}
+                      disabled={!categories.find((c) => c.name === formData.category)?.subcategories?.length}
+                    >
+                      <option value="">None</option>
+                      {categories
+                        .find((c) => c.name === formData.category)
+                        ?.subcategories?.map((s) => {
+                          const sName = typeof s === 'string' ? s : s.name;
+                          return <option key={sName} value={sName}>{sName}</option>;
+                        })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Mobile-only Status Toggles */}
+                <div className="md:hidden space-y-4 pt-4 border-t border-dashed">
+                   <div className="flex items-center justify-between">
+                      <label className="label mb-0">Visibility</label>
+                      <select name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
+                        <option value="Draft">Draft</option>
+                        <option value="Published">Published</option>
+                      </select>
+                   </div>
+                   <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="onSale" checked={formData.onSale} onChange={handleChange} className="w-4 h-4 accent-red-500" />
+                        <span className="text-xs font-bold uppercase text-red-600">Sale</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                        <span className="text-xs font-bold uppercase text-secondary">Featured</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                        <span className="text-xs font-bold uppercase text-secondary">Alterable</span>
+                      </label>
+                   </div>
+                </div>
+             </div>
+
+             <div className="md:w-64 space-y-4 border-l pl-6 hidden md:block">
+                <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-2 flex items-center gap-2">
+                   <Eye size={14} /> Publication Status
+                </h2>
+                <div className="space-y-3">
+                   <div>
+                      <label className="label">Visibility</label>
+                      <select name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
+                        <option value="Draft">Draft</option>
+                        <option value="Published">Published</option>
+                      </select>
+                   </div>
+                   <div className="flex flex-col gap-2 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                        <span className="text-sm font-medium group-hover:text-primary transition-colors">Featured Item</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                        <span className="text-sm font-medium group-hover:text-primary transition-colors">Alterable</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
+                        <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                        <div className="flex flex-col">
+                           <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1">
+                              <Sparkles size={12} /> Force New Arrival
+                           </span>
+                           <span className="text-[10px] text-secondary leading-tight">Manual badge override</span>
+                        </div>
+                      </label>
+                   </div>
+                </div>
+             </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════
+            ZONE B — Pricing & Promotion
+            (Regular Price + Intelligently Synced Sale)
+        ══════════════════════════════════════════════ */}
+        <section className={`card p-6 border-2 transition-all duration-300 ${formData.onSale ? 'border-red-500 bg-red-50/20' : 'border-transparent'}`}>
+           <div className="flex items-center justify-between mb-6">
+              <h2 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${formData.onSale ? 'text-red-700' : 'text-secondary'}`}>
+                 <DollarSign size={14} /> Pricing & Promotion
+              </h2>
+              <label className="flex items-center gap-2 cursor-pointer">
+                 <span className={`text-sm font-bold ${formData.onSale ? 'text-red-600' : 'text-secondary'}`}>ON SALE</span>
+                 <div 
+                    role="checkbox"
+                    aria-checked={formData.onSale}
+                    tabIndex="0"
+                    onClick={() => handleChange({ target: { name: 'onSale', type: 'checkbox', checked: !formData.onSale } })}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${formData.onSale ? 'bg-red-500' : 'bg-gray-300'}`}
+                 >
+                    <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${formData.onSale ? 'translate-x-5' : ''}`} />
+                 </div>
+              </label>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                 <label className="label">Regular Rental Price (₱) *</label>
+                 <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
+                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" />
+                 </div>
+              </div>
+
+              {formData.onSale && (
+                <div className="md:col-span-2 animate-in fade-in slide-in-from-left-8">
+                   <label className="label text-red-700 font-bold flex items-center justify-between">
+                      <span>SALE PRICE (₱)</span>
+                      {formData.discountPercentage > 0 && (
+                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                           {formData.discountPercentage}% OFF
+                        </span>
+                      )}
+                   </label>
+                   <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600">₱</span>
+                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" />
+                   </div>
+                </div>
+              )}
            </div>
         </section>
 
-        {/* SALE DETAILS SECTION */}
-        <section className="p-4 border-2 rounded-lg transition-all" style={{ 
-          borderColor: formData.onSale ? '#ef4444' : 'var(--charcoal)',
-          backgroundColor: formData.onSale ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
-        }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <TagIcon size={20} className={formData.onSale ? 'text-red-600' : 'text-gray-500'} />
-              <h2 className="text-xl font-semibold" style={{ color: formData.onSale ? '#b91c1c' : 'inherit' }}>Sale Details</h2>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <span className="text-sm font-medium">ON SALE</span>
-              <input
-                type="checkbox"
-                name="onSale"
-                checked={formData.onSale}
-                onChange={handleChange}
-                style={{ width: '18px', height: '18px', accentColor: '#ef4444' }}
-              />
-            </label>
-          </div>
-
-          {formData.onSale && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2">
-              <div>
-                <label className="label">Discount Percentage (%)</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    name="discountPercentage"
-                    className="input-field pr-10"
-                    placeholder="e.g. 10"
-                    value={formData.discountPercentage}
-                    onChange={handleChange}
-                    min="1"
-                    max="99"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-red-600">%</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">This will auto-calculate the sale price.</p>
-              </div>
-              <div>
-                <label className="label">Final Sale Price (₱)</label>
-                <input
-                  type="number"
-                  name="salePrice"
-                  className="input-field font-bold text-red-600 border-red-200"
-                  style={{ backgroundColor: 'white' }}
-                  value={formData.salePrice}
-                  onChange={handleChange}
-                  placeholder="Final price"
-                />
-                <p className="text-xs text-gray-500 mt-1">Rounded to nearest whole number.</p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Image Gallery</h2>
-          <div className="flex flex-wrap gap-4 mb-4">
-            {/* Existing Images */}
-            {formData.images.map((url, idx) => (
-              <div key={`exist-${idx}`} className="relative w-28 h-28 border rounded overflow-hidden group">
-                <img src={url} alt={`img-${idx}`} className="w-full h-full object-cover" loading="lazy" />
-                
-                {/* Visual indicator for primary image */}
-                {idx === 0 && (
-                  <div className="absolute top-0 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold z-10">
-                    PRIMARY
+        {/* ══════════════════════════════════════════════
+            ZONE C — Media & AR
+        ══════════════════════════════════════════════ */}
+        <section className="card p-6">
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Upload size={14} /> Product Gallery
+           </h2>
+           
+           <div className="flex flex-wrap gap-4">
+              {/* Existing Images */}
+              {formData.images.map((url, idx) => (
+                <div key={`exist-${idx}`} className="gallery-item relative border rounded-lg overflow-hidden group shadow-sm bg-gray-50">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  {idx === 0 && <div className="primary-badge">PRIMARY COVER</div>}
+                  
+                  <div className="gallery-overlay">
+                    <div className="flex items-center justify-center gap-2">
+                      <button type="button" onClick={() => moveExistingImage(idx, -1)} disabled={idx === 0} title="Move Left" className="gallery-btn disabled:opacity-30">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button type="button" onClick={() => setAsPrimary(idx)} disabled={idx === 0} title="Set as Primary" className={`gallery-btn ${idx === 0 ? 'text-yellow-400' : 'text-white'}`}>
+                        <Star size={16} fill={idx === 0 ? "currentColor" : "none"} />
+                      </button>
+                      <button type="button" onClick={() => moveExistingImage(idx, 1)} disabled={idx === formData.images.length - 1} title="Move Right" className="gallery-btn disabled:opacity-30">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => removeExistingImage(idx)} className="w-full py-1 bg-red-500/80 hover:bg-red-600 rounded text-white text-[9px] font-bold transition-colors uppercase tracking-wider">
+                      Delete Image
+                    </button>
                   </div>
-                )}
-
-                {/* Sorting Controls */}
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveExistingImage(idx, -1)}
-                    disabled={idx === 0}
-                    title="Move Left"
-                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                     type="button"
-                     onClick={() => removeExistingImage(idx)}
-                     title="Remove"
-                     className="p-1 bg-red-500/80 hover:bg-red-500 rounded text-white"
-                   >
-                     <X size={16} />
-                   </button>
-                  <button
-                    type="button"
-                    onClick={() => moveExistingImage(idx, 1)}
-                    disabled={idx === formData.images.length - 1}
-                    title="Move Right"
-                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
                 </div>
-              </div>
-            ))}
-            {/* New Previews */}
-            {previews.map((preview, idx) => (
-              <div
-                key={`prev-${idx}`}
-                className="relative w-28 h-28 border border-dashed border-primary rounded overflow-hidden group"
-              >
-                <img src={preview} alt="preview" className="w-full h-full object-cover opacity-70" loading="lazy" />
-                
-                {/* Sorting Controls for new files */}
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveSelectedFile(idx, -1)}
-                    disabled={idx === 0}
-                    title="Move Left"
-                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeSelectedFile(idx)}
-                    title="Remove"
-                    className="p-1 bg-red-500/80 hover:bg-red-500 rounded text-white"
-                  >
-                    <X size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveSelectedFile(idx, 1)}
-                    disabled={idx === previews.length - 1}
-                    title="Move Right"
-                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white disabled:opacity-30"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {/* Upload Button */}
-            <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition">
-              <Upload size={24} className="text-gray-400 mb-1" />
-              <span className="text-xs text-gray-500 text-center">Add Image</span>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-            </label>
-          </div>
-          <p
-            style={{
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-              marginTop: '0.5rem',
-              fontStyle: 'italic',
-            }}
-          >
-            💡 Tip: For best results, upload product images with a white or transparent background.
-          </p>
-        </section>
-
-        {/* Images section ends */}
-        
-        {/* AR Notice */}
-        <section className="p-4 border border-dashed rounded-lg bg-indigo-50/30">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
-                <Shirt size={18} /> Virtual Try-On Configuration
-              </h3>
-              <p className="text-sm text-indigo-700 mt-1">
-                3D models and AI masks are now managed centrally. To activate AR for this product, tag it as "AR Try-On" below and visit the AR Hub.
-              </p>
-            </div>
-            <button 
-              type="button" 
-              className="btn-outline small text-indigo-700 border-indigo-300"
-              onClick={() => window.open('/ar-assets', '_blank')}
-            >
-              Open AR Hub
-            </button>
-          </div>
-        </section>
-
-        {/* Variations */}
-        <section>
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Variations & Specifications</h2>
-          <div className="mb-4">
-            <label className="label">Available Sizes *</label>
-            <div className="flex flex-wrap mt-2" style={{ gap: '0.75rem' }}>
-              {AVAILABLE_SIZES.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => toggleSize(size)}
-                  className="text-sm font-medium transition-colors"
-                  style={{
-                    backgroundColor: formData.sizes.includes(size)
-                      ? 'var(--charcoal)'
-                      : 'var(--beige)',
-                    color: formData.sizes.includes(size) ? 'white' : 'var(--charcoal)',
-                    border: formData.sizes.includes(size)
-                      ? '2px solid var(--charcoal)'
-                      : '2px solid var(--border-color)',
-                    borderRadius: '999px',
-                    padding: '0.5rem 1.25rem',
-                    minWidth: '48px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {size}
-                </button>
               ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="label">Color (Name)</label>
-              <input
-                type="text"
-                name="color"
-                className="input-field"
-                value={formData.color}
-                onChange={handleChange}
-                placeholder="e.g. Ruby Red"
-              />
-            </div>
-            <div>
-              <label className="label">Color Category (Filter) *</label>
-              <select
-                name="baseColor"
-                className="input-field"
-                value={formData.baseColor}
-                onChange={handleChange}
-                required
-              >
-                {COLOR_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Fit & Sizing</label>
-              <select
-                name="fitAndSizing"
-                className="input-field"
-                value={formData.fitAndSizing}
-                onChange={handleChange}
-              >
-                <option value="">Select Fit</option>
-                <option value="Slim Fit">Slim Fit</option>
-                <option value="Regular Fit">Regular Fit</option>
-                <option value="Oversized">Oversized</option>
-                <option value="True to Size">True to Size</option>
-                <option value="Runs Small">Runs Small</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Season</label>
-              <select
-                name="season"
-                className="input-field"
-                value={formData.season}
-                onChange={handleChange}
-              >
-                {SEASONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div className="mt-6 border-t pt-4">
-            <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
-              <Ruler size={18} /> Garment Measurements (Size Chart)
-            </h3>
-            <p className="text-sm text-secondary mb-4">
-              Upload specific dimensions for each size to help customers find their perfect fit.
-              Metrics added here will override generic size recommendations.
-            </p>
-            <MeasurementTable 
-              sizes={formData.sizes} 
-              measurements={formData.measurements} 
-              category={formData.category}
-              subCategory={formData.subCategory}
-              subSubCategory={formData.subSubCategory}
-              onChange={(m) => setFormData(prev => ({ ...prev, measurements: m }))} 
-            />
-          </div>
+              {/* Previews */}
+              {previews.map((url, idx) => (
+                <div key={`prev-${idx}`} className="gallery-item relative border-2 border-dashed border-primary/50 rounded-lg overflow-hidden group bg-gray-50/50">
+                  <img src={url} alt="" className="w-full h-full object-cover opacity-70" />
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button type="button" onClick={() => removeSelectedFile(idx)} className="p-1.5 bg-red-500 rounded-full text-white shadow-lg"><X size={16} /></button>
+                  </div>
+                </div>
+              ))}
 
-          {/* Visibility & Featured */}
-          <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label className="label" style={{ marginBottom: 0 }}>
-                Visibility
+              <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all">
+                <Upload size={24} className="text-gray-400 mb-2" />
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
+                <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
               </label>
-              <select
-                name="visibility"
-                className="input-field"
-                style={{ width: 'auto', minWidth: 120 }}
-                value={formData.visibility}
-                onChange={handleChange}
-              >
-                <option value="Published">Published</option>
-                <option value="Draft">Draft</option>
-              </select>
-            </div>
-          </div>
+           </div>
+
+           <div className="mt-6 pt-4 border-t border-dashed flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                    <Shirt size={20} />
+                 </div>
+                 <div>
+                    <h3 className="text-sm font-bold text-indigo-900">Virtual Try-On (AR)</h3>
+                    <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
+                 </div>
+              </div>
+              <button type="button" onClick={() => window.open('/ar-assets', '_blank')} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+                Configure AR Assets
+              </button>
+           </div>
         </section>
 
-        <section>
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Additional Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="label">Product Description</label>
-              <textarea
-                name="description"
-                className="input-field"
-                rows="3"
-                value={formData.description}
-                onChange={handleChange}
-              ></textarea>
-            </div>
-            <div>
-              <label className="label">Material/Fabric</label>
-              <input
-                type="text"
-                name="material"
-                className="input-field"
-                value={formData.material}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label className="label">Care Instructions</label>
-              <input
-                type="text"
-                name="careInstructions"
-                className="input-field"
-                value={formData.careInstructions}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
+        {/* ══════════════════════════════════════════════
+            ZONE D — Composition & Specs
+        ══════════════════════════════════════════════ */}
+        <section className="card p-6">
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Palette size={14} /> Material & Aesthetics
+           </h2>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                 <label className="label">Material / Fabric</label>
+                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material} onChange={handleChange} />
+              </div>
+              <div>
+                 <label className="label">Display Color Name</label>
+                 <input type="text" name="color" className="input-field" placeholder="e.g. Midnight Azure" value={formData.color} onChange={handleChange} />
+              </div>
+              <div>
+                 <label className="label">Color Filter *</label>
+                 <select name="baseColor" className="input-field" value={formData.baseColor} onChange={handleChange} required>
+                    {COLOR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                 </select>
+              </div>
+              <div>
+                 <label className="label">Collection / Season</label>
+                 <select name="season" className="input-field" value={formData.season} onChange={handleChange}>
+                    {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                 </select>
+              </div>
+              <div>
+                 <label className="label">Occasion</label>
+                 <input type="text" name="occasion" className="input-field" placeholder="e.g. Wedding, GALA" value={formData.occasion} onChange={handleChange} />
+              </div>
+           </div>
         </section>
 
-        <div className="flex justify-end pt-4 border-t">
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving
-              ? uploadProgress.total > 0
-                ? `Uploading image ${uploadProgress.current} of ${uploadProgress.total}...`
-                : 'Saving...'
-              : isEditing
-                ? 'Save Changes'
-                : 'Create Product'}
-          </button>
+        {/* ══════════════════════════════════════════════
+            ZONE E — Sizing & Measurements
+        ══════════════════════════════════════════════ */}
+        <section className="card p-6">
+           <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
+                 <Ruler size={14} /> Sizing & Measurement Grid
+              </h2>
+              <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+           </div>
+
+           <div className="mb-6">
+              <label className="label">Available Sizes *</label>
+              <div className="flex flex-wrap gap-3 mt-3">
+                 {AVAILABLE_SIZES.map((size) => (
+                    <button
+                       key={size}
+                       type="button"
+                       onClick={() => toggleSize(size)}
+                       className={`size-btn font-bold border-2 ${
+                          formData.sizes.includes(size) 
+                          ? 'active shadow-lg' 
+                          : ''
+                       }`}
+                    >
+                       {size}
+                    </button>
+                 ))}
+              </div>
+           </div>
+
+           <div className="border-t pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                 <label className="label mb-0">Fit Type</label>
+                 <select name="fitAndSizing" className="input-field py-1 text-sm w-auto" value={formData.fitAndSizing} onChange={handleChange}>
+                    <option value="">Standard Fit</option>
+                    <option value="Slim Fit">Slim Fit</option>
+                    <option value="Regular Fit">Regular Fit</option>
+                    <option value="Oversized">Oversized</option>
+                    <option value="True to Size">True to Size</option>
+                 </select>
+              </div>
+              <MeasurementTable 
+                sizes={formData.sizes} 
+                measurements={formData.measurements} 
+                category={formData.category}
+                subCategory={formData.subCategory}
+                onChange={(m) => setFormData(prev => ({ ...prev, measurements: m }))} 
+              />
+           </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════
+            ZONE F — Product Story & Metadata
+        ══════════════════════════════════════════════ */}
+        <section className="card p-6">
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+              <BookOpen size={14} /> Product Story & Logistics
+           </h2>
+           <div className="space-y-4">
+              <div>
+                 <label className="label">Full Description</label>
+                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description} onChange={handleChange} />
+              </div>
+              <div>
+                 <label className="label">Care Instructions</label>
+                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions} onChange={handleChange} />
+              </div>
+              <div>
+                 <label className="label flex items-center gap-2"><TagIcon size={14} /> Tags (Comma separated)</label>
+                 <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="AR Try-On, New Arrival, High-End" 
+                    value={formData.tags?.join(', ') || ''} 
+                    onChange={(e) => {
+                       const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+                       setFormData(prev => ({ ...prev, tags }));
+                    }} 
+                 />
+              </div>
+           </div>
+        </section>
+
+        {/* Actions */}
+        <div className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 bg-white/80 backdrop-blur-sm p-4 border-t z-20">
+           <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">Cancel</button>
+           <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Processing...' : (isEditing ? 'Update Product' : 'Create Product')}
+           </button>
         </div>
       </form>
     </div>

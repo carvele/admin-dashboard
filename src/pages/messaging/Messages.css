@@ -44,7 +44,7 @@
   transition: background-color 0.2s;
 }
 .conversation-item:hover {
-  background-color: #fafafa;
+  background-color: var(--cream);
 }
 .conversation-item.active {
   background-color: var(--cream);
@@ -139,7 +139,7 @@
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
-  background-color: #fafafa;
+  background-color: var(--cream);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -272,7 +272,7 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .messages-sidebar {
     display: none;
   }
@@ -322,7 +322,7 @@
   border-radius: 12px;
   overflow: hidden;
   min-width: 260px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(31, 28, 24, 0.05);
   border: 1px solid var(--border-color);
   color: var(--charcoal);
   text-align: left;
@@ -392,7 +392,7 @@
   border-top: 1px dashed var(--border-color);
   font-size: 0.7rem;
   color: var(--text-secondary);
-  background-color: #fafafa;
+  background-color: var(--cream);
 }
 
 /* ── Bubble column (wraps bubble + reaction chips) ── */
@@ -438,7 +438,7 @@
   justify-content: center;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
-  z-index: 2;
+  z-index: var(--z-base);
   line-height: 1;
   padding: 0;
   box-shadow: 0 2px 6px rgba(0,0,0,0.12);
@@ -458,7 +458,7 @@
   border-radius: 24px;
   padding: 6px 10px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-  z-index: 20;
+  z-index: var(--z-base);
   animation: popoverIn 0.15s ease-out;
 }
 .emoji-popover.popover-left {

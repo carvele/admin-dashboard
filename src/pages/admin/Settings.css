@@ -114,48 +114,7 @@
   background-color: var(--cream);
 }
 
-.level3-container {
-  padding: 0.75rem 0.75rem 0.75rem 3rem;
-  border-top: 1px solid var(--border-color);
-  background-color: white;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  animation: slideIn 0.2s ease-out;
-}
 
-.level3-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.level3-header {
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-}
-
-.level3-tag {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.35rem 0.65rem;
-  background-color: white;
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  user-select: none;
-}
-
-.level3-tag:hover {
-  border-color: var(--charcoal);
-  color: var(--charcoal);
-  background-color: var(--white);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
 
 .image-upload-wrapper {
   width: 32px;
@@ -178,7 +137,7 @@
   inset: 0;
   cursor: pointer;
   opacity: 0;
-  z-index: 2;
+  z-index: var(--z-base);
 }
 
 .upload-overlay {

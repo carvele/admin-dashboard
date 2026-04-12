@@ -153,8 +153,8 @@
 }
 
 .badge-danger {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  color: var(--stock-low);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -189,13 +189,13 @@
   flex-shrink: 0;
 }
 .item-icon-bg.alert {
-  background-color: #fee2e2;
+  background-color: var(--status-cancelled-bg);
 }
 .item-icon-bg.warning {
-  background-color: #fef3c7;
+  background-color: var(--status-pending-bg);
 }
 .text-danger {
-  color: #dc2626;
+  color: var(--stock-low);
 }
 .text-warning {
   color: #d97706;
@@ -359,7 +359,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999;
+  z-index: var(--z-popover);
   backdrop-filter: blur(2px);
 }
 
@@ -578,7 +578,7 @@
 }
 
 .logistics-badge.pickup {
-  background: #fef3c7;
+  background: var(--status-pending-bg);
   color: #d97706;
 }
 
@@ -619,7 +619,7 @@
   flex-shrink: 0;
 }
 
-.activity-icon-sm.reservation { background: #fee2e2; color: #dc2626; }
+.activity-icon-sm.reservation { background: var(--status-cancelled-bg); color: var(--stock-low); }
 .activity-icon-sm.customer { background: #e0e7ff; color: #4338ca; }
 .activity-icon-sm.staff { background: #f3e8ff; color: #7e22ce; }
 

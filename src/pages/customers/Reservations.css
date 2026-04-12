@@ -45,7 +45,7 @@
 .toggle-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(31, 28, 24, 0.1);
 }
 
 .card-toolbar {
@@ -148,7 +148,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-toast);
   backdrop-filter: blur(2px);
 }
 .modal-content {
@@ -156,7 +156,7 @@
   border-radius: 12px;
   width: 100%;
   max-width: 500px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(31, 28, 24, 0.1);
 }
 .modal-header {
   padding: 1.5rem;
@@ -246,7 +246,7 @@
   color: var(--text-secondary);
   background-color: var(--white);
   position: relative;
-  z-index: 2;
+  z-index: var(--z-base);
   transition: all 0.3s;
 }
 .lifecycle-dot.filled {
@@ -278,7 +278,7 @@
   width: calc(100% - 32px);
   height: 2px;
   background-color: var(--border-color);
-  z-index: 1;
+  z-index: var(--z-base);
 }
 .lifecycle-line.filled {
   background-color: var(--accent);

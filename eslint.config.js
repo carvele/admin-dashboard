@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
+import globals from 'globals';
 
 export default [
   js.configs.recommended,
@@ -14,18 +15,9 @@ export default [
         ecmaFeatures: { jsx: true }
       },
       globals: {
-        console: 'readonly',
-        window: 'readonly',
-        document: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        Math: 'readonly',
-        Promise: 'readonly',
-        localStorage: 'readonly',
-        navigator: 'readonly',
-        process: 'readonly',
-        require: 'readonly',
-        module: 'readonly'
+        ...globals.browser,
+        ...globals.jest,
+        ...globals.node
       }
     },
     plugins: {

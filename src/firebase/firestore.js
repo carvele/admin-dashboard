@@ -330,4 +330,4 @@ export const updateDeviceSecurity = async (fingerprint, attempts, lockoutTime) =
 };
 
 // Re-export useful Firestore utilities for use in pages
-export { query, where, orderBy, limit, serverTimestamp, collection, doc, onSnapshot };
+export { query, where, orderBy, limit, serverTimestamp, collection, doc, onSnapshot, getDocs, db };

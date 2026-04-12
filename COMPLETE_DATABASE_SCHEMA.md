@@ -1,59 +1,118 @@
 # Complete Database Schema Documentation
 
+## Overview
+This document outlines the Firestore database schema used by the application, focusing on how collections are related to ensure parity between the Android app and the Web Admin Dashboard. 
+*Note*: This schema has been harmonized across both platforms to use exact matching fields.
+
 ## Collections
 
-### 1. Products
-- **Description:** This collection contains information about the products available in the admin dashboard.
-- **Fields:**
-  - `productId` (string): Unique identifier for the product.
-  - `name` (string): Name of the product.
-  - `description` (string): Detailed information about the product.
-  - `price` (number): Price of the product.
-  - `category` (string): Category to which the product belongs.
-  - `stock` (number): Quantity available in stock.
-  - `createdAt` (timestamp): The date and time the product was added.
-  - `updatedAt` (timestamp): The last date and time the product was updated.
+### `users`
+Represents both customers and admin/staff users.
 
-- **Security Rules:**
-  - Read access: Granted to authenticated users.
-  - Write access: Restricted to admin users only.
+- `id`: `string` (Firebase UID)
+- `email`: `string`
+- `firstName`: `string`
+- `lastName`: `string`
+- `role`: `string` (`"customer"`, `"staff"`, `"admin"`, `"owner"`)
+- `phone`: `string`
+- `height`: `number` (optional)
+- `weight`: `number` (optional)
+- `measurements`: `map` (e.g. `{bust: number, waist: number, hips: number}`)
+- `fitPreference`: `string` (optional)
+- `deleted`: `boolean`
+- `createdAt`: `timestamp` (Milliseconds Long)
+- `updatedAt`: `timestamp` (Milliseconds Long)
+- `lastLoginAt`: `timestamp` (Milliseconds Long)
 
-- **Example:**
-  ```json
-  {
-    "productId": "P123","name": "Sample Product","description": "This is a sample product.","price": 19.99,"category": "Clothing","stock": 100,"createdAt": "2026-03-29T07:30:12.000Z","updatedAt": "2026-03-29T07:30:12.000Z"
-  }
-  ```
+### `products` (Catalog)
+Available boutique items. (Previously referenced as `catalog`).
 
-### 2. WardrobeItems
-- **Description:** This collection holds details about wardrobe items managed through the admin dashboard.
-- **Fields:**
-  - `wardrobeItemId` (string): Unique identifier for the wardrobe item.
-  - `name` (string): Name of the wardrobe item.
-  - `description` (string): Detailed information about the item.
-  - `type` (string): Type of the wardrobe item (e.g., Shirt, Pants).
-  - `size` (string): Size of the wardrobe item.
-  - `color` (string): Color of the wardrobe item.
-  - `price` (number): Price of the wardrobe item.
-  - `imageUrl` (string): URL of the item's image.
-  - `createdAt` (timestamp): The date and time the item was added to the wardrobe.
-  - `updatedAt` (timestamp): The last date and time the item was updated.
+- `id`: `string` (Auto-generated)
+- `name`: `string`
+- `category`: `string`
+- `subCategory`: `string`
+- `price`: `number`
+- `description`: `string`
+- `material`: `string`
+- `color`: `string`
+- `baseColor`: `string`
+- `careInstructions`: `string`
+- `fitAndSizing`: `string`
+- `styleCode`: `string`
+- `season`: `string`
+- `occasion`: `string`
+- `visibility`: `string` (`"Draft"` or `"Published"`)
+- `isFeatured`: `boolean`
+- `images`: `array of string` (Image URLs)
+- `imageUrl`: `string` (Primary Image URL)
+- `sizes`: `array of string`
+- `stock`: `number`
+- `tags`: `array of string`
+- `isAlterable`: `boolean`
+- `timestamp`: `number` (Epoch ms)
+- `model3DURL`: `string` (AR GLB model)
+- `maskURL`: `string` (AR DeepAR or segmentation mask)
+- `rating`: `number`
+- `reviewCount`: `number`
+- `onSale`: `boolean`
+- `salePrice`: `number`
+- `discountPercentage`: `number`
+- `isNewArrival`: `boolean`
+- `measurements`: `map` (Nested map of sizes and measurements)
+- `createdAt`: `timestamp` (Milliseconds Long)
+- `updatedAt`: `timestamp` (Milliseconds Long)
+- `deleted`: `boolean`
 
-- **Security Rules:**
-  - Read access: Granted to authenticated users.
-  - Write access: Restricted to admin users only.
+### `reservations`
+Customer's shopping carts or orders.
 
-- **Example:**
-  ```json
-  {
-    "wardrobeItemId": "WI456","name": "Stylish Pants","description": "Comfortable stylish pants for casual wear.","type": "Pants","size": "M","color": "Black","price": 39.99,"imageUrl": "http://example.com/image.png","createdAt": "2026-03-29T07:30:12.000Z","updatedAt": "2026-03-29T07:30:12.000Z"
-  }
-  ```
+- `id`: `string` (Auto-generated)
+- `customerId`: `string` (References `users.id`)
+- `customerName`: `string`
+- `productId`: `string` (References `products.id`)
+- `productName`: `string`
+- `imageUrl`: `string`
+- `date`: `timestamp` (Milliseconds Long)
+- `returnDate`: `timestamp` (Milliseconds Long)
+- `status`: `string` (`"pending"`, `"approved"`, `"completed"`, `"cancelled"`)
+- `size`: `string`
+- `color`: `string`
+- `quantity`: `number`
+- `appointmentTime`: `string`
+- `staffId`: `string`
+- `rentalPrice`: `number`
+- `paymentStatus`: `string`
+- `paymentType`: `string`
+- `receiptUrl`: `string`
+- `timestamp`: `number` (Epoch ms)
 
-### Additional Collections
+### `wardrobeItems` (Wardrobe)
+Items owned by users in the digital Wardrobe.
 
-*Please document the remaining 16 collections similarly with appropriate fields, security rules, and examples.*
+- `id`: `string` (Auto-generated)
+- `userId`: `string` (References `users.id`)
+- `productId`: `string` (Optional, references `products.id`)
+- `imageUrl`: `string`
+- `category`: `string`
+- `subCategory`: `string`
+- `timestamp`: `number` (Epoch ms)
+- `deleted`: `boolean`
 
----
+### `inventory`
+Manages per-size inventory tracking.
 
-Last updated on: 2026-03-29 07:30:12 UTC
+- `id`: `string` (Auto-generated)
+- `productDocId`: `string`
+- `sku`: `string`
+- `item`: `string` (Product Name)
+- `category`: `string`
+- `size`: `string`
+- `total`: `number`
+- `reserved`: `number`
+- `available`: `number`
+
+## Conventions
+
+- **Timestamps:** Harmonized to use Epoch milliseconds as Numbers (`Date.now()` on JS, `long` on Java). This prevents cross-platform deserialization errors.
+- **Naming:** `camelCase` for all fields (`firstName`, `lastName`).
+- **IDs:** Document IDs must be added to the data payload as `id` or `customId` to make it accessible to Android clients.

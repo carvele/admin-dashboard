@@ -134,7 +134,7 @@
 }
 
 .icon-btn-cancel {
-  color: #dc2626;
+  color: var(--stock-low);
 }
 
 .icon-btn-cancel:hover {
@@ -189,7 +189,7 @@
 
 .status-revoked {
   background: rgba(239, 68, 68, 0.12);
-  color: #dc2626;
+  color: var(--stock-low);
 }
 
 .device-btns {
@@ -230,7 +230,7 @@
 
 .btn-delete {
   background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  color: var(--stock-low);
   padding: 6px 8px;
 }
 

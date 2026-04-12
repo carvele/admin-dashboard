@@ -125,14 +125,14 @@ export const deleteInventoryItem = (docId) => {
   return deleteDocument('inventory', docId);
 };
 
-export const recordBoutiqueSale = async (inventoryItem, quantity, user) => {
+export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
   const { db } = await import('../firebase/config');
   const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
   const { logAction } = await import('./staffService');
 
   if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
 
-  // 1. Update Inventory Stock
+  // 1. Update Inventory Stock (Subtrack from Total and Available)
   await updateInventoryItem(inventoryItem.docId, {
     total: inventoryItem.total - quantity,
     available: inventoryItem.available - quantity
@@ -144,13 +144,16 @@ export const recordBoutiqueSale = async (inventoryItem, quantity, user) => {
     productName: inventoryItem.item,
     size: inventoryItem.size,
     quantity: quantity,
+    price: salePrice,
+    totalAmount: (salePrice || 0) * quantity,
     status: 'Completed',
     platform: 'Boutique',
     customerName: 'Walk-in Customer',
     staffId: user?.uid || 'unknown',
     staffName: user?.name || user?.email || 'Staff',
-    createdAt: serverTimestamp(),
-    completedAt: serverTimestamp(),
+    createdAt: Date.now(),
+    completedAt: Date.now(),
+    timestamp: Date.now(),
     isBoutiqueSale: true
   });
 
@@ -175,7 +178,7 @@ export const getCategories = async () => {
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
   const data = await getCollection('categories');
   const sortedData = data.sort((a, b) => (a.order || 0) - (b.order || 0));
-  queryCache.set(cacheKey, sortedData, CACHE_TTL.LONG);
+  queryCache.set(cacheKey, sortedData, CACHE_TTL.SHORT);
   return sortedData;
 };
 

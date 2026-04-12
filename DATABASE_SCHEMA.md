@@ -1,7 +1,8 @@
 # Database Schema Documentation
 
 ## Overview
-This document outlines the Firestore database schema used by the application, focusing on how collections are related to ensure parity between the Android app and the Web Admin Dashboard.
+This document outlines the Firestore database schema used by the application, focusing on how collections are related to ensure parity between the Android app and the Web Admin Dashboard. 
+*Note*: This schema has been harmonized across both platforms to use exact matching fields.
 
 ## Collections
 
@@ -10,90 +11,163 @@ Represents both customers and admin/staff users.
 
 - `id`: `string` (Firebase UID)
 - `email`: `string`
-- `firstName`: `string` (Preferred camelCase, falls back to `first_name`)
-- `lastName`: `string` (Preferred camelCase, falls back to `last_name`)
+- `firstName`: `string`
+- `lastName`: `string`
 - `role`: `string` (`"customer"`, `"staff"`, `"admin"`, `"owner"`)
 - `phone`: `string`
-- `createdAt`: `timestamp`
-- `updatedAt`: `timestamp`
-- `lastOnline`: `timestamp`
-- **Sub-collections:** None (Currently favorites/feedback are separate collections and not nested)
+- `height`: `number` (optional)
+- `weight`: `number` (optional)
+- `measurements`: `map` (e.g. `{bust: number, waist: number, hips: number}`)
+- `fitPreference`: `string` (optional)
+- `deleted`: `boolean`
+- `createdAt`: `timestamp` (Milliseconds Long)
+- `updatedAt`: `timestamp` (Milliseconds Long)
+- `lastLoginAt`: `timestamp` (Milliseconds Long)
 
-### `catalog` (Products)
-Available boutique items.
+### `products` (Catalog)
+Available boutique items. (Previously referenced as `catalog`).
 
 - `id`: `string` (Auto-generated)
 - `name`: `string`
-- `description`: `string`
-- `price`: `number`
 - `category`: `string`
-- `imageUrl`: `string`
-- `stock`: `number` (or map of sizes)
-- `createdAt`: `timestamp`
-- `updatedAt`: `timestamp`
+- `subCategory`: `string`
+- `price`: `number`
+- `description`: `string`
+- `material`: `string`
+- `color`: `string`
+- `baseColor`: `string`
+- `careInstructions`: `string`
+- `fitAndSizing`: `string`
+- `styleCode`: `string`
+- `season`: `string`
+- `occasion`: `string`
+- `visibility`: `string` (`"Draft"` or `"Published"`)
+- `isFeatured`: `boolean`
+- `images`: `array of string` (Image URLs)
+- `imageUrl`: `string` (Primary Image URL)
+- `sizes`: `array of string`
+- `stock`: `number`
+- `tags`: `array of string`
+- `isAlterable`: `boolean`
+- `timestamp`: `number` (Epoch ms)
+- `model3DURL`: `string` (AR GLB model)
+- `maskURL`: `string` (AR DeepAR or segmentation mask)
+- `rating`: `number`
+- `reviewCount`: `number`
+- `onSale`: `boolean`
+- `salePrice`: `number`
+- `discountPercentage`: `number`
+- `isNewArrival`: `boolean`
+- `measurements`: `map` (Nested map of sizes and measurements)
+- `createdAt`: `timestamp` (Milliseconds Long)
+- `updatedAt`: `timestamp` (Milliseconds Long)
+- `deleted`: `boolean`
 
 ### `reservations`
 Customer's shopping carts or orders.
 
 - `id`: `string` (Auto-generated)
-- `userId`: `string` (References `users.id`)
+- `customerId`: `string` (References `users.id`)
 - `customerName`: `string`
-- `customerEmail`: `string`
+- `productId`: `string` (References `products.id`)
+- `productName`: `string`
+- `imageUrl`: `string`
+- `date`: `timestamp` (Milliseconds Long)
+- `returnDate`: `timestamp` (Milliseconds Long)
 - `status`: `string` (`"pending"`, `"approved"`, `"completed"`, `"cancelled"`)
-- `totalAmount`: `number`
-- `reservationDate`: `timestamp`
-- `createdAt`: `timestamp`
-- `updatedAt`: `timestamp`
-- **Sub-collections:**
-  - `items`: The products reserved in this order.
-    - `id`: `string`
-    - `productId`: `string` (References `catalog.id`)
-    - `name`: `string`
-    - `price`: `number`
-    - `quantity`: `number`
-    - `size`: `string`
+- `size`: `string`
+- `color`: `string`
+- `quantity`: `number`
+- `appointmentTime`: `string`
+- `staffId`: `string`
+- `rentalPrice`: `number`
+- `paymentStatus`: `string`
+- `paymentType`: `string`
+- `receiptUrl`: `string`
+- `timestamp`: `number` (Epoch ms)
 
 ### `wardrobe`
 Items owned by users.
 
 - `id`: `string` (Auto-generated)
 - `userId`: `string` (References `users.id`)
-- `productId`: `string` (Optional, links back to `catalog.id` if bought from boutique)
+- `productId`: `string` (Optional, references `products.id`)
 - `imageUrl`: `string`
 - `category`: `string`
-- `dateAdded`: `timestamp`
+- `subCategory`: `string`
+- `timestamp`: `number` (Epoch ms)
+- `deleted`: `boolean`
 
-### `favorites`
-Items favorited by users.
-
-- `id`: `string` (Composite ID: `userId_productId`)
-- `userId`: `string` (References `users.id`)
-- `productId`: `string` (References `catalog.id`)
-- `addedAt`: `timestamp`
-
-### `feedback`
-Feedback on products.
+### `inventory`
+Manages per-size inventory tracking.
 
 - `id`: `string` (Auto-generated)
-- `userId`: `string` (References `users.id`)
+- `productDocId`: `string`
+- `sku`: `string`
+- `item`: `string` (Product Name)
+- `category`: `string`
+- `size`: `string`
+- `total`: `number`
+- `reserved`: `number`
+- `available`: `number`
+
+### `notifications`
+User alerts and updates.
+
+- `id`: `string`
+- `title`: `string`
+- `message`: `string`
+- `imageUrl`: `string`
+- `timestamp`: `number` (Epoch ms)
+- `type`: `string`
+- `isRead`: `boolean`
+- `relatedId`: `string`
+- `userId`: `string`
+
+### `reviews` (ProductReview)
+Customer product reviews.
+
+- `id`: `string`
+- `productId`: `string`
+- `userId`: `string`
 - `userName`: `string`
-- `productId`: `string` (References `catalog.id`)
 - `rating`: `number`
-- `comment`: `string`
-- `createdAt`: `timestamp`
+- `reviewText`: `string`
+- `timestamp`: `number` (Epoch ms)
+- `reservationId`: `string`
 
-### `logs`
-Audit logs for staff actions.
+### `suggestedOutfits`
+Stylist recommendations or pre-made looks.
 
-- `id`: `string` (Auto-generated)
-- `userId`: `string` (References `users.id`)
-- `userName`: `string`
-- `action`: `string`
-- `timestamp`: `timestamp`
-- `details`: `map` (Contextual data)
+- `id`: `string`
+- `name`: `string`
+- `price`: `number`
+- `imageUrl`: `string`
+- `isAvailable`: `boolean`
+- `isFavorite`: `boolean`
+- `description`: `string`
+- `sizes`: `array of string`
+- `style`: `string`
+
+### `exploreCategories`
+Explorative style groupings.
+
+- `id`: `string`
+- `name`: `string`
+- `productCount`: `number`
+- `imageUrl`: `string`
+
+### `favorites` (FavoriteProduct)
+User liked products.
+
+- `id`: `string`
+- `name`: `string`
+- `category`: `string`
+- `imageUrl`: `string`
+- `isAvailable`: `boolean`
 
 ## Conventions
 
-- **Timestamps:** Use Firebase `serverTimestamp()` for writes. Dates are stored as `{ seconds, nanoseconds }`.
-- **Naming:** Prefer `camelCase` for all fields (`firstName`, `lastName`). Legacy seed data may use `snake_case` in Android, which the dashboard fallbacks handle (`getUserDisplayName`).
-- **IDs:** Document IDs must be added to the data payload as `id` or `customId` to make it accessible to Android clients effectively.
+- **Timestamps:** Harmonized to use Epoch milliseconds as Numbers (`Date.now()` on JS, `long` on Java). This prevents cross-platform deserialization errors.
+- **Naming:** `camelCase` for all fields (`firstName`, `lastName`).
+- **IDs:** Document IDs must be added to the data payload as `id` or `customId` to make it accessible to Android clients.

@@ -10,7 +10,7 @@
   position: relative;
   flex-shrink: 0;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 100;
+  z-index: var(--z-sticky);
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
 }
 
@@ -37,7 +37,7 @@
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    z-index: 99;
+    z-index: var(--z-dropdown);
     backdrop-filter: blur(2px);
   }
 }
@@ -45,7 +45,7 @@
 /* ===== Brand ===== */
 .sidebar-brand {
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -75,7 +75,7 @@
 }
 .sidebar-close-btn:hover {
   color: white;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--glass-border);
 }
 @media (max-width: 768px) {
   .sidebar-close-btn {
@@ -97,7 +97,7 @@
 }
 .nav-divider {
   height: 1px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--glass-border);
   margin: 0.75rem 1rem;
 }
 
@@ -220,7 +220,7 @@
   font-weight: 600;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--glass-border);
   color: rgba(255, 255, 255, 0.8);
   transition: all 0.2s;
 }
@@ -231,7 +231,7 @@
 
 /* ===== PIN Modal ===== */
 .pin-overlay {
-  z-index: 1000;
+  z-index: var(--z-toast);
 }
 .pin-modal {
   max-width: 380px;
@@ -283,7 +283,7 @@
   font-size: 1.25rem;
 }
 .pin-error {
-  color: #dc2626;
+  color: var(--stock-low);
   font-size: 0.8125rem;
   margin-top: 0.5rem;
 }

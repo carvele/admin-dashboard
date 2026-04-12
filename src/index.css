@@ -39,6 +39,17 @@
   --stock-med: #f59e0b;
   --stock-low: #ef4444;
 
+  /* Z-Index Architecture */
+  --z-negative: -1;
+  --z-base: 1;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-sidebar: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-toast: 9999;
+
   font-family:
     'Outfit',
     system-ui,

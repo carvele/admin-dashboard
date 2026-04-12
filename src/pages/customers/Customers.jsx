@@ -17,9 +17,10 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  getPaginatedCustomers,
   updateCustomer,
   deleteCustomer,
+  sendNotification,
+  getPaginatedCustomers,
 } from '../../services/customerService';
 import { orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -46,6 +47,9 @@ const Customers = () => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [msgModal, setMsgModal] = useState(null);
+  const [msgText, setMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   const fetchCustomers = async (loadMore = false, signal = null) => {
     if (loadMore) setLoadingMore(true);
@@ -209,6 +213,26 @@ const Customers = () => {
     }
   };
 
+  // --- SEND MESSAGE ---
+  const handleSendMessage = async () => {
+    if (!msgText.trim()) return;
+    setSendingMsg(true);
+    try {
+      await sendNotification(
+        msgModal.docId, 
+        getUserDisplayName(msgModal), 
+        msgText
+      );
+      toast.success('Message sent successfully');
+      setMsgModal(null);
+      setMsgText('');
+    } catch (e) {
+      toast.error('Failed to send message');
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header d-flex justify-between align-center">
@@ -330,7 +354,7 @@ const Customers = () => {
                               </div>
                             )}
                             <span
-                              className={`online-dot ${isOnline(cust.lastOnline) ? 'online' : 'offline'}`}
+                              className={`online-dot ${isOnline(cust.lastOnline) ? 'online online-pulse' : 'offline'}`}
                             ></span>
                           </div>
                           <div>
@@ -582,6 +606,15 @@ const Customers = () => {
                     <p>Saved Items</p>
                   </div>
                 </div>
+
+                {!isEditing && (
+                  <button 
+                    className="btn-primary w-full mt-4 flex-center gap-2"
+                    onClick={() => setMsgModal(selectedCustomer)}
+                  >
+                    <Mail size={16} /> Send Message
+                  </button>
+                )}
               </div>
 
               <div className="profile-main">
@@ -843,6 +876,42 @@ const Customers = () => {
               <button className="btn-danger" onClick={handleDelete}>
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ===== SEND MESSAGE MODAL ===== */}
+      {msgModal && (
+        <div className="modal-overlay" onClick={() => setMsgModal(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 450 }}>
+            <div className="modal-header">
+              <h2>Message {getUserDisplayName(msgModal)}</h2>
+              <button className="close-btn" onClick={() => setMsgModal(null)}>&times;</button>
+            </div>
+            <div className="p-4">
+              <p className="text-secondary text-sm mb-4">
+                This message will appear in the customer's mobile app inbox.
+              </p>
+              <textarea
+                className="input-field w-full"
+                style={{ minHeight: 120, resize: 'vertical' }}
+                placeholder="Type your message here..."
+                value={msgText}
+                onChange={(e) => setMsgText(e.target.value)}
+                autoFocus
+              ></textarea>
+              <div className="modal-footer justify-end mt-4 px-0">
+                <button className="btn-outline" onClick={() => setMsgModal(null)} disabled={sendingMsg}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn-primary flex-center gap-2" 
+                  onClick={handleSendMessage}
+                  disabled={sendingMsg || !msgText.trim()}
+                >
+                  {sendingMsg ? 'Sending...' : <><Mail size={16} /> Send Message</>}
+                </button>
+              </div>
             </div>
           </div>
         </div>

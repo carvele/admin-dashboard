@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Ruler, RefreshCw, Copy } from 'lucide-react';
-import { DEFAULT_MEASUREMENT_METRICS } from '../../utils/constants';
+import { DEFAULT_MEASUREMENT_METRICS, AVAILABLE_SIZES } from '../../utils/constants';
 
-const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory, subSubCategory }) => {
+const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory }) => {
   const [newMetric, setNewMetric] = useState('');
   const [unit, setUnit] = useState('cm'); // 'cm' | 'in'
 
@@ -10,7 +10,6 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
   const findSmartTemplate = () => {
     const templateKeys = Object.keys(DEFAULT_MEASUREMENT_METRICS);
     const searchTerms = [
-      subSubCategory, 
       subCategory, 
       category
     ].filter(Boolean).map(s => s.toLowerCase());
@@ -207,10 +206,10 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
             <span className="hidden lg:inline">Clear</span>
           </button>
 
-          <div className="flex rounded-lg p-1 border" style={{ backgroundColor: 'var(--beige)' }}>
+          <div className="flex rounded-xl p-1.5 border shadow-sm" style={{ backgroundColor: 'var(--beige)' }}>
             <button
               type="button"
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${unit === 'cm' ? 'bg-charcoal text-white shadow-sm' : 'text-secondary hover:text-charcoal'}`}
+              className={`px-5 py-2 text-sm font-extrabold rounded-lg transition-all ${unit === 'cm' ? 'bg-charcoal text-white shadow-md' : 'text-secondary hover:text-charcoal'}`}
               style={unit === 'cm' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
               onClick={() => unit !== 'cm' && toggleUnit()}
             >
@@ -218,7 +217,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
             </button>
             <button
               type="button"
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${unit === 'in' ? 'bg-charcoal text-white shadow-sm' : 'text-secondary hover:text-charcoal'}`}
+              className={`px-5 py-2 text-sm font-extrabold rounded-lg transition-all ${unit === 'in' ? 'bg-charcoal text-white shadow-md' : 'text-secondary hover:text-charcoal'}`}
               style={unit === 'in' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
               onClick={() => unit !== 'in' && toggleUnit()}
             >
@@ -251,7 +250,9 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
             </tr>
           </thead>
           <tbody>
-            {sizes.map(size => (
+            {[...sizes]
+              .sort((a, b) => AVAILABLE_SIZES.indexOf(a) - AVAILABLE_SIZES.indexOf(b))
+              .map(size => (
               <tr key={size} className="hover:bg-slate-50 transition-colors">
                 <td className="p-3 border-b font-bold bg-light/30">{size}</td>
                 {metrics.map(metric => (

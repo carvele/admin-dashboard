@@ -51,7 +51,7 @@
 }
 .product-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 15px -3px rgba(31, 28, 24, 0.1);
 }
 .product-card:hover .product-actions-overlay {
   opacity: 1;
@@ -59,7 +59,7 @@
 
 .product-image-area {
   height: 240px;
-  background-color: #fafafa;
+  background-color: var(--cream);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,7 +103,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(31, 28, 24, 0.1);
 }
 .icon-btn-light:hover {
   transform: scale(1.05);
@@ -118,14 +118,14 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.1);
   backdrop-filter: blur(4px);
-  z-index: 10;
+  z-index: var(--z-base);
 }
 
 .ar-badge.ready {
   color: #047857; /* Emerald 700 */
-  border: 1px solid #10b981;
+  border: 1px solid var(--stock-high);
 }
 
 .ar-badge.missing {
@@ -137,7 +137,7 @@
   position: absolute;
   top: 1rem;
   left: 1rem;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, var(--stock-high), #059669);
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
@@ -163,11 +163,11 @@
 }
 .btn-danger-outline {
   border-color: #fca5a5;
-  color: #dc2626;
+  color: var(--stock-low);
 }
 .btn-danger-outline:hover {
-  background-color: #fee2e2;
-  border-color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  border-color: var(--stock-low);
 }
 
 .product-info-area {
@@ -178,7 +178,13 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--charcoal);
-  margin-bottom: 0.125rem;
+  margin-bottom: 0.25rem;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.7rem; /* Fixes overlap by reserving space */
 }
 .product-category {
   font-size: 0.8125rem;
@@ -238,7 +244,7 @@
   border-radius: 8px;
   padding: 2rem;
   text-align: center;
-  background-color: #fafafa;
+  background-color: var(--cream);
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
@@ -282,8 +288,8 @@
   transition: opacity 0.2s;
 }
 .icon-btn-light.danger:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  color: var(--stock-low);
 }
 
 /* Inline Stock Control */

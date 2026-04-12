@@ -36,8 +36,8 @@ const DigitalWardrobe = () => {
       // Only show app customers
       const appUsers = data.filter((u) => !u.role || u.role === 'customer');
       setUsers(appUsers);
-      if (appUsers.length > 0 && !activeUserId) {
-        setActiveUserId(appUsers[0].id);
+      if (appUsers.length > 0) {
+        setActiveUserId(prevId => prevId || appUsers[0].id);
       }
     });
     const unsubProducts = subscribeToProducts((data) => {

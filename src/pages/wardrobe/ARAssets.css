@@ -24,7 +24,7 @@
 .tab-switcher .tab-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(31, 28, 24, 0.05);
 }
 
 .count-badge {
@@ -51,15 +51,15 @@
   border-radius: 20px;
 }
 .align-status.verified {
-  background-color: #d1fae5;
+  background-color: var(--status-completed-bg);
   color: #065f46;
 }
 .align-status.pending {
-  background-color: #fef3c7;
+  background-color: var(--status-pending-bg);
   color: #92400e;
 }
 .align-status.failed {
-  background-color: #fee2e2;
+  background-color: var(--status-cancelled-bg);
   color: #991b1b;
 }
 
@@ -96,7 +96,7 @@
 }
 .pose-img-placeholder {
   height: 200px;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -119,7 +119,7 @@
 }
 .align-preview-area {
   flex: 2;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   border-radius: 8px;
   height: 480px;
   display: flex;
@@ -130,7 +130,7 @@
 }
 .align-controls {
   flex: 1;
-  background-color: #fafafa;
+  background-color: var(--cream);
   padding: 1.5rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);

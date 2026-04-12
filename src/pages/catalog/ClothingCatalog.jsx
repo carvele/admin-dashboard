@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles, Star } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles, Star, Box } from 'lucide-react';
 import ProductReviewsModal from './ProductReviewsModal';
 import {
   getProducts,
@@ -66,12 +66,28 @@ const ClothingCatalog = () => {
   const categories = ['All', ...dbCategories];
   const availableTags = ['AR Try-On'];
 
-  // Auto-expire New Arrival after 7 days
+  // Auto-expire New Arrival after 7 days, or respect manual toggle
   const isNewArrival = (item) => {
-    if (!item.timestamp) return false;
-    const created = typeof item.timestamp === 'number' ? item.timestamp : Date.now();
+    // 1. Manual override takes priority
+    if (item.isNewArrival) return true;
+
+    // 2. Automatic 7-day logic
+    // Handle Firebase Timestamp objects or numeric timestamps
+    let createdDate = 0;
+    if (item.createdAt) {
+      if (typeof item.createdAt.toMillis === 'function') {
+        createdDate = item.createdAt.toMillis();
+      } else if (item.createdAt.seconds) {
+        createdDate = item.createdAt.seconds * 1000;
+      } else {
+        createdDate = new Date(item.createdAt).getTime();
+      }
+    }
+
+    if (!createdDate) return false;
+    
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    return Date.now() - created < sevenDays;
+    return Date.now() - createdDate < sevenDays;
   };
 
   const filteredCatalog = catalog.filter((item) => {
@@ -254,9 +270,48 @@ const ClothingCatalog = () => {
                     <Sparkles size={10} /> New Arrival
                   </div>
                 )}
+                
+                {/* Conditional AR Badge */}
+                {(item.tags || []).includes('AR Try-On') && (
                   <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
-                    {item.model3DURL ? 'AR Ready' : 'AR Missing'}
+                    {item.model3DURL ? (
+                      <span className="flex align-center gap-1"><Sparkles size={10} /> AR Ready</span>
+                    ) : 'AR Missing'}
                   </div>
+                )}
+
+                {/* Quick AR Toggle */}
+                <div className="ar-quick-toggle" style={{
+                  position: 'absolute',
+                  top: '10px',
+                  left: '10px',
+                  zIndex: 20
+                }}>
+                  <button
+                    className="icon-btn-light"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTag(item, 'AR Try-On');
+                    }}
+                    title={(item.tags || []).includes('AR Try-On') ? "Disable AR Try-On" : "Enable AR Try-On"}
+                    style={{ 
+                      width: '32px', 
+                      height: '32px',
+                      backgroundColor: (item.tags || []).includes('AR Try-On') ? '#8B6F5C' : 'white',
+                      color: (item.tags || []).includes('AR Try-On') ? 'white' : '#8B6F5C',
+                      border: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Box size={16} />
+                  </button>
+                </div>
+
                 {item.onSale && (
                   <div className="sale-badge" style={{
                     position: 'absolute',
@@ -296,25 +351,28 @@ const ClothingCatalog = () => {
                   </div>
                   <div className="product-price-container" style={{ textAlign: 'right' }}>
                     {item.onSale ? (
-                      <>
+                      <div className="sale-price-group">
                         <div className="original-price" style={{ 
-                          fontSize: '0.8rem', 
+                          fontSize: '0.85rem', 
                           textDecoration: 'line-through', 
-                          opacity: 0.5,
-                          marginBottom: '-2px'
+                          color: '#94a3b8',
+                          lineHeight: '1'
                         }}>
                           ₱{(item.price || 0).toLocaleString()}
                         </div>
                         <div className="sale-price" style={{ 
-                          color: '#ef4444', 
-                          fontWeight: 'bold',
-                          fontSize: '1.2rem'
+                          color: '#e11d48', 
+                          fontWeight: '800',
+                          fontSize: '1.25rem',
+                          lineHeight: '1.2'
                         }}>
                           ₱{(item.salePrice || 0).toLocaleString()}
                         </div>
-                      </>
+                      </div>
                     ) : (
-                      <div className="product-price">₱{(item.price || 0).toLocaleString()}</div>
+                      <div className="product-price" style={{ fontWeight: '700', fontSize: '1.1rem' }}>
+                        ₱{(item.price || 0).toLocaleString()}
+                      </div>
                     )}
                   </div>
                 </div>

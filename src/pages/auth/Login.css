@@ -52,7 +52,7 @@
 .login-testimonial {
   padding: 2rem 0;
   position: relative;
-  z-index: 2;
+  z-index: var(--z-base);
 }
 .login-testimonial blockquote {
   font-size: 1.125rem;
@@ -171,7 +171,7 @@
 
 .login-error {
   padding: 0.75rem 1rem;
-  background-color: #fee2e2;
+  background-color: var(--status-cancelled-bg);
   color: #991b1b;
   border-radius: 8px;
   font-size: 0.875rem;

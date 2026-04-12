@@ -3,7 +3,7 @@
  */
 
 export interface User {
-  id?: string; // Appears as document ID; should not be redundantly stored via UID / userId
+  id?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -11,45 +11,83 @@ export interface User {
   phone?: string;
   height?: number;
   weight?: number;
-  measurements?: {
-    bust?: number;
-    waist?: number;
-    hips?: number;
-  };
+  measurements?: Record<string, number>;
   fitPreference?: 'tight' | 'semi-tight' | 'standard' | 'semi-loose' | 'loose';
-  createdAt: string | Date;
-  updatedAt?: string | Date;
-  lastLoginAt?: string | Date;
+  deleted?: boolean;
+  createdAt: string | Date | number | Record<string, number>;
+  updatedAt?: string | Date | number | Record<string, number>;
+  lastLoginAt?: string | Date | number | Record<string, number>;
 }
 
 export interface Product {
   id?: string;
   name: string;
-  description: string;
   category: string;
+  subCategory?: string;
   price: number;
-  stockQuantity: number;
-  sizes: string[];
-  colors: string[];
+  description: string;
+  material?: string;
+  color?: string;
+  baseColor?: string;
+  careInstructions?: string;
+  fitAndSizing?: string;
+  styleCode?: string;
+  season?: string;
+  occasion?: string;
+  visibility: string;
+  isFeatured?: boolean;
+  created_by?: string;
+  images: string[];
   imageUrl: string;
-  imageUrls?: string[];
-  createdAt: string | Date;
-  updatedAt?: string | Date;
+  sizes: string[];
+  stock: number;
+  tags?: string[];
+  isAlterable?: boolean;
+  timestamp?: number;
+  model3DURL?: string;
+  maskURL?: string;
+  rating?: number;
+  reviewCount?: number;
+  onSale?: boolean;
+  salePrice?: number;
+  discountPercentage?: number;
+  isNewArrival?: boolean;
+  measurements?: Record<string, Record<string, string>>;
+  createdAt?: string | Date | number | Record<string, number>;
+  updatedAt?: string | Date | number | Record<string, number>;
+  updated_by?: string;
+  status?: string;
+  deleted?: boolean;
 }
 
 export interface Reservation {
   id?: string;
-  customerId: string;
   customerName?: string;
-  productId: string;
-  date: string | Date;
-  status: 'pending' | 'approved' | 'completed' | 'cancelled';
+  customerId?: string;
+  productId?: string;
+  productName?: string;
+  name?: string;
+  title?: string;
+  imageUrl?: string;
+  date?: string | Date | number | Record<string, number>;
+  returnDate?: string | Date | number | Record<string, number>;
+  status: string;
   size?: string;
   color?: string;
-  staff?: string;
-  notes?: string;
-  createdAt: string | Date;
-  updatedAt?: string | Date;
+  quantity?: number;
+  appointmentTime?: string;
+  staffId?: string;
+  countdown?: boolean;
+  timestamp?: number;
+  rentalPrice?: number;
+  hiddenInCancelled?: boolean;
+  hiddenInHistory?: boolean;
+  deleted?: boolean;
+  paymentStatus?: string;
+  paymentType?: string;
+  receiptUrl?: string;
+  createdAt?: string | Date | number | Record<string, number>;
+  completedAt?: string | Date | number | Record<string, number>;
 }
 
 export interface Message {
@@ -57,8 +95,8 @@ export interface Message {
   conversationId: string;
   sender: string;
   text: string;
-  createdAt: string | Date;
-  readAt?: string | Date;
+  createdAt: string | Date | number | Record<string, number>;
+  readAt?: string | Date | number | Record<string, number>;
 }
 
 export interface Conversation {
@@ -66,19 +104,22 @@ export interface Conversation {
   customerId: string;
   customerName: string;
   lastMessage: string;
-  lastMessageTime: string | Date;
+  lastMessageTime: string | Date | number | Record<string, number>;
   unread: number;
-  createdAt: string | Date;
-  updatedAt?: string | Date;
+  createdAt: string | Date | number | Record<string, number>;
+  updatedAt?: string | Date | number | Record<string, number>;
 }
 
 export interface WardrobeItem {
   id?: string;
   userId: string;
-  productId?: string;
   imageUrl: string;
   category: string;
-  addedAt: string | Date;
+  subCategory?: string;
+  productId?: string;
+  timestamp?: number;
+  addedAt?: string | Date | number | Record<string, number>;
+  deleted?: boolean;
 }
 
 export interface Outfit {
@@ -87,8 +128,8 @@ export interface Outfit {
   name: string;
   description?: string;
   items: string[];
-  createdAt: string | Date;
-  updatedAt?: string | Date;
+  createdAt: string | Date | number | Record<string, number>;
+  updatedAt?: string | Date | number | Record<string, number>;
 }
 
 export interface Feedback {
@@ -97,5 +138,88 @@ export interface Feedback {
   userName?: string;
   email: string;
   message: string;
-  createdAt: string | Date;
+  createdAt: string | Date | number | Record<string, number>;
+}
+
+export interface Notification {
+  id?: string;
+  title: string;
+  message: string;
+  imageUrl?: string;
+  timestamp: number;
+  type?: string;
+  isRead?: boolean;
+  relatedId?: string;
+  userId?: string;
+}
+
+export interface ProductReview {
+  id?: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  reviewText: string;
+  timestamp: number;
+  reservationId?: string;
+}
+
+export interface BodyProfile {
+  neck?: number;
+  neckBase?: number;
+  shoulderWidth?: number;
+  backLength?: number;
+  armLength?: number;
+  sleeveLengthCenterBack?: number;
+  topBust?: number;
+  underBust?: number;
+  waist?: number;
+  hip?: number;
+  insideLegLength?: number;
+  user_height_cm?: number;
+  user_weight_kg?: number;
+  fitPreference?: string;
+}
+
+export interface PoseData {
+  neck?: number[];
+  neckBase?: number[];
+  shoulderWidth?: number[];
+  backLength?: number[];
+  armLength?: number[];
+  sleeveLengthCenterBack?: number[];
+  topBust?: number[];
+  underBust?: number[];
+  waist?: number[];
+  hip?: number[];
+  insideLegLength?: number[];
+  user_height_cm?: number[];
+  user_weight_kg?: number[];
+}
+
+export interface ExploreCategory {
+  id?: string;
+  name: string;
+  productCount: number;
+  imageUrl?: string;
+}
+
+export interface SuggestedOutfit {
+  id?: string;
+  name: string;
+  price: number;
+  imageUrl?: string;
+  isAvailable?: boolean;
+  isFavorite?: boolean;
+  description?: string;
+  sizes?: string[];
+  style?: string;
+}
+
+export interface FavoriteProduct {
+  id?: string;
+  name: string;
+  category: string;
+  imageUrl?: string;
+  isAvailable?: boolean;
 }

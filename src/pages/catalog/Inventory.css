@@ -28,16 +28,16 @@
   color: #1e40af;
 }
 .icon-bg-soft.green {
-  background-color: #d1fae5;
+  background-color: var(--status-completed-bg);
   color: #065f46;
 }
 .icon-bg-soft.orange {
-  background-color: #fef3c7;
+  background-color: var(--status-pending-bg);
   color: #92400e;
 }
 .icon-bg-soft.red {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  color: var(--stock-low);
 }
 
 .inv-stat-content h3 {
@@ -70,7 +70,7 @@
 .stock-progress-bar {
   flex: 1;
   height: 6px;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -102,14 +102,14 @@
   color: var(--charcoal);
 }
 .icon-btn-small.text-danger:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  color: var(--stock-low);
 }
 .icon-btn-small.restock-btn {
   color: var(--stock-high);
 }
 .icon-btn-small.restock-btn:hover {
-  background-color: #d1fae5;
+  background-color: var(--status-completed-bg);
 }
 
 .restock-item-info {
@@ -131,8 +131,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--status-cancelled-bg);
+  color: var(--stock-low);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +140,7 @@
 }
 
 .btn-danger {
-  background-color: #dc2626;
+  background-color: var(--stock-low);
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;

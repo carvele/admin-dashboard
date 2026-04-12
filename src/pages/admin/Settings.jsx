@@ -62,7 +62,6 @@ const Settings = () => {
   const [expandedCatId, setExpandedCatId] = useState(null);
   const [newSubCategory, setNewSubCategory] = useState('');
   const [expandedSubCatIdx, setExpandedSubCatIdx] = useState(null);
-  const [newSubSubCategory, setNewSubSubCategory] = useState('');
   const [seedProgress, setSeedProgress] = useState(null);
 
   const handleAddSubCategory = (catId) => {
@@ -82,7 +81,6 @@ const Settings = () => {
           const newSubObj = {
             name: newSubCategory.trim(),
             imageUrl: '',
-            subSubcategories: []
           };
           return { ...c, subcategories: [...subcategories, newSubObj] };
         }
@@ -91,46 +89,6 @@ const Settings = () => {
     );
     setNewSubCategory('');
     toast.success('Added to pending changes.');
-  };
-
-  const handleAddSubSubCategory = (catId, subIdx) => {
-    if (!newSubSubCategory.trim()) return;
-    
-    setCategories((prev) =>
-      prev.map((c) => {
-        if (c.id === catId) {
-          const updatedSubs = [...(c.subcategories || [])];
-          if (typeof updatedSubs[subIdx] === 'string') {
-            updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: '', subSubcategories: [] };
-          }
-          if (!updatedSubs[subIdx].subSubcategories) updatedSubs[subIdx].subSubcategories = [];
-          if (updatedSubs[subIdx].subSubcategories.includes(newSubSubCategory.trim())) {
-            toast.error('Tag already exists!');
-            return c;
-          }
-          updatedSubs[subIdx].subSubcategories = [...updatedSubs[subIdx].subSubcategories, newSubSubCategory.trim()];
-          return { ...c, subcategories: updatedSubs };
-        }
-        return c;
-      }),
-    );
-    setNewSubSubCategory('');
-    toast.success('Tag added.');
-  };
-
-  const handleDeleteSubSubCategory = (catId, subIdx, subSubName) => {
-    setCategories((prev) =>
-      prev.map((c) => {
-        if (c.id === catId) {
-          const updatedSubs = [...(c.subcategories || [])];
-          if (updatedSubs[subIdx]?.subSubcategories) {
-            updatedSubs[subIdx].subSubcategories = updatedSubs[subIdx].subSubcategories.filter(s => s !== subSubName);
-          }
-          return { ...c, subcategories: updatedSubs };
-        }
-        return c;
-      }),
-    );
   };
 
   const handleDeleteSubCategory = (catId, subIdx) => {
@@ -382,7 +340,7 @@ const Settings = () => {
               } else {
                 const updatedSubs = [...(c.subcategories || [])];
                 if (typeof updatedSubs[subIdx] === 'string') {
-                  updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: result.secure_url, subSubcategories: [] };
+                  updatedSubs[subIdx] = { name: updatedSubs[subIdx], imageUrl: result.secure_url };
                 } else {
                   updatedSubs[subIdx] = { ...updatedSubs[subIdx], imageUrl: result.secure_url };
                 }
@@ -401,6 +359,26 @@ const Settings = () => {
     } finally {
       setUploadingCatId(null);
     }
+  };
+
+  const handleRemoveCategoryImage = (catId, subIdx = null) => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === catId) {
+          if (subIdx === null) {
+            return { ...c, imageUrl: null };
+          } else {
+            const updatedSubs = [...(c.subcategories || [])];
+            if (typeof updatedSubs[subIdx] !== 'string') {
+              updatedSubs[subIdx] = { ...updatedSubs[subIdx], imageUrl: null };
+            }
+            return { ...c, subcategories: updatedSubs };
+          }
+        }
+        return c;
+      }),
+    );
+    toast.info('Image removed (remember to Save Changes)');
   };
 
   return (
@@ -567,11 +545,35 @@ const Settings = () => {
                           }}
                         >
                           {cat.imageUrl ? (
-                            <img
-                              src={cat.imageUrl}
-                              alt={cat.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
+                            <>
+                              <img
+                                src={cat.imageUrl}
+                                alt={cat.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveCategoryImage(cat.id);
+                                }}
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  right: 0,
+                                  backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '0 0 0 4px',
+                                  padding: '2px',
+                                  cursor: 'pointer',
+                                  zIndex: 10,
+                                }}
+                                title="Remove Image"
+                              >
+                                <X size={10} />
+                              </button>
+                            </>
                           ) : (
                             <Image
                               size={18}
@@ -778,7 +780,6 @@ const Settings = () => {
                                 const isObj = typeof sub === 'object';
                                 const sName = isObj ? sub.name : sub;
                                 const sImg = isObj ? sub.imageUrl : null;
-                                const sSubs = isObj ? (sub.subSubcategories || []) : [];
                                 const isExpanded = expandedSubCatIdx === sIdx;
 
                                 return (
@@ -820,79 +821,6 @@ const Settings = () => {
                                         <X size={14} />
                                       </button>
                                     </div>
-
-                                    {/* Level 3 items (Tags) */}
-                                    {isExpanded && (
-                                      <div className="level3-container">
-                                        <div className="level3-header">
-                                          <span className="text-[10px] font-bold uppercase opacity-50">Tags & Descriptors</span>
-                                        </div>
-                                        <Reorder.Group 
-                                          axis="x"
-                                          layoutScroll
-                                          values={sSubs}
-                                          onReorder={(newVal) => {
-                                            setCategories(prev => prev.map(c => {
-                                              if (c.id === cat.id) {
-                                                const updatedSubs = [...c.subcategories];
-                                                updatedSubs[sIdx] = { ...updatedSubs[sIdx], subSubcategories: newVal };
-                                                return { ...c, subcategories: updatedSubs };
-                                              }
-                                              return c;
-                                            }));
-                                          }}
-                                          className="level3-grid"
-                                          style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}
-                                        >
-                                          {sSubs.map(ssName => (
-                                            <Reorder.Item 
-                                              key={ssName} 
-                                              value={ssName} 
-                                              className="level3-tag" 
-                                              style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                gap: '4px',
-                                                cursor: 'grab' 
-                                              }}
-                                            >
-                                              <GripVertical size={8} style={{ opacity: 0.5 }} />
-                                              <span>{ssName}</span>
-                                              <button type="button" onClick={() => handleDeleteSubSubCategory(cat.id, sIdx, ssName)}>
-                                                <X size={10} className="text-red-500" />
-                                              </button>
-                                            </Reorder.Item>
-                                          ))}
-                                          {sSubs.length === 0 && <span className="text-[10px] italic opacity-50">No tags yet.</span>}
-                                        </Reorder.Group>
-                                        <div className="flex gap-2">
-                                          <input
-                                            type="text"
-                                            placeholder="Add tag (e.g. Slim Fit)..."
-                                            className="input-field"
-                                            style={{ height: '30px', fontSize: '11px', flex: 1 }}
-                                            value={newSubSubCategory}
-                                            onChange={(e) => setNewSubSubCategory(e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                handleAddSubSubCategory(cat.id, sIdx);
-                                              }
-                                            }}
-                                          />
-                                          <button 
-                                            type="button" 
-                                            onClick={(e) => { e.stopPropagation(); handleAddSubSubCategory(cat.id, sIdx); }}
-                                            className="btn-primary" 
-                                            style={{ padding: '0 0.5rem', height: '30px' }}
-                                          >
-                                            <PlusCircle size={14} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
                                   </Reorder.Item>
                                 );
                               })}

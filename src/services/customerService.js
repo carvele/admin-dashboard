@@ -7,6 +7,12 @@ import {
   softDeleteDocument,
   subscribeToCollection,
   getPaginatedCollection,
+  query,
+  where,
+  getDocs,
+  collection,
+  db,
+  serverTimestamp,
 } from '../firebase/firestore';
 
 /**
@@ -107,8 +113,53 @@ export const deleteReservation = (docId) => softDeleteDocument('reservations', d
 // --- Wardrobe ---
 
 export const getCustomerWardrobe = async (customerId) => {
-  // Uses a query block via getCollection (if customized further) or currently just fetches globally
-  // and filters client side, but standardizes it as an API extension point.
-  // We'll leave it simple for now or proxy it if needed down the line.
   return []; // Placeholder for Wardrobe
+};
+
+// --- Notifications / Messaging ---
+
+export const sendNotification = async (customerId, customerName, messageText) => {
+  // 1. Find or Create Conversation
+  const q = query(collection(db, 'conversations'), where('customerId', '==', customerId));
+  const snap = await getDocs(q);
+  
+  let conversationId;
+  let conversationDocId;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  if (snap.empty) {
+    conversationId = `conv_${Date.now()}`;
+    const convData = {
+      id: conversationId,
+      customerId,
+      customerName,
+      lastMessage: messageText,
+      time: timeStr,
+      unread: 0,
+      updatedAt: serverTimestamp(),
+    };
+    conversationDocId = await addDocument('conversations', convData);
+  } else {
+    const convDoc = snap.docs[0];
+    conversationId = convDoc.data().id;
+    conversationDocId = convDoc.id;
+    await updateDocument('conversations', conversationDocId, {
+      lastMessage: messageText,
+      time: timeStr,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  // 2. Send Message
+  const messageData = {
+    conversationId,
+    sender: 'staff',
+    text: messageText,
+    time: timeStr,
+    createdAt: serverTimestamp(),
+    id: Date.now(),
+  };
+
+  return await addDocument('messages', messageData);
 };

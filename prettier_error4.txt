@@ -1,0 +1,231 @@
+﻿node.exe : [error] Dashboard_temp.js: SyntaxError: Unexpected token, expected "," (181:11129)
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\carlv\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([error] Dashboa..."," (181:11129):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[error]   179 |                 }, children: [widgetPrefs.chartReservationTrends && (_jsxs(motion.div, { initial: { 
+opacity: 0, scale: 0.95 }, animate: { opacity: 1, scale: 1 }, transition: { delay: 0.3 }, className: "chart-card 
+card", children: [_jsxs("div", { className: "card-header", children: [_jsx("h3", { children: "Reservation Trends" }), 
+_jsxs("select", { className: "input-field small-select", value: trendFilter, onChange: (e) => 
+setTrendFilter(e.target.value), children: [_jsx("option", { value: "This Week", children: "This Week" }), 
+_jsx("option", { value: "This Month", children: "This Month" })] })] }), _jsx("div", { className: "chart-container", 
+children: _jsx(ResponsiveContainer, { width: "100%", height: 300, children: _jsxs(AreaChart, { data: 
+reservationTrends, margin: { top: 10, right: 30, left: 0, bottom: 0 }, children: [_jsx("defs", { children: 
+_jsxs("linearGradient", { id: "colorRes", x1: "0", y1: "0", x2: "0", y2: "1", children: [_jsx("stop", { offset: "5%", 
+stopColor: "#8B6F5C", stopOpacity: 0.8 }), _jsx("stop", { offset: "95%", stopColor: "#8B6F5C", stopOpacity: 0 })] }) 
+}), _jsx(XAxis, { dataKey: "name", axisLine: false, tickLine: false, tick: { fill: '#6B6B6B' } }), _jsx(YAxis, { 
+axisLine: false, tickLine: false, tick: { fill: '#6B6B6B' } }), _jsx(CartesianGrid, { strokeDasharray: "3 3", 
+vertical: false, stroke: "#E2E8F0" }), _jsx(Tooltip, {}), _jsx(Area, { type: "monotone", dataKey: "reservations", 
+stroke: "#8B6F5C", strokeWidth: 3, fillOpacity: 1, fill: "url(#colorRes)" })] }) }) })] })), 
+widgetPrefs.chartPopularOutfits && (_jsxs(motion.div, { initial: { opacity: 0, scale: 0.95 }, animate: { opacity: 1, 
+scale: 1 }, transition: { delay: 0.4 }, className: "chart-card card", children: [_jsxs("div", { className: 
+"card-header", children: [_jsx("h3", { children: "Popular Outfit Combinations" }), _jsx("button", { className: 
+"text-btn", onClick: () => navigate('/outfits'), children: "View All" })] }), _jsxs("div", { className: 
+"chart-container pie-container", children: [_jsx(ResponsiveContainer, { width: "100%", height: 260, children: 
+_jsxs(PieChart, { children: [_jsx(Pie, { data: finalPopular, cx: "50%", cy: "50%", innerRadius: 70, outerRadius: 100, 
+fill: "#8884d8", paddingAngle: 5, dataKey: "value", children: finalPopular.map((_entry, index) => (_jsx(Cell, { fill: 
+COLORS[index % COLORS.length] }, `cell-${index}`))) }), _jsx(Tooltip, {})] }) }), _jsx("div", { className: 
+"pie-legend", children: finalPopular.map((_entry, index) => (_jsxs("div", { className: "legend-item", children: 
+[_jsx("span", { className: "legend-dot", style: { backgroundColor: COLORS[index % COLORS.length] } }), _jsx("span", { 
+className: "legend-text", children: finalPopular[index].name })] }, index))) })] })] }))] }), _jsxs("div", { 
+className: "widgets-grid", style: {
+[error]   180 |                     gridTemplateColumns: (!widgetPrefs.widgetLowStock || 
+!widgetPrefs.widgetRecentCustomers) ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))'
+[error] > 181 |                 }, children: [widgetPrefs.widgetLowStock && (_jsxs(motion.div, { initial: { opacity: 
+0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { delay: 0.5 }, className: "widget card", children: 
+[_jsxs("div", { className: "card-header", children: [_jsx("h3", { children: "Low Stock Alerts" }), _jsxs("span", { 
+className: "badge-danger", children: [lowStockItems.length, " Items"] })] }), _jsxs("div", { className: "widget-list", 
+children: [lowStockItems.length === 0 && (_jsx("div", { className: "p-4 text-center text-secondary", children: "All 
+stock levels healthy." })), lowStockItems.map((item) => (_jsxs("div", { className: "widget-item alert-item", children: 
+[_jsx("div", { className: "item-icon-bg alert", children: _jsx(AlertTriangle, { size: 18, className: "text-danger" }) 
+}), _jsxs("div", { className: "item-details", children: [_jsx("h4", { children: item.item }), _jsxs("p", { children: 
+["Size ", item.size, " \u00B7 Only ", item.available, " left"] })] }), _jsx("button", { className: "btn-outline 
+small", onClick: () => navigate('/inventory'), children: "Restock" })] }, item.id)))] })] })), 
+widgetPrefs.widgetRecentCustomers && (_jsxs(motion.div, { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 
+}, transition: { delay: 0.6 }, className: "widget card", children: [_jsxs("div", { className: "card-header", children: 
+[_jsx("h3", { children: "Recent Customers" }), _jsx("button", { className: "text-btn", onClick: () => 
+navigate('/customers'), children: "View All" })] }), _jsxs("div", { className: "widget-list", children: 
+[recentCustomers.length === 0 && (_jsx("div", { className: "p-4 text-center text-secondary", children: "No customers 
+yet." })), recentCustomers.map((c, i) => (_jsxs("div", { className: "widget-item", children: [_jsx("div", { className: 
+"avatar-small", style: { backgroundColor: `hsl(${200 + i * 40}, 50%, 50%)` }, children: (c.name || 'U')[0] }), 
+_jsxs("div", { className: "item-details", children: [_jsx("h4", { children: c.name }), _jsx("p", { children: 
+c.lastActive })] }), _jsx("button", { className: "icon-btn small", onClick: () => navigate('/customers'), children: 
+_jsx(Users, { size: 16 }) })] }, c.id)))] })] })), widgetPrefs.widgetWeather && (_jsxs(motion.div, { initial: { 
+opacity: 0, scale: 0.95 }, animate: { opacity: 1, scale: 1 }, transition: { delay: 0.7 }, className: 
+"weather-insight-card widget card", children: [_jsxs("div", { className: "card-header", children: [_jsx("h3", { 
+children: "Operational Insight" }), _jsx("span", { className: "badge accent", children: "Weather Context" })] }), 
+_jsxs("div", { className: "flex align-center gap-4 mt-2", children: [_jsxs("div", { className: "weather-icon-large", 
+children: [weather === 'Sunny' && _jsx(Sun, { size: 40, className: "text-warning" }), weather === 'Rainy' && 
+_jsx(CloudRain, { size: 40, className: "text-accent" }), weather === 'Cloudy' && _jsx(Cloud, { size: 40, className: 
+"text-secondary" })] }), _jsxs("div", { children: [_jsxs("h4", { className: "font-bold text-lg", children: [weather, " 
+Today"] }), _jsx("p", { className: "text-sm text-secondary leading-tight", children: weatherAdvice })] })] })] }))] 
+}), _jsxs("div", { className: "command-center-grid mt-6", style: { display: 'grid', gridTemplateColumns: 
+'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }, children: [widgetPrefs.widgetLogistics && (_jsxs(motion.div, 
+{ className: "card logistics-widget", initial: { opacity: 0, x: -20 }, animate: { opacity: 1, x: 0 }, transition: { 
+delay: 0.8 }, children: [_jsxs("div", { className: "card-header", children: [_jsxs("div", { className: "flex 
+align-center gap-2", children: [_jsx(MapPin, { size: 20, className: "text-accent" }), _jsx("h3", { children: "Today's 
+Logistics Monitor" })] }), _jsxs("span", { className: "badge secondary", children: [todayLogistics.length, " Events"] 
+})] }), _jsx("div", { className: "logistics-timeline mt-4", children: todayLogistics.length === 0 ? (_jsx("div", { 
+className: "p-8 text-center text-secondary bg-cream rounded-xl", children: "No pickups or returns scheduled for 
+today." })) : (todayLogistics.map((item, idx) => (_jsxs("div", { className: `logistics-row 
+${item.actionType.toLowerCase()}`, children: [_jsx("div", { className: "logistics-time", children: item.timeStr }), 
+_jsx("div", { className: "logistics-point" }), _jsxs("div", { className: "logistics-info", children: [_jsxs("div", { 
+className: "flex-between align-center", children: [_jsx("span", { className: `logistics-badge 
+${item.actionType.toLowerCase()}`, children: item.actionType }), _jsx("span", { className: "text-xs font-semibold", 
+children: item.status })] }), _jsx("h4", { children: item.customerName }), _jsxs("p", { children: [item.productName || 
+item.outfit, " \u00B7 ", item.size] })] })] }, idx)))) })] })), widgetPrefs.widgetActivityFeed && (_jsxs(motion.div, { 
+className: "card activity-feed-widget", initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, transition: { 
+delay: 0.9 }, children: [_jsx("div", { className: "card-header", children: _jsxs("div", { className: "flex 
+align-center gap-2", children: [_jsx(Activity, { size: 20, className: "text-accent" }), _jsx("h3", { children: 
+"Real-time Activity Pulse" })] }) }), _jsx("div", { className: "activity-pulse-list mt-4", children: 
+activityFeed.map((item, idx) => (_jsxs("div", { className: "activity-pulse-item", children: [_jsxs("div", { className: 
+`activity-icon-sm ${item.type}`, children: [item.type === 'reservation' && _jsx(Calendar, { size: 14 }), item.type === 
+'customer' && _jsx(Users, { size: 14 }), item.type === 'staff' && _jsx(RefreshCw, { size: 14 })] }), _jsxs("div", { 
+className: "activity-pulse-content", children: [_jsx("p", { className: "text-sm", children: item.desc }), _jsx("span", 
+{ className: "text-xs text-secondary", children: item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' 
+}) })] })] }, idx))) })] }))] }), showPreferences && (_jsx("div", { className: "modal-overlay", onClick: () => 
+setShowPreferences(false), children: _jsxs("div", { className: "preferences-modal", onClick: (e) => 
+e.stopPropagation(), children: [_jsxs("div", { className: "preferences-header", children: [_jsx("h3", { children: 
+"Customize Dashboard" }), _jsx("button", { className: "icon-btn", onClick: () => setShowPreferences(false), children: 
+_jsx(X, { size: 20 }) })] }), _jsxs("div", { className: "preferences-body", children: [_jsxs("div", { className: 
+"pref-section", children: [_jsx("h4", { children: "Top Statistics" }), _jsxs("div", { className: "pref-list", 
+children: [_jsxs("div", { className: "pref-item", children: [_jsx("span", { className: "pref-label", children: "Total 
+Reservations" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: "checkbox", className: 
+"toggle-input", checked: widgetPrefs.statTotalReservations, onChange: () => togglePref('statTotalReservations') }), 
+_jsx("span", { className: "toggle-slider" })] })] }), _jsxs("div", { className: "pref-item", children: [_jsx("span", { 
+className: "pref-label", children: "Active Customers" }), _jsxs("label", { className: "toggle-switch", children: 
+[_jsx("input", { type: "checkbox", className: "toggle-input", checked: widgetPrefs.statActiveCustomers, onChange: () 
+=> togglePref('statActiveCustomers') }), _jsx("span", { className: "toggle-slider" })] })] }), _jsxs("div", { 
+className: "pref-item", children: [_jsx("span", { className: "pref-label", children: "Pending Requests" }), 
+_jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: "checkbox", className: "toggle-input", 
+checked: widgetPrefs.statPendingRequests, onChange: () => togglePref('statPendingRequests') }), _jsx("span", { 
+className: "toggle-slider" })] })] }), _jsxs("div", { className: "pref-item", children: [_jsx("span", { className: 
+"pref-label", children: "AR Try-On Usage" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { 
+type: "checkbox", className: "toggle-input", checked: widgetPrefs.statARUsage, onChange: () => 
+togglePref('statARUsage') }), _jsx("span", { className: "toggle-slider" })] })] })] })] }), _jsxs("div", { className: 
+"pref-section", children: [_jsx("h4", { children: "Charts" }), _jsxs("div", { className: "pref-list", children: 
+[_jsxs("div", { className: "pref-item", children: [_jsx("span", { className: "pref-label", children: "Reservation 
+Trends" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: "checkbox", className: 
+"toggle-input", checked: widgetPrefs.chartReservationTrends, onChange: () => togglePref('chartReservationTrends') }), 
+_jsx("span", { className: "toggle-slider" })] })] }), _jsxs("div", { className: "pref-item", children: [_jsx("span", { 
+className: "pref-label", children: "Popular Outfits" }), _jsxs("label", { className: "toggle-switch", children: 
+[_jsx("input", { type: "checkbox", className: "toggle-input", checked: widgetPrefs.chartPopularOutfits, onChange: () 
+=> togglePref('chartPopularOutfits') }), _jsx("span", { className: "toggle-slider" })] })] })] })] }), _jsxs("div", { 
+className: "pref-section", children: [_jsx("h4", { children: "Tactical Widgets" }), _jsxs("div", { className: 
+"pref-list", children: [_jsxs("div", { className: "pref-item", children: [_jsx("span", { className: "pref-label", 
+children: "Low Stock Alerts" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: 
+"checkbox", className: "toggle-input", checked: widgetPrefs.widgetLowStock, onChange: () => 
+togglePref('widgetLowStock') }), _jsx("span", { className: "toggle-slider" })] })] }), _jsxs("div", { className: 
+"pref-item", children: [_jsx("span", { className: "pref-label", children: "Recent Customers" }), _jsxs("label", { 
+className: "toggle-switch", children: [_jsx("input", { type: "checkbox", className: "toggle-input", checked: 
+widgetPrefs.widgetRecentCustomers, onChange: () => togglePref('widgetRecentCustomers') }), _jsx("span", { className: 
+"toggle-slider" })] })] }), _jsxs("div", { className: "pref-item", children: [_jsx("span", { className: "pref-label", 
+children: "Logistics Monitor" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: 
+"checkbox", className: "toggle-input", checked: widgetPrefs.widgetLogistics, onChange: () => 
+togglePref('widgetLogistics') }), _jsx("span", { className: "toggle-slider" })] })] }), _jsxs("div", { className: 
+"pref-item", children: [_jsx("span", { className: "pref-label", children: "Activity Pulse" }), _jsxs("label", { 
+className: "toggle-switch", children: [_jsx("input", { type: "checkbox", className: "toggle-input", checked: 
+widgetPrefs.widgetActivityFeed, onChange: () => togglePref('widgetActivityFeed') }), _jsx("span", { className: 
+"toggle-slider" })] })] }), _jsxs("div", { className: "pref-item", children: [_jsx("span", { className: "pref-label", 
+children: "Operational Insights" }), _jsxs("label", { className: "toggle-switch", children: [_jsx("input", { type: 
+"checkbox", className: "toggle-input", checked: widgetPrefs.widgetWeather, onChange: () => togglePref('widgetWeather') 
+}), _jsx("span", { className: "toggle-slider" })] })] })] })] })] })] }) }) ) ] }) );
+[error]       |                                                                                                        
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                                                                       
+                                                                             ^
+[error]   182 | };
+[error]   183 |
+[error]   184 | export default Dashboard;

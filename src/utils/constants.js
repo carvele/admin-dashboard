@@ -16,7 +16,7 @@ export const COLOR_CATEGORIES = [
   'Purple'
 ];
 
-export const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
+export const AVAILABLE_SIZES = ['One Size', 'XS', 'S', 'M', 'L', 'XL', '2XL'];
 
 export const SEASONS = [
   'All-Season',
@@ -29,6 +29,7 @@ export const DEFAULT_MEASUREMENT_METRICS = {
   'Tops': ['Shoulder', 'Chest', 'Sleeve Length', 'Body Length'],
   'Bottoms': ['Waist', 'Hip', 'Thigh', 'Inseam', 'Outseam', 'Total Length'],
   'Dress': ['Bust', 'Waist', 'Hip', 'Shoulder', 'Total Length'],
+  'Gowns': ['Bust', 'Waist', 'Hip', 'Shoulder', 'Shoulder to Floor', 'Total Length'],
   'Footwear': ['Foot Length', 'Foot Width'],
   'Outerwear': ['Shoulder', 'Chest', 'Sleeve Length', 'Total Length', 'Cuff'],
   'Bags': ['Width', 'Height', 'Depth', 'Strap Length'],
