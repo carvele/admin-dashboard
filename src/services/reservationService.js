@@ -24,6 +24,28 @@ export const getReservations = (maxResults = 0) => {
   return getCollection('reservations', false, maxResults);
 };
 
+export const getReservationsByProduct = async (productId, productName) => {
+  const { getDocs } = await import('firebase/firestore');
+  const snap1 = await getDocs(query(collection(db, 'reservations'), where('productId', '==', productId)));
+  // Legacy support for when only name was stored
+  let snap2 = { docs: [] };
+  if (productName) {
+    snap2 = await getDocs(query(collection(db, 'reservations'), where('productName', '==', productName)));
+    if (snap2.empty) {
+      snap2 = await getDocs(query(collection(db, 'reservations'), where('outfit', '==', productName)));
+    }
+  }
+  
+  const allDocs = [...snap1.docs, ...snap2.docs];
+  // Deduplicate
+  const uniqueMap = new Map();
+  allDocs.forEach(doc => {
+    uniqueMap.set(doc.id, { docId: doc.id, id: doc.data().id, ...doc.data() });
+  });
+  
+  return Array.from(uniqueMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+};
+
 export const createReservation = (data) => {
   return addDocument('reservations', data);
 };

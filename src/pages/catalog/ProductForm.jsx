@@ -10,6 +10,7 @@ import {
   getInventory,
 } from '../../services/productService';
 import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
+import { getReservationsByProduct } from '../../services/reservationService';
 import {
   subscribeToSuggestedOutfits,
 } from '../../services/wardrobeService';
@@ -31,6 +32,8 @@ const ProductForm = () => {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [oldData, setOldData] = useState(null); // To track changes for sync
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Uniqlo-like details
   const [formData, setFormData] = useState({
@@ -98,48 +101,41 @@ const ProductForm = () => {
   useEffect(() => {
       const loadProduct = async () => {
         try {
-          const doc = await getProductById(id);
-          if (doc) {
-            const data = {
-              name: doc.name || '',
-              category: doc.category || categories[0]?.name || 'Tops',
-              subCategory: doc.subCategory || '',
-              price: doc.price || '',
-              description: doc.description || '',
-              material: doc.material || '',
-              color: doc.color || '',
-              careInstructions: doc.careInstructions || '',
-              fitAndSizing: doc.fitAndSizing || '',
-              season: doc.season || 'All-Season',
-              occasion: doc.occasion || '',
-              visibility: doc.visibility || 'Draft',
-              isFeatured: doc.isFeatured ?? doc.featured ?? false,
-              isAlterable: doc.isAlterable || false,
-              onSale: doc.onSale || false,
-              discountPercentage: doc.discountPercentage || 0,
-              salePrice: doc.salePrice || '',
-              sizes: doc.sizes || ['M'],
-              images: doc.images || (doc.imageUrl ? [doc.imageUrl] : []),
-              measurements: doc.measurements || {},
-              tags: doc.tags || [],
-              baseColor: doc.baseColor || 'White',
-              styleCode: doc.styleCode || '',
-            };
-            setFormData(data);
-            setOldData(data);
+          const docParams = await getProductById(id);
+          if (docParams) {
+             setOldData(docParams);
+             setFormData(prev => ({
+                ...prev,
+                ...docParams,
+                sizes: docParams.sizes || [],
+                images: docParams.images || [],
+                measurements: docParams.measurements || {},
+                tags: docParams.tags || []
+             }));
+             
+             // Fetch order history for this product
+             setLoadingHistory(true);
+             try {
+                const history = await getReservationsByProduct(id, docParams.name);
+                setOrderHistory(history);
+             } catch (err) {
+                console.error("Failed fetching order history", err);
+             } finally {
+                setLoadingHistory(false);
+             }
+          } else {
+             toast.error('Product not found.');
+             navigate('/catalog');
           }
         } catch (e) {
-          Logger.error('Failed to load product', e);
-          toast.error('Failed to load product');
-          navigate('/catalog');
+          toast.error('Failed to load product details.');
         } finally {
           setLoading(false);
         }
       };
-      if (isEditing) {
-        loadProduct();
-      }
-  }, [id, isEditing]);
+      if (isEditing) loadProduct();
+  }, [id, isEditing, navigate]);
+
 
   // Auto-generate SKU from product name
   useEffect(() => {
@@ -535,7 +531,7 @@ const ProductForm = () => {
                 </div>
              </div>
 
-             <div className="md:w-64 space-y-4 border-l pl-6 hidden md:block">
+             <div className="md:w-72 space-y-4 border-l pl-6 hidden md:block" style={{ minWidth: '18rem' }}>
                 <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-2 flex items-center gap-2">
                    <Eye size={14} /> Publication Status
                 </h2>
@@ -557,9 +553,9 @@ const ProductForm = () => {
                         <span className="text-sm font-medium group-hover:text-primary transition-colors">Alterable</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
-                        <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                        <div className="flex flex-col">
-                           <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1">
+                        <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                           <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1" style={{ whiteSpace: 'nowrap' }}>
                               <Sparkles size={12} /> Force New Arrival
                            </span>
                            <span className="text-[10px] text-secondary leading-tight">Manual badge override</span>
@@ -594,7 +590,7 @@ const ProductForm = () => {
               </label>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className={`grid grid-cols-1 ${formData.onSale ? 'md:grid-cols-3' : ''} gap-6`}>
               <div>
                  <label className="label">Regular Rental Price (₱) *</label>
                  <div className="relative">
@@ -756,9 +752,9 @@ const ProductForm = () => {
            </div>
 
            <div className="border-t pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                 <label className="label mb-0">Fit Type</label>
-                 <select name="fitAndSizing" className="input-field py-1 text-sm w-auto" value={formData.fitAndSizing} onChange={handleChange}>
+              <div className="mb-4" style={{ maxWidth: '20rem' }}>
+                 <label className="label">Fit Type</label>
+                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing} onChange={handleChange}>
                     <option value="">Standard Fit</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
@@ -800,13 +796,63 @@ const ProductForm = () => {
                     placeholder="AR Try-On, New Arrival, High-End" 
                     value={formData.tags?.join(', ') || ''} 
                     onChange={(e) => {
-                       const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+                       const value = e.target.value;
+                       // Split only on commas to preserve multi-word tags like "New Arrival"
+                       const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
                        setFormData(prev => ({ ...prev, tags }));
                     }} 
                  />
               </div>
            </div>
         </section>
+
+        {isEditing && (
+        <section className="card p-6">
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-2"><Package size={14} /> Order History</span>
+              <span className="bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">{orderHistory.length} Total Orders</span>
+           </h2>
+           {loadingHistory ? (
+              <div className="text-center py-4 text-sm text-gray-500">Loading order history...</div>
+           ) : orderHistory.length === 0 ? (
+              <div className="text-center py-4 text-sm text-gray-500">No orders found for this product yet.</div>
+           ) : (
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left text-sm text-gray-700">
+                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
+                       <tr>
+                          <th className="px-4 py-3 rounded-tl-lg">Order ID</th>
+                          <th className="px-4 py-3">Customer</th>
+                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Status</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                       {orderHistory.map(order => {
+                         const orderDate = new Date(order.timestamp || order.createdAt || order.reservationDate?.seconds * 1000 || Date.now());
+                         return (
+                           <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 font-mono text-xs">{order.id}</td>
+                              <td className="px-4 py-3 font-medium">{order.customerName || order.customer || 'Guest'}</td>
+                              <td className="px-4 py-3 text-secondary">{orderDate.toLocaleDateString()}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                  order.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                                  order.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+                                  'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {order.status || 'Pending'}
+                                </span>
+                              </td>
+                           </tr>
+                         );
+                       })}
+                    </tbody>
+                 </table>
+              </div>
+           )}
+        </section>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 bg-white/80 backdrop-blur-sm p-4 border-t z-20">

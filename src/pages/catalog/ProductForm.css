@@ -124,6 +124,7 @@
   .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .md\:col-span-2 { grid-column: span 2 / span 2; }
   .md\:w-64 { width: 16rem; }
+  .md\:w-72 { width: 18rem; }
   .md\:flex-row { flex-direction: row; }
 }
 .rounded-lg { border-radius: 0.5rem; }
@@ -215,11 +216,11 @@
   border-bottom-right-radius: 0.5rem;
 }
 
-/* Larger Sizing Buttons */
+/* Sizing Buttons */
 .size-btn {
-  padding: 0.75rem 1.5rem !important; /* Larger hit area */
-  font-size: 0.875rem !important;
-  min-width: 4rem;
+  padding: 0.5rem 1rem !important;
+  font-size: 0.85rem !important;
+  min-width: 3.5rem;
   text-align: center;
 }
 .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
@@ -244,6 +245,10 @@
 .border-indigo-200 { border-color: #c7d2fe; }
 .hover\:bg-indigo-50:hover { background-color: #eef2ff; }
 
+.bg-gray-300 { background-color: #d1d5db; }
+.bg-red-500 { background-color: #ef4444; }
+.bg-red-100 { background-color: #fee2e2; }
+
 /* Missing Switch & Sizing Utilities */
 .w-10 { width: 2.5rem; }
 .h-5 { height: 1.25rem; }
@@ -257,11 +262,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem 2rem !important;
-  font-size: 1rem !important;
-  min-width: 5.5rem;
-  height: 3.5rem;
-  border-radius: 1rem !important;
+  padding: 0.5rem 1rem !important;
+  font-size: 0.85rem !important;
+  min-width: 3.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem !important;
   cursor: pointer;
   background-color: white;
   border-color: #e5e7eb;
@@ -269,8 +274,8 @@
 }
 
 .size-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   border-color: #9ca3af;
 }
 
@@ -278,7 +283,7 @@
   background-color: var(--charcoal) !important;
   color: white !important;
   border-color: var(--charcoal) !important;
-  transform: scale(1.05);
+  transform: scale(1.03);
 }
 .relative { position: relative; }
 .absolute { position: absolute; }

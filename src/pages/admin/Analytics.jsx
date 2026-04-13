@@ -46,7 +46,7 @@ const Analytics = () => {
   const [reservations, setReservations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [catalog, setCatalog] = useState([]);
-  const [convRates, setConvRates] = useState([]);
+  const [arLogs, setArLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
   
   // Filter state
@@ -98,14 +98,14 @@ const Analytics = () => {
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
     }, userConstraint);
     const unsubCat = subscribeToCollection('products', setCatalog, productConstraint);
-    const unsubConv = subscribeToCollection('analyticsConvRate', setConvRates, [limit(100)]);
+    const unsubAR = subscribeToCollection('arLogs', setArLogs, [orderBy('timestamp', 'desc'), limit(500)]);
     const unsubFeed = subscribeToCollection('feedback', setFeedback, [limit(200)]);
     
     return () => {
       unsubR();
       unsubC();
       unsubCat();
-      unsubConv();
+      unsubAR();
       unsubFeed();
     };
   }, []);
@@ -154,8 +154,11 @@ const Analytics = () => {
   completedOrConfirmed.forEach((r) => {
     const outfitName = r.productName || r.outfit;
     const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-    if (item) totalRev += item.price || 0;
-    else totalRev += r.price || r.totalAmount || r.rentalFee || 0;
+    if (item) {
+      totalRev += Number(item.price) || 0;
+    } else {
+      totalRev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
+    }
   });
 
   const getGrowth = (list, dateField = null) => {
@@ -309,6 +312,32 @@ const Analytics = () => {
     }
     setExportRef(false);
   };
+
+  // Dynamic AR Conversions
+  const dynamicConvRates = (() => {
+    const months = {};
+    // Group tryOns
+    arLogs.forEach(log => {
+      const d = parseResDate(log);
+      if(!d) return;
+      const m = d.toLocaleDateString('en-US', { month: 'short' });
+      if(!months[m]) months[m] = { month: m, tryOn: 0, reserved: 0, _date: d };
+      months[m].tryOn++;
+    });
+    // Group reservations
+    reservations.forEach(r => {
+      const d = parseResDate(r);
+      if(!d) return;
+      const m = d.toLocaleDateString('en-US', { month: 'short' });
+      if(!months[m]) months[m] = { month: m, tryOn: 0, reserved: 0, _date: d };
+      months[m].reserved++;
+    });
+    
+    // Sort chronologically and return
+    return Object.values(months)
+      .sort((a, b) => a._date - b._date)
+      .slice(-6); // last 6 months
+  })();
 
   return (
     <div className="page-container">
@@ -561,7 +590,7 @@ const Analytics = () => {
             </div>
             <div className="chart-container" style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={convRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <BarChart data={dynamicConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />

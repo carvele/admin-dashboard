@@ -206,19 +206,17 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
             <span className="hidden lg:inline">Clear</span>
           </button>
 
-          <div className="flex rounded-xl p-1.5 border shadow-sm" style={{ backgroundColor: 'var(--beige)' }}>
+          <div className="flex bg-gray-100 rounded-lg p-1 shadow-inner gap-1">
             <button
               type="button"
-              className={`px-5 py-2 text-sm font-extrabold rounded-lg transition-all ${unit === 'cm' ? 'bg-charcoal text-white shadow-md' : 'text-secondary hover:text-charcoal'}`}
-              style={unit === 'cm' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${unit === 'cm' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => unit !== 'cm' && toggleUnit()}
             >
               CM
             </button>
             <button
               type="button"
-              className={`px-5 py-2 text-sm font-extrabold rounded-lg transition-all ${unit === 'in' ? 'bg-charcoal text-white shadow-md' : 'text-secondary hover:text-charcoal'}`}
-              style={unit === 'in' ? { backgroundColor: 'var(--charcoal)', color: 'white' } : {}}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${unit === 'in' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => unit !== 'in' && toggleUnit()}
             >
               IN
@@ -228,12 +226,12 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
       </div>
 
       <div className="overflow-x-auto border rounded-lg">
-        <table className="table w-full text-sm">
+        <table className="table w-full text-xs">
           <thead>
             <tr className="bg-light">
-              <th className="p-3 text-left border-b font-semibold">Size</th>
+              <th className="px-3 py-2 text-left border-b font-semibold">Size</th>
               {metrics.map(metric => (
-                <th key={metric} className="p-3 text-left border-b font-semibold group">
+                <th key={metric} className="px-3 py-2 text-left border-b font-semibold group">
                   <div className="flex items-center justify-between gap-2">
                     {metric}
                     <button 
@@ -254,14 +252,14 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
               .sort((a, b) => AVAILABLE_SIZES.indexOf(a) - AVAILABLE_SIZES.indexOf(b))
               .map(size => (
               <tr key={size} className="hover:bg-slate-50 transition-colors">
-                <td className="p-3 border-b font-bold bg-light/30">{size}</td>
+                <td className="px-3 py-1 border-b font-bold bg-light/30">{size}</td>
                 {metrics.map(metric => (
-                  <td key={`${size}-${metric}`} className="p-2 border-b">
+                  <td key={`${size}-${metric}`} className="px-2 py-0 border-b">
                     <div className="relative">
                       <input
                         type="text"
                         inputMode="decimal"
-                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1"
+                        className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center"
                         placeholder="--"
                         value={measurements?.[size]?.[metric] || ''}
                         onChange={(e) => handleValueChange(size, metric, e.target.value)}

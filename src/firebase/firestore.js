@@ -82,7 +82,7 @@ export const withRetry = async (operationName, asyncFn, maxRetries = 3) => {
 export const getCollection = async (collectionName, includeDeleted = false, maxResults = 0) => {
   return withRetry(`getCollection_${collectionName}`, async () => {
     let q = query(collection(db, collectionName));
-    const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate', 'messages', 'conversations'].includes(collectionName);
+    const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate', 'arLogs', 'messages', 'conversations'].includes(collectionName);
     if (!includeDeleted && !isExempt) {
       q = query(q, where('deleted', '!=', true));
     }
@@ -107,7 +107,7 @@ export const getPaginatedCollection = async (
 ) => {
   return withRetry(`getPaginatedCollection_${collectionName}`, async () => {
     let baseConstraints = [...queryConstraints];
-    const isExempt = ['reservations', 'inventory', 'logs', 'favorites', 'users', 'analyticsConvRate', 'messages', 'conversations'].includes(collectionName);
+    const isExempt = ['reservations', 'inventory', 'logs', 'favorites', 'users', 'analyticsConvRate', 'arLogs', 'messages', 'conversations'].includes(collectionName);
     if (!includeDeleted && !isExempt) {
       baseConstraints.push(where('deleted', '!=', true));
     }
@@ -197,11 +197,11 @@ export const softDeleteDocument = async (collectionName, docId) => {
     const batch = writeBatch(db);
     const mainDocRef = doc(db, collectionName, docId);
     
-    batch.update(mainDocRef, {
+    batch.set(mainDocRef, {
       deleted: true,
       deletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }, { merge: true });
 
     if (collectionName === 'products') {
       const q = query(collection(db, 'inventory'), where('productDocId', '==', docId));
@@ -245,7 +245,7 @@ export const subscribeToCollection = (
   includeDeleted = false,
 ) => {
   let finalConstraints = [...queryConstraints];
-  const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate', 'devices', 'messages', 'conversations'].includes(collectionName);
+  const isExempt = ['reservations', 'inventory', 'logs', 'users', 'analyticsConvRate', 'arLogs', 'devices', 'messages', 'conversations'].includes(collectionName);
   if (!includeDeleted && !isExempt) {
     finalConstraints.push(where('deleted', '!=', true));
   }

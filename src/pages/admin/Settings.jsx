@@ -801,9 +801,33 @@ const Settings = () => {
                                             <Image size={14} />
                                           </div>
                                         )}
-                                        <label onClick={(e) => e.stopPropagation()}>
+                                        <label onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', inset: 0, cursor: 'pointer', opacity: 0 }}>
                                           <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleCategoryImageUpload(cat.id, e.target.files[0], sIdx)} />
                                         </label>
+                                        {sImg && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveCategoryImage(cat.id, sIdx);
+                                            }}
+                                            style={{
+                                              position: 'absolute',
+                                              top: 0,
+                                              right: 0,
+                                              backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                              color: 'white',
+                                              border: 'none',
+                                              borderRadius: '0 0 0 4px',
+                                              padding: '2px',
+                                              cursor: 'pointer',
+                                              zIndex: 10,
+                                            }}
+                                            title="Remove Image"
+                                          >
+                                            <X size={10} />
+                                          </button>
+                                        )}
                                         {uploadingCatId === `${cat.id}-${sIdx}` && (
                                           <div className="upload-overlay">
                                             <Loader2 size={12} className="animate-spin" />
