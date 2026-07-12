@@ -47,3 +47,5 @@
   background-color: var(--status-fitting-bg);
   color: var(--status-fitting-text);
 }
+
+.status-no-stock,.status-critical{background:var(--status-cancelled-bg)}.status-very-low,.status-low{background:var(--status-pending-bg)}.status-healthy,.status-overstock{background:var(--status-completed-bg)}

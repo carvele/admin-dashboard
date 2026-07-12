@@ -1,0 +1,1 @@
+.stock-history-modal{width:min(900px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);border:0}.stock-history-modal::backdrop{background:rgba(0,0,0,.5)}.stock-history-modal table{width:100%;border-collapse:collapse}.stock-history-modal th,.stock-history-modal td{padding:.75rem;border-bottom:1px solid var(--border-color)}
