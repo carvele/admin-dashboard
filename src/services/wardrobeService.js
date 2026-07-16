@@ -1,71 +1,84 @@
+/**
+ * wardrobeService.js  (Supabase)
+ * Replaces the Firebase-based wardrobeService.
+ *
+ * Table mapping:
+ *  suggestedOutfits  → public.suggested_outfits
+ *  wardrobeItems     → public.wardrobe_items
+ *  ar_sessions       → public.ar_sessions
+ *  ar_assets         → public.ar_assets
+ */
+
 import {
   getCollection,
   subscribeToCollection,
   addDocument,
   updateDocument,
   deleteDocument,
-} from '../firebase/firestore';
+} from '../lib/supabaseService';
 
-export const subscribeToSuggestedOutfits = (callback) => {
-  return subscribeToCollection('suggestedOutfits', callback);
+// ── Suggested Outfits ────────────────────────────────────────
+
+export const subscribeToSuggestedOutfits = (callback) =>
+  subscribeToCollection('suggested_outfits', callback);
+
+export const getSuggestedOutfits = (maxResults = 0) =>
+  getCollection('suggested_outfits', false, maxResults);
+
+export const createSuggestedOutfit = (data) =>
+  addDocument('suggested_outfits', data);
+
+export const updateSuggestedOutfit = (docId, updates) =>
+  updateDocument('suggested_outfits', docId, updates);
+
+export const deleteSuggestedOutfit = (docId) =>
+  deleteDocument('suggested_outfits', docId);
+
+// ── Wardrobe Items (customer wardrobe) ───────────────────────
+
+export const subscribeToWardrobeItems = (callback) =>
+  subscribeToCollection('wardrobe_items', callback);
+
+export const getWardrobeItems = (maxResults = 0) =>
+  getCollection('wardrobe_items', false, maxResults);
+
+// ── AR Sessions ──────────────────────────────────────────────
+
+export const subscribeToARSessions = (callback) =>
+  subscribeToCollection('ar_sessions', callback);
+
+export const getARSessions = () =>
+  getCollection('ar_sessions');
+
+// ── AR Assets ────────────────────────────────────────────────
+
+export const subscribeToARAssets = (callback) =>
+  subscribeToCollection('ar_assets', callback);
+
+export const getARAssets = () =>
+  getCollection('ar_assets');
+
+export const createARAsset = (data) =>
+  addDocument('ar_assets', data);
+
+export const updateARAsset = (docId, updates) =>
+  updateDocument('ar_assets', docId, updates);
+
+export const deleteARAsset = (docId) =>
+  deleteDocument('ar_assets', docId);
+
+// ── Pose Guides ──────────────────────────────────────────────
+
+export const subscribeToPoseGuides = (callback) =>
+  subscribeToCollection('pose_guides', callback);
+
+export const createPoseGuide = (data) => {
+  // Use supabaseService directly or upsert since id is custom
+  const { id, name, category } = data;
+  return import('../lib/supabaseService').then(({ upsertDocument }) => 
+    upsertDocument('pose_guides', { id, name, category })
+  );
 };
 
-export const getSuggestedOutfits = (maxResults = 0) => {
-  return getCollection('suggestedOutfits', false, maxResults);
-};
-
-export const createSuggestedOutfit = (data) => {
-  return addDocument('suggestedOutfits', data);
-};
-
-export const updateSuggestedOutfit = (docId, updates) => {
-  return updateDocument('suggestedOutfits', docId, updates);
-};
-
-export const deleteSuggestedOutfit = (docId) => {
-  return deleteDocument('suggestedOutfits', docId);
-};
-
-/**
- * Subscribe to Android customer wardrobe items.
- * This is the canonical collection that the Android app writes to
- * via FirebaseCollections.WARDROBE_ITEMS ("wardrobeItems").
- */
-export const subscribeToWardrobeItems = (callback) => {
-  return subscribeToCollection('wardrobeItems', callback);
-};
-
-export const getWardrobeItems = (maxResults = 0) => {
-  return getCollection('wardrobeItems', false, maxResults);
-};
-
-/**
- * AR-session digital wardrobe (separate from the customer wardrobe panel).
- * @deprecated Use `subscribeToWardrobeItems` for customer wardrobe data.
- */
-export const subscribeToDigitalWardrobe = (callback) => {
-  return subscribeToCollection('digital_wardrobe', callback);
-};
-
-export const subscribeToARSessions = (callback) => {
-  return subscribeToCollection('ar_sessions', callback);
-};
-
-export const getARSessions = () => {
-  return getCollection('ar_sessions');
-};
-
-export const subscribeToARAssets = (callback) => {
-  return subscribeToCollection('ar_assets', callback);
-};
-
-export const getARAssets = () => {
-  return getCollection('ar_assets');
-};
-
-export const createARAsset = (data) => {
-  return addDocument('ar_assets', {
-    ...data,
-    timestamp: Date.now()
-  });
-};
+export const deletePoseGuide = (docId) =>
+  deleteDocument('pose_guides', docId);

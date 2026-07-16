@@ -1,56 +1,163 @@
+/**
+ * reservationService.js  (Supabase)
+ * Replaces the Firebase-based reservationService.
+ *
+ * Key mapping:
+ *  Firestore `docId`          → Supabase `id` (uuid)
+ *  Firestore `productId`      → `product_id` (uuid FK to products)
+ *  Firestore `customerId`     → `customer_id` (uuid FK to profiles)
+ *  Firestore `appointmentTime` (string "HH:MM") is combined with `date` into
+ *    `appointment_time` (timestamptz) on write, and unpacked on read.
+ */
+
+import { supabase } from '../lib/supabaseClient';
 import {
   getCollection,
   subscribeToCollection,
   addDocument,
   updateDocument,
   deleteDocument,
-  query,
-  where,
-  collection,
   getPaginatedCollection,
-} from '../firebase/firestore';
-import { getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+  normaliseRow,
+  toCamel,
+} from '../lib/supabaseService';
+
+// ── Helpers ─────────────────────────────────────────────────
+
+/**
+ * Combine a date string or epoch and a time string ("HH:MM") into a timestamptz.
+ * Returns null if inputs are invalid.
+ */
+const buildTimestamp = (date, timeStr) => {
+  if (!date) return null;
+  const d = date instanceof Date ? date : (typeof date === 'number' ? new Date(date) : new Date(date));
+  if (isNaN(d.getTime())) return null;
+
+  const datePart = d.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+  if (!timeStr || typeof timeStr !== 'string') return d.toISOString();
+  return `${datePart}T${timeStr.padStart(5, '0')}:00+08:00`;
+};
+
+/**
+ * Extract the "HH:MM" time string from a timestamptz column value.
+ */
+const extractTime = (isoStr) => {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Convert a raw Supabase reservation row into the shape the UI expects.
+ * Outputs camelCase fields plus the legacy helpers (docId, id for display_id).
+ */
+const normaliseReservation = (row) => {
+  if (!row) return null;
+  const c = toCamel(row);
+  return {
+    ...c,
+    docId: c.id,
+    // Legacy field: UI sometimes uses 'id' as the display reservation number
+    displayId: c.displayId ?? c.id,
+    // appointmentTime as the extracted "HH:MM" string
+    appointmentTime: extractTime(c.appointmentTime),
+    // date as JS Date object for UI components that call .toDate() style methods
+    date: c.date ? new Date(c.date) : null,
+    returnDate: c.returnDate ? new Date(c.returnDate) : null,
+  };
+};
+
+// ── Subscriptions ────────────────────────────────────────────
 
 export const subscribeToReservations = (callback) => {
-  return subscribeToCollection('reservations', callback);
+  return subscribeToCollection('reservations', (rows) => {
+    callback(rows.map(normaliseReservation));
+  }, {}, true /* includeDeleted so cancelled/history are accessible */);
 };
 
-export const getPaginatedReservations = (pageSize, lastDoc = null, constraints = []) => {
-  return getPaginatedCollection('reservations', pageSize, lastDoc, constraints);
+// ── One-time fetches ─────────────────────────────────────────
+
+export const getReservations = async (maxResults = 0) => {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(maxResults > 0 ? maxResults : 10000);
+  if (error) throw error;
+  return (data ?? []).map(normaliseReservation);
 };
 
-export const getReservations = (maxResults = 0) => {
-  return getCollection('reservations', false, maxResults);
+export const getPaginatedReservations = async (pageSize, page = 0, filters = {}) => {
+  const result = await getPaginatedCollection('reservations', pageSize, page, filters, true);
+  return { ...result, data: result.data.map(normaliseReservation) };
 };
 
 export const getReservationsByProduct = async (productId, productName) => {
-  const { getDocs } = await import('firebase/firestore');
-  const snap1 = await getDocs(query(collection(db, 'reservations'), where('productId', '==', productId)));
-  // Legacy support for when only name was stored
-  let snap2 = { docs: [] };
-  if (productName) {
-    snap2 = await getDocs(query(collection(db, 'reservations'), where('productName', '==', productName)));
-    if (snap2.empty) {
-      snap2 = await getDocs(query(collection(db, 'reservations'), where('outfit', '==', productName)));
-    }
+  const results = new Map();
+
+  // 1. By product_id (UUID FK)
+  if (productId) {
+    const { data: byId } = await supabase
+      .from('reservations')
+      .select('*')
+      .eq('product_id', productId);
+    (byId ?? []).forEach((row) => results.set(row.id, row));
   }
-  
-  const allDocs = [...snap1.docs, ...snap2.docs];
-  // Deduplicate
-  const uniqueMap = new Map();
-  allDocs.forEach(doc => {
-    uniqueMap.set(doc.id, { docId: doc.id, id: doc.data().id, ...doc.data() });
-  });
-  
-  return Array.from(uniqueMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+
+  // 2. By product_name (legacy text match)
+  if (productName) {
+    const { data: byName } = await supabase
+      .from('reservations')
+      .select('*')
+      .eq('product_name', productName);
+    (byName ?? []).forEach((row) => results.set(row.id, row));
+  }
+
+  return Array.from(results.values())
+    .map(normaliseReservation)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
-export const createReservation = (data) => {
-  return addDocument('reservations', data);
+// ── Writes ────────────────────────────────────────────────────
+
+export const createReservation = async (data) => {
+  // Combine date + appointmentTime string → appointment_time timestamptz
+  const appointmentTs = buildTimestamp(data.date, data.appointmentTime);
+  const returnTs = data.returnDate
+    ? (data.returnDate instanceof Date ? data.returnDate.toISOString() : new Date(data.returnDate).toISOString())
+    : null;
+  const dateTs = data.date
+    ? (data.date instanceof Date ? data.date.toISOString() : new Date(data.date).toISOString())
+    : null;
+
+  const { appointmentTime, ...rest } = data;
+  return addDocument('reservations', {
+    ...rest,
+    date: dateTs,
+    return_date: returnTs,
+    appointment_time: appointmentTs,
+    deleted: false,
+  });
 };
 
 export const updateReservation = (docId, updates) => {
+  // If updating date/appointmentTime, rebuild the combined timestamp
+  if (updates.date || updates.appointmentTime) {
+    const date = updates.date ?? undefined;
+    const time = updates.appointmentTime ?? undefined;
+    if (date || time) {
+      updates = {
+        ...updates,
+        appointment_time: buildTimestamp(date, time),
+      };
+    }
+    delete updates.appointmentTime; // remove camelCase before sending to Supabase
+  }
   return updateDocument('reservations', docId, updates);
 };
 
@@ -58,119 +165,116 @@ export const deleteReservation = (docId) => {
   return deleteDocument('reservations', docId);
 };
 
+// ── Inventory adjustment ─────────────────────────────────────
+
+/**
+ * Adjust inventory available/reserved counts when a reservation status changes.
+ * `delta` = positive when releasing (e.g. cancelled), negative when consuming.
+ * `isConsume` = true permanently reduces total stock (for sales).
+ */
 export const adjustInventoryForReservation = async (productIdOrName, size, delta, isConsume = false) => {
   try {
-    // 1. Try to find by productId (Doc ID or SKU)
-    let q = query(
-      collection(db, 'inventory'),
-      where('productDocId', '==', productIdOrName),
-      where('size', '==', size)
-    );
-    let snap = await getDocs(q);
+    let invRow = null;
 
-    // 2. If not found, try by SKU
-    if (snap.empty) {
-      q = query(
-        collection(db, 'inventory'),
-        where('sku', '==', productIdOrName),
-        where('size', '==', size)
-      );
-      snap = await getDocs(q);
+    // 1. Try by product_doc_id (uuid)
+    const { data: byId } = await supabase
+      .from('inventory')
+      .select('id, total, reserved, available')
+      .eq('product_doc_id', productIdOrName)
+      .eq('size', size)
+      .maybeSingle();
+    invRow = byId;
+
+    // 2. Try by SKU
+    if (!invRow) {
+      const { data: bySku } = await supabase
+        .from('inventory')
+        .select('id, total, reserved, available')
+        .eq('sku', productIdOrName)
+        .eq('size', size)
+        .maybeSingle();
+      invRow = bySku;
     }
 
-    // 3. Final fallback: try by Name (item field)
-    if (snap.empty) {
-      q = query(
-        collection(db, 'inventory'),
-        where('item', '==', productIdOrName),
-        where('size', '==', size)
-      );
-      snap = await getDocs(q);
+    // 3. Try by item name
+    if (!invRow) {
+      const { data: byName } = await supabase
+        .from('inventory')
+        .select('id, total, reserved, available')
+        .eq('item', productIdOrName)
+        .eq('size', size)
+        .maybeSingle();
+      invRow = byName;
     }
 
-    if (!snap.empty) {
-      const invDoc = snap.docs[0];
-      const data = invDoc.data();
-      
-      if (isConsume) {
-        const amount = Math.abs(delta);
-        await updateDocument('inventory', invDoc.id, {
-          total: Math.max(0, (data.total || 0) - amount),
-          reserved: Math.max(0, (data.reserved || 0) - amount),
-        });
-        console.log(`[Inventory] Consumed stock for ${productIdOrName} (${size}): ${amount}`);
-      } else {
-        await updateDocument('inventory', invDoc.id, {
-          available: Math.max(0, (data.available || 0) + delta),
-          reserved: Math.max(0, (data.reserved || 0) - delta),
-        });
-        console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): ${delta}`);
-      }
-    } else {
+    if (!invRow) {
       console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size})`);
+      return;
     }
+
+    const updates = {};
+    if (isConsume) {
+      const amount = Math.abs(delta);
+      updates.total = Math.max(0, (invRow.total || 0) - amount);
+      updates.reserved = Math.max(0, (invRow.reserved || 0) - amount);
+    } else {
+      updates.available = Math.max(0, (invRow.available || 0) + delta);
+      updates.reserved = Math.max(0, (invRow.reserved || 0) - delta);
+    }
+    updates.updated_at = new Date().toISOString();
+
+    const { error } = await supabase.from('inventory').update(updates).eq('id', invRow.id);
+    if (error) console.warn('[Inventory] Adjust failed:', error.message);
+    else console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
   } catch (err) {
     console.warn('Stock adjustment failed:', err);
   }
 };
 
 /**
- * Repairs reservation data by looking up the actual customer name and product name.
- * This is a powerful healing tool for when the End-User app sends IDs instead of Names.
+ * Repairs stale customer/product name fields on a reservation row.
+ * Safe to call speculatively — only writes when data actually differs.
  */
-export const repairReservationData = async (reservation, signal = null) => {
+export const repairReservationData = async (reservation) => {
   const currentCustomerName = reservation.customerName || reservation.customer || '';
   const customerId = reservation.customerId || '';
-  
   const currentProductName = reservation.productName || reservation.outfit || '';
   const productId = reservation.productId || '';
 
-  const isId = (str) => /^[a-zA-Z0-9]{15,30}$/.test(str);
-  
-  let updates = {};
+  const isLikelyId = (str) => /^[a-zA-Z0-9-]{15,40}$/.test(str);
 
-  try {
-    const { getDocument } = await import('../firebase/firestore');
+  const updates = {};
 
-    // 1. Repair Customer Name
-    if (customerId && (!currentCustomerName || isId(currentCustomerName))) {
-      const userDoc = await getDocument('users', customerId);
-      if (userDoc) {
-        const realName = userDoc.name || 
-                          (userDoc.firstName ? `${userDoc.firstName} ${userDoc.lastName || ''}`.trim() : null) ||
-                          (userDoc.first_name ? `${userDoc.first_name} ${userDoc.last_name || ''}`.trim() : null) ||
-                          userDoc.email || 
-                          'User';
-        if (realName && realName !== currentCustomerName) {
-          updates.customerName = realName;
-          // Note: do NOT write legacy `customer` alias — standardised on `customerName`
-        }
-      }
+  // 1. Repair customer name
+  if (customerId && (!currentCustomerName || isLikelyId(currentCustomerName))) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('first_name, last_name, email')
+      .eq('id', customerId)
+      .maybeSingle();
+    if (profile) {
+      const realName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email || 'User';
+      if (realName && realName !== currentCustomerName) updates.customerName = realName;
     }
+  }
 
-    // 2. Repair Product Name
-    if (productId && (!currentProductName || isId(currentProductName))) {
-      const prodDoc = await getDocument('products', productId);
-      if (prodDoc) {
-        if (prodDoc.name && prodDoc.name !== currentProductName) {
-          updates.productName = prodDoc.name;
-          // Note: do NOT write legacy `outfit` alias — standardised on `productName`
-          // Also repair image if missing
-          if (!reservation.imageUrl && prodDoc.images?.[0]) {
-            updates.imageUrl = prodDoc.images[0];
-          }
-        }
-      }
+  // 2. Repair product name
+  if (productId && (!currentProductName || isLikelyId(currentProductName))) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('name, images')
+      .eq('id', productId)
+      .maybeSingle();
+    if (product) {
+      if (product.name && product.name !== currentProductName) updates.productName = product.name;
+      if (!reservation.imageUrl && product.images?.[0]) updates.imageUrl = product.images[0];
     }
+  }
 
-    if (Object.keys(updates).length > 0) {
-      const { updateDocument } = await import('../firebase/firestore');
-      await updateDocument('reservations', reservation.docId, updates);
-      console.log(`[Healer] Repaired data for reservation ${reservation.id}`);
-      return true;
-    }
-  } catch (err) {
-    console.warn(`[Healer] Failed to repair data for reservation ${reservation.id}:`, err);
+  if (Object.keys(updates).length > 0) {
+    await updateReservation(reservation.docId, updates);
+    console.log(`[Healer] Repaired reservation ${reservation.displayId ?? reservation.docId}`);
+    return true;
   }
   return false;
 };

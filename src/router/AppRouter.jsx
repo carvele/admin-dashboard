@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -18,11 +18,12 @@ const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions
 const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
 const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
 const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
-const Inventory = lazy(() => import('../pages/catalog/Inventory'));
+const InventoryDashboard = lazy(() => import('../pages/InventoryDashboard'));
 const Analytics = lazy(() => import('../pages/admin/Analytics'));
 const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
+const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
 
 // Suspense fallback
 const PageLoader = () => (
@@ -101,7 +102,14 @@ const RequireAdmin = ({ children }) => {
 
 const AnimatedRoutes = () => {
   const location = useLocation();
+  const { checkLockout } = useAuth();
 
+  // Run a background lockout check on every route change.
+  // This ensures terminated/blocked/archived accounts are signed out
+  // even when navigating within an already-active session.
+  useEffect(() => {
+    checkLockout();
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Routes location={location}>
       <Route
@@ -207,7 +215,7 @@ const AnimatedRoutes = () => {
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
-                  <Inventory />
+                  <InventoryDashboard />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -293,6 +301,18 @@ const AnimatedRoutes = () => {
                     <StaffManagement />
                   </Suspense>
                 </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          {/* staff/:id — any authenticated user may visit;
+              StaffProfile redirects non-admins who try to view another user's profile */}
+          <Route
+            path="staff/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <StaffProfile />
+                </Suspense>
               </ProtectedRoute>
             }
           />

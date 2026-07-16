@@ -5,6 +5,20 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import * as Sentry from '@sentry/react';
 import './index.css';
 
+// Unregister any stale service workers from previous deployments/projects
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister().then((success) => {
+        if (success) {
+          console.log('[ServiceWorker] Unregistered stale service worker:', registration);
+          window.location.reload();
+        }
+      });
+    }
+  });
+}
+
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN || "",
   tracesSampleRate: 1.0,

@@ -1,4 +1,5 @@
 // removed React import
+// @ts-ignore
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -12,8 +13,8 @@ jest.mock('../context/AuthContext', () => ({
   }),
 }));
 
-// Mock Firestore
-jest.mock('../firebase/firestore', () => ({
+// Mock Supabase Service
+jest.mock('../lib/supabaseService', () => ({
   subscribeToCollection: jest.fn(() => jest.fn()), // Returns unsub function
 }));
 

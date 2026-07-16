@@ -82,7 +82,8 @@
 .stock-status-label {
   font-size: 0.75rem;
   font-weight: 600;
-  width: 80px;
+  width: 110px;  /* wider to fit 'Critical Stock' / 'Very Low Stock' */
+  white-space: nowrap;
 }
 
 /* Inventory action buttons */
@@ -178,11 +179,183 @@
   font-size: 0.75rem;
 }
 
-@media (max-width: 768px) {
-  .inv-summary-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .form-row {
-    flex-direction: column;
-  }
+/* ===== 5-Tier Stock Health Badges ===== */
+.stock-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.stock-tier-badge.healthy {
+  background-color: var(--stock-healthy-bg);
+  color: var(--stock-healthy);
+}
+.stock-tier-badge.low {
+  background-color: var(--stock-low-bg);
+  color: var(--stock-low);
+}
+.stock-tier-badge.very-low {
+  background-color: var(--stock-very-low-bg);
+  color: var(--stock-very-low);
+}
+.stock-tier-badge.critical {
+  background-color: var(--stock-critical-bg);
+  color: var(--stock-critical);
+  animation: criticalPulse 2s ease-in-out infinite;
+}
+.stock-tier-badge.no-stock {
+  background-color: var(--stock-none-bg);
+  color: var(--stock-none);
+}
+
+@keyframes criticalPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+}
+
+/* ===== Demand Pressure Indicator ===== */
+.demand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+.demand-badge.high {
+  background-color: var(--stock-critical-bg);
+  color: var(--stock-critical);
+}
+.demand-badge.moderate {
+  background-color: var(--stock-very-low-bg);
+  color: var(--stock-very-low);
+}
+.demand-badge.low {
+  background-color: var(--stock-low-bg);
+  color: var(--stock-low);
+}
+
+/* ===== Urgency Tooltip ===== */
+.stock-cell {
+  position: relative;
+}
+.urgency-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: help;
+}
+.urgency-tooltip-wrap .urgency-tip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--charcoal);
+  color: var(--cream);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 0.6rem 0.875rem;
+  border-radius: 8px;
+  width: 260px;
+  white-space: normal;
+  pointer-events: none;
+  z-index: 600;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+.urgency-tooltip-wrap .urgency-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--charcoal);
+}
+.urgency-tooltip-wrap:hover .urgency-tip {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ===== Dashboard Stock Alert Breakdown ===== */
+.stock-breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+.stock-breakdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Archive/Segment Toggle styling */
+.archive-toggle-row {
+  display: flex;
+  background-color: var(--cream);
+  padding: 0.25rem;
+  border-radius: 8px;
+  width: fit-content;
+  border: 1px solid var(--border-color);
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.archive-toggle-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.archive-toggle-btn:hover {
+  color: var(--charcoal);
+}
+
+.archive-toggle-btn.active {
+  background-color: var(--white);
+  color: var(--charcoal);
+  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.08);
+}
+
+/* Archive confirm button */
+.btn-archive {
+  background-color: #d97706;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-archive:hover {
+  opacity: 0.9;
 }

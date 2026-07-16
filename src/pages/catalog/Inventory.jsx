@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   Plus,
@@ -7,14 +7,19 @@ import {
   Package,
   AlertTriangle,
   Edit,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   RefreshCw,
   ShoppingCart,
+  Info,
+  Flame,
 } from 'lucide-react';
+import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockHealth';
 import {
   subscribeToInventory,
   updateInventoryItem,
-  deleteInventoryItem,
+  archiveInventoryItem,
+  restoreInventoryItem,
   getInventory,
   getProducts,
   updateProduct,
@@ -22,6 +27,7 @@ import {
   recordBoutiqueSale,
   getCategories,
   subscribeToCategories,
+  persistDemandScore,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -45,7 +51,8 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [dbCategories, setDbCategories] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'item', direction: 'ascending' });
+  const [sortConfig, setSortConfig] = useState({ key: 'stockStatus', direction: 'ascending' });
+  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
 
   // Fetch dynamic categories
   // Subscribe to dynamic categories for real-time filter sync
@@ -60,20 +67,55 @@ const Inventory = () => {
   const [restockModal, setRestockModal] = useState(null); // inv item or null
   const [editModal, setEditModal] = useState(null);
   const [sellModal, setSellModal] = useState(null); // Added for POS
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [archiveConfirm, setArchiveConfirm] = useState(null);
 
   // Form state
   const [restockQty, setRestockQty] = useState('');
   const [salePriceInput, setSalePriceInput] = useState('');
   const [editForm, setEditForm] = useState({ total: '', reserved: '', available: '' });
 
-  // Derived stats
-  const totalItems = inventory.length;
-  const totalStock = inventory.reduce((sum, i) => sum + i.total, 0);
-  const totalReserved = inventory.reduce((sum, i) => sum + i.reserved, 0);
-  const lowStockCount = inventory.filter(
-    (i) => i.available === 0 || i.available / i.total <= 0.2,
-  ).length;
+  // ── Demand score persistence (fire-and-forget, debounced per item) ──────────
+  // Runs whenever inventory changes. Writes demandScore + tier to Firestore
+  // for historical analysis. Skips if the stored value already matches.
+  const persistTimerRef = useRef(null);
+  useEffect(() => {
+    if (inventory.length === 0) return;
+    // Debounce: wait 2s after last inventory update before writing
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      inventory.forEach((item) => {
+        if (!item.docId) return;
+        const health = getStockHealth(item.available, item.total, item.reserved || 0);
+        // Only write if the stored value is stale or missing
+        if (
+          item.demandScore !== health.demandScore ||
+          item.stockTier  !== health.tier
+        ) {
+          persistDemandScore(
+            item.docId,
+            health.demandScore,
+            health.tier,
+            health.adjustedScore
+          );
+        }
+      });
+    }, 2000);
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
+  }, [inventory]);
+
+  // Derived stats (Active inventory only)
+  const activeInventory = inventory.filter((i) => i.deleted !== true);
+  const totalItems = activeInventory.length;
+  const totalStock = activeInventory.reduce((sum, i) => sum + i.total, 0);
+  const totalReserved = activeInventory.reduce((sum, i) => sum + i.reserved, 0);
+
+  // 5-tier breakdown — used for stat card + sorting
+  const stockBreakdown = getStockBreakdown(
+    activeInventory.map((i) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
+  );
+  const lowStockCount = stockBreakdown.alerts; // very-low + critical + no-stock
 
   // Extract unique categories for filter - Sync with DB categories
   const dropdownCategories = ['All', ...dbCategories];
@@ -86,7 +128,19 @@ const Inventory = () => {
     setSortConfig({ key, direction });
   };
 
+  // Sorting uses the shared getStockPriority from stockHealth utility
+  // (demand-aware priority: 1 = worst, 5 = best)
+
   const sortedInv = [...inventory].sort((a, b) => {
+    if (sortConfig.key === 'stockStatus') {
+      const priorityA = getStockPriority(a.available, a.total, a.reserved || 0);
+      const priorityB = getStockPriority(b.available, b.total, b.reserved || 0);
+      if (priorityA !== priorityB) {
+        return sortConfig.direction === 'ascending' ? priorityA - priorityB : priorityB - priorityA;
+      }
+      return (a.item || '').localeCompare(b.item || '');
+    }
+
     if (a[sortConfig.key] < b[sortConfig.key]) {
       return sortConfig.direction === 'ascending' ? -1 : 1;
     }
@@ -97,6 +151,11 @@ const Inventory = () => {
   });
 
   const filteredInv = sortedInv.filter((item) => {
+    // Filter by view mode (active vs archived)
+    const isArchived = item.deleted === true;
+    if (viewMode === 'active' && isArchived) return false;
+    if (viewMode === 'archived' && !isArchived) return false;
+
     const matchesSearch =
       (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
       (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
@@ -104,14 +163,7 @@ const Inventory = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const getStockStatus = (available, total) => {
-    if (total === 0) return { label: 'No Stock', color: 'var(--stock-low)' };
-    const ratio = available / total;
-    if (available === 0) return { label: 'Out of Stock', color: 'var(--stock-low)' };
-    if (ratio <= 0.2) return { label: 'Low Stock', color: 'var(--stock-low)' };
-    if (ratio <= 0.5) return { label: 'Medium', color: 'var(--stock-med)' };
-    return { label: 'Healthy', color: 'var(--stock-high)' };
-  };
+  // getStockStatus is replaced by the shared getStockHealth() from stockHealth.js
 
   // --- ACTIONS ---
   const syncProductStock = async (productDocId, sku) => {
@@ -238,17 +290,28 @@ const Inventory = () => {
     }
   };
 
-  const handleDelete = async () => {
-    const item = deleteConfirm;
+  const handleArchive = async () => {
+    const item = archiveConfirm;
     try {
-      await deleteInventoryItem(item.docId);
+      await archiveInventoryItem(item.docId);
       await syncProductStock(item.productDocId, item.sku);
-      await logAction(user, 'Deleted inventory item', { itemName: item.item, size: item.size });
-      toast.success(`Removed ${item.item} (${item.size}) from inventory`);
+      await logAction(user, 'Archived inventory item', { itemName: item.item, size: item.size });
+      toast.success(`Archived ${item.item} (${item.size}) from inventory`);
     } catch (e) {
-      toast.error('Failed to delete item from inventory');
+      toast.error('Failed to archive item');
     } finally {
-      setDeleteConfirm(null);
+      setArchiveConfirm(null);
+    }
+  };
+
+  const handleRestore = async (item) => {
+    try {
+      await restoreInventoryItem(item.docId);
+      await syncProductStock(item.productDocId, item.sku);
+      await logAction(user, 'Restored inventory item', { itemName: item.item, size: item.size });
+      toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
+    } catch (e) {
+      toast.error('Failed to restore item');
     }
   };
 
@@ -373,13 +436,48 @@ const Inventory = () => {
             <AlertTriangle size={24} />
           </div>
           <div className="inv-stat-content">
-            <p className="stat-label text-danger font-medium">Low Stock Alerts</p>
+            <p className="stat-label text-danger font-medium">Stock Alerts</p>
             <h3 className="text-danger">{lowStockCount}</h3>
+            {lowStockCount > 0 && (
+              <div className="stock-breakdown-row">
+                {stockBreakdown.noStock > 0 && (
+                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-none-bg)', color: 'var(--stock-none)' }}>
+                    {stockBreakdown.noStock} No Stock
+                  </span>
+                )}
+                {stockBreakdown.critical > 0 && (
+                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-critical-bg)', color: 'var(--stock-critical)' }}>
+                    {stockBreakdown.critical} Critical
+                  </span>
+                )}
+                {stockBreakdown.veryLow > 0 && (
+                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-very-low-bg)', color: 'var(--stock-very-low)' }}>
+                    {stockBreakdown.veryLow} Very Low
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="card mt-2">
+        {isAdminUnlocked && (
+          <div className="archive-toggle-row" style={{ margin: '1rem 1.5rem 0.5rem 1.5rem' }}>
+            <button
+              className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
+              onClick={() => setViewMode('active')}
+            >
+              Active ({inventory.filter(i => i.deleted !== true).length})
+            </button>
+            <button
+              className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
+              onClick={() => setViewMode('archived')}
+            >
+              <Archive size={14} /> Archived ({inventory.filter(i => i.deleted === true).length})
+            </button>
+          </div>
+        )}
         <div className="card-toolbar">
           <div className="search-box">
             <Search size={18} className="search-icon" />
@@ -426,7 +524,9 @@ const Inventory = () => {
                 <th className="text-right" onClick={() => handleSort('available')} style={{ cursor: 'pointer' }}>
                   Available {sortConfig.key === 'available' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                 </th>
-                <th>Stock Level</th>
+                <th onClick={() => handleSort('stockStatus')} style={{ cursor: 'pointer' }}>
+                  Stock Level {sortConfig.key === 'stockStatus' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                </th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
@@ -459,8 +559,7 @@ const Inventory = () => {
                 </tr>
               ) : (
                 filteredInv.map((inv) => {
-                  const status = getStockStatus(inv.available, inv.total);
-                  const percent = inv.total > 0 ? (inv.available / inv.total) * 100 : 0;
+                  const health = getStockHealth(inv.available, inv.total, inv.reserved || 0);
 
                   return (
                     <tr key={`${inv.id}-${inv.size}`}>
@@ -471,70 +570,95 @@ const Inventory = () => {
                         <span className="size-badge">{inv.size}</span>
                       </td>
                       <td className="text-right">{inv.total}</td>
-                      <td className="text-right text-secondary">{inv.reserved}</td>
+                      <td className="text-right text-secondary">{inv.reserved || 0}</td>
                       <td className="text-right font-medium">{inv.available}</td>
-                      <td>
-                        <div className="stock-progress-container">
-                          <div className="stock-progress-bar">
-                            <div
-                              className="stock-progress-fill"
-                              style={{ width: `${percent}%`, backgroundColor: status.color }}
-                            ></div>
+                      <td className="stock-cell">
+                        <div className="urgency-tooltip-wrap">
+                          {/* Progress bar */}
+                          <div className="stock-progress-container" style={{ flex: 1 }}>
+                            <div className="stock-progress-bar">
+                              <div
+                                className="stock-progress-fill"
+                                style={{ width: `${health.percent}%`, backgroundColor: health.color }}
+                              />
+                            </div>
+                            <span className={`stock-tier-badge ${health.tier}`}>
+                              {health.tier === 'critical' && <Flame size={10} />}
+                              {health.label}
+                            </span>
+                            {/* Demand pressure badge — only shown when demand is notable */}
+                            {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
+                              <span className={`demand-badge ${health.demandLevel}`}>
+                                🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
+                              </span>
+                            )}
                           </div>
-                          <span className="stock-status-label" style={{ color: status.color }}>
-                            {status.label}
-                          </span>
+                          {/* Urgency tooltip */}
+                          <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
+                          <span className="urgency-tip">{health.urgencyTooltip}</span>
                         </div>
                       </td>
                       <td className="text-right">
                         <div className="action-buttons justify-end">
-                          <button
-                            className="icon-btn-small"
-                            title="Add / Publish"
-                            onClick={() => handlePublishProduct(inv)}
-                            style={{ opacity: inv.available > 0 ? 1 : 0.4 }}
-                          >
-                            <Plus size={15} />
-                          </button>
-                          <button
-                            className="icon-btn-small restock-btn"
-                            title="Restock"
-                            onClick={() => {
-                              setRestockModal(inv);
-                              setRestockQty('');
-                            }}
-                          >
-                            <Package size={15} />
-                          </button>
-                          <button
-                            className="icon-btn-small"
-                            title="Record Boutique Sale"
-                            onClick={() => {
-                              setSellModal(inv);
-                              setRestockQty('1');
-                              setSalePriceInput(inv.price || '');
-                            }}
-                            style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
-                            disabled={inv.available <= 0}
-                          >
-                            <ShoppingCart size={15} />
-                          </button>
-                          {isAdminUnlocked && (
+                          {inv.deleted ? (
+                            <button
+                              className="icon-btn-small text-success"
+                              title="Restore"
+                              onClick={() => handleRestore(inv)}
+                            >
+                              <ArchiveRestore size={15} />
+                            </button>
+                          ) : (
                             <>
                               <button
                                 className="icon-btn-small"
-                                title="Edit"
-                                onClick={() => openEditModal(inv)}
+                                title="Add / Publish"
+                                onClick={() => handlePublishProduct(inv)}
+                                style={{ opacity: inv.available > 0 ? 1 : 0.4 }}
                               >
-                                <Edit size={15} />
+                                <Plus size={15} />
                               </button>
                               <button
-                                className="icon-btn-small text-danger"
-                                title="Delete"
-                                onClick={() => setDeleteConfirm(inv)}
+                                className="icon-btn-small restock-btn"
+                                title="Restock"
+                                onClick={() => {
+                                  setRestockModal(inv);
+                                  setRestockQty('');
+                                }}
                               >
-                                <Trash2 size={15} />
+                                <Package size={15} />
                               </button>
+                              <button
+                                className="icon-btn-small"
+                                title="Record Boutique Sale"
+                                onClick={() => {
+                                  setSellModal(inv);
+                                  setRestockQty('1');
+                                  setSalePriceInput(inv.price || '');
+                                }}
+                                style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
+                                disabled={inv.available <= 0}
+                              >
+                                <ShoppingCart size={15} />
+                              </button>
+                              {isAdminUnlocked && (
+                                <>
+                                  <button
+                                    className="icon-btn-small"
+                                    title="Edit"
+                                    onClick={() => openEditModal(inv)}
+                                  >
+                                    <Edit size={15} />
+                                  </button>
+                                  <button
+                                    className="icon-btn-small text-warning"
+                                    title="Archive"
+                                    onClick={() => setArchiveConfirm(inv)}
+                                  >
+                                    <Archive size={15} />
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -681,31 +805,31 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* ===== DELETE CONFIRM ===== */}
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+      {/* ===== ARCHIVE CONFIRM ===== */}
+      {archiveConfirm && (
+        <div className="modal-overlay" onClick={() => setArchiveConfirm(null)}>
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
           >
-            <div className="delete-icon-wrap">
-              <Trash2 size={32} />
+            <div className="archive-icon-wrap" style={{ backgroundColor: 'var(--status-pending-bg)', color: 'var(--warning)', display: 'inline-flex', padding: '1rem', borderRadius: '50%', marginBottom: '1rem' }}>
+              <Archive size={32} />
             </div>
-            <h2>Delete Item?</h2>
+            <h2>Archive Item?</h2>
             <p className="text-secondary mt-2">
-              Remove{' '}
+              Move{' '}
               <strong>
-                {deleteConfirm.item} ({deleteConfirm.size})
+                {archiveConfirm.item} ({archiveConfirm.size})
               </strong>{' '}
-              from inventory? This cannot be undone.
+              to the archive? History and reservation metrics will be preserved. You can restore it anytime.
             </p>
             <div className="modal-footer justify-center mt-4">
-              <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>
+              <button className="btn-outline" onClick={() => setArchiveConfirm(null)}>
                 Cancel
               </button>
-              <button className="btn-danger" onClick={handleDelete}>
-                Delete
+              <button className="btn-archive" onClick={handleArchive}>
+                Archive
               </button>
             </div>
           </div>

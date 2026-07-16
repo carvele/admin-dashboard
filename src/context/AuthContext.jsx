@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase/config';
 import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
-import { registerDevice, getDeviceStatus, logAction, getStaffByEmail } from '../firebase/firestore';
+import { supabase } from '../lib/supabaseClient';
+import { toCamel } from '../lib/supabaseService';
 
 const AuthContext = createContext(null);
 
@@ -14,16 +13,68 @@ const withTimeout = (promise, ms = 5000) =>
     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
   ]);
 
+// ── Device helpers ──────────────────────────────────────────
+
+/**
+ * Upsert a device row in public.devices.
+ * PK is the fingerprint text column.
+ */
+const registerDevice = async (fingerprint, userAgent, staffEmail = '', staffName = '') => {
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase
+    .from('devices')
+    .select('fingerprint, login_history')
+    .eq('fingerprint', fingerprint)
+    .maybeSingle();
+
+  if (!existing) {
+    await supabase.from('devices').insert({
+      fingerprint,
+      status: 'pending',
+      user_agent: userAgent,
+      last_seen: now,
+      name: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
+      staff_email: staffEmail,
+      staff_name: staffName,
+      failed_attempts: 0,
+      lockout_until: null,
+      login_history: [{ email: staffEmail, time: now }],
+    });
+  } else {
+    const history = Array.isArray(existing.login_history) ? existing.login_history : [];
+    await supabase.from('devices').update({
+      last_seen: now,
+      ...(staffEmail && {
+        staff_email: staffEmail,
+        staff_name: staffName,
+        login_history: [...history, { email: staffEmail, time: now }].slice(-20),
+      }),
+      updated_at: now,
+    }).eq('fingerprint', fingerprint);
+  }
+};
+
+// ── Main provider ───────────────────────────────────────────
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState('checking');
   const [deviceFingerprint, setDeviceFingerprint] = useState(null);
   const [deviceData, setDeviceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const deviceUnsubRef = useRef(() => {});
+  const deviceChannelRef = useRef(null);
 
-  const handleDeviceCheck = async (firebaseUser) => {
-    if (!firebaseUser) {
+  // Unsubscribe from old device channel before starting a new one
+  const clearDeviceChannel = () => {
+    if (deviceChannelRef.current) {
+      supabase.removeChannel(deviceChannelRef.current);
+      deviceChannelRef.current = null;
+    }
+  };
+
+  const handleDeviceCheck = async (supabaseUser) => {
+    if (!supabaseUser) {
+      clearDeviceChannel();
       setUser(null);
       setDeviceStatus('checking');
       setIsLoading(false);
@@ -36,7 +87,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const stored = localStorage.getItem('_jz_fp_id');
         if (stored) visitorId = atob(stored);
-      } catch (e) {
+      } catch {
         // ignore decoding errors
       }
 
@@ -47,106 +98,139 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('_jz_fp_id', btoa(visitorId));
       } catch {
         if (!visitorId) {
-          visitorId = 'fb_' + Math.random().toString(36).substr(2, 9);
+          visitorId = 'sb_' + Math.random().toString(36).substr(2, 9);
           localStorage.setItem('_jz_fp_id', btoa(visitorId));
         }
       }
       setDeviceFingerprint(visitorId);
 
-      // --- 2. Register device & start live listener ---
-      // Fire-and-forget registration: the Firestore write runs to completion regardless
-      // of network speed. On mobile, a 5s timeout was killing the write before it finished,
-      // so the device doc was never created and never appeared in Device Management.
+      // --- 2. Register device (fire-and-forget) ---
       registerDevice(
         visitorId,
         navigator.userAgent,
-        firebaseUser.email,
-        firebaseUser.displayName || '',
+        supabaseUser.email,
+        supabaseUser.user_metadata?.full_name || '',
       ).catch((err) => console.warn('[Device] Registration write failed:', err));
 
-      // Start the live listener immediately so the UI gets status as soon as the doc lands.
-      deviceUnsubRef.current();
-      deviceUnsubRef.current = getDeviceStatus(visitorId, (docSnap) => {
-        if (docSnap) {
-          setDeviceData(docSnap);
-          setDeviceStatus(docSnap.status);
-        } else {
-          // Doc not yet written (registration still in-flight on slow network).
-          // Default to 'approved' so the user isn't stuck on a loading spinner.
-          setDeviceStatus('approved');
-        }
-      });
+      // --- 3. Start live device listener ---
+      clearDeviceChannel();
+      const channel = supabase
+        .channel(`device:${visitorId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
+          async () => {
+            const { data } = await supabase
+              .from('devices')
+              .select('*')
+              .eq('fingerprint', visitorId)
+              .maybeSingle();
+            if (data) {
+              const row = toCamel(data);
+              setDeviceData(row);
+              setDeviceStatus(row.status);
+            }
+          },
+        )
+        .subscribe();
+      deviceChannelRef.current = channel;
 
-      // --- 3. Staff role lookup ---
+      // Initial device status fetch
+      const { data: deviceRow } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('fingerprint', visitorId)
+        .maybeSingle();
+      if (deviceRow) {
+        const row = toCamel(deviceRow);
+        setDeviceData(row);
+        setDeviceStatus(row.status);
+      } else {
+        // Doc not yet written (registration still in-flight)
+        setDeviceStatus('approved');
+      }
+
+      // --- 4. Staff role lookup from public.profiles ---
       let resolvedRole = null;
       let staffName = '';
       try {
-        const staffDoc = await withTimeout(getStaffByEmail(firebaseUser.email), 5000);
-        if (staffDoc) {
-          resolvedRole = staffDoc.role;
-          staffName = staffDoc.name;
-        } else if (
-          firebaseUser.email === 'admin@jezsy.com' ||
-          firebaseUser.email === 'admin@jezsycollection.com'
-        ) {
-          resolvedRole = 'Owner';
-        } else {
-          await signOut(auth);
-          setUser(null);
-          setIsLoading(false);
-          toast.error('Access denied. Admin portal is for staff only.');
-          return;
+        const { data: profile } = await withTimeout(
+          supabase
+            .from('profiles')
+            // Fetch the full status fields — we decide access, not the query filter
+            .select('role, first_name, last_name, deleted, is_blocked, employment_status')
+            .eq('id', supabaseUser.id)
+            .maybeSingle(),
+          5000,
+        );
+
+        if (profile) {
+          // ── Lockout guard ──────────────────────────────────────
+          // DENY-LIST logic: only block on explicit bad states.
+          // NULL / 'active' / 'on_leave' / 'resigned' employment_status
+          // are all ALLOWED — only 'terminated' is denied.
+          // Accounts created outside the app (e.g. via Supabase Dashboard)
+          // may have employment_status = NULL; that is valid and must not block login.
+          if (
+            profile.deleted === true ||
+            profile.is_blocked === true ||
+            profile.employment_status === 'terminated'
+          ) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setIsLoading(false);
+            toast.error(
+              'This account no longer has access. Please contact the store owner.',
+              { duration: 6000 },
+            );
+            return;
+          }
+
+          resolvedRole = profile.role;
+          staffName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
         }
       } catch (err) {
-        console.warn('Staff role lookup timed out or failed.', err);
-        if (
-          firebaseUser.email === 'admin@jezsy.com' ||
-          firebaseUser.email === 'admin@jezsycollection.com'
-        ) {
-          resolvedRole = 'Owner';
-        } else {
-          await signOut(auth);
-          setUser(null);
-          setIsLoading(false);
-          toast.error('Access denied. Admin portal is for staff only.');
-          return;
-        }
+        console.warn('Profile role lookup timed out or failed.', err);
       }
 
-      // --- 4. Set user & admin state ---
+      // Only admin/staff/owner may access the dashboard
+      if (!resolvedRole || resolvedRole === 'customer') {
+        await supabase.auth.signOut();
+        setUser(null);
+        setIsLoading(false);
+        toast.error('Access denied. Admin portal is for staff only.');
+        return;
+      }
+
+      // --- 5. Set user state ---
       setUser({
-        uid: firebaseUser.uid,
-        name: staffName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Staff',
-        email: firebaseUser.email,
+        uid: supabaseUser.id,
+        name: staffName || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Staff',
+        email: supabaseUser.email,
         role: resolvedRole,
       });
     } catch (err) {
       console.error('Auth check failed:', err);
       setDeviceStatus('error');
     } finally {
-      // ★ GUARANTEED: always unblock the UI — no matter what
       setIsLoading(false);
     }
   };
 
-  // Listen for auth state changes (initial load + logout)
+  // Listen for Supabase auth state changes (initial load + logout)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, handleDeviceCheck);
-    
-    // Background token refresher (every 10 minutes)
-    const tokenRefreshInterval = setInterval(() => {
-      if (auth.currentUser) {
-        auth.currentUser.getIdToken(true).catch((err) => {
-          console.error("Token refresh failed, ending session", err);
-          logout();
-        });
-      }
-    }, 10 * 60 * 1000);
+    // Get current session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleDeviceCheck(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleDeviceCheck(session?.user ?? null);
+    });
 
     return () => {
-      unsubscribe();
-      clearInterval(tokenRefreshInterval);
-      deviceUnsubRef.current();
+      subscription.unsubscribe();
+      clearDeviceChannel();
     };
   }, []);
 
@@ -187,27 +271,24 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       setIsLoading(true);
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      await handleDeviceCheck(cred.user);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      await handleDeviceCheck(data.user);
       toast.success('Welcome back!');
     } catch (error) {
       setIsLoading(false);
       let message = 'Login failed. Please check your credentials.';
-      if (error.code === 'auth/user-not-found') message = 'No account found with this email.';
-      if (error.code === 'auth/wrong-password') message = 'Incorrect password.';
-      if (error.code === 'auth/invalid-email') message = 'Invalid email address.';
-      if (error.code === 'auth/invalid-credential')
-        message = 'Invalid credentials. Please try again.';
+      if (error.message?.includes('Invalid login credentials')) message = 'Invalid credentials. Please try again.';
+      if (error.message?.includes('Email not confirmed')) message = 'Please confirm your email first.';
       toast.error(message);
       throw error;
     }
   };
 
   const logout = async () => {
-    // Preserve the device fingerprint so the same device doc is reused on next login.
-    // Clearing it would cause a new fingerprint (and a new pending device entry) every session.
     const savedFingerprint = localStorage.getItem('_jz_fp_id');
-    await signOut(auth);
+    clearDeviceChannel();
+    await supabase.auth.signOut();
     setUser(null);
     setDeviceStatus('checking');
     localStorage.clear();
@@ -216,7 +297,60 @@ export const AuthProvider = ({ children }) => {
     toast.info('Logged out successfully');
   };
 
-  const isAdminUnlocked = user?.role === 'Admin' || user?.role === 'Owner';
+  /**
+   * Background lockout check — called on every route change.
+   * Silently signs out the user if their account has been archived,
+   * blocked, or terminated since their session was last validated.
+   */
+  const checkLockout = async () => {
+    // Only run if there is an active user session
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('deleted, is_blocked, employment_status')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[checkLockout] Profile fetch error:', error.message);
+        return; // fail open — don't sign out on a fetch error
+      }
+
+      // !profile (row not found) is treated as fail-open: transient RLS/network
+      // issues must not sign out a valid user. Only explicit bad flags trigger lockout.
+      if (
+        profile &&
+        (
+          profile.deleted === true ||
+          profile.is_blocked === true ||
+          profile.employment_status === 'terminated'
+        )
+      ) {
+        clearDeviceChannel();
+        await supabase.auth.signOut();
+        setUser(null);
+        setDeviceStatus('checking');
+        toast.error(
+          'This account no longer has access. Please contact the store owner.',
+          { duration: 6000 },
+        );
+      }
+    } catch (err) {
+      console.warn('[checkLockout] Unexpected error:', err);
+    }
+  };
+
+  // Role normalization: Supabase stores lowercase ('admin', 'owner', 'staff')
+  // The UI historically checks for 'Admin' or 'Owner' (capitalized).
+  // We surface a normalized role to satisfy both old (capital) and new (lower) checks.
+  const normalizedRole = user?.role
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()
+    : null;
+
+  const isAdminUnlocked = normalizedRole === 'Admin' || normalizedRole === 'Owner';
 
   if (isLoading) {
     return (
@@ -237,9 +371,10 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user: user ? { ...user, role: normalizedRole } : null,
         login,
         logout,
+        checkLockout,
         isAdminUnlocked,
         deviceStatus,
         deviceFingerprint,

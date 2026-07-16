@@ -52,7 +52,9 @@ const defaultPreferences = {
 // @ts-ignore
 import { getCustomers } from '../../services/customerService';
 // @ts-ignore
-import { getInventory } from '../../services/productService';
+import { getInventory, subscribeToInventory } from '../../services/productService';
+// @ts-ignore
+import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockHealth';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 import { motion } from 'framer-motion';
@@ -101,7 +103,7 @@ const Dashboard = () => {
       setReservations(resData || []);
       setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
       setInventory(invData || []);
-      setArSessionCount(arCount || 0);
+      setArSessionCount(arCount?.length || 0);
       setSuggestedOutfits(outfitsData || []);
       setLastSynced(new Date());
     } catch (error) {
@@ -110,20 +112,41 @@ const Dashboard = () => {
   };
 
   React.useEffect(() => {
+    // Non-inventory data: load once, poll every 5 minutes
     loadDashboard();
-    // Poll every 5 minutes
     const intervalId = setInterval(loadDashboard, 5 * 60 * 1000);
-    return () => clearInterval(intervalId);
+    // Inventory: real-time subscription so stock alerts update instantly
+    const unsubInventory = subscribeToInventory((invData: any[]) => {
+      setInventory(invData || []);
+      setLastSynced(new Date());
+    });
+    return () => {
+      clearInterval(intervalId);
+      unsubInventory();
+    };
   }, []);
+
+  // 5-tier stock alert analysis (demand-aware, real-time) - Active items only
+  const activeInventory = inventory.filter((i: any) => i.deleted !== true);
+
+  const stockBreakdown = getStockBreakdown(
+    activeInventory.map((i: any) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
+  );
 
   const totalReservations = reservations.length;
   const activeCustomers = customers.filter((c) => c.status === 'Active').length;
   const pendingRequests = reservations.filter(
     (r) => r.status === 'Pending' || r.status === 'Request Approval' || r.status === 'To Pay'
   ).length;
-  const lowStockItems = inventory
-    .filter((i) => i.total === 0 || i.available / i.total <= 0.2)
-    .slice(0, 3);
+  // 5-tier: alert = very-low + critical + no-stock items (Active items only)
+  const lowStockItems = activeInventory
+    .filter((i: any) => isStockAlert(i.available, i.total, i.reserved || 0))
+    .sort((a: any, b: any) => {
+      const hA = getStockHealth(a.available, a.total, a.reserved || 0);
+      const hB = getStockHealth(b.available, b.total, b.reserved || 0);
+      return hA.priority - hB.priority; // worst (priority=1) first
+    })
+    .slice(0, 5);
   const recentCustomers = [...customers]
     .sort((a, b) => (b.id || '').localeCompare(a.id || ''))
     .slice(0, 3);
@@ -456,29 +479,59 @@ const Dashboard = () => {
           className="widget card"
         >
           <div className="card-header">
-            <h3>Low Stock Alerts</h3>
-            <span className="badge-danger">{lowStockItems.length} Items</span>
+            <h3>Stock Health Alerts</h3>
+            <span className="badge-danger">{stockBreakdown.alerts} Items</span>
           </div>
+          {/* Tier breakdown chips */}
+          {stockBreakdown.alerts > 0 && (
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              {stockBreakdown.noStock > 0 && (
+                <span style={{ background: 'var(--stock-none-bg)', color: 'var(--stock-none)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
+                  {stockBreakdown.noStock} No Stock
+                </span>
+              )}
+              {stockBreakdown.critical > 0 && (
+                <span style={{ background: 'var(--stock-critical-bg)', color: 'var(--stock-critical)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
+                  {stockBreakdown.critical} Critical
+                </span>
+              )}
+              {stockBreakdown.veryLow > 0 && (
+                <span style={{ background: 'var(--stock-very-low-bg)', color: 'var(--stock-very-low)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
+                  {stockBreakdown.veryLow} Very Low
+                </span>
+              )}
+            </div>
+          )}
           <div className="widget-list">
             {lowStockItems.length === 0 && (
-              <div className="p-4 text-center text-secondary">All stock levels healthy.</div>
+              <div className="p-4 text-center text-secondary">All stock levels healthy ✅</div>
             )}
-            {lowStockItems.map((item) => (
-              <div key={item.id} className="widget-item alert-item">
-                <div className="item-icon-bg alert">
-                  <AlertTriangle size={18} className="text-danger" />
+            {lowStockItems.map((item: any) => {
+              const health = getStockHealth(item.available, item.total, item.reserved || 0);
+              return (
+                <div key={`${item.id}-${item.size}`} className="widget-item alert-item">
+                  <div className="item-icon-bg alert" style={{ background: health.bgColor }}>
+                    <AlertTriangle size={18} style={{ color: health.color }} />
+                  </div>
+                  <div className="item-details">
+                    <h4>{item.item}</h4>
+                    <p>
+                      Size {item.size} ·{' '}
+                      <span style={{ color: health.color, fontWeight: 600 }}>{health.label}</span>
+                      {' · '}{item.available} / {item.total} available
+                      {(item.reserved || 0) > 0 && (
+                        <span style={{ color: 'var(--stock-very-low)', marginLeft: '0.3rem', fontSize: '0.72rem' }}>
+                          ({item.reserved} reserved)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button className="btn-outline small" onClick={() => navigate('/inventory')}>
+                    Restock
+                  </button>
                 </div>
-                <div className="item-details">
-                  <h4>{item.item}</h4>
-                  <p>
-                    Size {item.size} · Only {item.available} left
-                  </p>
-                </div>
-                <button className="btn-outline small" onClick={() => navigate('/inventory')}>
-                  Restock
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </motion.div>
         )}

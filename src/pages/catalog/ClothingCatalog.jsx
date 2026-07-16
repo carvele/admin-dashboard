@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Trash2, Sparkles, Star, Box } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Box, Flame } from 'lucide-react';
+import { getStockHealth } from '../../utils/stockHealth';
 import ProductReviewsModal from './ProductReviewsModal';
 import {
   getProducts,
   updateProduct,
-  deleteProduct,
+  archiveProduct,
+  restoreProduct,
   getCategories,
   getInventory,
-  deleteInventoryItem,
 } from '../../services/productService';
-import { deleteFile } from '../../firebase/storage';
+import { getReservations } from '../../services/reservationService';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
@@ -25,13 +26,52 @@ const ClothingCatalog = () => {
   const [catalog, setCatalog] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  // productDocId → { available, total, reserved } aggregated across all sizes
+  const [inventoryMap, setInventoryMap] = useState({});
 
   useEffect(() => {
-    // Fetch products (now cached)
+    // Fetch products, reservations, and inventory in one parallel pass.
     const fetchProducts = async () => {
       try {
-        const data = await getProducts();
-        setCatalog(data);
+        const [prods, reservations, inventoryRows] = await Promise.all([
+          getProducts(true), // includeDeleted = true
+          getReservations(),
+          getInventory(),    // all inventory rows (non-deleted filtered below)
+        ]);
+
+        // Count reservations per product
+        const reservationCounts = {};
+        (reservations || []).forEach(r => {
+          const pId = r.productId || '';
+          const pName = r.productName || r.outfit || '';
+          if (pId) {
+            reservationCounts[pId] = (reservationCounts[pId] || 0) + 1;
+          }
+          if (pName) {
+            reservationCounts[pName] = (reservationCounts[pName] || 0) + 1;
+          }
+        });
+
+        const catalogWithReservations = (prods || []).map(p => ({
+          ...p,
+          reservationCount: reservationCounts[p.docId] || reservationCounts[p.name] || reservationCounts[p.id] || 0
+        }));
+
+        // Build productDocId → aggregated stock map (active rows only)
+        const map = {};
+        (inventoryRows || [])
+          .filter(row => row.deleted !== true)
+          .forEach(row => {
+            const key = row.productDocId || row.product_doc_id;
+            if (!key) return;
+            if (!map[key]) map[key] = { available: 0, total: 0, reserved: 0 };
+            map[key].available += Number(row.available || 0);
+            map[key].total     += Number(row.total     || 0);
+            map[key].reserved  += Number(row.reserved  || 0);
+          });
+        setInventoryMap(map);
+
+        setCatalog(catalogWithReservations);
       } catch (err) {
         toast.error('Failed to load products');
       } finally {
@@ -47,10 +87,10 @@ const ClothingCatalog = () => {
         if (cats && cats.length > 0) {
           setDbCategories(cats.map((c) => c.name));
         } else {
-          setDbCategories(['Tops', 'Dress', 'Bags', 'Bottoms', 'Footwear']);
+          setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
         }
       } catch (err) {
-        setDbCategories(['Tops', 'Dress', 'Bags', 'Bottoms', 'Footwear']);
+        setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
       }
     };
     fetchCategories();
@@ -58,10 +98,11 @@ const ClothingCatalog = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(null);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
   const [activeColor, setActiveColor] = useState('All Colors');
+  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
 
   const categories = ['All', ...dbCategories];
   const availableTags = ['AR Try-On'];
@@ -91,6 +132,11 @@ const ClothingCatalog = () => {
   };
 
   const filteredCatalog = catalog.filter((item) => {
+    // Filter by active/archived
+    const isArchived = item.deleted === true;
+    if (viewMode === 'active' && isArchived) return false;
+    if (viewMode === 'archived' && !isArchived) return false;
+
     const matchesSearch = (item.name || '')
       .toLowerCase()
       .includes((searchTerm || '').toLowerCase());
@@ -99,63 +145,44 @@ const ClothingCatalog = () => {
     return matchesSearch && matchesCat && matchesColor;
   });
 
-  // --- DELETE PRODUCT ---
-  const handleDelete = async () => {
-    if (!deleteConfirm) return;
-    setIsDeleting(true);
-    const itemToDelete = deleteConfirm;
+  // --- ARCHIVE PRODUCT ---
+  const handleArchive = async () => {
+    if (!archiveConfirm) return;
+    setIsArchiving(true);
+    const itemToArchive = archiveConfirm;
     try {
-      Logger.info(`Deleting product ${itemToDelete.docId} (${itemToDelete.name})...`);
+      Logger.info(`Archiving product ${itemToArchive.docId} (${itemToArchive.name})...`);
 
-      // 1. Delete Firestore Document
-      await deleteProduct(itemToDelete.docId);
+      // Soft delete — product + linked inventory marked deleted=true
+      // All data and images are preserved for historical reference
+      await archiveProduct(itemToArchive.docId);
 
-      // 2. Cleanup Images (Only Firebase Storage, ignore Cloudinary/External)
-      const isFirebaseUrl = (url) => url && url.includes('firebasestorage.googleapis.com');
+      // Update local state to reflect the change instantly
+      setCatalog(catalog.map(c =>
+        c.docId === itemToArchive.docId ? { ...c, deleted: true, deletedAt: Date.now() } : c
+      ));
 
-      // Ensure we don't try to delete the exact same URL twice (imageUrl and images[0] usually overlap)
-      const rawImageUrls = [itemToDelete.imageUrl, ...(itemToDelete.images || [])];
-      const allImageUrls = [...new Set(rawImageUrls)].filter(
-        (url) => url && typeof url === 'string',
-      );
-
-      for (const url of allImageUrls) {
-        if (isFirebaseUrl(url)) {
-          Logger.info(`Deleting Firebase asset: ${url}`);
-          await deleteFile(url).catch((e) =>
-            Logger.warn(`Failed to delete storage file: ${url}`, e),
-          );
-        } else if (url.includes('cloudinary.com')) {
-          Logger.info(
-            `Skipping Cloudinary asset delete (must be handled via Cloud Function): ${url}`,
-          );
-        }
-      }
-
-      // 3. Delete linked inventory
-      Logger.info(`Cleaning up inventory for ${itemToDelete.docId}...`);
-      const invDocs = await getInventory();
-      const toDelete = invDocs.filter((inv) => {
-        return (
-          inv.productDocId === itemToDelete.docId ||
-          inv.sku === itemToDelete.id ||
-          inv.id === itemToDelete.id
-        );
-      });
-
-      if (toDelete.length > 0) {
-        const deletePromises = toDelete.map((d) => deleteInventoryItem(d.docId));
-        await Promise.all(deletePromises);
-        console.log(`Deleted ${toDelete.length} inventory items.`);
-      }
-
-      toast.success(`Product "${itemToDelete.name}" deleted successfully`);
+      toast.success(`"${itemToArchive.name}" archived successfully. You can restore it anytime.`);
     } catch (e) {
-      Logger.error('Delete product error:', e);
-      toast.error('Failed to delete product: ' + e.message);
+      Logger.error('Archive product error:', e);
+      toast.error('Failed to archive product: ' + e.message);
     } finally {
-      setIsDeleting(false);
-      setDeleteConfirm(null);
+      setIsArchiving(false);
+      setArchiveConfirm(null);
+    }
+  };
+
+  // --- RESTORE PRODUCT ---
+  const handleRestore = async (item) => {
+    try {
+      await restoreProduct(item.docId);
+      setCatalog(catalog.map(c =>
+        c.docId === item.docId ? { ...c, deleted: false, deletedAt: null } : c
+      ));
+      toast.success(`"${item.name}" restored to the active catalog.`);
+    } catch (e) {
+      Logger.error('Restore product error:', e);
+      toast.error('Failed to restore product: ' + e.message);
     }
   };
 
@@ -243,8 +270,33 @@ const ClothingCatalog = () => {
         </div>
       </div>
 
+      {/* Active / Archived Segment Toggle */}
+      {isAdminUnlocked && (
+        <div className="archive-toggle-row">
+          <button
+            className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
+            onClick={() => setViewMode('active')}
+          >
+            Active ({catalog.filter(c => !c.deleted).length})
+          </button>
+          <button
+            className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
+            onClick={() => setViewMode('archived')}
+          >
+            <Archive size={14} /> Archived ({catalog.filter(c => c.deleted).length})
+          </button>
+        </div>
+      )}
+
       <div className="catalog-grid-display">
         {filteredCatalog.map((item) => {
+          // Use real inventory totals (aggregated across all sizes) when available;
+          // fall back to products.stock with the flat 10-unit baseline if no
+          // inventory rows exist yet for this product.
+          const invData = inventoryMap[item.docId] || inventoryMap[item.id];
+          const stockHealth = invData
+            ? getStockHealth(invData.available, invData.total || 10, invData.reserved)
+            : getStockHealth(item.stock ?? 0, 10, 0);
           // Check for gallery first, else fallback to imageUrl
           const displayUrl =
             item.images && item.images.length > 0
@@ -253,8 +305,17 @@ const ClothingCatalog = () => {
           const isRealImage = displayUrl && displayUrl.startsWith('http');
 
           return (
-            <div key={item.id} className="product-card card">
+            <div key={item.id} className={`product-card card ${item.deleted ? 'archived-card' : ''}`}>
               <div className="product-image-area">
+                {item.deleted && (
+                  <div className="archived-overlay">
+                    <Archive size={24} />
+                    <span>Archived</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 500, marginTop: '4px', opacity: 0.9 }}>
+                      Reserved: {item.reservationCount || 0} times
+                    </span>
+                  </div>
+                )}
                 {isRealImage ? (
                   <ImageWithFallback
                     src={displayUrl}
@@ -398,6 +459,19 @@ const ClothingCatalog = () => {
                   ))}
                 </div>
 
+                {/* Stock Health Badge */}
+                {!item.deleted && (
+                  <div className="flex align-center gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
+                    <span className={`stock-tier-badge ${stockHealth.tier}`}>
+                      {stockHealth.tier === 'critical' && <Flame size={9} />}
+                      {stockHealth.label}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      {invData ? invData.available : (item.stock ?? 0)} / {invData ? invData.total : 10} units
+                    </span>
+                  </div>
+                )}
+
                 {/* AR Tag Toggle & Featured Toggle */}
                 <div className="product-tags mt-3">
                   {availableTags.map((tag) => (
@@ -426,19 +500,31 @@ const ClothingCatalog = () => {
                 {/* CRUD Actions */}
                 {isAdminUnlocked && (
                   <div className="product-card-actions mt-3">
-                    <button
-                      className="btn-outline btn-sm flex-center gap-1"
-                      onClick={() => navigate('/catalog/edit/' + item.docId)}
-                    >
-                      <Edit size={14} /> Edit
-                    </button>
-                    {can(user?.role, 'delete_catalog') && (
+                    {item.deleted ? (
                       <button
-                        className="btn-outline btn-sm btn-danger-outline flex-center gap-1"
-                        onClick={() => setDeleteConfirm(item)}
+                        className="btn-outline btn-sm flex-center gap-1"
+                        style={{ borderColor: 'var(--stock-healthy)', color: 'var(--stock-healthy)' }}
+                        onClick={() => handleRestore(item)}
                       >
-                        <Trash2 size={14} /> Delete
+                        <ArchiveRestore size={14} /> Restore
                       </button>
+                    ) : (
+                      <>
+                        <button
+                          className="btn-outline btn-sm flex-center gap-1"
+                          onClick={() => navigate('/catalog/edit/' + item.docId)}
+                        >
+                          <Edit size={14} /> Edit
+                        </button>
+                        {can(user?.role, 'archive_catalog') && (
+                          <button
+                            className="btn-outline btn-sm btn-archive-outline flex-center gap-1"
+                            onClick={() => setArchiveConfirm(item)}
+                          >
+                            <Archive size={14} /> Archive
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -473,31 +559,32 @@ const ClothingCatalog = () => {
         ) : null}
       </div>
 
-      {/* Delete Confirm Modal */}
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+      {/* Archive Confirm Modal */}
+      {archiveConfirm && (
+        <div className="modal-overlay" onClick={() => setArchiveConfirm(null)}>
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
           >
-            <div className="delete-icon-wrap">
-              <Trash2 size={32} />
+            <div className="archive-icon-wrap">
+              <Archive size={32} />
             </div>
-            <h2>Delete Product?</h2>
+            <h2>Archive Product?</h2>
             <p className="text-secondary mt-2">
-              Remove <strong>{deleteConfirm.name}</strong> from the catalog? This cannot be undone.
+              Move <strong>{archiveConfirm.name}</strong> to the archive? All inventory
+              variants and history will be preserved. You can restore it at any time.
             </p>
             <div className="modal-footer justify-center mt-4">
               <button
                 className="btn-outline"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={isDeleting}
+                onClick={() => setArchiveConfirm(null)}
+                disabled={isArchiving}
               >
                 Cancel
               </button>
-              <button className="btn-danger" onClick={handleDelete} disabled={isDeleting}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
+              <button className="btn-archive" onClick={handleArchive} disabled={isArchiving}>
+                {isArchiving ? 'Archiving...' : 'Archive'}
               </button>
             </div>
           </div>

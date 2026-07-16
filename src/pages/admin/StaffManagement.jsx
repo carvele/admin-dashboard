@@ -1,152 +1,461 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   UserPlus,
   UserMinus,
   Shield,
   ShieldCheck,
-  Mail,
-  Clock,
   Search,
   Trash2,
   Crown,
+  Eye,
+  ShieldAlert,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import {
-  subscribeToCollection,
-  addDocument,
-  updateDocument,
-  deleteDocument,
+  subscribeToStaff,
+  updateStaffStatus,
   logAction,
-} from '../../firebase/firestore';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { auth, firebaseConfig } from '../../firebase/config';
-import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+} from '../../services/staffService';
+import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import { sanitizeText } from '../../utils/validation';
 import './StaffManagement.css';
 
+const EMPLOYMENT_STATUS_META = {
+  active:     { label: 'Active',      cls: 'emp-active' },
+  on_leave:   { label: 'On Leave',    cls: 'emp-leave' },
+  resigned:   { label: 'Resigned',    cls: 'emp-resigned' },
+  terminated: { label: 'Terminated',  cls: 'emp-terminated' },
+};
+
 const StaffManagement = () => {
-  const { user } = useAuth();
+  const { user, isAdminUnlocked } = useAuth();
+  const navigate = useNavigate();
+
+  // ── Data ────────────────────────────────────────────────────
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    email: '',
-    role: 'Sales Staff',
-    password: '',
-  });
+
+  // ── UI state ─────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
   const [searchTerm, setSearchTerm] = useState('');
 
+  // ── Archived-tab extras ──────────────────────────────────────
+  // Map<staffId, latestNote> — loaded once when switching to archived tab
+  const [historyNotes, setHistoryNotes] = useState({});
+
+  // ── Reactivate modal ─────────────────────────────────────────
+  const [reactivateMember, setReactivateMember] = useState(null);
+  const [reactivateNote, setReactivateNote] = useState('');
+  const [reactivating, setReactivating] = useState(false);
+
+  // ── Create modal ─────────────────────────────────────────────
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: '', email: '', role: 'staff' });
+
+  // ── Subscribe to ALL staff (including deleted) ───────────────
   useEffect(() => {
-    const unsub = subscribeToCollection('staff', (data) => {
+    const unsub = subscribeToStaff((data) => {
       setStaff(data);
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
+  // ── Fetch latest history notes when Archived tab is opened ───
+  useEffect(() => {
+    if (viewMode !== 'archived') return;
+
+    const fetchNotes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('staff_status_history')
+          .select('staff_id, note, created_at')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Keep only the most-recent note per staff member
+        const noteMap = {};
+        (data ?? []).forEach((h) => {
+          if (!noteMap[h.staff_id]) noteMap[h.staff_id] = h.note;
+        });
+        setHistoryNotes(noteMap);
+      } catch (err) {
+        console.error('[StaffManagement] Failed to fetch history notes:', err);
+      }
+    };
+
+    fetchNotes();
+  }, [viewMode, staff]);
+
+  // ── Derived lists ─────────────────────────────────────────────
+  const activeStaff   = staff.filter((s) => s.deleted !== true);
+  const archivedStaff = staff.filter((s) => s.deleted === true);
+
+  const getDisplayName = (m) =>
+    [m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown';
+  const getDisplayRole = (role) =>
+    role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff';
+
+  const filteredActive = activeStaff.filter(
+    (s) =>
+      getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  const filteredArchived = archivedStaff.filter(
+    (s) =>
+      getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  // ── Actions: Active tab ───────────────────────────────────────
+
   const handleCreateAccount = async (e) => {
     e.preventDefault();
-    const adminEmail = user.email;
-
-    if (!createForm.password || createForm.password.length < 6) {
-      toast.error('Password must be at least 6 characters long.');
-      return;
-    }
-
-    let secondaryApp;
-    let secondaryAuth;
     try {
-      // 1. Initialize a secondary Firebase instance so we don't log out the Admin
-      secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp_' + Date.now());
-      secondaryAuth = getAuth(secondaryApp);
-
-      // 2. Create the new Firebase Auth account using the secondary instance
-      const cred = await createUserWithEmailAndPassword(
-        secondaryAuth,
-        createForm.email,
-        createForm.password,
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-staff-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            name: sanitizeText(createForm.name),
+            email: createForm.email.toLowerCase().trim(),
+            role: createForm.role,
+          }),
+        },
       );
-
-      // 3. Create the Firestore staff document
-      const cleanName = sanitizeText(createForm.name);
-      
-      await addDocument('staff', {
-        name: cleanName,
-        email: createForm.email.toLowerCase().trim(),
-        authUid: cred.user.uid,
-        role: createForm.role,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-      });
-
-      // 4. Send password reset email
-      await sendPasswordResetEmail(secondaryAuth, createForm.email);
-
-      // 5. Sign out the secondary instance to clean up
-      await secondaryAuth.signOut();
-
-      // 6. Log action
-      await logAction(user, 'Created new staff account & sent reset', {
+      const result = await res.json();
+      if (!res.ok) {
+        if (result.error?.includes('already registered') || res.status === 409) {
+          toast.error('This email is already registered.');
+        } else {
+          toast.error('Failed to create account: ' + (result.error ?? 'Unknown error'));
+        }
+        return;
+      }
+      await logAction(user, 'Created new staff account', {
+        targetType: 'profile',
+        targetId: result.userId,
         email: createForm.email,
         role: createForm.role,
       });
-
-      toast.success(`Account created! A password reset email has been sent to ${createForm.name}.`);
+      toast.success(
+        `Invite sent to ${createForm.email}. They will receive an email to set their password and activate their account.`,
+        { duration: 6000 },
+      );
       setIsCreateModalOpen(false);
-      setCreateForm({ name: '', email: '', role: 'Sales Staff', password: '' });
+      setCreateForm({ name: '', email: '', role: 'staff' });
     } catch (err) {
       console.error('Staff creation error:', err);
-      if (err.code === 'auth/email-already-in-use') {
-        toast.error('This email is already registered in Firebase Auth.');
-      } else {
-        toast.error('Failed to create staff account: ' + err.message);
-      }
-    } finally {
-      if (secondaryApp) {
-        await deleteApp(secondaryApp).catch(console.error);
-      }
+      toast.error('Failed to create staff account: ' + err.message);
     }
   };
 
   const handleRemove = async (member) => {
-    if (member.role === 'Owner') {
+    if (member.role === 'owner') {
       toast.error('The master Owner account cannot be removed.');
       return;
     }
-    if (!window.confirm(`Are you sure you want to remove ${member.name}?`)) return;
+    const name = getDisplayName(member);
+    if (!window.confirm(`Are you sure you want to archive ${name}?`)) return;
     try {
-      await deleteDocument('staff', member.docId);
-      await logAction(user, 'Removed staff member', { staffName: member.name });
-      toast.success(`${member.name} removed from team`);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .eq('id', member.id);
+      if (error) throw error;
+      await logAction(user, 'Archived staff member', {
+        targetType: 'profile',
+        targetId: member.id,
+        staffName: name,
+      });
+      toast.success(`${name} has been archived`);
     } catch (err) {
-      toast.error('Failed to remove staff member');
+      toast.error('Failed to archive staff member');
     }
   };
 
   const toggleRole = async (member) => {
-    if (member.role === 'Owner') {
+    if (member.role === 'owner') {
       toast.error('The Owner role cannot be downgraded. It is permanent.');
       return;
     }
-    const newRole = member.role === 'Admin' ? 'Sales Staff' : 'Admin';
+    const newRole = member.role === 'admin' ? 'staff' : 'admin';
+    const name = getDisplayName(member);
     try {
-      await updateDocument('staff', member.docId, { role: newRole });
-      await logAction(user, 'Changed staff role', { staffName: member.name, newRole });
-      toast.success(`${member.name} is now ${newRole}`);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', member.id);
+      if (error) throw error;
+      await logAction(user, 'Changed staff role', {
+        targetType: 'profile',
+        targetId: member.id,
+        staffName: name,
+        newRole,
+      });
+      toast.success(`${name} is now ${newRole}`);
     } catch (err) {
       toast.error('Failed to update role');
     }
   };
 
-  const filteredStaff = staff.filter(
-    (s) =>
-      (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  // ── Actions: Archived tab ─────────────────────────────────────
 
-  const myData = staff.find((s) => s.email === user.email);
+  const openReactivateModal = (member) => {
+    setReactivateMember(member);
+    setReactivateNote('');
+  };
+
+  const handleReactivate = async (e) => {
+    e.preventDefault();
+    if (!reactivateNote.trim()) {
+      toast.error('A reactivation note is required.');
+      return;
+    }
+    if (!reactivateMember) return;
+
+    setReactivating(true);
+    try {
+      // 1. Update employment_status → 'active' via the secured RPC (writes audit log)
+      await updateStaffStatus(reactivateMember.id, 'active', false, reactivateNote.trim());
+
+      // 2. Flip the soft-delete flag back
+      const { error } = await supabase
+        .from('profiles')
+        .update({ deleted: false, updated_at: new Date().toISOString() })
+        .eq('id', reactivateMember.id);
+      if (error) throw error;
+
+      await logAction(user, 'Reactivated archived staff account', {
+        targetType: 'profile',
+        targetId: reactivateMember.id,
+        staffName: getDisplayName(reactivateMember),
+        note: reactivateNote.trim(),
+      });
+
+      toast.success(`${getDisplayName(reactivateMember)} has been reactivated.`);
+      setReactivateMember(null);
+      setReactivateNote('');
+    } catch (err) {
+      toast.error('Failed to reactivate account: ' + err.message);
+    } finally {
+      setReactivating(false);
+    }
+  };
+
+  // ── Shared table rows ─────────────────────────────────────────
+
+  const renderActiveRows = () => {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan="6" className="text-center py-8">Loading team...</td>
+        </tr>
+      );
+    }
+    if (filteredActive.length === 0) {
+      return (
+        <tr>
+          <td colSpan="6">
+            <div className="empty-state flex-col flex-center gap-3 p-8">
+              <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
+                <UserMinus size={48} opacity={0.5} />
+              </div>
+              <h3 className="text-lg font-medium">No staff members found</h3>
+              <p className="text-secondary text-center max-w-sm">
+                There are no active staff members matching your current search.
+              </p>
+              {searchTerm && (
+                <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
+                  Clear Search
+                </button>
+              )}
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
+    return filteredActive.map((member) => (
+      <tr key={member.id}>
+        <td>
+          <div className="member-info">
+            <div
+              className="avatar small-av"
+              style={{ backgroundColor: 'var(--color-gold)', color: 'white' }}
+            >
+              {(getDisplayName(member) || 'U')[0]}
+            </div>
+            <div>
+              <div className="font-medium">{getDisplayName(member)}</div>
+              <div className="text-secondary text-xs">{member.email}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div
+            className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}
+            onClick={() => toggleRole(member)}
+            style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
+            title={member.role === 'owner' ? 'Role locked' : 'Click to toggle role'}
+          >
+            {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
+            {member.role === 'admin' && <ShieldCheck size={14} className="text-success" />}
+            {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
+            <span style={{ fontWeight: member.role === 'owner' ? 700 : 500 }}>
+              {getDisplayRole(member.role)}
+            </span>
+          </div>
+        </td>
+        <td>
+          {(() => {
+            const es = member.employmentStatus;
+            const m = EMPLOYMENT_STATUS_META[es];
+            return es
+              ? <span className={`emp-badge ${m?.cls ?? ''}`}>{m?.label ?? es}</span>
+              : <span className="text-secondary text-sm">—</span>;
+          })()}
+        </td>
+        <td>
+          {member.isBlocked
+            ? <span className="emp-badge emp-blocked"><ShieldAlert size={12} /> Blocked</span>
+            : <span className="emp-badge emp-clear"><ShieldCheck size={12} /> Clear</span>
+          }
+        </td>
+        <td className="text-secondary text-sm">
+          {member.createdAt ? new Date(member.createdAt).toLocaleDateString() : 'N/A'}
+        </td>
+        <td className="text-right" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button
+            className="icon-btn-small"
+            onClick={() => navigate(`/staff/${member.id}`)}
+            title="View Profile"
+          >
+            <Eye size={16} />
+          </button>
+          {member.role !== 'owner' && (
+            <button
+              className="icon-btn-small text-danger"
+              onClick={() => handleRemove(member)}
+              title="Archive Staff Member"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </td>
+      </tr>
+    ));
+  };
+
+  const renderArchivedRows = () => {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan="7" className="text-center py-8">Loading archived members...</td>
+        </tr>
+      );
+    }
+    if (filteredArchived.length === 0) {
+      return (
+        <tr>
+          <td colSpan="7">
+            <div className="empty-state flex-col flex-center gap-3 p-8">
+              <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
+                <Archive size={48} opacity={0.5} />
+              </div>
+              <h3 className="text-lg font-medium">No archived members</h3>
+              <p className="text-secondary text-center max-w-sm">
+                Archived staff will appear here. Use the archive action on the Active tab to move someone here.
+              </p>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
+    return filteredArchived.map((member) => (
+      <tr key={member.id} style={{ opacity: 0.85 }}>
+        <td>
+          <div className="member-info">
+            <div
+              className="avatar small-av"
+              style={{ backgroundColor: 'var(--color-muted, #aaa)', color: 'white' }}
+            >
+              {(getDisplayName(member) || 'U')[0]}
+            </div>
+            <div>
+              <div className="font-medium">{getDisplayName(member)}</div>
+              <div className="text-secondary text-xs">{member.email}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}>
+            {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
+            {member.role === 'admin' && <ShieldCheck size={14} className="text-secondary" />}
+            {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
+            <span>{getDisplayRole(member.role)}</span>
+          </div>
+        </td>
+        <td>
+          {(() => {
+            const es = member.employmentStatus;
+            const m = EMPLOYMENT_STATUS_META[es];
+            return es
+              ? <span className={`emp-badge ${m?.cls ?? ''}`}>{m?.label ?? es}</span>
+              : <span className="text-secondary text-sm">—</span>;
+          })()}
+        </td>
+        <td className="text-secondary text-sm" style={{ maxWidth: 200 }}>
+          {historyNotes[member.id]
+            ? <span title={historyNotes[member.id]} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {historyNotes[member.id]}
+              </span>
+            : <span className="text-secondary" style={{ fontStyle: 'italic' }}>No note</span>
+          }
+        </td>
+        <td className="text-secondary text-sm">
+          {member.createdAt ? new Date(member.createdAt).toLocaleDateString() : 'N/A'}
+        </td>
+        <td className="text-secondary text-sm">
+          {member.updatedAt ? new Date(member.updatedAt).toLocaleDateString() : 'N/A'}
+        </td>
+        <td className="text-right" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button
+            className="icon-btn-small"
+            onClick={() => navigate(`/staff/${member.id}`)}
+            title="View Profile"
+          >
+            <Eye size={16} />
+          </button>
+          {isAdminUnlocked && (
+            <button
+              className="icon-btn-small text-success"
+              onClick={() => openReactivateModal(member)}
+              title="Reactivate Account"
+            >
+              <ArchiveRestore size={16} />
+            </button>
+          )}
+        </td>
+      </tr>
+    ));
+  };
+
+  // ── Render ────────────────────────────────────────────────────
 
   return (
     <div className="page-container">
@@ -155,15 +464,34 @@ const StaffManagement = () => {
           <h1 className="page-title">Team Management</h1>
           <p className="page-subtitle">Create and manage staff accounts for the admin dashboard</p>
         </div>
-        <button
-          className="btn-primary flex-center gap-2"
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          <UserPlus size={18} /> Create Staff Account
-        </button>
+        {viewMode === 'active' && (
+          <button
+            className="btn-primary flex-center gap-2"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <UserPlus size={18} /> Invite Staff Member
+          </button>
+        )}
       </div>
 
       <div className="card">
+        {/* ── Tab toggle ── */}
+        <div className="archive-toggle-row" style={{ margin: '1rem 1.5rem 0.5rem 1.5rem' }}>
+          <button
+            className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
+            onClick={() => setViewMode('active')}
+          >
+            Active ({activeStaff.length})
+          </button>
+          <button
+            className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
+            onClick={() => setViewMode('archived')}
+          >
+            <Archive size={14} /> Archived ({archivedStaff.length})
+          </button>
+        </div>
+
+        {/* ── Search ── */}
         <div className="card-toolbar">
           <div className="search-box">
             <Search size={18} className="search-icon" />
@@ -177,112 +505,47 @@ const StaffManagement = () => {
           </div>
         </div>
 
+        {/* ── Table ── */}
         <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Added</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStaff.map((member) => (
-                <tr key={member.id}>
-                  <td>
-                    <div className="member-info">
-                      <div
-                        className="avatar small-av"
-                        style={{ backgroundColor: 'var(--color-gold)', color: 'white' }}
-                      >
-                        {(member.name || 'U')[0]}
-                      </div>
-                      <div>
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-secondary text-xs">{member.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div
-                      className={`role-chip ${member.role === 'Owner' ? 'owner-chip' : ''}`}
-                      onClick={() => toggleRole(member)}
-                      style={{ cursor: member.role === 'Owner' ? 'default' : 'pointer' }}
-                      title={member.role === 'Owner' ? 'Role locked' : 'Click to toggle role'}
-                    >
-                      {member.role === 'Owner' && (
-                        <Crown size={14} style={{ color: 'var(--color-gold)' }} />
-                      )}
-                      {member.role === 'Admin' && (
-                        <ShieldCheck size={14} className="text-success" />
-                      )}
-                      {member.role === 'Sales Staff' && (
-                        <Shield size={14} className="text-secondary" />
-                      )}
-                      <span style={{ fontWeight: member.role === 'Owner' ? 700 : 500 }}>
-                        {member.role}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`status-dot ${member.status}`}></span>
-                    <span className="text-capitalize">{member.status}</span>
-                  </td>
-                  <td className="text-secondary text-sm">
-                    {member.createdAt ? new Date(member.createdAt).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="text-right">
-                    {member.role !== 'Owner' && (
-                      <button
-                        className="icon-btn-small text-danger"
-                        onClick={() => handleRemove(member)}
-                        title="Remove Staff Member"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {loading && (
+          {viewMode === 'active' ? (
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan="5" className="text-center py-8">
-                    Loading team...
-                  </td>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th>Employment</th>
+                  <th>Blocked</th>
+                  <th>Added</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              )}
-              {!loading && filteredStaff.length === 0 && (
+              </thead>
+              <tbody>{renderActiveRows()}</tbody>
+            </table>
+          ) : (
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan="5">
-                    <div className="empty-state flex-col flex-center gap-3 p-8">
-                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                        <UserMinus size={48} opacity={0.5} />
-                      </div>
-                      <h3 className="text-lg font-medium">No staff members found</h3>
-                      <p className="text-secondary text-center max-w-sm">
-                        There are no staff members matching your current search.
-                      </p>
-                      {searchTerm && (
-                        <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
-                          Clear Search
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th>Status at Archive</th>
+                  <th>Archive Reason</th>
+                  <th>Added</th>
+                  <th>Archived</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>{renderArchivedRows()}</tbody>
+            </table>
+          )}
         </div>
       </div>
 
+      {/* ── Create Staff Modal ── */}
       {isCreateModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: 400 }}>
             <div className="modal-header">
-              <h2>Create Staff Account</h2>
+              <h2>Invite Staff Member</h2>
               <button className="close-btn" onClick={() => setIsCreateModalOpen(false)}>
                 &times;
               </button>
@@ -309,38 +572,79 @@ const StaffManagement = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="label">Password</label>
-                <input
-                  type="password"
-                  className="input-field"
-                  value={createForm.password}
-                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                  required
-                  minLength={6}
-                  placeholder="Min. 6 characters"
-                />
-              </div>
-              <div className="form-group">
                 <label className="label">Access Role</label>
                 <select
                   className="input-field"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                 >
-                  <option value="Sales Staff">Sales Staff</option>
-                  <option value="Admin">Admin (Full Access)</option>
+                  <option value="staff">Sales Staff</option>
+                  <option value="admin">Admin (Full Access)</option>
                 </select>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
+                An activation email will be sent. The staff member sets their own password when they accept the invite.
+              </p>
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setIsCreateModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">Send Invite</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reactivate Modal ── */}
+      {reactivateMember && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h2>Reactivate Staff Account</h2>
+              <button
+                className="close-btn"
+                onClick={() => setReactivateMember(null)}
+                disabled={reactivating}
+              >
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleReactivate} className="modal-body">
+              <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                You are reactivating{' '}
+                <strong style={{ color: 'var(--charcoal)' }}>{getDisplayName(reactivateMember)}</strong>.
+                Their employment status will be set to <strong>Active</strong> and their account will
+                become visible on the Active tab again.
+              </p>
+              <div className="form-group">
+                <label className="label">
+                  Reactivation Note <span style={{ color: 'var(--color-danger)' }}>*</span>
+                </label>
+                <textarea
+                  className="input-field"
+                  rows={3}
+                  placeholder="e.g. Rehired for seasonal position, starting 2026-08-01"
+                  value={reactivateNote}
+                  onChange={(e) => setReactivateNote(e.target.value)}
+                  required
+                  style={{ resize: 'vertical' }}
+                />
+                <p className="text-secondary text-xs" style={{ marginTop: '0.3rem' }}>
+                  This note will be stored in the status history audit log.
+                </p>
               </div>
               <div className="modal-footer">
                 <button
                   type="button"
                   className="btn-outline"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => setReactivateMember(null)}
+                  disabled={reactivating}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Create Account
+                <button type="submit" className="btn-primary" disabled={reactivating}>
+                  {reactivating ? 'Reactivating…' : 'Reactivate Account'}
                 </button>
               </div>
             </form>

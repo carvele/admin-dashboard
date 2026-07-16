@@ -7,7 +7,7 @@
 
 const PERMISSIONS = {
   manage_staff: ['Owner'],
-  delete_catalog: ['Owner', 'Admin'],
+  archive_catalog: ['Owner', 'Admin'],
   create_catalog: ['Owner', 'Admin'],
   edit_catalog: ['Owner', 'Admin'],
   assign_reservation: ['Owner', 'Admin', 'Sales Staff'],

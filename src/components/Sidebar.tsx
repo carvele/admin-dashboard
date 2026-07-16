@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -15,11 +15,14 @@ import {
   Settings,
   X,
   Shield,
+  AlertTriangle,
 } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
 // @ts-ignore
-import { subscribeToCollection } from '../firebase/firestore';
+// @ts-ignore
+import { subscribeToCollection } from '../lib/supabaseService';
+import { getStockHealth } from '../utils/stockHealth';
 import './Sidebar.css';
 
 const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
@@ -33,10 +36,46 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { user, isAdminUnlocked } = useAuth();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [stockAlert, setStockAlert] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToCollection('inventory', (data: any[]) => {
+      let hasNoStockOrCritical = false;
+      let hasVeryLow = false;
+      
+      for (const item of data) {
+        if (item.deleted === true) continue; // Ignore archived items
+        
+        const total = item.total || 0;
+        const available = item.available || 0;
+        const reserved = item.reserved || 0;
+
+        const health = getStockHealth(available, total, reserved);
+        
+        if (health.tier === 'no-stock' || health.tier === 'critical') {
+          hasNoStockOrCritical = true;
+          break; // Red alert takes priority
+        }
+        
+        if (health.tier === 'very-low') {
+          hasVeryLow = true;
+        }
+      }
+
+      if (hasNoStockOrCritical) {
+        setStockAlert('danger');
+      } else if (hasVeryLow) {
+        setStockAlert('warning');
+      } else {
+        setStockAlert(null);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeToCollection('conversations', (data: any[]) => {
-      const count = data.reduce((sum: number, conv: any) => sum + (conv.unread || 0), 0);
+      const count = data.reduce((sum: number, conv: any) => sum + (conv.unreadCount || conv.unread || 0), 0);
       setUnreadMessages(count);
     });
     return () => unsub();
@@ -55,7 +94,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const allLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', admin: false },
     { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: false },
-    { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false },
+    { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false, alertType: stockAlert },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
     { to: '/feedbacks', icon: MessageSquarePlus, label: 'Feedback & Suggestions', admin: false },
@@ -110,6 +149,11 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                     <Icon size={20} />
                     <span>{link.label}</span>
                     {link.badge && <span className="badge-unread">{link.badge}</span>}
+                    {(link as any).alertType && (
+                      <span className={`sidebar-alert-icon ${(link as any).alertType}`}>
+                        <AlertTriangle size={16} strokeWidth={2.5} />
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               );
@@ -118,12 +162,17 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="profile-badge">
+          <Link
+            to={`/staff/${(user as any)?.uid}`}
+            className="profile-badge"
+            title="View my profile"
+            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          >
             <div className="profile-avatar">
-              <span>{user?.name?.[0]?.toUpperCase() || 'S'}</span>
+              <span>{(user as any)?.name?.[0]?.toUpperCase() || 'S'}</span>
             </div>
             <div className="profile-info">
-              <span className="profile-name">{user?.name || 'Staff Member'}</span>
+              <span className="profile-name">{(user as any)?.name || 'Staff Member'}</span>
               <span
                 className="profile-role"
                 style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
@@ -131,7 +180,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                 {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
               </span>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
     </>

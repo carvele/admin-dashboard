@@ -22,7 +22,6 @@ import {
   sendNotification,
   getPaginatedCustomers,
 } from '../../services/customerService';
-import { orderBy } from 'firebase/firestore';
 import { toast } from 'sonner';
 import {
   getAvatarColor,

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../firebase/config';
+import { supabase } from '../../lib/supabaseClient';
 import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import './ForgotPassword.css';
 
@@ -23,9 +22,10 @@ const ForgotPassword = () => {
     setErrorMsg('');
 
     try {
-      await sendPasswordResetEmail(auth, email.trim(), {
-        url: `${window.location.origin}/login`,
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login`,
       });
+      if (error) throw error;
       setStatus('success');
 
       // Auto redirect back to login after 5 seconds
@@ -35,12 +35,10 @@ const ForgotPassword = () => {
     } catch (err) {
       console.error('Password reset error:', err);
       setStatus('error');
-
-      // Map common Firebase auth errors to user-friendly messages
       let message = 'Failed to send reset email. Please try again.';
-      if (err.code === 'auth/user-not-found') {
+      if (err.message?.includes('not found') || err.message?.includes('User not found')) {
         message = 'No account found with this email address.';
-      } else if (err.code === 'auth/invalid-email') {
+      } else if (err.message?.includes('invalid')) {
         message = 'Please enter a valid email address.';
       }
       setErrorMsg(message);

@@ -66,3 +66,58 @@
   border-color: var(--border-color);
   box-shadow: var(--shadow-sm);
 }
+
+/* ── Employment status badges (Staff Management table) ── */
+.emp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 0.2rem 0.65rem;
+  white-space: nowrap;
+}
+.emp-active     { background: #d4f4dd; color: #1a7d3a; }
+.emp-leave      { background: #fff8d6; color: #8a6d00; }
+.emp-resigned   { background: #f0f0f0; color: #666;    }
+.emp-terminated { background: #fde8e8; color: #c0392b; }
+.emp-blocked    { background: #fde8e8; color: #c0392b; }
+.emp-clear      { background: #d4f4dd; color: #1a7d3a; }
+
+/* ── Archive / Active tab toggle (mirrors Inventory.css) ── */
+.archive-toggle-row {
+  display: flex;
+  background-color: var(--cream);
+  padding: 0.25rem;
+  border-radius: 8px;
+  width: fit-content;
+  border: 1px solid var(--border-color);
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.archive-toggle-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.archive-toggle-btn:hover {
+  color: var(--charcoal);
+}
+
+.archive-toggle-btn.active {
+  background-color: var(--white);
+  color: var(--charcoal);
+  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.08);
+}

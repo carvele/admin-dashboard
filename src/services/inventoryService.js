@@ -106,7 +106,7 @@ export const getProductWithStock = async (productId) => {
 
   // 3. Compute stock values
   const currentStock = calculateCurrentStock(movements);
-  const stockBaseline = product.stockBaseline ?? 10;
+  const stockBaseline = product.stockbaseline ?? 10;
   const stockPercentage = calculateStockPercentage(currentStock, stockBaseline);
   const stockStatus = calculateStockStatus(currentStock, stockBaseline);
 
@@ -135,7 +135,7 @@ export const getProductsWithStock = async (includeDeleted = false) => {
       try {
         const movements = await getStockMovementHistory(p.id);
         const currentStock = calculateCurrentStock(movements);
-        const stockBaseline = p.stockBaseline ?? 10;
+        const stockBaseline = p.stockbaseline ?? 10;
         const stockPercentage = calculateStockPercentage(currentStock, stockBaseline);
         const stockStatus = calculateStockStatus(currentStock, stockBaseline);
 
@@ -193,6 +193,31 @@ export const addColor = async (colorName) => {
  * @returns {Promise<void>}
  */
 export const deleteColor = async (colorId) => {
+  // 1. Get the color name first
+  const { data: colorData, error: fetchError } = await supabase
+    .from('color_list')
+    .select('name')
+    .eq('id', colorId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!colorData) return; // Already deleted or doesn't exist
+
+  // 2. Check if any product references this color
+  const { data: referencingProducts, error: countError } = await supabase
+    .from('products')
+    .select('id, name')
+    .eq('base_color', colorData.name)
+    .eq('deleted', false); // Only active products
+
+  if (countError) throw countError;
+
+  if (referencingProducts && referencingProducts.length > 0) {
+    const productNames = referencingProducts.map(p => `"${p.name}"`).join(', ');
+    throw new Error(`Cannot delete color "${colorData.name}" because it is still referenced by product(s): ${productNames}.`);
+  }
+
+  // 3. Perform delete
   const { error } = await supabase
     .from('color_list')
     .delete()
@@ -235,6 +260,31 @@ export const addPattern = async (patternName) => {
  * @returns {Promise<void>}
  */
 export const deletePattern = async (patternId) => {
+  // 1. Get the pattern name first
+  const { data: patternData, error: fetchError } = await supabase
+    .from('pattern_list')
+    .select('name')
+    .eq('id', patternId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!patternData) return; // Already deleted or doesn't exist
+
+  // 2. Check if any product references this pattern
+  const { data: referencingProducts, error: countError } = await supabase
+    .from('products')
+    .select('id, name')
+    .eq('pattern', patternData.name)
+    .eq('deleted', false); // Only active products
+
+  if (countError) throw countError;
+
+  if (referencingProducts && referencingProducts.length > 0) {
+    const productNames = referencingProducts.map(p => `"${p.name}"`).join(', ');
+    throw new Error(`Cannot delete pattern "${patternData.name}" because it is still referenced by product(s): ${productNames}.`);
+  }
+
+  // 3. Perform delete
   const { error } = await supabase
     .from('pattern_list')
     .delete()
@@ -254,7 +304,13 @@ export const deletePattern = async (patternId) => {
 export const updatePattern=async(id,name)=>{const{data,error}=await supabase.from('pattern_list').update({name}).eq('id',id).select().single();if(error)throw error;return toCamel(data)};
 
 export const updateStockBaseline = async (productId, newBaseline) => {
-  return updateDocument('products', productId, { stockBaseline: newBaseline });
+  // Use raw column name 'stockbaseline' (Postgres lowercased the unquoted identifier).
+  // Cannot go through updateDocument/toSnake — that would produce 'stock_baseline' (wrong).
+  const { error } = await supabase
+    .from('products')
+    .update({ stockbaseline: newBaseline, updated_at: new Date().toISOString() })
+    .eq('id', productId);
+  if (error) throw error;
 };
 
 /**

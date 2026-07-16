@@ -13,12 +13,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  subscribeToCollection,
-  updateDocument,
-  addDocument,
-  deleteDocument,
-} from '../../firebase/firestore';
-import { routeAndUploadFile } from '../../firebase/storage';
+  subscribeToProducts,
+  updateProduct,
+} from '../../services/productService';
+import {
+  subscribeToPoseGuides,
+  createPoseGuide,
+  deletePoseGuide,
+  subscribeToARAssets,
+  createARAsset,
+} from '../../services/wardrobeService';
+import { routeAndUploadFile } from '../../lib/storage';
 import './ARAssets.css';
 
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
@@ -53,14 +58,14 @@ const ARAssets = () => {
   const [poseForm, setPoseForm] = useState({ name: '', category: 'Calibration' });
 
   useEffect(() => {
-    const unsub = subscribeToCollection('products', (data) => {
+    const unsub = subscribeToProducts((data) => {
       const arTagged = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
       setAssets(arTagged.filter(p => p.model3DURL));
       setPendingProducts(arTagged.filter(p => !p.model3DURL));
       setLoading(false);
     });
-    const unsubPoses = subscribeToCollection('poseGuides', setPoses);
-    const unsubLibrary = subscribeToCollection('ar_assets', setGlobalLibrary);
+    const unsubPoses = subscribeToPoseGuides(setPoses);
+    const unsubLibrary = subscribeToARAssets(setGlobalLibrary);
     return () => {
       unsub();
       unsubPoses();
@@ -71,7 +76,7 @@ const ARAssets = () => {
   const toggleStatus = async (asset) => {
     const newStatus = asset.arStatus === 'Disabled' ? 'Active' : 'Disabled';
     try {
-      await updateDocument('products', asset.docId, { arStatus: newStatus });
+      await updateProduct(asset.docId, { arStatus: newStatus });
       toast.success(`AR status updated to ${newStatus} for ${asset.name}`);
     } catch (e) {
       toast.error('Failed to update AR status');
@@ -92,7 +97,7 @@ const ARAssets = () => {
   const saveAlignmentPoints = async () => {
     if (!configAsset) return;
     try {
-      await updateDocument('products', configAsset.docId, {
+      await updateProduct(configAsset.docId, {
         arAlignPoints: alignPoints,
         arAlignments: 'Verified',
       });
@@ -110,14 +115,13 @@ const ARAssets = () => {
     }
     setIsUploading(true);
     try {
-      // Use Firebase Storage for consistency with ProductForm
-      console.log('[Storage] Uploading asset to Firebase...');
+      console.log('[Storage] Uploading asset to Storage...');
       const downloadURL = await routeAndUploadFile(selectedFile, selectedFile.name.endsWith('.glb') ? 'catalog-assets/models' : 'catalog-assets/masks');
       
       const assetType = selectedFile.name.endsWith('.glb') ? '3D Model' : 'Segmentation Mask';
       
       // 1. Register in Global Library
-      await addDocument('ar_assets', {
+      await createARAsset({
         name: selectedFile.name,
         url: downloadURL,
         type: assetType,
@@ -131,7 +135,7 @@ const ARAssets = () => {
           ? { model3DURL: downloadURL, arStatus: 'Active' } 
           : { maskURL: downloadURL };
         
-        await updateDocument('products', window._targetProduct.docId, updateData);
+        await updateProduct(window._targetProduct.docId, updateData);
         toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
         window._targetProduct = null;
       } else {
@@ -153,7 +157,7 @@ const ARAssets = () => {
       return;
     }
     try {
-      await addDocument('poseGuides', {
+      await createPoseGuide({
         id: `P-${String(poses.length + 1).padStart(3, '0')}`,
         name: poseForm.name,
         category: poseForm.category,
@@ -169,7 +173,7 @@ const ARAssets = () => {
   const handleDeletePose = async (pose) => {
     if (!window.confirm(`Delete pose "${pose.name}"?`)) return;
     try {
-      await deleteDocument('poseGuides', pose.docId);
+      await deletePoseGuide(pose.docId);
       toast.success('Pose deleted');
     } catch (e) {
       toast.error('Failed to delete pose');
@@ -413,7 +417,7 @@ const ARAssets = () => {
                               const updateData = item.type === '3D Model' 
                                 ? { model3DURL: item.url, arStatus: 'Active' } 
                                 : { maskURL: item.url };
-                              await updateDocument('products', window._targetProduct.docId, updateData);
+                              await updateProduct(window._targetProduct.docId, updateData);
                               toast.success(`Linked ${item.name} to ${window._targetProduct.name}`);
                               window._targetProduct = null;
                               setActiveTab('assets');

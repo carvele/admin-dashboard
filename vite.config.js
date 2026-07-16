@@ -23,12 +23,12 @@ export default defineConfig({
   },
   server: {
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gstatic.com https://www.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://api.cloudinary.com; img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gstatic.com https://www.gstatic.com; connect-src 'self' https://wufcmtndotfvxvvxkamv.supabase.co wss://wufcmtndotfvxvvxkamv.supabase.co https://api.cloudinary.com; img-src 'self' data: blob: https://res.cloudinary.com https://wufcmtndotfvxvvxkamv.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com",
     },
   },
   preview: {
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gstatic.com https://www.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://api.cloudinary.com; img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gstatic.com https://www.gstatic.com; connect-src 'self' https://wufcmtndotfvxvvxkamv.supabase.co wss://wufcmtndotfvxvvxkamv.supabase.co https://api.cloudinary.com; img-src 'self' data: blob: https://res.cloudinary.com https://wufcmtndotfvxvvxkamv.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com",
     },
   },
 })

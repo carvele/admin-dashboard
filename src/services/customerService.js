@@ -1,165 +1,185 @@
+/**
+ * customerService.js  (Supabase)
+ * Replaces the Firebase-based customerService.
+ *
+ * Key mapping:
+ *  Firestore `users` collection → Supabase `public.profiles` (role = 'customer')
+ *  Firestore `conversations`    → Supabase `public.conversations`
+ *  Firestore `messages`         → Supabase `public.messages`
+ */
+
+import { supabase } from '../lib/supabaseClient';
 import {
   getCollection,
   getDocument,
   addDocument,
   updateDocument,
-  deleteDocument,
   softDeleteDocument,
   subscribeToCollection,
   getPaginatedCollection,
-  query,
-  where,
-  getDocs,
-  collection,
-  db,
-  serverTimestamp,
-} from '../firebase/firestore';
+  normaliseRow,
+  toCamel,
+} from '../lib/supabaseService';
 
-/**
- * @typedef {Object} Customer
- * @property {string} docId
- * @property {string} firstName
- * @property {string} lastName
- * @property {string} email
- * @property {string} status - 'Active', 'Inactive', 'VIP'
- * @property {string} phone
- * @property {number} totalSpent
- * @property {number} wardrobeItems
- * @property {number} reservations
- * @property {string} lastOnline - ISO Date format
- * @property {Date} createdAt - Timestamp
-* @property {Object} measurements - AI Scanning Result
- * @property {number} measurements.bust
- * @property {number} measurements.waist
- * @property {number} measurements.hips
- * @property {number} measurements.neckBase
- * @property {number} measurements.shoulderWidth
- * @property {number} measurements.chest
- * @property {number} measurements.sleeveLength
- * @property {number} measurements.height
- * @property {number} measurements.inseam
- * @property {number} measurements.outseam
- * @property {number} measurements.armHole
- */
+// ── Customers (profiles with role = 'customer') ─────────────
 
-/**
- * @typedef {Object} Reservation
- * @property {string} docId
- * @property {string} id - Display string 'RES-001'
- * @property {string} customerName - Canonical customer display name
- * @property {string} customerId - Reference identifier
- * @property {string} productName - Canonical product name (use instead of legacy `outfit`)
- * @property {string} productId - Reference to the product document
- * @property {string} size - Selected sizing
- * @property {string} date - ISO format string
- * @property {string} status - 'Pending' | 'To Pay' | 'To Pickup' | 'Confirmed' | 'Fitting' | 'Completed' | 'Cancelled'
- * @property {string} staffId - Assigned staff member ID
- * @property {boolean} countdown - Is approaching urgency
- * @property {boolean} deposit - Paid deposit flag
- * @property {string} paymentStatus - GCash / Cash payment tracking
- * @property {string} paymentType - 'GCash' | 'Cash'
- * @property {string} receiptUrl - Firebase Storage URL for payment proof
- */
-
-/**
- * @typedef {Object} WardrobeItem
- * @property {string} docId
- * @property {string} customer_id
- * @property {string} productDocId
- * @property {string} status - E.g. Default, Checked-Out, Archived
- */
-
-// --- Customers ---
-
+/** Subscribe to all customer profiles in real-time. */
 export const subscribeToCustomers = (callback) => {
-  return subscribeToCollection('users', callback);
+  return subscribeToCollection('profiles', (rows) => {
+    callback(rows.filter((r) => r.role === 'customer'));
+  });
 };
 
-export const getCustomers = (maxResults = 0) => {
-  return getCollection('users', false, maxResults);
+/** Fetch all customer profiles (one-time). */
+export const getCustomers = async (maxResults = 0) => {
+  let q = supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'customer')
+    .eq('deleted', false);
+  if (maxResults > 0) q = q.limit(maxResults);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ ...toCamel(r), docId: r.id }));
 };
-export const getCustomerById = (id) => getDocument('users', id);
 
-export const getPaginatedCustomers = (pageSize, lastDoc = null, constraints = [], includeDeleted = false) => {
-  return getPaginatedCollection('users', pageSize, lastDoc, constraints, includeDeleted);
+export const getCustomerById = async (id) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { ...toCamel(data), docId: data.id } : null;
+};
+
+export const getPaginatedCustomers = async (pageSize, page = 0, filters = {}, includeDeleted = false) => {
+  let q = supabase
+    .from('profiles')
+    .select('*', { count: 'exact' })
+    .eq('role', 'customer');
+
+  if (!includeDeleted) q = q.eq('deleted', false);
+
+  for (const [col, val] of Object.entries(filters)) {
+    q = q.eq(col, val);
+  }
+
+  const from = page * pageSize;
+  q = q.range(from, from + pageSize - 1);
+
+  const { data, count, error } = await q;
+  if (error) throw error;
+  return {
+    data: (data ?? []).map((r) => ({ ...toCamel(r), docId: r.id })),
+    hasMore: (from + (data?.length ?? 0)) < (count ?? 0),
+    nextPage: page + 1,
+  };
 };
 
 export const createCustomer = (customerData) => {
-  return addDocument('users', { ...customerData, role: 'customer' });
+  return addDocument('profiles', { ...customerData, role: 'customer' });
 };
 
 export const updateCustomer = (docId, updates) => {
-  return updateDocument('users', docId, updates);
+  return updateDocument('profiles', docId, updates);
 };
 
+/** Soft-delete a customer profile. */
 export const deleteCustomer = (docId) => {
-  return softDeleteDocument('users', docId);
+  return softDeleteDocument('profiles', docId);
 };
 
-// --- Reservations ---
+// ── Reservations (re-exported from reservationService) ───────
 
 export const subscribeToReservations = (callback) => {
-  return subscribeToCollection('reservations', callback);
+  return subscribeToCollection('reservations', callback, {}, true);
 };
 
-export const getReservations = () => getCollection('reservations');
+export const getReservations = async () => {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ ...toCamel(r), docId: r.id }));
+};
 
 export const createReservation = (data) => addDocument('reservations', data);
-
 export const updateReservation = (docId, updates) => updateDocument('reservations', docId, updates);
-
 export const deleteReservation = (docId) => softDeleteDocument('reservations', docId);
 
-// --- Wardrobe ---
+// ── Wardrobe (placeholder — feature reads from wardrobe_items) ──
 
 export const getCustomerWardrobe = async (customerId) => {
-  return []; // Placeholder for Wardrobe
+  if (!customerId) return [];
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .select('*')
+    .eq('user_id', customerId)
+    .eq('deleted', false);
+  if (error) return [];
+  return (data ?? []).map((r) => ({ ...toCamel(r), docId: r.id }));
 };
 
-// --- Notifications / Messaging ---
+// ── Notifications / Messaging ─────────────────────────────────
 
-export const sendNotification = async (customerId, customerName, messageText) => {
-  // 1. Find or Create Conversation
-  const q = query(collection(db, 'conversations'), where('customerId', '==', customerId));
-  const snap = await getDocs(q);
-  
+/**
+ * Find or create a conversation for the given customerId, then append a staff message.
+ * Maps to conversations (customer_id, last_message) + messages (conversation_id, sender_id, text).
+ */
+export const sendNotification = async (customerId, customerName, messageText, staffUser = null) => {
+  const now = new Date().toISOString();
+
+  // 1. Find existing conversation
+  const { data: existing, error: convFetchErr } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('customer_id', customerId)
+    .maybeSingle();
+  if (convFetchErr) throw convFetchErr;
+
   let conversationId;
-  let conversationDocId;
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  if (snap.empty) {
-    conversationId = `conv_${Date.now()}`;
-    const convData = {
-      id: conversationId,
-      customerId,
-      customerName,
-      lastMessage: messageText,
-      time: timeStr,
-      unread: 0,
-      updatedAt: serverTimestamp(),
-    };
-    conversationDocId = await addDocument('conversations', convData);
+  if (!existing) {
+    // Create new conversation
+    const { data: newConv, error: convInsertErr } = await supabase
+      .from('conversations')
+      .insert({
+        customer_id: customerId,
+        last_message: messageText,
+        last_message_time: now,
+        unread_count: 1,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+    if (convInsertErr) throw convInsertErr;
+    conversationId = newConv.id;
   } else {
-    const convDoc = snap.docs[0];
-    conversationId = convDoc.data().id;
-    conversationDocId = convDoc.id;
-    await updateDocument('conversations', conversationDocId, {
-      lastMessage: messageText,
-      time: timeStr,
-      updatedAt: serverTimestamp(),
-    });
+    conversationId = existing.id;
+    await supabase.from('conversations').update({
+      last_message: messageText,
+      last_message_time: now,
+      unread_count: supabase.rpc ? undefined : 0, // increment handled server-side ideally
+      updated_at: now,
+    }).eq('id', conversationId);
   }
 
-  // 2. Send Message
-  const messageData = {
-    conversationId,
-    sender: 'staff',
-    text: messageText,
-    time: timeStr,
-    createdAt: serverTimestamp(),
-    id: Date.now(),
-  };
+  // 2. Insert message
+  const { data: msg, error: msgErr } = await supabase
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: staffUser?.uid ?? null,
+      sender_name: staffUser?.name ?? 'Staff',
+      text: messageText,
+      created_at: now,
+    })
+    .select('id')
+    .single();
+  if (msgErr) throw msgErr;
 
-  return await addDocument('messages', messageData);
+  return msg.id;
 };

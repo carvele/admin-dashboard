@@ -8,7 +8,7 @@ import {
   formatRelativeTime,
   sanitizeForDisplay,
 } from '../utils/helpers';
-import { subscribeToCollection, updateDocument, orderBy, limit } from '../firebase/firestore';
+import { subscribeToCollection, updateDocument } from '../lib/supabaseService';
 import './TopNav.css';
 import { User } from '../types';
 
@@ -44,14 +44,13 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
       // Instead of global subscriptions, we'd ideally search via a callable function or specific indices.
       // Since this is a small-to-md shop, we search once when typing pauses.
       try {
-        const { getCollection } = await import('../firebase/firestore');
+        const { getCollection } = await import('../lib/supabaseService');
         const q = sanitizeForDisplay(searchQuery).toLowerCase();
         const results: any[] = [];
 
-        // Check if we already have data from active page-level listeners (optional optimization)
-        // Here we fetch max 50 documents to reduce reads
-        const resSearch = await getCollection('reservations', false, 50); 
-        const custSearch = await getCollection('users', false, 50);
+        // Fetch limited sets for local search
+        const resSearch = await getCollection('reservations', true, 50);
+        const custSearch = await getCollection('profiles', false, 50);
         const prodSearch = await getCollection('products', false, 50);
 
         resSearch.forEach((r: any) => {
@@ -67,8 +66,9 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
         });
 
         custSearch.forEach((c: any) => {
-          if ((c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)) {
-            results.push({ type: 'Customer', label: c.name, sub: c.email, path: '/customers' });
+          const cName = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || '';
+          if (cName.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)) {
+            results.push({ type: 'Customer', label: cName, sub: c.email, path: '/customers' });
           }
         });
 
@@ -120,20 +120,15 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     const unsub = subscribeToCollection(
       'notifications',
       (data: any[]) => {
+        // Sort by ISO createdAt string descending
         const sorted = [...data].sort((a, b) => {
-          // Prefer Firestore Timestamp; fall back to Android epoch-ms `timestamp`
-          const aTime = a.createdAt?.seconds
-            ? a.createdAt.seconds
-            : (a.timestamp || 0) / 1000;
-          const bTime = b.createdAt?.seconds
-            ? b.createdAt.seconds
-            : (b.timestamp || 0) / 1000;
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : (a.timestamp || 0);
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : (b.timestamp || 0);
           return bTime - aTime;
-        });
+        }).slice(0, 20);
         setNotifications(sorted);
         setUnreadCount(sorted.filter((n) => !n.isRead).length);
       },
-      [orderBy('createdAt', 'desc'), limit(20)],
     );
     return () => unsub();
   }, []);
@@ -282,10 +277,10 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                       <div className="noti-content">
                         <p>{n.title ? <strong>{n.title}:</strong> : null} {n.message || 'New notification'}</p>
                         <span>
-                          {n.createdAt?.seconds
-                            ? formatRelativeTime(n.createdAt.seconds * 1000)
+                          {n.createdAt
+                            ? formatRelativeTime(new Date(n.createdAt).getTime())
                             : n.timestamp
-                            ? formatRelativeTime(n.timestamp)  // Android epoch-ms fallback
+                            ? formatRelativeTime(n.timestamp)
                             : 'Just now'}
                         </span>
                       </div>

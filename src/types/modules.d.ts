@@ -10,15 +10,20 @@ declare module '*/utils/helpers' {
   export const sanitizeForDisplay: (str: string) => string;
 }
 
-declare module '*/firebase/firestore' {
+declare module '*/lib/supabaseService' {
   export const subscribeToCollection: any;
+  export const subscribeToDocument: any;
   export const updateDocument: any;
-  export const orderBy: any;
-  export const limit: any;
-  export const getCollection: (collectionName: string, includeDeleted?: boolean, maxResults?: number) => Promise<any[]>;
+  export const getCollection: (tableName: string, includeDeleted?: boolean, maxResults?: number) => Promise<any[]>;
   export const getPaginatedCollection: any;
   export const getDocument: any;
   export const addDocument: any;
   export const deleteDocument: any;
   export const softDeleteDocument: any;
+  export const upsertDocument: any;
+  export const logAction: any;
+  export const toCamel: (obj: any) => any;
+  export const toSnake: (obj: any) => any;
+  export const normaliseRow: (row: any) => any;
+  export const supabase: any;
 }

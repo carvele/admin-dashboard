@@ -20,7 +20,7 @@ import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X, 
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { subscribeToCollection, orderBy, limit } from '../../firebase/firestore';
+import { subscribeToCollection } from '../../lib/supabaseService';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -89,18 +89,14 @@ const Analytics = () => {
   };
 
   useEffect(() => {
-    const reservationConstraint = [limit(1000)];
-    const userConstraint = [limit(1000)];
-    const productConstraint = [orderBy('createdAt', 'desc'), limit(500)];
-
-    const unsubR = subscribeToCollection('reservations', setReservations, reservationConstraint);
-    const unsubC = subscribeToCollection('users', (data) => {
+    const unsubR = subscribeToCollection('reservations', setReservations, {}, true);
+    const unsubC = subscribeToCollection('profiles', (data) => {
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
-    }, userConstraint);
-    const unsubCat = subscribeToCollection('products', setCatalog, productConstraint);
-    const unsubAR = subscribeToCollection('arLogs', setArLogs, [orderBy('timestamp', 'desc'), limit(500)]);
-    const unsubFeed = subscribeToCollection('feedback', setFeedback, [limit(200)]);
-    
+    });
+    const unsubCat = subscribeToCollection('products', setCatalog, {}, true);
+    const unsubAR = subscribeToCollection('ar_sessions', setArLogs);
+    const unsubFeed = subscribeToCollection('feedback', setFeedback, {}, true);
+
     return () => {
       unsubR();
       unsubC();
@@ -127,6 +123,7 @@ const Analytics = () => {
   const parseResDate = (item, overrideField = null) => {
     const raw = overrideField ? item[overrideField] : (item.reservationDate || item.date || item.timestamp || item.createdAt || item.joinedAt);
     if (!raw) return null;
+    // Supabase returns ISO strings; legacy Firestore may have .toDate() or .seconds
     if (raw?.toDate) return raw.toDate();
     if (raw?.seconds) return new Date(raw.seconds * 1000);
     return new Date(raw);
@@ -215,9 +212,10 @@ const Analytics = () => {
     ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
     : 0;
 
-  // Inventory Health
-  const inStock = catalog.filter(p => (p.stock || 0) > 0).length;
-  const outOfStock = catalog.filter(p => (p.stock || 0) <= 0).length;
+  // Inventory Health - Active items only
+  const activeCatalog = catalog.filter(p => p.deleted !== true);
+  const inStock = activeCatalog.filter(p => (p.stock || 0) > 0).length;
+  const outOfStock = activeCatalog.filter(p => (p.stock || 0) <= 0).length;
 
   // Build dynamic trends from actual reservation data
   const buildTrends = () => {
@@ -542,11 +540,11 @@ const Analytics = () => {
               </div>
               <div className="demo-bar-group">
                  <div className="demo-bar">
-                   <div className="demo-fill" style={{ width: `${(inStock / catalog.length) * 100}%`, backgroundColor: '#059669' }}></div>
+                   <div className="demo-fill" style={{ width: `${(inStock / (activeCatalog.length || 1)) * 100}%`, backgroundColor: '#059669' }}></div>
                  </div>
               </div>
               <p className="text-xs text-secondary text-center">
-                Total Catalog size: <span className="text-charcoal font-bold">{catalog.length} items</span>
+                Total Catalog size: <span className="text-charcoal font-bold">{activeCatalog.length} items</span>
               </p>
            </div>
         </div>

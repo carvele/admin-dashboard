@@ -6,12 +6,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  subscribeToCollection,
-  addDocument,
-  deleteDocument,
-  updateDocument,
-} from '../../firebase/firestore';
-import { uploadToCloudinary } from '../../firebase/storage';
+  subscribeToSuggestedOutfits,
+  createSuggestedOutfit,
+  updateSuggestedOutfit,
+  deleteSuggestedOutfit,
+} from '../../services/wardrobeService';
+import { subscribeToProducts } from '../../services/productService';
+import { uploadToCloudinary } from '../../lib/storage';
 import { sanitizeText } from '../../utils/validation';
 import './OutfitSuggestions.css';
 
@@ -55,8 +56,8 @@ const OutfitSuggestions = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   useEffect(() => {
-    const unsubOutfits = subscribeToCollection('suggestedOutfits', (data) => setOutfits(data));
-    const unsubCatalog = subscribeToCollection('products', (data) => setCatalog(data));
+    const unsubOutfits = subscribeToSuggestedOutfits((data) => setOutfits(data));
+    const unsubCatalog = subscribeToProducts((data) => setCatalog(data));
     return () => { unsubOutfits(); unsubCatalog(); };
   }, []);
 
@@ -178,10 +179,10 @@ const OutfitSuggestions = () => {
     try {
       const payload = await buildPayload();
       if (editingOutfit) {
-        await updateDocument('suggestedOutfits', editingOutfit.docId, payload);
+        await updateSuggestedOutfit(editingOutfit.docId, payload);
         toast.success('Outfit updated!');
       } else {
-        await addDocument('suggestedOutfits', payload);
+        await createSuggestedOutfit(payload);
         toast.success('Outfit created!');
       }
       closeModal();
@@ -193,7 +194,7 @@ const OutfitSuggestions = () => {
 
   const handleDelete = async (docId) => {
     try {
-      await deleteDocument('suggestedOutfits', docId);
+      await deleteSuggestedOutfit(docId);
       toast.success('Outfit deleted');
       setDeleteConfirmId(null);
     } catch {
@@ -204,7 +205,7 @@ const OutfitSuggestions = () => {
   const toggleOutfitActive = async (outfit) => {
     const newActive = !(outfit.isAvailable !== false);
     try {
-      await updateDocument('suggestedOutfits', outfit.docId, { isAvailable: newActive });
+      await updateSuggestedOutfit(outfit.docId, { isAvailable: newActive });
       toast.success(newActive ? 'Outfit activated' : 'Outfit deactivated');
     } catch {
       toast.error('Failed to update outfit status');

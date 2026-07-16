@@ -74,7 +74,7 @@ export const getCollection = async (table, includeDeleted = false, maxResults = 
   if (!includeDeleted) {
     // Only filter deleted if the table actually has a deleted column
     const DELETED_TABLES = [
-      'products', 'categories', 'profiles', 'inventory',
+      'products', 'profiles', 'inventory',
       'wardrobe_items', 'saved_outfits',
     ];
     if (DELETED_TABLES.includes(table)) {
@@ -186,7 +186,7 @@ export const getPaginatedCollection = async (
   let q = supabase.from(table).select('*', { count: 'exact' });
 
   if (!includeDeleted) {
-    const DELETED_TABLES = ['products', 'categories', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
+    const DELETED_TABLES = ['products', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
     if (DELETED_TABLES.includes(table)) q = q.eq('deleted', false);
   }
 
@@ -257,7 +257,7 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
   const doFetch = async () => {
     let q = supabase.from(table).select('*');
     if (!includeDeleted) {
-      const DELETED_TABLES = ['products', 'categories', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
+      const DELETED_TABLES = ['products', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
       if (DELETED_TABLES.includes(table)) q = q.eq('deleted', false);
     }
     for (const [col, val] of Object.entries(filters)) {

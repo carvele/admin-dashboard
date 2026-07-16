@@ -212,6 +212,20 @@
   border-radius: 10px;
 }
 
+.sidebar-alert-icon {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-alert-icon.danger {
+  color: var(--stock-low, #ef4444);
+}
+
+.sidebar-alert-icon.warning {
+  color: var(--stock-med, #f59e0b);
+}
+
 .lock-admin-btn {
   display: flex;
   align-items: center;

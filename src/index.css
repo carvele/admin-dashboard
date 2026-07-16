@@ -34,10 +34,20 @@
   --status-fitting-bg: #f3e8ff;
   --status-fitting-text: #6b21a8;
 
-  /* Stock Colors */
-  --stock-high: #10b981;
-  --stock-med: #f59e0b;
-  --stock-low: #ef4444;
+  /* Stock Health — 5 Tiers (+ bg variants for badges) */
+  --stock-healthy:        #10b981;  /* Emerald */
+  --stock-healthy-bg:     #d1fae5;
+  --stock-low:            #f59e0b;  /* Amber   */
+  --stock-low-bg:         #fef3c7;
+  --stock-very-low:       #f97316;  /* Orange  */
+  --stock-very-low-bg:    #ffedd5;
+  --stock-critical:       #ef4444;  /* Red     */
+  --stock-critical-bg:    #fee2e2;
+  --stock-none:           #6b7280;  /* Gray    */
+  --stock-none-bg:        #f3f4f6;
+  /* Legacy aliases — kept so old references don't break */
+  --stock-high:           #10b981;
+  --stock-med:            #f97316;
 
   /* Z-Index Architecture */
   --z-negative: -1;
@@ -93,6 +103,20 @@
   --status-confirmed-text: #22d3ee;
   --status-fitting-bg: rgba(139, 92, 246, 0.2);
   --status-fitting-text: #a78bfa;
+
+  /* Stock Health — dark mode overrides */
+  --stock-healthy:        #34d399;
+  --stock-healthy-bg:     rgba(16, 185, 129, 0.15);
+  --stock-low:            #fbbf24;
+  --stock-low-bg:         rgba(245, 158, 11, 0.15);
+  --stock-very-low:       #fb923c;
+  --stock-very-low-bg:    rgba(249, 115, 22, 0.15);
+  --stock-critical:       #f87171;
+  --stock-critical-bg:    rgba(239, 68, 68, 0.15);
+  --stock-none:           #9ca3af;
+  --stock-none-bg:        rgba(107, 114, 128, 0.15);
+  --stock-high:           #34d399;
+  --stock-med:            #fb923c;
 }
 
 .flex-center-vh {
@@ -571,6 +595,32 @@ input:checked + .toggle-slider:before {
 .status-disabled {
   background: #e2e8f0;
   color: #64748b;
+}
+
+/* ===== 5-Tier Stock Health Badges (global — used in Inventory + Catalog) ===== */
+.stock-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.stock-tier-badge.healthy  { background-color: var(--stock-healthy-bg);  color: var(--stock-healthy);  }
+.stock-tier-badge.low      { background-color: var(--stock-low-bg);       color: var(--stock-low);      }
+.stock-tier-badge.very-low { background-color: var(--stock-very-low-bg);  color: var(--stock-very-low); }
+.stock-tier-badge.critical {
+  background-color: var(--stock-critical-bg);
+  color: var(--stock-critical);
+  animation: criticalPulse 2s ease-in-out infinite;
+}
+.stock-tier-badge.no-stock { background-color: var(--stock-none-bg);      color: var(--stock-none);     }
+@keyframes criticalPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
 }
 
 /* View Toggle */

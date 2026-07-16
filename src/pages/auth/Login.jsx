@@ -2,10 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, LogIn, UserPlus, Shield, X } from 'lucide-react';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-import { firebaseConfig } from '../../firebase/config';
+import { supabase } from '../../lib/supabaseClient';
 import { sanitizeText } from '../../utils/validation';
 import { toast } from 'sonner';
 import './Login.css';
@@ -25,7 +22,6 @@ const Login = () => {
     adminPassword: '',
     staffName: '',
     staffEmail: '',
-    staffPassword: '',
     staffRole: 'Sales Staff'
   });
   const [isAdminCreating, setIsAdminCreating] = useState(false);
@@ -63,72 +59,69 @@ const Login = () => {
 
   const handleAdminCreateAccount = async (e) => {
     e.preventDefault();
-    if (!adminForm.adminEmail || !adminForm.adminPassword || !adminForm.staffName || !adminForm.staffEmail || !adminForm.staffPassword) {
+    if (!adminForm.adminEmail || !adminForm.adminPassword || !adminForm.staffName || !adminForm.staffEmail) {
       setAdminError('Please fill in all fields.');
       return;
     }
-    
+
     setAdminError('');
     setIsAdminCreating(true);
-    let tempApp = null;
 
     try {
-      // 1. Initialize Encapsulated Admin App
-      tempApp = initializeApp(firebaseConfig, 'AdminCreateTemp_' + Date.now());
-      const tempAuth = getAuth(tempApp);
-      const tempDb = getFirestore(tempApp);
+      // 1. Sign in the super admin to verify credentials + get a fresh JWT
+      const { data: adminSignIn, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: adminForm.adminEmail.trim(),
+        password: adminForm.adminPassword,
+      });
+      if (signInErr) throw new Error('Invalid super admin credentials.');
 
-      // 2. Authenticate the Super Admin
-      const authCred = await signInWithEmailAndPassword(tempAuth, adminForm.adminEmail.trim(), adminForm.adminPassword);
+      // 2. Verify admin/owner role in profiles table
+      const { data: profile, error: profErr } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminSignIn.user.id)
+        .maybeSingle();
+      if (profErr || !profile || !['admin', 'owner'].includes(profile.role)) {
+        await supabase.auth.signOut();
+        throw new Error('Unauthorized. Only Super Admins can use this tool.');
+      }
 
-      // 3. Verify they are actually an Admin/Owner
-      let isVerifiedAdmin = false;
-      if (authCred.user.email === 'admin@jezsy.com' || authCred.user.email === 'admin@jezsycollection.com') {
-        isVerifiedAdmin = true;
-      } else {
-        const q = query(collection(tempDb, 'staff'), where('email', '==', authCred.user.email));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const role = snap.docs[0].data().role;
-          if (role === 'Owner' || role === 'Admin') isVerifiedAdmin = true;
+      // 3. Call Edge Function to create new staff account
+      const token = adminSignIn.session?.access_token;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-staff-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            name: sanitizeText(adminForm.staffName),
+            email: adminForm.staffEmail.toLowerCase().trim(),
+            role: adminForm.staffRole === 'Admin' ? 'admin' : 'staff',
+          }),
         }
-      }
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? 'Failed to create account.');
 
-      if (!isVerifiedAdmin) {
-        throw new Error("Unauthorized. Only Super Admins can use this tool.");
-      }
+      // 4. Sign back out (so current user sees a clean login form)
+      await supabase.auth.signOut();
 
-      // 4. Create new Auth Account (this switches the tempAuth to the new user, which is exactly why we use a tempApp)
-      const newCred = await createUserWithEmailAndPassword(tempAuth, adminForm.staffEmail.trim(), adminForm.staffPassword);
-
-      // 5. Write Staff Document
-      await addDoc(collection(tempDb, 'staff'), {
-        name: sanitizeText(adminForm.staffName),
-        email: adminForm.staffEmail.toLowerCase().trim(),
-        authUid: newCred.user.uid,
-        role: adminForm.staffRole,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-      });
-
-      // 6. Send Password Reset
-      // We send it to the new account email
-      await sendPasswordResetEmail(tempAuth, adminForm.staffEmail.trim());
-
-      toast.success(`Account for ${adminForm.staffName} created successfully. They can now log in.`);
+      toast.success(`Invite sent to ${adminForm.staffEmail}. They will receive an email to set their password.`, { duration: 6000 });
       setShowAdminCreate(false);
-      setAdminForm({
-        adminEmail: '', adminPassword: '', staffName: '', staffEmail: '', staffPassword: '', staffRole: 'Sales Staff'
-      });
+      setAdminForm({ adminEmail: '', adminPassword: '', staffName: '', staffEmail: '', staffRole: 'Sales Staff' });
     } catch (err) {
       console.error(err);
       let msg = 'Failed to create account.';
-      if (err.message.includes('Unauthorized')) msg = err.message;
-      else if (err.code === 'auth/wrong-password') msg = 'Invalid admin credentials.';
-      else if (err.code === 'auth/email-already-in-use') msg = 'Staff email is already registered.';
+      if (err.message?.includes('Unauthorized')) msg = err.message;
+      else if (err.message?.includes('credentials')) msg = 'Invalid admin credentials.';
+      else if (err.message?.includes('already registered')) msg = 'Staff email is already registered.';
+      else if (err.message) msg = err.message;
       setAdminError(msg);
     } finally {
-      if (tempApp) await deleteApp(tempApp);
       setIsAdminCreating(false);
     }
   };
@@ -274,9 +267,6 @@ const Login = () => {
                    <input type="email" className="input-field" placeholder="Staff Email Address" value={adminForm.staffEmail} onChange={(e)=>setAdminForm({...adminForm, staffEmail: e.target.value})} required />
                 </div>
                 <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                   <input type="text" className="input-field" placeholder="Temporary Password" value={adminForm.staffPassword} onChange={(e)=>setAdminForm({...adminForm, staffPassword: e.target.value})} required minLength={6} />
-                </div>
-                <div className="form-group">
                    <select className="input-field" value={adminForm.staffRole} onChange={(e)=>setAdminForm({...adminForm, staffRole: e.target.value})}>
                      <option value="Sales Staff">Sales Staff</option>
                      <option value="Admin">Admin</option>
@@ -287,7 +277,7 @@ const Login = () => {
               {adminError && <div style={{ fontSize: '0.875rem', color: '#ef4444', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fef2f2', padding: '0.5rem', borderRadius: '0.5rem' }}>{adminError}</div>}
               
               <button type="submit" className="btn-primary w-full" disabled={isAdminCreating}>
-                {isAdminCreating ? 'Authorizing & Creating...' : <><UserPlus size={18} /> Force Create Account</>}
+                {isAdminCreating ? 'Authorizing & Inviting...' : <><UserPlus size={18} /> Authorize & Send Invite</>}
               </button>
             </form>
           </div>

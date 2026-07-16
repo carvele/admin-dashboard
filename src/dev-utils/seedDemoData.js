@@ -4,7 +4,7 @@
  * Seeds Firestore with realistic 90-day operational data.
  * Designed to run ONCE from Settings → Developer Tools.
  */
-import { addDocument } from '../firebase/firestore';
+import { addDocument } from '../lib/supabaseService';
 
 // --- Helpers ---
 const randomDate = (daysAgo) => {

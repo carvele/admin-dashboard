@@ -9,7 +9,7 @@ import {
   createInventoryItem,
   getInventory,
 } from '../../services/productService';
-import { routeAndUploadFile, deleteFile } from '../../firebase/storage';
+import { routeAndUploadFile, deleteFile } from '../../lib/storage';
 import { getReservationsByProduct } from '../../services/reservationService';
 import {
   subscribeToSuggestedOutfits,
@@ -18,7 +18,8 @@ import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
-import { COLOR_CATEGORIES, AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
+import { AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
+import { getColorList, getPatternList } from '../../services/inventoryService';
 import { Logger } from '../../utils/Logger';
 import { toast } from 'sonner';
 import './ProductForm.css';
@@ -44,7 +45,8 @@ const ProductForm = () => {
     description: '',
     material: '',
     color: '',
-    baseColor: 'White', // Default category for filtering
+    baseColor: '', // Populated from color_list on mount
+    pattern: 'Solid', // Populated from pattern_list on mount
     careInstructions: '',
     fitAndSizing: '',
     styleCode: '',
@@ -64,6 +66,8 @@ const ProductForm = () => {
   });
 
   const [categories, setCategories] = useState([]);
+  const [colorList, setColorList] = useState([]);
+  const [patternList, setPatternList] = useState([]);
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -96,6 +100,26 @@ const ProductForm = () => {
     });
 
     return () => unsubscribeCategories();
+  }, []);
+
+  // Load admin-managed color and pattern lists from Supabase
+  useEffect(() => {
+    getColorList()
+      .then((list) => {
+        setColorList(list);
+        // Seed baseColor default to first entry if not already set
+        setFormData((prev) => ({
+          ...prev,
+          baseColor: prev.baseColor || (list[0]?.name ?? ''),
+        }));
+      })
+      .catch((err) => console.error('Failed to load color list:', err));
+
+    getPatternList()
+      .then((list) => {
+        setPatternList(list);
+      })
+      .catch((err) => console.error('Failed to load pattern list:', err));
   }, []);
 
   useEffect(() => {
@@ -336,7 +360,7 @@ const ProductForm = () => {
         visibility: formData.visibility,
         isFeatured: formData.isFeatured,
         isAlterable: formData.isAlterable,
-        updated_by: user?.email || 'admin',
+        updated_by: user?.id || null,
         images: finalImages,
         imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
         // Sale Fields
@@ -345,8 +369,9 @@ const ProductForm = () => {
         salePrice: formData.onSale ? parseFloat(formData.salePrice) : null,
         // New Categorization
         baseColor: formData.baseColor,
+        pattern: formData.pattern,
         measurements: formData.measurements,
-        timestamp: Date.now(),
+
         tags: formData.tags || [],
       };
 
@@ -387,7 +412,7 @@ const ProductForm = () => {
         console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
-        payload.created_by = user?.email || 'admin';
+        payload.created_by = user?.id || null;
         payload.stock = 0;
         payload.status = 'Out of Stock';
         payload.visibility = 'Draft';
@@ -553,14 +578,14 @@ const ProductForm = () => {
                         <span className="text-sm font-medium group-hover:text-primary transition-colors">Alterable</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
-                        <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
-                        <div style={{ minWidth: 0 }}>
-                           <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1" style={{ whiteSpace: 'nowrap' }}>
-                              <Sparkles size={12} /> Force New Arrival
-                           </span>
-                           <span className="text-[10px] text-secondary leading-tight">Manual badge override</span>
-                        </div>
-                      </label>
+                         <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
+                         <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                            <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1">
+                               <Sparkles size={12} /> Force New Arrival
+                            </span>
+                            <span className="text-[10px] text-secondary leading-tight">Manual badge override</span>
+                         </div>
+                       </label>
                    </div>
                 </div>
              </div>
@@ -702,9 +727,20 @@ const ProductForm = () => {
                  <input type="text" name="color" className="input-field" placeholder="e.g. Midnight Azure" value={formData.color} onChange={handleChange} />
               </div>
               <div>
-                 <label className="label">Color Filter *</label>
+                 <label className="label">Color *</label>
                  <select name="baseColor" className="input-field" value={formData.baseColor} onChange={handleChange} required>
-                    {COLOR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="" disabled>Select a color</option>
+                    {colorList.map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                 </select>
+              </div>
+              <div>
+                 <label className="label">Pattern</label>
+                 <select name="pattern" className="input-field" value={formData.pattern} onChange={handleChange}>
+                    {patternList.map((p) => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
                  </select>
               </div>
               <div>

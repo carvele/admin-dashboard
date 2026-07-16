@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
 import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
-import { subscribeToCollection } from '../../firebase/firestore';
+import { subscribeToWardrobeItems } from '../../services/wardrobeService';
+import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
 import { getAvatarColor, getUserDisplayName } from '../../utils/helpers';
 import './DigitalWardrobe.css';
@@ -29,15 +30,13 @@ const DigitalWardrobe = () => {
   
   // Subscribe to wardrobeItems (normalized top-level collection)
   React.useEffect(() => {
-    const unsubItems = subscribeToCollection('wardrobeItems', (data) => {
+    const unsubItems = subscribeToWardrobeItems((data) => {
       setWardrobeItems(data);
     });
-    const unsubUsers = subscribeToCollection('users', (data) => {
-      // Only show app customers
-      const appUsers = data.filter((u) => !u.role || u.role === 'customer');
-      setUsers(appUsers);
-      if (appUsers.length > 0) {
-        setActiveUserId(prevId => prevId || appUsers[0].id);
+    const unsubUsers = subscribeToCustomers((data) => {
+      setUsers(data);
+      if (data.length > 0) {
+        setActiveUserId(prevId => prevId || data[0].id);
       }
     });
     const unsubProducts = subscribeToProducts((data) => {

@@ -104,6 +104,7 @@ ON public.products;
 
 CREATE POLICY "Allow admins to edit inventory columns on products"
 ON public.products FOR UPDATE
+USING (true)
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.profiles
@@ -112,8 +113,7 @@ WITH CHECK (
     AND profiles.deleted = false
     AND profiles.is_blocked = false
   )
-)
-USING (true);
+);
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 4. RLS POLICIES FOR COLOR_LIST TABLE (admin-managed)
@@ -149,6 +149,7 @@ ON public.color_list;
 
 CREATE POLICY "Allow admins to update colors"
 ON public.color_list FOR UPDATE
+USING (true)
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.profiles
@@ -157,8 +158,7 @@ WITH CHECK (
     AND profiles.deleted = false
     AND profiles.is_blocked = false
   )
-)
-USING (true);
+);
 
 -- POLICY: DELETE — Admin-only
 DROP POLICY IF EXISTS "Allow admins to delete colors" 
@@ -210,6 +210,7 @@ ON public.pattern_list;
 
 CREATE POLICY "Allow admins to update patterns"
 ON public.pattern_list FOR UPDATE
+USING (true)
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.profiles
@@ -218,8 +219,7 @@ WITH CHECK (
     AND profiles.deleted = false
     AND profiles.is_blocked = false
   )
-)
-USING (true);
+);
 
 -- POLICY: DELETE — Admin-only
 DROP POLICY IF EXISTS "Allow admins to delete patterns" 

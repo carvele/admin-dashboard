@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Star, Trash2 } from 'lucide-react';
-import { db } from '../../firebase/config';
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { getProductReviews, deleteReview } from '../../services/reviewService';
+import { updateProduct } from '../../services/productService';
 import { toast } from 'sonner';
 
 const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
@@ -15,42 +15,8 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
   const fetchReviews = async () => {
     setLoading(true);
     try {
-      const q = query(
-        collection(db, 'product_reviews'),
-        where('productId', '==', product.docId || product.id)
-      );
-      const snapshot = await getDocs(q);
-      const fetchedReviews = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
-
-      // Fix "App User" issue: Try to get real names from users collection
-      const reviewsWithNames = await Promise.all(fetchedReviews.map(async (review) => {
-        let displayDisplayName = review.userName;
-
-        // If userName is generic/missing, try fetching from Users collection
-        if (!displayDisplayName || displayDisplayName === 'App User' || displayDisplayName === 'Customer') {
-          if (review.userId) {
-            try {
-              const userRef = doc(db, 'users', review.userId);
-              const userSnap = await getDoc(userRef);
-              if (userSnap.exists()) {
-                const userData = userSnap.data();
-                displayDisplayName = userData.name || userData.firstName || displayDisplayName;
-              }
-            } catch (e) {
-              console.warn('Could not fetch user profile for review:', review.userId);
-            }
-          }
-        }
-
-        // Final fallback sanitation
-        if (displayDisplayName === 'App User') displayDisplayName = 'Guest Explorer';
-
-        return { ...review, displayName: displayDisplayName || 'Anonymous' };
-      }));
-
-      // Sort in memory mostly sufficient, or add orderBy if indexed
-      reviewsWithNames.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      setReviews(reviewsWithNames);
+      const fetchedReviews = await getProductReviews(product.docId || product.id);
+      setReviews(fetchedReviews);
     } catch (err) {
       console.error('Error fetching reviews:', err);
       toast.error('Failed to load reviews');
@@ -63,7 +29,7 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
     if (!window.confirm("Are you sure you want to delete this review?")) return;
     
     try {
-      await deleteDoc(doc(db, 'product_reviews', reviewDocId));
+      await deleteReview(reviewDocId);
       toast.success('Review deleted');
       
       const newReviews = reviews.filter(r => r.docId !== reviewDocId);
@@ -74,13 +40,13 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
       newReviews.forEach(r => { sum += (r.rating || 0); });
       const avg = newReviews.length > 0 ? sum / newReviews.length : 0;
       
-      await updateDoc(doc(db, 'products', product.docId), {
+      await updateProduct(product.docId || product.id, {
         rating: avg,
         reviewCount: newReviews.length
       });
       
       if (onReviewsChanged) {
-        onReviewsChanged(product.docId, avg, newReviews.length);
+        onReviewsChanged(product.docId || product.id, avg, newReviews.length);
       }
     } catch (err) {
       console.error('Error deleting review', err);

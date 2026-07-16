@@ -86,7 +86,7 @@ ON CONFLICT (name) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.stock_movements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
   
   -- Stock state
   previous_stock INTEGER NOT NULL,

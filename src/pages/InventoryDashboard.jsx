@@ -80,17 +80,54 @@ const InventoryDashboard = () => {
     handleCloseStockForm();
   };
 
-  if (loading) return <div className="inventory-dashboard loading">Loading inventory...</div>;
-  if (error) return <div className="inventory-dashboard error">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex-center-vh" style={{ minHeight: '300px' }}>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-container page-animate">
+        <div
+          role="alert"
+          style={{
+            padding: '1rem',
+            backgroundColor: 'var(--status-cancelled-bg)',
+            color: 'var(--status-cancelled-text)',
+            borderRadius: '8px',
+            margin: '2rem auto',
+            maxWidth: '500px',
+            textAlign: 'center',
+            fontWeight: 500,
+            border: '1px solid rgba(153, 27, 27, 0.1)',
+          }}
+        >
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="inventory-dashboard">
-      <div className="inventory-header">
-        <h1>Inventory Dashboard</h1>
+    <div className="page-container page-animate">
+      <div className="page-header d-flex justify-between align-center">
+        <div>
+          <h1 className="page-title">Inventory Dashboard</h1>
+          <p className="page-subtitle">Track product stock levels and administrative settings</p>
+        </div>
         {isAdmin && (
           <button
-            className="btn btn-admin"
+            className={`btn-outline small flex-center gap-2 ${showAdmin ? 'active' : ''}`}
             onClick={() => setShowAdmin(!showAdmin)}
+            style={{
+              borderColor: showAdmin ? 'var(--charcoal)' : 'var(--border-color)',
+              backgroundColor: showAdmin ? 'var(--beige)' : 'var(--white)',
+              color: 'var(--charcoal)',
+              fontWeight: 600,
+            }}
             aria-label={showAdmin ? 'Hide admin controls' : 'Show admin controls'}
           >
             {showAdmin ? 'Hide Admin' : 'Show Admin'}
@@ -99,67 +136,77 @@ const InventoryDashboard = () => {
       </div>
 
       {showAdmin && isAdmin && (
-        <AdminInventoryPanel products={products} onClose={() => setShowAdmin(false)} onProductUpdated={async () => setProducts(await getProductsWithStock(false))} />
+        <AdminInventoryPanel
+          products={products}
+          onClose={() => setShowAdmin(false)}
+          onProductUpdated={async () => setProducts(await getProductsWithStock(false))}
+        />
       )}
 
-      <div className="inventory-list">
-        <table role="table" aria-label="Product inventory">
-          <thead>
-            <tr>
-              <th scope="col">Product Name</th>
-              <th scope="col">Color</th>
-              <th scope="col">Pattern</th>
-              <th scope="col">Date Added</th>
-              <th scope="col">Current Stock</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.length === 0 ? (
+      <div className="card mt-2">
+        <div className="table-container">
+          <table className="table" aria-label="Product inventory">
+            <thead>
               <tr>
-                <td colSpan="7" className="empty">
-                  No products in inventory
-                </td>
+                <th scope="col">Product Name</th>
+                <th scope="col">Color</th>
+                <th scope="col">Pattern</th>
+                <th scope="col">Date Added</th>
+                <th scope="col" className="text-right">Current Stock</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="text-right">Actions</th>
               </tr>
-            ) : (
-              products.map((product) => (
-                <tr key={product.id}>
-                  <td>{product.name}</td>
-                  <td>{product.color || '—'}</td>
-                  <td>{product.pattern || 'Solid'}</td>
-                  <td>
-                    {product.dateAdded
-                      ? new Date(product.dateAdded).toLocaleDateString()
-                      : '—'}
-                  </td>
-                  <td className="numeric">{product.currentStock ?? 0}</td>
-                  <td>
-                    <StatusBadge status={product.stockStatus} />
-                  </td>
-                  <td className="actions">
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => handleViewHistory(product)}
-                      aria-label={`View stock history for ${product.name}`}
-                    >
-                      History
-                    </button>
-                    {isAdmin && (
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => handleAddMovement(product)}
-                        aria-label={`Add stock movement for ${product.name}`}
-                      >
-                        Add Movement
-                      </button>
-                    )}
+            </thead>
+            <tbody>
+              {products.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-secondary">
+                    No products in inventory
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                products.map((product) => (
+                  <tr key={product.id}>
+                    <td className="font-medium">{product.name}</td>
+                    <td>{product.color || '—'}</td>
+                    <td>{product.pattern || 'Solid'}</td>
+                    <td className="text-secondary">
+                      {product.dateAdded
+                        ? new Date(product.dateAdded).toLocaleDateString()
+                        : '—'}
+                    </td>
+                    <td className="text-right font-medium" style={{ paddingRight: '1.5rem' }}>
+                      {product.currentStock ?? 0}
+                    </td>
+                    <td>
+                      <StatusBadge status={product.stockStatus} />
+                    </td>
+                    <td className="text-right">
+                      <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn-outline small"
+                          onClick={() => handleViewHistory(product)}
+                          aria-label={`View stock history for ${product.name}`}
+                        >
+                          History
+                        </button>
+                        {isAdmin && (
+                          <button
+                            className="btn-primary small"
+                            onClick={() => handleAddMovement(product)}
+                            aria-label={`Add stock movement for ${product.name}`}
+                          >
+                            Add Movement
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {selectedProduct && historyModal && (

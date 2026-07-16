@@ -1,3 +1,14 @@
+/**
+ * productService.js  (Supabase)
+ * Replaces the Firebase-based productService.
+ *
+ * Key mapping decisions:
+ *  - Firestore `docId`   → Supabase `id` (uuid)
+ *  - Firestore `productDocId` in inventory → Supabase `product_doc_id` (uuid)
+ *  - camelCase ↔ snake_case conversion handled by supabaseService helpers
+ */
+
+import { supabase } from '../lib/supabaseClient';
 import {
   getCollection,
   getDocument,
@@ -6,68 +17,24 @@ import {
   deleteDocument,
   softDeleteDocument,
   subscribeToCollection,
-  syncProductUpdateToInventory,
-} from '../firebase/firestore';
+  normaliseRow,
+  toSnake,
+  toCamel,
+} from '../lib/supabaseService';
+import { logAction } from './staffService';
 import { queryCache, CACHE_TTL } from '../utils/cache';
 
-/**
- * @typedef {Object} Product
- * @property {string} docId - Auto-generated Firestore document ID
- * @property {string} id - The SKU or unique product identifier across the app
- * @property {string} name - Product canonical name
- * @property {string} category - Assigned catalog category
- * @property {number} price - Retail price
- * @property {string} material - Fabric composition
- * @property {string} color - Primary color descriptive string
- * @property {string} fitAndSizing - Fit standard (e.g. Regular Fit)
- * @property {string} season - Operational season
- * @property {string} occasion - Targeted event usage
- * @property {string[]} sizes - Array of available sizes
- * @property {string} visibility - 'Published' | 'Draft'
- * @property {boolean} featured - Is featured globally
- * @property {number} stock - Sum total internal stock
- * @property {string[]} tags - Associated metadata tags
- * @property {string} imageUrl - Main thumbnail uri
- * @property {string[]} images - Carousel array uris
- * @property {string} description - Long description narrative
- * @property {string} careInstructions - Care handling text
- * @property {string} styleCode - Legacy mapping code equivalent to SKU usually
- * @property {string} created_by - User identifier that minted record
- */
+// ── Products ────────────────────────────────────────────────
 
-/**
- * @typedef {Object} Category
- * @property {string} docId
- * @property {string} id
- * @property {string} name
- * @property {string[]} [subcategories] - Optional nested paths
- */
-
-/**
- * @typedef {Object} InventoryItem
- * @property {string} docId
- * @property {string} productDocId - Relational link to Product Document
- * @property {string} sku - Product code
- * @property {string} item - Normalized product Name
- * @property {string} category - Normalized product Category
- * @property {string} size - The discrete size enum this record represents
- * @property {number} total - Grand capacity
- * @property {number} reserved - Currently checked out constraint
- * @property {number} available - Computable total - reserved
- */
-
-/**
- * Subscribes to real-time streams of the global product catalog.
- * @param {Function} callback - Returns Array of Products
- */
+/** Real-time subscription to all non-deleted products. */
 export const subscribeToProducts = (callback) => {
   return subscribeToCollection('products', callback);
 };
 
-export const getProducts = async (maxResults = 0) => {
-  const cacheKey = `products_${maxResults}`;
+export const getProducts = async (includeDeleted = false, maxResults = 0) => {
+  const cacheKey = `products_${includeDeleted}_${maxResults}`;
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
-  const data = await getCollection('products', false, maxResults);
+  const data = await getCollection('products', includeDeleted, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
 };
@@ -84,102 +51,251 @@ export const updateProduct = async (docId, updates) => {
   await updateDocument('products', docId, updates);
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
-  // Auto-propagate specific column updates to Inventory mapping
-  if (updates.name || updates.category) {
+
+  // Propagate name/category changes to linked inventory rows
+  if (updates.name || updates.category || updates.price || updates.sku || updates.imageUrl) {
     await syncProductUpdateToInventory(docId, updates);
   }
 };
 
-export const deleteProduct = async (docId) => {
+/** Soft-archive a product and cascade to its inventory rows. */
+export const archiveProduct = async (docId) => {
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
-  return deleteDocument('products', docId);
+  return softDeleteDocument('products', docId);
 };
 
-// --- Inventory Layer ---
+/** Restore a soft-deleted product and its inventory rows. */
+export const restoreProduct = async (docId) => {
+  const now = new Date().toISOString();
 
+  // Restore product
+  const { error: pErr } = await supabase
+    .from('products')
+    .update({ deleted: false, deleted_at: null, updated_at: now })
+    .eq('id', docId);
+  if (pErr) throw pErr;
+
+  // Restore linked inventory rows
+  const { error: iErr } = await supabase
+    .from('inventory')
+    .update({ deleted: false, deleted_at: null, updated_at: now })
+    .eq('product_doc_id', docId);
+  if (iErr) console.warn('[Inventory] Restore cascade failed:', iErr.message);
+
+  queryCache.invalidateByPrefix('products');
+  queryCache.invalidateByPrefix('inventory');
+};
+
+/** Sync product metadata changes to all linked inventory rows. */
+const syncProductUpdateToInventory = async (productDocId, newData) => {
+  const { name, category, price, sku, imageUrl } = newData;
+  const updates = {};
+  if (name !== undefined) updates.item = name;
+  if (category !== undefined) updates.category = category;
+  if (price !== undefined) updates.price = price;
+  if (sku !== undefined) updates.sku = sku;
+  if (imageUrl !== undefined) updates.image_url = imageUrl;
+  if (!Object.keys(updates).length) return;
+
+  updates.updated_at = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('inventory')
+    .update(updates)
+    .eq('product_doc_id', productDocId);
+  if (error) console.warn('[Inventory] Sync failed:', error.message);
+};
+
+// ── Inventory ────────────────────────────────────────────────
+
+/** Real-time subscription to all inventory rows (including deleted, for history). */
 export const subscribeToInventory = (callback) => {
-  return subscribeToCollection('inventory', callback);
+  return subscribeToCollection('inventory', callback, {}, true /* includeDeleted */);
 };
 
 export const getInventory = async (maxResults = 0) => {
   const cacheKey = `inventory_${maxResults}`;
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
-  const data = await getCollection('inventory', false, maxResults);
+  const data = await getCollection('inventory', true /* includeDeleted */, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
 };
 
-export const createInventoryItem = (data) => {
+export const createInventoryItem = async (data) => {
   queryCache.invalidateByPrefix('inventory');
+  // Map `productDocId` → `product_doc_id`
   return addDocument('inventory', data);
 };
 
-export const updateInventoryItem = (docId, updates) => {
+export const updateInventoryItem = async (docId, updates) => {
   queryCache.invalidateByPrefix('inventory');
-  return updateDocument('inventory', docId, updates);
+  const result = await updateDocument('inventory', docId, updates);
+  // Re-sync parent product stock. productDocId may be in updates (on create/move),
+  // or we need to fetch it from the existing row.
+  const productDocId = updates.productDocId || updates.product_doc_id;
+  if (productDocId) {
+    await syncProductStock(productDocId);
+  } else {
+    const { data: row } = await supabase.from('inventory').select('product_doc_id').eq('id', docId).maybeSingle();
+    await syncProductStock(row?.product_doc_id);
+  }
+  return result;
 };
 
-export const deleteInventoryItem = (docId) => {
-  queryCache.invalidateByPrefix('inventory');
-  return deleteDocument('inventory', docId);
+/**
+ * Recalculates and writes aggregated available/reserved/stock back to the
+ * parent product row after any inventory mutation.
+ * This is the Supabase-side replacement for the Firebase Cloud Function
+ * (functions/src/triggers/syncInventory.ts) which never runs here.
+ *
+ * @param {string} productDocId - UUID of the parent product
+ */
+export const syncProductStock = async (productDocId) => {
+  if (!productDocId) return;
+  try {
+    const { data: rows, error } = await supabase
+      .from('inventory')
+      .select('available, reserved, total')
+      .eq('product_doc_id', productDocId)
+      .eq('deleted', false);
+    if (error) throw error;
+
+    const totAvailable = (rows || []).reduce((s, r) => s + Number(r.available || 0), 0);
+    const totReserved  = (rows || []).reduce((s, r) => s + Number(r.reserved  || 0), 0);
+    let status = 'In Boutique';
+    if (totAvailable <= 0) {
+      status = totReserved > 0 ? 'Reserved' : 'Out of Stock';
+    }
+
+    await supabase.from('products').update({
+      stock: totAvailable,
+      status,
+      updated_at: new Date().toISOString(),
+    }).eq('id', productDocId);
+
+    queryCache.invalidateByPrefix('products');
+    queryCache.invalidateByPrefix('inventory');
+  } catch (err) {
+    console.warn('[syncProductStock] Failed to sync stock to product:', err?.message ?? err);
+  }
 };
 
+export const archiveInventoryItem = async (docId) => {
+  queryCache.invalidateByPrefix('inventory');
+  const result = await updateDocument('inventory', docId, {
+    deleted: true,
+    deleted_at: new Date().toISOString(),
+  });
+  // Fetch the productDocId so we can re-sync the parent product's stock
+  const { data: row } = await supabase.from('inventory').select('product_doc_id').eq('id', docId).maybeSingle();
+  await syncProductStock(row?.product_doc_id);
+  return result;
+};
+
+export const restoreInventoryItem = async (docId) => {
+  queryCache.invalidateByPrefix('inventory');
+  const result = await updateDocument('inventory', docId, {
+    deleted: false,
+    deleted_at: null,
+  });
+  const { data: row } = await supabase.from('inventory').select('product_doc_id').eq('id', docId).maybeSingle();
+  await syncProductStock(row?.product_doc_id);
+  return result;
+};
+
+/**
+ * Persists the demand score to a specific inventory document (fire-and-forget).
+ */
+export const persistDemandScore = async (docId, demandScore, tier, adjustedScore) => {
+  try {
+    await updateDocument('inventory', docId, {
+      demandScore,
+      stockTier: tier,
+      adjustedScore: parseFloat(adjustedScore.toFixed(4)),
+      demandScoredAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('[StockHealth] Failed to persist demand score:', err);
+  }
+};
+
+/** Record an in-store walk-in sale: deduct stock + create a completed reservation. */
 export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
-  const { db } = await import('../firebase/config');
-  const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-  const { logAction } = await import('./staffService');
-
   if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
 
-  // 1. Update Inventory Stock (Subtrack from Total and Available)
+  // 1. Update Inventory Stock
   await updateInventoryItem(inventoryItem.docId, {
     total: inventoryItem.total - quantity,
-    available: inventoryItem.available - quantity
+    available: inventoryItem.available - quantity,
   });
 
-  // 2. Create a "Virtual" completed reservation for tracking/revenue
-  await addDoc(collection(db, 'reservations'), {
-    productId: inventoryItem.productDocId || inventoryItem.sku || '',
-    productName: inventoryItem.item,
+  // 2. Create virtual completed reservation
+  const now = new Date().toISOString();
+  await supabase.from('reservations').insert({
+    product_id: inventoryItem.productDocId || null,
+    product_name: inventoryItem.item,
     size: inventoryItem.size,
-    quantity: quantity,
-    price: salePrice,
-    totalAmount: (salePrice || 0) * quantity,
+    quantity,
+    rental_price: salePrice || 0,
     status: 'Completed',
-    platform: 'Boutique',
-    customerName: 'Walk-in Customer',
-    staffId: user?.uid || 'unknown',
-    staffName: user?.name || user?.email || 'Staff',
-    createdAt: Date.now(),
-    completedAt: Date.now(),
-    timestamp: Date.now(),
-    isBoutiqueSale: true
+    customer_name: 'Walk-in Customer',
+    staff_id: user?.uid ?? null,
+    created_at: now,
+    updated_at: now,
+    hidden_in_history: false,
+    deleted: false,
   });
 
-  // 3. Log Audit Trail
+  // 3. Audit log
   await logAction(user, 'Recorded In-Store Sale', {
+    targetType: 'inventory',
+    targetId: inventoryItem.docId,
     itemName: inventoryItem.item,
     size: inventoryItem.size,
-    quantitySold: quantity
+    quantitySold: quantity,
   });
 
   return { success: true };
 };
 
-// --- Category Layer ---
+// ── Categories ───────────────────────────────────────────────
+
+/**
+ * Converts the flat categories table (parent_id FK structure) into the nested
+ * shape that ProductForm expects: [{ id, name, subcategories: [{id, name}] }]
+ * Top-level rows: parent_id = null
+ * Subcategory rows: parent_id = UUID of a top-level row
+ */
+const buildCategoryTree = (rows) => {
+  const parents = rows
+    .filter((r) => !r.parentId)  // toCamel converts parent_id → parentId
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  return parents.map((parent) => ({
+    id: parent.id,
+    name: parent.name,
+    slug: parent.slug,
+    subcategories: rows
+      .filter((r) => r.parentId === parent.id)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+      .map((s) => ({ id: s.id, name: s.name, slug: s.slug })),
+  }));
+};
 
 export const subscribeToCategories = (callback) => {
-  return subscribeToCollection('categories', callback);
+  return subscribeToCollection('categories', (rows) => {
+    callback(buildCategoryTree(rows));
+  });
 };
 
 export const getCategories = async () => {
   const cacheKey = 'categories';
   if (queryCache.has(cacheKey)) return queryCache.get(cacheKey);
   const data = await getCollection('categories');
-  const sortedData = data.sort((a, b) => (a.order || 0) - (b.order || 0));
-  queryCache.set(cacheKey, sortedData, CACHE_TTL.SHORT);
-  return sortedData;
+  const tree = buildCategoryTree(data);
+  queryCache.set(cacheKey, tree, CACHE_TTL.SHORT);
+  return tree;
 };
 
 export const createCategory = (categoryData) => {
@@ -197,92 +313,162 @@ export const deleteCategory = (docId) => {
   return softDeleteDocument('categories', docId);
 };
 
+// ── Admin-managed category CRUD ──────────────────────────────
+
+/**
+ * Add a top-level category or a subcategory.
+ * @param {string} name
+ * @param {string|null} parentId — null for top-level, UUID for subcategory
+ */
+export const addCategoryAdmin = async (name, parentId = null) => {
+  queryCache.invalidateByPrefix('categories');
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ name, slug, parent_id: parentId || null })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Rename an existing category or subcategory.
+ * @param {string} id
+ * @param {string} newName
+ */
+export const renameCategoryAdmin = async (id, newName) => {
+  queryCache.invalidateByPrefix('categories');
+  const slug = newName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const { error } = await supabase
+    .from('categories')
+    .update({ name: newName, slug })
+    .eq('id', id);
+  if (error) throw error;
+};
+
+/**
+ * Delete a category (hard delete).
+ * Guard: throws a user-friendly Error if any live product references this
+ * category name (in `category` or `sub_category` columns).
+ *
+ * @param {string} id  — UUID of the category row to delete
+ * @param {string} name — display name of the category (for the guard query)
+ * @param {boolean} isSubcategory — true if deleting a sub, false for top-level
+ */
+export const deleteCategoryAdmin = async (id, name, isSubcategory = false) => {
+  // 1. Guard: check if any products use this name
+  const column = isSubcategory ? 'sub_category' : 'category';
+  const { data: usingProducts, error: guardError } = await supabase
+    .from('products')
+    .select('name')
+    .eq(column, name)
+    .eq('deleted', false);
+
+  if (guardError) throw guardError;
+
+  if (usingProducts && usingProducts.length > 0) {
+    const productList = usingProducts.slice(0, 3).map((p) => `"${p.name}"`).join(', ');
+    const extra = usingProducts.length > 3 ? ` and ${usingProducts.length - 3} more` : '';
+    throw new Error(
+      `Cannot delete "${name}" — it is currently used by ${usingProducts.length} product(s): ${productList}${extra}. Please reassign those products first.`
+    );
+  }
+
+  // 2. If it's a top-level category, also check if any subcategory rows exist under it
+  if (!isSubcategory) {
+    const { data: children, error: childErr } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('parent_id', id);
+    if (childErr) throw childErr;
+    if (children && children.length > 0) {
+      const names = children.map((c) => `"${c.name}"`).join(', ');
+      throw new Error(
+        `Cannot delete "${name}" — it still has subcategories: ${names}. Delete or reassign subcategories first.`
+      );
+    }
+  }
+
+  // 3. Perform hard delete
+  queryCache.invalidateByPrefix('categories');
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (error) throw error;
+};
+
+
+// ── Stock healing ─────────────────────────────────────────────
+
 /**
  * Force-recalculates all inventory reserved stock by scanning active reservations.
- * This is a "healing" function to fix data mismatches.
+ * Healing function for data mismatches.
  */
 export const recalculateAllInventoryStock = async () => {
-  const { db } = await import('../firebase/config');
-  const { collection, getDocs, query, where, writeBatch, serverTimestamp, doc } = await import('firebase/firestore');
+  const ACTIVE_STATUSES = ['Pending', 'To Pay', 'To Pickup', 'Confirmed', 'Fitting'];
 
-  // 1. Get all active reservations (any status that still holds inventory)
-  const resQuery = query(
-    collection(db, 'reservations'),
-    where('status', 'in', ['Pending', 'To Pay', 'To Pickup', 'Confirmed', 'Fitting'])
-  );
-  const resSnap = await getDocs(resQuery);
-  const activeRes = resSnap.docs.map(d => d.data());
+  // 1. Get all active reservations
+  const { data: activeRes, error: resErr } = await supabase
+    .from('reservations')
+    .select('product_id, product_name, size, quantity')
+    .in('status', ACTIVE_STATUSES);
+  if (resErr) throw resErr;
 
   // 2. Get all inventory items
-  const invSnap = await getDocs(collection(db, 'inventory'));
-  
-  const batch = writeBatch(db);
-  
-  // 3. Process each inventory item
-  invSnap.docs.forEach((invDoc) => {
-    const invData = invDoc.data();
-    const invDocId = invDoc.id;
-    
-    // Find matching reservations for this item+size
-    const matchingReservations = activeRes.filter(r => {
-      const productId = r.productId || '';
-      const productName = r.productName || r.outfit || '';
+  const { data: invRows, error: invErr } = await supabase
+    .from('inventory')
+    .select('id, product_doc_id, sku, item, size, total, reserved, available');
+  if (invErr) throw invErr;
+
+  // 3. Recalculate reserved per inventory row
+  const updates = [];
+  for (const inv of invRows) {
+    const matching = activeRes.filter((r) => {
       const resSize = r.size || '';
-      
+      const pId = r.product_id || '';
+      const pName = r.product_name || '';
       return (
-        resSize === invData.size &&
-        (productId === invData.productDocId || 
-         productId === invData.sku || 
-         productName === invData.item)
+        resSize === inv.size &&
+        (pId === inv.product_doc_id || pId === inv.sku || pName === inv.item)
       );
     });
-
-    const newReserved = matchingReservations.length;
-    const newAvailable = Math.max(0, (invData.total || 0) - newReserved);
-
-    // Only update if changed
-    if (invData.reserved !== newReserved || invData.available !== newAvailable) {
-      batch.update(invDoc.ref, {
-        reserved: newReserved,
-        available: newAvailable,
-        updatedAt: serverTimestamp()
-      });
+    const newReserved = matching.reduce((sum, r) => sum + (r.quantity || 1), 0);
+    const newAvailable = Math.max(0, (inv.total || 0) - newReserved);
+    if (inv.reserved !== newReserved || inv.available !== newAvailable) {
+      updates.push({ id: inv.id, reserved: newReserved, available: newAvailable });
     }
-  });
+  }
 
-  await batch.commit();
+  // Batch-update inventory
+  for (const u of updates) {
+    await supabase.from('inventory').update({
+      reserved: u.reserved,
+      available: u.available,
+      updated_at: new Date().toISOString(),
+    }).eq('id', u.id);
+  }
 
-  // 4. Aggregate by Product and sync status/stock
-  const updatedInvSnap = await getDocs(collection(db, 'inventory'));
-  const productMap = {}; // productDocId -> { available, reserved }
+  // 4. Sync stock / status back to products table
+  const productMap = {};
+  for (const inv of invRows) {
+    const pId = inv.product_doc_id;
+    if (!pId) continue;
+    if (!productMap[pId]) productMap[pId] = { available: 0, reserved: 0 };
+    // Use updated values if we changed them
+    const upd = updates.find((u) => u.id === inv.id);
+    productMap[pId].available += upd ? upd.available : (inv.available || 0);
+    productMap[pId].reserved += upd ? upd.reserved : (inv.reserved || 0);
+  }
 
-  updatedInvSnap.docs.forEach(doc => {
-    const data = doc.data();
-    const pId = data.productDocId;
-    if (pId) {
-      if (!productMap[pId]) productMap[pId] = { available: 0, reserved: 0 };
-      productMap[pId].available += (data.available || 0);
-      productMap[pId].reserved += (data.reserved || 0);
+  for (const [pId, stats] of Object.entries(productMap)) {
+    let status = 'In Boutique';
+    if (stats.available <= 0) {
+      status = stats.reserved > 0 ? 'Reserved' : 'Out of Stock';
     }
-  });
-
-  const productEntries = Object.entries(productMap);
-  for (let i = 0; i < productEntries.length; i += 450) {
-    const chunk = productEntries.slice(i, i + 450);
-    const finalBatch = writeBatch(db);
-    
-    for (const [pId, stats] of chunk) {
-      let status = 'In Boutique';
-      if (stats.available <= 0) {
-        status = stats.reserved > 0 ? 'Reserved' : 'Out of Stock';
-      }
-
-      finalBatch.update(doc(db, 'products', pId), {
-        stock: stats.available,
-        status: status
-      });
-    }
-    await finalBatch.commit();
+    await supabase.from('products').update({
+      stock: stats.available,
+      status,
+      updated_at: new Date().toISOString(),
+    }).eq('id', pId);
   }
 
   queryCache.invalidateByPrefix('inventory');

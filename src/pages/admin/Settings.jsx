@@ -16,27 +16,10 @@ import {
 } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  getDocument,
-  setDocument,
-  logAction,
-  addDocument,
-  updateDocument,
-} from '../../firebase/firestore';
+import { supabase } from '../../lib/supabaseClient';
+import { getDocument, addDocument, updateDocument, upsertDocument, logAction } from '../../lib/supabaseService';
 import { useAuth } from '../../context/AuthContext';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  updateDoc,
-  deleteField,
-  serverTimestamp,
-  writeBatch,
-} from 'firebase/firestore';
-import { auth, db } from '../../firebase/config';
-import { uploadToCloudinary } from '../../firebase/storage';
+import { uploadToCloudinary } from '../../lib/storage';
 import './Settings.css';
 
 const PROTECTED_CATEGORIES = [
@@ -122,30 +105,33 @@ const Settings = () => {
     displayName: '',
   });
 
-  // Fetch settings from Firestore on mount
+  // Fetch settings from Supabase on mount
   useEffect(() => {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
-        const storeInfo = await getDocument('settings', 'storeInfo');
-        const resRules = (await getDocument('settings', 'reservations')) || {};
-        const arRules = (await getDocument('settings', 'ar')) || {};
+        // Settings are stored as key/value rows in public.settings
+        const { data: settingsRows, error: sErr } = await supabase.from('settings').select('key, value');
+        if (sErr) throw sErr;
+        const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
 
         // Fetch categories
-        const catSnap = await getDocs(collection(db, 'categories'));
-        const cats = [];
-        catSnap.forEach((snapDoc) => cats.push({ id: snapDoc.id, ...snapDoc.data() }));
-        
-        // Sort by order
-        const sortedCats = cats.sort((a, b) => (a.order || 0) - (b.order || 0));
+        const { data: cats, error: cErr } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('deleted', false)
+          .order('order', { ascending: true });
+        if (cErr) throw cErr;
+
+        const sortedCats = (cats ?? []).map((c) => ({ ...c }));
         setCategories(sortedCats);
         setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
 
         setFormData((prev) => ({
           ...prev,
-          ...(storeInfo || {}),
-          ...resRules,
-          ...arRules,
+          ...(settingsMap.storeInfo || {}),
+          ...(settingsMap.reservations || {}),
+          ...(settingsMap.ar || {}),
           displayName: user?.name || '',
         }));
       } catch (error) {
@@ -162,76 +148,71 @@ const Settings = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
+      const now = new Date().toISOString();
+
       if (activeTab === 'categories') {
-        const batch = writeBatch(db);
-        
-        // Find changed categories
+        // Upsert all categories; delete removed ones
         for (let i = 0; i < categories.length; i++) {
           const cat = categories[i];
-          const initial = initialCategories.find(ic => ic.id === cat.id);
-          const needsUpdate = !initial || 
-                             JSON.stringify(cat) !== JSON.stringify(initial) || 
-                             cat.order !== i;
-          
-          if (needsUpdate) {
-            // New category?
-            let catRef;
-            if (cat.id.startsWith('temp-')) {
-              catRef = doc(collection(db, 'categories')); // Auto ID
-            } else {
-              catRef = doc(db, 'categories', cat.id);
-            }
-            
-            const updateData = { ...cat, order: i, updatedAt: serverTimestamp() };
-            // Ensure internal Firestore ID isn't in fields if not wanted
-            delete updateData.id; 
-            batch.set(catRef, updateData, { merge: true });
+          const { id, ...fields } = cat;
+          if (id?.startsWith('temp-')) {
+            // New category
+            await supabase.from('categories').insert({ ...fields, order: i, deleted: false, created_at: now, updated_at: now });
+          } else {
+            await supabase.from('categories').update({ ...fields, order: i, updated_at: now }).eq('id', id);
           }
         }
-        
-        // Find deleted categories
+        // Soft-delete removed categories
         for (const initial of initialCategories) {
-          if (!categories.find(c => c.id === initial.id)) {
-            const catRef = doc(db, 'categories', initial.id);
-            batch.delete(catRef);
+          if (!categories.find((c) => c.id === initial.id)) {
+            await supabase.from('categories').update({ deleted: true, updated_at: now }).eq('id', initial.id);
           }
         }
-        
-        await batch.commit();
-        
-        // Refresh to get real IDs
-        const catSnap = await getDocs(collection(db, 'categories'));
-        const cats = [];
-        catSnap.forEach((snapDoc) => cats.push({ id: snapDoc.id, ...snapDoc.data() }));
-        const sortedCats = cats.sort((a, b) => (a.order || 0) - (b.order || 0));
-        setCategories(sortedCats);
-        setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
-        
+        // Refresh
+        const { data: fresh } = await supabase.from('categories').select('*').eq('deleted', false).order('order');
+        const sorted = (fresh ?? []);
+        setCategories(sorted);
+        setInitialCategories(JSON.parse(JSON.stringify(sorted)));
         toast.success('Categories saved successfully!');
+
       } else if (activeTab === 'boutique') {
-        await setDocument('settings', 'storeInfo', {
-          storeName: formData.storeName,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          gcashName: formData.gcashName || '',
-          gcashNumber: formData.gcashNumber || '',
-          gcashQrUrl: formData.gcashQrUrl || '',
-        });
+        await supabase.from('settings').upsert({
+          key: 'storeInfo',
+          value: {
+            storeName: formData.storeName,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            gcashName: formData.gcashName || '',
+            gcashNumber: formData.gcashNumber || '',
+            gcashQrUrl: formData.gcashQrUrl || '',
+          },
+          updated_at: now,
+        }, { onConflict: 'key' });
         toast.success('Boutique settings saved!');
+
       } else if (activeTab === 'reservation') {
-        await setDocument('settings', 'reservations', {
-          maxBookingDays: formData.maxBookingDays,
-          depositRequired: formData.depositRequired,
-          cancellationWindow: formData.cancellationWindow,
-        });
+        await supabase.from('settings').upsert({
+          key: 'reservations',
+          value: {
+            maxBookingDays: formData.maxBookingDays,
+            depositRequired: formData.depositRequired,
+            cancellationWindow: formData.cancellationWindow,
+          },
+          updated_at: now,
+        }, { onConflict: 'key' });
         toast.success('Reservation rules saved!');
+
       } else if (activeTab === 'ar') {
-        await setDocument('settings', 'ar', {
-          enableGlobalAR: formData.enableGlobalAR,
-          autoApproveAR: formData.autoApproveAR,
-          maxFileSize: formData.maxFileSize,
-        });
+        await supabase.from('settings').upsert({
+          key: 'ar',
+          value: {
+            enableGlobalAR: formData.enableGlobalAR,
+            autoApproveAR: formData.autoApproveAR,
+            maxFileSize: formData.maxFileSize,
+          },
+          updated_at: now,
+        }, { onConflict: 'key' });
         toast.success('AR settings saved!');
       }
 
@@ -254,16 +235,15 @@ const Settings = () => {
 
   const handlePasswordReset = async () => {
     const email = user?.email;
-    if (!email) {
-      toast.error('No email address found for your account.');
-      return;
-    }
+    if (!email) { toast.error('No email address found for your account.'); return; }
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) throw error;
       toast.success(`Password reset email sent to ${email}`);
       await logAction(user, 'Requested password reset');
     } catch (error) {
-      console.error('Password reset error:', error);
       toast.error(error.message || 'Failed to send reset email.');
     }
   };

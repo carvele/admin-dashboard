@@ -381,3 +381,95 @@
   border-color: var(--charcoal);
   color: var(--white);
 }
+
+/* Archive/Segment Toggle styling */
+.archive-toggle-row {
+  display: flex;
+  background-color: var(--cream);
+  padding: 0.25rem;
+  border-radius: 8px;
+  width: fit-content;
+  border: 1px solid var(--border-color);
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.archive-toggle-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.archive-toggle-btn:hover {
+  color: var(--charcoal);
+}
+
+.archive-toggle-btn.active {
+  background-color: var(--white);
+  color: var(--charcoal);
+  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.08);
+}
+
+/* Archived Card Styles */
+.archived-card {
+  opacity: 0.85;
+}
+
+.archived-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(247, 245, 240, 0.85); /* cream colored tint */
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  z-index: 10;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.btn-archive-outline {
+  border-color: var(--warning);
+  color: #d97706; /* Amber 600 */
+}
+.btn-archive-outline:hover {
+  background-color: #fef3c7; /* Amber 50 */
+  border-color: #d97706;
+}
+
+.archive-icon-wrap {
+  background-color: #fef3c7;
+  color: #d97706;
+  display: inline-flex;
+  padding: 1rem;
+  border-radius: 50%;
+  margin-bottom: 1rem;
+}
+.btn-archive {
+  background-color: #d97706;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-archive:hover {
+  opacity: 0.9;
+}

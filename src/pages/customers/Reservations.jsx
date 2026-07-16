@@ -11,19 +11,17 @@ import {
   XCircle,
   Clock,
   Eye,
-  Trash2,
   CalendarCheck,
   UserCheck,
   Shirt,
   MessageSquare,
 } from 'lucide-react';
-import StatusBadge from '../../components/StatusBadge';
+import StatusBadge from '../../components/inventory/StatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import {
   subscribeToReservations,
   adjustInventoryForReservation,
   updateReservation,
-  deleteReservation,
   createReservation,
   repairReservationData,
 } from '../../services/reservationService';
@@ -127,7 +125,6 @@ const Reservations = () => {
   const [viewMode, setViewMode] = useState('table');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [viewModal, setViewModal] = useState(null);
 
   const [newRes, setNewRes] = useState({
@@ -290,19 +287,7 @@ const Reservations = () => {
     }
   };
 
-  const handleDelete = async () => {
-    try {
-      await deleteReservation(deleteConfirm.docId);
-      await logAction(user, 'Deleted reservation', {
-        reservationId: deleteConfirm.id,
-        customer: deleteConfirm.customerName || deleteConfirm.customer,
-      });
-      toast.success(`Reservation ${deleteConfirm.id} deleted`);
-      setDeleteConfirm(null);
-    } catch (e) {
-      toast.error('Failed to delete');
-    }
-  };
+
 
   const handleCreateReservation = async (e) => {
     e.preventDefault();
@@ -537,15 +522,7 @@ const Reservations = () => {
                               <Calendar size={16} />
                             </button>
                           )}
-                          {can(user?.role, 'delete_reservation') && (
-                            <button
-                              className="action-icon reject"
-                              title="Delete"
-                              onClick={() => setDeleteConfirm(res)}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
+
                         </div>
                       </td>
                     </tr>
