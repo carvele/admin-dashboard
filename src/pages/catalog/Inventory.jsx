@@ -70,9 +70,12 @@ const Inventory = () => {
 
   // Product list — needed to map each inventory row to its category/subcategory
   // (category_id lives on products, not on inventory rows) and to feed the
-  // stock-baseline picker in the admin panel below.
+  // stock-baseline picker in the admin panel below. includeDeleted=true so
+  // archived inventory rows (viewMode === 'archived') still resolve their
+  // real category instead of falling into "Uncategorized" just because
+  // their parent product is soft-deleted.
   React.useEffect(() => {
-    const unsub = subscribeToProducts((data) => setProducts(data));
+    const unsub = subscribeToProducts((data) => setProducts(data), true);
     return () => unsub();
   }, []);
 

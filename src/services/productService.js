@@ -26,9 +26,9 @@ import { queryCache, CACHE_TTL } from '../utils/cache';
 
 // ── Products ────────────────────────────────────────────────
 
-/** Real-time subscription to all non-deleted products. */
-export const subscribeToProducts = (callback) => {
-  return subscribeToCollection('products', callback);
+/** Real-time subscription to products. Non-deleted only unless includeDeleted. */
+export const subscribeToProducts = (callback, includeDeleted = false) => {
+  return subscribeToCollection('products', callback, {}, includeDeleted);
 };
 
 export const getProducts = async (includeDeleted = false, maxResults = 0) => {
