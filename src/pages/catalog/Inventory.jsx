@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search,
   Plus,
@@ -13,10 +13,14 @@ import {
   ShoppingCart,
   Info,
   Flame,
+  ChevronDown,
+  ChevronRight,
+  Settings2,
 } from 'lucide-react';
 import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockHealth';
 import {
   subscribeToInventory,
+  subscribeToProducts,
   updateInventoryItem,
   archiveInventoryItem,
   restoreInventoryItem,
@@ -25,41 +29,64 @@ import {
   updateProduct,
   recalculateAllInventoryStock,
   recordBoutiqueSale,
-  getCategories,
   subscribeToCategories,
   persistDemandScore,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
+import { can } from '../../utils/permissions';
+import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
+import SkeletonTable from '../../components/SkeletonTable';
 import { toast } from 'sonner';
 import './Inventory.css';
 
+// Garment sizes don't sort alphabetically in a useful order (S, M, L, XL — not
+// L, M, S, XL). Anything not in this list (numeric sizes, "One Size", etc.)
+// sorts after the named sizes, alphabetically among themselves.
+const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const sizeRank = (s) => {
+  const i = SIZE_ORDER.indexOf(s);
+  return i === -1 ? SIZE_ORDER.length : i;
+};
+
+const TABLE_COLUMNS = 9;
+
 const Inventory = () => {
   const { user, isAdminUnlocked } = useAuth();
+  const canManageLookups = can(user?.role, 'manage_inventory');
   const [inventory, setInventory] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
-      console.log('DEBUG: RAW INVENTORY FROM FIRESTORE:', data);
       setInventory(data);
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  // Product list — needed to map each inventory row to its category/subcategory
+  // (category_id lives on products, not on inventory rows) and to feed the
+  // stock-baseline picker in the admin panel below.
+  React.useEffect(() => {
+    const unsub = subscribeToProducts((data) => setProducts(data));
+    return () => unsub();
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [dbCategories, setDbCategories] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]); // [{id,name,subcategories:[{id,name}]}]
+  const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ key: 'stockStatus', direction: 'ascending' });
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
 
-  // Fetch dynamic categories
-  // Subscribe to dynamic categories for real-time filter sync
+  // Subscribe to the real category tree for both the filter dropdown and the
+  // Category → Subcategory grouping below.
   React.useEffect(() => {
-    const unsub = subscribeToCategories((data) => {
-      setDbCategories(data.map(c => c.name));
-    });
+    const unsub = subscribeToCategories((tree) => setCategoryTree(tree));
     return () => unsub();
   }, []);
 
@@ -118,7 +145,7 @@ const Inventory = () => {
   const lowStockCount = stockBreakdown.alerts; // very-low + critical + no-stock
 
   // Extract unique categories for filter - Sync with DB categories
-  const dropdownCategories = ['All', ...dbCategories];
+  const dropdownCategories = ['All', ...categoryTree.map((c) => c.name)];
 
   const handleSort = (key) => {
     let direction = 'ascending';
@@ -163,6 +190,63 @@ const Inventory = () => {
     return matchesSearch && matchesCategory;
   });
 
+  // ── Category → Subcategory grouping (the "browsing" view) ──────────────────
+  // Only used when neither search nor the category dropdown narrows the list —
+  // the moment either does, a flat filtered/sorted table (below) is more
+  // useful than a tree the user has to dig through.
+  const isBrowsingMode = !searchTerm.trim() && categoryFilter === 'All';
+
+  const productMetaById = useMemo(() => {
+    const map = {};
+    products.forEach((p) => { map[p.id] = p; });
+    return map;
+  }, [products]);
+
+  const hierarchy = useMemo(() => {
+    if (!isBrowsingMode) return [];
+    const scopedRows = inventory.filter((i) => (i.deleted === true) === (viewMode === 'archived'));
+
+    return categoryTree
+      .map((cat) => {
+        const subcats = cat.subcategories
+          .map((sub) => {
+            const rows = scopedRows
+              .filter((r) => productMetaById[r.productDocId]?.categoryId === sub.id)
+              .sort((a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size));
+            return {
+              ...sub,
+              rows,
+              alertCount: rows.filter((r) => isStockAlert(r.available, r.total, r.reserved || 0)).length,
+            };
+          })
+          .filter((sub) => sub.rows.length > 0);
+
+        return {
+          ...cat,
+          subcats,
+          rowCount: subcats.reduce((s, sc) => s + sc.rows.length, 0),
+          alertCount: subcats.reduce((s, sc) => s + sc.alertCount, 0),
+        };
+      })
+      .filter((cat) => cat.subcats.length > 0);
+  }, [isBrowsingMode, inventory, viewMode, productMetaById, categoryTree]);
+
+  const uncategorizedRows = useMemo(() => {
+    if (!isBrowsingMode) return [];
+    const scopedRows = inventory.filter((i) => (i.deleted === true) === (viewMode === 'archived'));
+    return scopedRows
+      .filter((r) => !productMetaById[r.productDocId]?.categoryId)
+      .sort((a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size));
+  }, [isBrowsingMode, inventory, viewMode, productMetaById]);
+
+  const toggleCategory = useCallback((id) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
   // getStockStatus is replaced by the shared getStockHealth() from stockHealth.js
 
   // --- ACTIONS ---
@@ -195,9 +279,9 @@ const Inventory = () => {
           status = totalReserved > 0 ? 'Reserved' : 'Out of Stock';
         }
 
-        await updateProduct(actualProdDocId, { 
+        await updateProduct(actualProdDocId, {
           stock: newTotalStock,
-          status: status 
+          status: status
         });
       }
     } catch (err) {
@@ -249,7 +333,7 @@ const Inventory = () => {
       const price = parseFloat(salePriceInput) || 0;
       await recordBoutiqueSale(sellModal, qty, user, price);
       await syncProductStock(sellModal.productDocId, sellModal.sku);
-      
+
       toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
       setSellModal(null);
       setRestockQty('');
@@ -379,6 +463,142 @@ const Inventory = () => {
     toast.success('Inventory exported as CSV');
   };
 
+  // ── Shared row renderer — used by both the flat (search/filter) view and
+  // the grouped (browsing) view, so the two never drift out of sync. ────────
+  const renderInvRow = (inv) => {
+    const health = getStockHealth(inv.available, inv.total, inv.reserved || 0);
+
+    return (
+      <tr key={`${inv.id}-${inv.size}`}>
+        <td className="font-mono text-xs text-secondary">{inv.sku || inv.id}</td>
+        <td className="font-medium">{inv.item}</td>
+        <td>{inv.category}</td>
+        <td>
+          <span className="size-badge">{inv.size}</span>
+        </td>
+        <td className="text-right">{inv.total}</td>
+        <td className="text-right text-secondary">{inv.reserved || 0}</td>
+        <td className="text-right font-medium">{inv.available}</td>
+        <td className="stock-cell">
+          <div className="urgency-tooltip-wrap">
+            {/* Progress bar */}
+            <div className="stock-progress-container" style={{ flex: 1 }}>
+              <div className="stock-progress-bar">
+                <div
+                  className="stock-progress-fill"
+                  style={{ width: `${health.percent}%`, backgroundColor: health.color }}
+                />
+              </div>
+              <span className={`stock-tier-badge ${health.tier}`}>
+                {health.tier === 'critical' && <Flame size={10} />}
+                {health.label}
+              </span>
+              {/* Demand pressure badge — only shown when demand is notable */}
+              {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
+                <span className={`demand-badge ${health.demandLevel}`}>
+                  🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
+                </span>
+              )}
+            </div>
+            {/* Urgency tooltip */}
+            <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
+            <span className="urgency-tip">{health.urgencyTooltip}</span>
+          </div>
+        </td>
+        <td className="text-right">
+          <div className="action-buttons justify-end">
+            {inv.deleted ? (
+              <button
+                className="icon-btn-small text-success"
+                title="Restore"
+                onClick={() => handleRestore(inv)}
+              >
+                <ArchiveRestore size={15} />
+              </button>
+            ) : (
+              <>
+                <button
+                  className="icon-btn-small"
+                  title="Add / Publish"
+                  onClick={() => handlePublishProduct(inv)}
+                  style={{ opacity: inv.available > 0 ? 1 : 0.4 }}
+                >
+                  <Plus size={15} />
+                </button>
+                <button
+                  className="icon-btn-small restock-btn"
+                  title="Restock"
+                  onClick={() => {
+                    setRestockModal(inv);
+                    setRestockQty('');
+                  }}
+                >
+                  <Package size={15} />
+                </button>
+                <button
+                  className="icon-btn-small"
+                  title="Record Boutique Sale"
+                  onClick={() => {
+                    setSellModal(inv);
+                    setRestockQty('1');
+                    setSalePriceInput(inv.price || '');
+                  }}
+                  style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
+                  disabled={inv.available <= 0}
+                >
+                  <ShoppingCart size={15} />
+                </button>
+                {isAdminUnlocked && (
+                  <>
+                    <button
+                      className="icon-btn-small"
+                      title="Edit"
+                      onClick={() => openEditModal(inv)}
+                    >
+                      <Edit size={15} />
+                    </button>
+                    <button
+                      className="icon-btn-small text-warning"
+                      title="Archive"
+                      onClick={() => setArchiveConfirm(inv)}
+                    >
+                      <Archive size={15} />
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderGroupHeaderRow = (key, label, rowCount, alertCount, isExpanded, onClick, depth) => (
+    <tr
+      key={key}
+      className={`inv-group-header depth-${depth}`}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+      aria-expanded={isExpanded}
+    >
+      <td colSpan={TABLE_COLUMNS}>
+        <div className="inv-group-header-content">
+          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span className="inv-group-label">{label}</span>
+          <span className="inv-group-count">{rowCount} {rowCount === 1 ? 'item' : 'items'}</span>
+          {alertCount > 0 && (
+            <span className="inv-group-alert">
+              <AlertTriangle size={12} /> {alertCount} need{alertCount === 1 ? 's' : ''} attention
+            </span>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+
   return (
     <div className="page-container">
       <div className="page-header d-flex justify-between align-center">
@@ -389,8 +609,17 @@ const Inventory = () => {
           </p>
         </div>
         <div className="flex-center gap-2">
-          <button 
-            className="btn-outline flex-center gap-2" 
+          {canManageLookups && (
+            <button
+              className={`btn-outline flex-center gap-2 ${showAdmin ? 'active' : ''}`}
+              onClick={() => setShowAdmin(!showAdmin)}
+              aria-label={showAdmin ? 'Hide admin controls' : 'Show admin controls'}
+            >
+              <Settings2 size={18} /> {showAdmin ? 'Hide Admin' : 'Show Admin'}
+            </button>
+          )}
+          <button
+            className="btn-outline flex-center gap-2"
             onClick={handleSyncStock}
             disabled={isSyncing}
           >
@@ -402,6 +631,14 @@ const Inventory = () => {
           </button>
         </div>
       </div>
+
+      {showAdmin && canManageLookups && (
+        <AdminInventoryPanel
+          products={products}
+          onClose={() => setShowAdmin(false)}
+          onProductUpdated={() => {}}
+        />
+      )}
 
       <div className="inv-summary-grid">
         <div className="card inv-stat-card">
@@ -501,175 +738,133 @@ const Inventory = () => {
               </option>
             ))}
           </select>
+          {isBrowsingMode && (
+            <p className="inv-mode-hint text-secondary text-xs">
+              Grouped by category — search or filter above to switch to a flat sortable list.
+            </p>
+          )}
         </div>
 
-        <div className="table-container">
-          <table className="table inv-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer' }}>
-                  SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th onClick={() => handleSort('item')} style={{ cursor: 'pointer' }}>
-                  Product Name {sortConfig.key === 'item' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
-                  Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th>Size</th>
-                <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer' }}>
-                  Total {sortConfig.key === 'total' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th className="text-right">Reserved</th>
-                <th className="text-right" onClick={() => handleSort('available')} style={{ cursor: 'pointer' }}>
-                  Available {sortConfig.key === 'available' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th onClick={() => handleSort('stockStatus')} style={{ cursor: 'pointer' }}>
-                  Stock Level {sortConfig.key === 'stockStatus' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+        {loading ? (
+          <div className="p-4"><SkeletonTable columns={TABLE_COLUMNS} rows={6} /></div>
+        ) : (
+          <div className="table-container">
+            <table className="table inv-table">
+              <thead>
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-secondary">
-                    Loading inventory...
-                  </td>
+                  <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer' }}>
+                    SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSort('item')} style={{ cursor: 'pointer' }}>
+                    Product Name {sortConfig.key === 'item' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
+                    Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th>Size</th>
+                  <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer' }}>
+                    Total {sortConfig.key === 'total' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="text-right">Reserved</th>
+                  <th className="text-right" onClick={() => handleSort('available')} style={{ cursor: 'pointer' }}>
+                    Available {sortConfig.key === 'available' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSort('stockStatus')} style={{ cursor: 'pointer' }}>
+                    Stock Level {sortConfig.key === 'stockStatus' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ) : filteredInv.length === 0 ? (
-                <tr>
-                  <td colSpan="9">
-                    <div className="empty-state flex-col flex-center gap-3 p-8">
-                      <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                        <PackageOpen size={48} opacity={0.5} />
-                      </div>
-                      <h3 className="text-lg font-medium">No inventory items found</h3>
-                      <p className="text-secondary text-center max-w-sm">
-                        We couldn't find any inventory records matching your current search. Try
-                        adjusting your filters.
-                      </p>
-                      {searchTerm && (
-                        <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
-                          Clear Search
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredInv.map((inv) => {
-                  const health = getStockHealth(inv.available, inv.total, inv.reserved || 0);
-
-                  return (
-                    <tr key={`${inv.id}-${inv.size}`}>
-                      <td className="font-mono text-xs text-secondary">{inv.sku || inv.id}</td>
-                      <td className="font-medium">{inv.item}</td>
-                      <td>{inv.category}</td>
-                      <td>
-                        <span className="size-badge">{inv.size}</span>
-                      </td>
-                      <td className="text-right">{inv.total}</td>
-                      <td className="text-right text-secondary">{inv.reserved || 0}</td>
-                      <td className="text-right font-medium">{inv.available}</td>
-                      <td className="stock-cell">
-                        <div className="urgency-tooltip-wrap">
-                          {/* Progress bar */}
-                          <div className="stock-progress-container" style={{ flex: 1 }}>
-                            <div className="stock-progress-bar">
-                              <div
-                                className="stock-progress-fill"
-                                style={{ width: `${health.percent}%`, backgroundColor: health.color }}
-                              />
-                            </div>
-                            <span className={`stock-tier-badge ${health.tier}`}>
-                              {health.tier === 'critical' && <Flame size={10} />}
-                              {health.label}
-                            </span>
-                            {/* Demand pressure badge — only shown when demand is notable */}
-                            {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
-                              <span className={`demand-badge ${health.demandLevel}`}>
-                                🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
-                              </span>
-                            )}
+              </thead>
+              <tbody>
+                {isBrowsingMode ? (
+                  hierarchy.length === 0 && uncategorizedRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={TABLE_COLUMNS}>
+                        <div className="empty-state flex-col flex-center gap-3 p-8">
+                          <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
+                            <PackageOpen size={48} opacity={0.5} />
                           </div>
-                          {/* Urgency tooltip */}
-                          <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
-                          <span className="urgency-tip">{health.urgencyTooltip}</span>
-                        </div>
-                      </td>
-                      <td className="text-right">
-                        <div className="action-buttons justify-end">
-                          {inv.deleted ? (
-                            <button
-                              className="icon-btn-small text-success"
-                              title="Restore"
-                              onClick={() => handleRestore(inv)}
-                            >
-                              <ArchiveRestore size={15} />
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                className="icon-btn-small"
-                                title="Add / Publish"
-                                onClick={() => handlePublishProduct(inv)}
-                                style={{ opacity: inv.available > 0 ? 1 : 0.4 }}
-                              >
-                                <Plus size={15} />
-                              </button>
-                              <button
-                                className="icon-btn-small restock-btn"
-                                title="Restock"
-                                onClick={() => {
-                                  setRestockModal(inv);
-                                  setRestockQty('');
-                                }}
-                              >
-                                <Package size={15} />
-                              </button>
-                              <button
-                                className="icon-btn-small"
-                                title="Record Boutique Sale"
-                                onClick={() => {
-                                  setSellModal(inv);
-                                  setRestockQty('1');
-                                  setSalePriceInput(inv.price || '');
-                                }}
-                                style={{ color: 'var(--stock-high)', opacity: inv.available > 0 ? 1 : 0.4 }}
-                                disabled={inv.available <= 0}
-                              >
-                                <ShoppingCart size={15} />
-                              </button>
-                              {isAdminUnlocked && (
-                                <>
-                                  <button
-                                    className="icon-btn-small"
-                                    title="Edit"
-                                    onClick={() => openEditModal(inv)}
-                                  >
-                                    <Edit size={15} />
-                                  </button>
-                                  <button
-                                    className="icon-btn-small text-warning"
-                                    title="Archive"
-                                    onClick={() => setArchiveConfirm(inv)}
-                                  >
-                                    <Archive size={15} />
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          )}
+                          <h3 className="text-lg font-medium">
+                            No {viewMode === 'archived' ? 'archived' : ''} inventory yet
+                          </h3>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    <>
+                      {hierarchy.map((cat) => {
+                        const catExpanded = expandedCategories.has(cat.id);
+                        return (
+                          <React.Fragment key={cat.id}>
+                            {renderGroupHeaderRow(
+                              cat.id,
+                              cat.name,
+                              cat.rowCount,
+                              cat.alertCount,
+                              catExpanded,
+                              () => toggleCategory(cat.id),
+                              0,
+                            )}
+                            {catExpanded && cat.subcats.map((sub) => (
+                              <React.Fragment key={sub.id}>
+                                {renderGroupHeaderRow(
+                                  sub.id,
+                                  sub.name,
+                                  sub.rows.length,
+                                  sub.alertCount,
+                                  expandedCategories.has(sub.id),
+                                  () => toggleCategory(sub.id),
+                                  1,
+                                )}
+                                {expandedCategories.has(sub.id) && sub.rows.map(renderInvRow)}
+                              </React.Fragment>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                      {uncategorizedRows.length > 0 && (
+                        <React.Fragment>
+                          {renderGroupHeaderRow(
+                            'uncategorized',
+                            'Uncategorized',
+                            uncategorizedRows.length,
+                            uncategorizedRows.filter((r) => isStockAlert(r.available, r.total, r.reserved || 0)).length,
+                            expandedCategories.has('uncategorized'),
+                            () => toggleCategory('uncategorized'),
+                            0,
+                          )}
+                          {expandedCategories.has('uncategorized') && uncategorizedRows.map(renderInvRow)}
+                        </React.Fragment>
+                      )}
+                    </>
+                  )
+                ) : filteredInv.length === 0 ? (
+                  <tr>
+                    <td colSpan={TABLE_COLUMNS}>
+                      <div className="empty-state flex-col flex-center gap-3 p-8">
+                        <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
+                          <PackageOpen size={48} opacity={0.5} />
+                        </div>
+                        <h3 className="text-lg font-medium">No inventory items found</h3>
+                        <p className="text-secondary text-center max-w-sm">
+                          We couldn't find any inventory records matching your current search. Try
+                          adjusting your filters.
+                        </p>
+                        {searchTerm && (
+                          <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
+                            Clear Search
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInv.map(renderInvRow)
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ===== RESTOCK MODAL ===== */}
@@ -687,6 +882,9 @@ const Inventory = () => {
               </button>
             </div>
             <form className="modal-body" onSubmit={handleRestock}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+                Adds units to this size only — other sizes of the same product are unaffected.
+              </p>
               <div className="restock-item-info">
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
@@ -744,6 +942,10 @@ const Inventory = () => {
               </button>
             </div>
             <form className="modal-body" onSubmit={handleEdit}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem' }}>
+                Directly overwrites the stock counts for this size — use Restock instead if you're
+                just adding newly-arrived units.
+              </p>
               <div className="form-row">
                 <div className="form-group flex-1">
                   <label className="label">Total Units</label>
@@ -854,6 +1056,10 @@ const Inventory = () => {
               </button>
             </div>
             <form className="modal-body" onSubmit={handleSell}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem' }}>
+                Records a walk-in sale and deducts it from available stock — for orders placed
+                through the app, stock already adjusts automatically on reservation.
+              </p>
               <div className="restock-item-info">
                 <strong>{sellModal.item}</strong>
                 <span className="size-badge">{sellModal.size}</span>

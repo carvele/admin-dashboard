@@ -1,165 +1,22 @@
 /**
  * src/services/inventoryService.js
- * Data-access layer for inventory feature
- *
- * Follows productService.js pattern:
- *  - Uses supabaseService helpers (getCollection, updateDocument, etc.)
- *  - Handles snake_case ↔ camelCase conversion
- *  - Includes caching where appropriate
+ * Data-access layer for product-level inventory lookups: color/pattern lists
+ * and stock baseline. Per-size stock itself lives in productService.js
+ * (the `inventory` table is the canonical stock model — see
+ * subscribeToInventory / updateInventoryItem there).
  *
  * Key functions:
- *  - getProductWithStock(id) — fetches product + computes currentStock
- *  - getStockMovementHistory(productId) — fetches all movements, newest first
- *  - createStockMovement(req) — appends new movement (only way to change stock)
  *  - getColorList(), updateColorList()
  *  - getPatternList(), updatePatternList()
+ *  - updateStockBaseline()
  */
 
 import { supabase } from '../lib/supabaseClient';
 import {
   getCollection,
-  getDocument,
   updateDocument,
   toCamel,
 } from '../lib/supabaseService';
-import { calculateStockStatus, calculateCurrentStock, calculateStockPercentage } from '../lib/calculateStock';
-
-// ── Stock Movement Functions ────────────────────────────────
-
-/**
- * Fetch all stock movements for a product (newest first)
- * @param {string} productId
- * @returns {Promise<Array>} Array of StockMovement objects
- */
-export const getStockMovementHistory = async (productId) => {
-  const { data, error } = await supabase
-    .from('stock_movements')
-    .select('*')
-    .eq('product_id', productId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data.map(toCamel);
-};
-
-/**
- * Create a new stock movement (the ONLY way to change product stock)
- *
- * This function:
- *  1. Fetches current product state
- *  2. Computes currentStock from existing movements
- *  3. Calculates previousStock and delta
- *  4. Inserts into stock_movements (RLS + CHECK constraint enforce immutability)
- *  5. Returns the created movement
- *
- * @param {string} productId
- * @param {number} newStock - The new stock level
- * @param {string} changeType - 'manual_adjustment', 'restock', or 'correction'
- * @param {string} [note] - Optional note
- * @returns {Promise<Object>} Created StockMovement object
- */
-export const createStockMovement = async (productId, newStock, changeType, note) => {
-  // 1. Get current stock by summing all existing movements
-  const movements = await getStockMovementHistory(productId);
-  const previousStock = calculateCurrentStock(movements);
-
-  // 2. Calculate delta
-  const delta = newStock - previousStock;
-
-  // 3. Insert new movement (RLS will verify admin role)
-  const { data, error } = await supabase
-    .from('stock_movements')
-    .insert({
-      product_id: productId,
-      previous_stock: previousStock,
-      new_stock: newStock,
-      delta,
-      change_type: changeType,
-      note: note || null,
-      // created_at and updated_at are auto-set by Postgres DEFAULT
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return toCamel(data);
-};
-
-// ── Product with Stock Functions ────────────────────────────────
-
-/**
- * Fetch a product with computed stock information
- *
- * @param {string} productId
- * @returns {Promise<Object>} Product object with:
- *   - currentStock: sum of all movements
- *   - stockStatus: calculated from currentStock/stockBaseline
- *   - stockPercentage: percentage of baseline
- */
-export const getProductWithStock = async (productId) => {
-  // 1. Fetch product
-  const product = await getDocument('products', productId);
-  if (!product) return null;
-
-  // 2. Fetch all movements for this product
-  const movements = await getStockMovementHistory(productId);
-
-  // 3. Compute stock values
-  const currentStock = calculateCurrentStock(movements);
-  const stockBaseline = product.stockbaseline ?? 10;
-  const stockPercentage = calculateStockPercentage(currentStock, stockBaseline);
-  const stockStatus = calculateStockStatus(currentStock, stockBaseline);
-
-  // 4. Return enriched product
-  return {
-    ...product,
-    currentStock,
-    stockStatus,
-    stockPercentage,
-  };
-};
-
-/**
- * Fetch all products with computed stock (for dashboard)
- *
- * @param {boolean} [includeDeleted=false]
- * @returns {Promise<Array>} Array of Product objects with stock computed
- */
-export const getProductsWithStock = async (includeDeleted = false) => {
-  const products = await getCollection('products', includeDeleted);
-
-  // For each product, compute stock by fetching movements
-  // This is a N+1 query — consider caching/batching in production
-  const enriched = await Promise.all(
-    products.map(async (p) => {
-      try {
-        const movements = await getStockMovementHistory(p.id);
-        const currentStock = calculateCurrentStock(movements);
-        const stockBaseline = p.stockbaseline ?? 10;
-        const stockPercentage = calculateStockPercentage(currentStock, stockBaseline);
-        const stockStatus = calculateStockStatus(currentStock, stockBaseline);
-
-        return {
-          ...p,
-          currentStock,
-          stockStatus,
-          stockPercentage,
-        };
-      } catch (err) {
-        console.error(`Failed to compute stock for product ${p.id}:`, err);
-        // Return product with default values if fetch fails
-        return {
-          ...p,
-          currentStock: 0,
-          stockStatus: 'ERROR',
-          stockPercentage: 0,
-        };
-      }
-    })
-  );
-
-  return enriched;
-};
 
 // ── Color List Functions ────────────────────────────────
 

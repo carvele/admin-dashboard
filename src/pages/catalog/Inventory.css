@@ -359,3 +359,65 @@
 .btn-archive:hover {
   opacity: 0.9;
 }
+
+/* ===== Category → Subcategory grouping (browsing view) ===== */
+.inv-mode-hint {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.inv-group-header {
+  cursor: pointer;
+  background-color: var(--cream);
+  user-select: none;
+}
+.inv-group-header:hover {
+  background-color: var(--beige);
+}
+.inv-group-header td {
+  padding: 0.7rem 1rem;
+}
+.inv-group-header.depth-1 {
+  background-color: var(--white);
+}
+.inv-group-header.depth-1:hover {
+  background-color: var(--cream);
+}
+
+.inv-group-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--charcoal);
+}
+.inv-group-header.depth-0 .inv-group-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.inv-group-header.depth-1 .inv-group-header-content {
+  padding-left: 1.5rem;
+}
+.inv-group-header.depth-1 .inv-group-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.inv-group-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.inv-group-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--stock-critical);
+  background-color: var(--stock-critical-bg);
+  padding: 0.15rem 0.55rem;
+  border-radius: 20px;
+  margin-left: auto;
+}

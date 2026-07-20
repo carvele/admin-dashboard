@@ -8,6 +8,7 @@ import PendingDeviceView from '../components/PendingDeviceView';
 // ── Lazy-loaded pages (code-split for faster initial load) ──
 const Login = lazy(() => import('../pages/auth/Login'));
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
+const SetPassword = lazy(() => import('../pages/auth/SetPassword'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazy(() => import('../pages/customers/Reservations'));
 const Customers = lazy(() => import('../pages/customers/Customers'));
@@ -18,7 +19,7 @@ const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions
 const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
 const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
 const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
-const InventoryDashboard = lazy(() => import('../pages/InventoryDashboard'));
+const Inventory = lazy(() => import('../pages/catalog/Inventory'));
 const Analytics = lazy(() => import('../pages/admin/Analytics'));
 const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
@@ -128,6 +129,18 @@ const AnimatedRoutes = () => {
             </Suspense>
           }
         />
+        {/* Reached via the Supabase invite-email link. Not wrapped in
+            ProtectedRoute — an invited user has a session but no profiles row
+            yet, so `user` is null; SetPassword reads the Supabase session
+            directly instead. */}
+        <Route
+          path="/set-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <SetPassword />
+            </Suspense>
+          }
+        />
 
         {/* Protect the entire dashboard layout behind the device check */}
         <Route
@@ -215,7 +228,7 @@ const AnimatedRoutes = () => {
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
-                  <InventoryDashboard />
+                  <Inventory />
                 </Suspense>
               </ProtectedRoute>
             }
