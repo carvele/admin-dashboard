@@ -22,16 +22,6 @@ import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import './Settings.css';
 
-const PROTECTED_CATEGORIES = [
-  'Tops',
-  'Bottoms',
-  'Outerwear',
-  'Dresses & Skirts',
-  'Innerwear',
-  'Accessories',
-  'Special Collections',
-];
-
 const Settings = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('boutique');
@@ -271,14 +261,12 @@ const Settings = () => {
     toast.success('Category added to pending list.');
   };
 
-  const handleDeleteCategory = (catId, catName) => {
-    if (PROTECTED_CATEGORIES.includes(catName)) {
-      toast.error('This category is protected and cannot be deleted.');
-      return;
-    }
-    if (!window.confirm(`Are you sure you want to remove "${catName}"? This will only take effect once you click Save Changes.`)) return;
-    setCategories((prev) => prev.filter((c) => c.id !== catId));
-  };
+  // Every entry in `categories` is a top-level (main) category — subcategories
+  // are nested inside `.subcategories` — so main categories are always
+  // protected from deletion here, regardless of which taxonomy is loaded.
+  // Deleting a main category is a big enough change that it should go
+  // through the dedicated category admin panel (which checks for referencing
+  // products), not a casual click on the Settings page.
 
   const handleRenameCategory = (catId) => {
     if (!editingCatName.trim()) return;
@@ -697,33 +685,16 @@ const Settings = () => {
                               }
                             />
                           </label>
-                          {PROTECTED_CATEGORIES.includes(cat.name) ? (
-                            <div
-                              title="System Protected (Cannot Delete)"
-                              style={{
-                                color: 'var(--text-secondary)',
-                                padding: '0.35rem',
-                                opacity: 0.5,
-                              }}
-                            >
-                              <Lock size={14} />
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              title="Delete"
-                              onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                              style={{
-                                color: '#DC2626',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: '0.35rem',
-                              }}
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
+                          <div
+                            title="Main categories can't be deleted here — use the category admin panel"
+                            style={{
+                              color: 'var(--text-secondary)',
+                              padding: '0.35rem',
+                              opacity: 0.5,
+                            }}
+                          >
+                            <Lock size={14} />
+                          </div>
                         </div>
                       </div>
 

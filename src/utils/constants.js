@@ -25,11 +25,16 @@ export const SEASONS = [
   'Cool Season (-Ber Months)',
 ];
 
+// Matched fuzzily (substring, singular/plural-insensitive) against a
+// product's category/sub-category in MeasurementTable.jsx — so e.g. "Dress"
+// already matches new sub-categories like "Casual dresses" without needing
+// an entry per exact name. "Gowns" was dropped: the category it matched
+// ("Ball Gowns") no longer exists in the taxonomy and nothing else contains
+// that substring.
 export const DEFAULT_MEASUREMENT_METRICS = {
   'Tops': ['Shoulder', 'Chest', 'Sleeve Length', 'Body Length'],
   'Bottoms': ['Waist', 'Hip', 'Thigh', 'Inseam', 'Outseam', 'Total Length'],
   'Dress': ['Bust', 'Waist', 'Hip', 'Shoulder', 'Total Length'],
-  'Gowns': ['Bust', 'Waist', 'Hip', 'Shoulder', 'Shoulder to Floor', 'Total Length'],
   'Footwear': ['Foot Length', 'Foot Width'],
   'Outerwear': ['Shoulder', 'Chest', 'Sleeve Length', 'Total Length', 'Cuff'],
   'Bags': ['Width', 'Height', 'Depth', 'Strap Length'],

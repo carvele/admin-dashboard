@@ -84,13 +84,14 @@ const ClothingCatalog = () => {
     const fetchCategories = async () => {
       try {
         const cats = await getCategories();
-        if (cats && cats.length > 0) {
-          setDbCategories(cats.map((c) => c.name));
-        } else {
-          setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
-        }
+        setDbCategories((cats || []).map((c) => c.name));
       } catch (err) {
-        setDbCategories(['Tops', 'Bottoms', 'Outerwear', 'Dresses & Skirts', 'Innerwear', 'Accessories', 'Special Collections']);
+        // No hardcoded fallback list — one would inevitably drift from the
+        // real taxonomy (as the old one did). Degrade to "All" only; the
+        // filter dropdown just won't offer per-category options until the
+        // next successful load.
+        Logger.error('Failed to load categories for filter dropdown', err);
+        setDbCategories([]);
       }
     };
     fetchCategories();

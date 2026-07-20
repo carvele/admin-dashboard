@@ -65,10 +65,16 @@ const CUSTOMERS = [
   },
 ];
 
+// category/subCategory/categoryId reflect the live taxonomy (10 main
+// categories seeded 2026-07-20) rather than the retired 6-category tree —
+// keep these in sync with supabase/migrations/*_seed_new_taxonomy.sql in
+// jezsy-mobile-app if the taxonomy changes again.
 const PRODUCTS = [
   {
     name: 'Midnight Elegance Gown',
-    category: 'Dresses',
+    category: 'Dresses & Jumpsuits',
+    subCategory: 'Formal dresses',
+    categoryId: 'a4444444-0000-0000-0000-000000000002',
     price: 15000,
     material: 'Silk',
     color: 'Black',
@@ -82,6 +88,8 @@ const PRODUCTS = [
   {
     name: 'Summer Breeze Set',
     category: 'Tops',
+    subCategory: 'T-Shirts',
+    categoryId: 'a9999999-0000-0000-0000-000000000001',
     price: 4500,
     material: 'Linen',
     color: 'White',
@@ -94,7 +102,9 @@ const PRODUCTS = [
   },
   {
     name: 'Royal Wedding Gown',
-    category: 'Dresses',
+    category: 'Dresses & Jumpsuits',
+    subCategory: 'Formal dresses',
+    categoryId: 'a4444444-0000-0000-0000-000000000002',
     price: 35000,
     material: 'Tulle & Lace',
     color: 'Ivory',
@@ -108,6 +118,8 @@ const PRODUCTS = [
   {
     name: 'Business Elite Blazer',
     category: 'Outerwear',
+    subCategory: 'Blazers',
+    categoryId: 'a8888888-0000-0000-0000-000000000003',
     price: 8500,
     material: 'Wool Blend',
     color: 'Navy',
@@ -121,6 +133,8 @@ const PRODUCTS = [
   {
     name: 'Party Night Sequin Top',
     category: 'Tops',
+    subCategory: 'Tank tops / camis',
+    categoryId: 'a9999999-0000-0000-0000-000000000002',
     price: 6200,
     material: 'Sequin Mesh',
     color: 'Gold',
@@ -133,7 +147,9 @@ const PRODUCTS = [
   },
   {
     name: 'Resort Maxi Dress',
-    category: 'Dresses',
+    category: 'Dresses & Jumpsuits',
+    subCategory: 'Maxi / midi / mini',
+    categoryId: 'a4444444-0000-0000-0000-000000000003',
     price: 9800,
     material: 'Chiffon',
     color: 'Coral',
@@ -147,6 +163,8 @@ const PRODUCTS = [
   {
     name: 'Classic Tailored Pants',
     category: 'Bottoms',
+    subCategory: 'Pants / trousers',
+    categoryId: 'a3333333-0000-0000-0000-000000000001',
     price: 5500,
     material: 'Cotton Twill',
     color: 'Charcoal',
@@ -159,7 +177,9 @@ const PRODUCTS = [
   },
   {
     name: 'Cocktail Mini Dress',
-    category: 'Dresses',
+    category: 'Dresses & Jumpsuits',
+    subCategory: 'Formal dresses',
+    categoryId: 'a4444444-0000-0000-0000-000000000002',
     price: 11000,
     material: 'Satin',
     color: 'Burgundy',
