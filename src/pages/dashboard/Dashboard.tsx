@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// @ts-ignore
+import { useAuth } from '../../context/AuthContext';
+// @ts-ignore
+import { can } from '../../utils/permissions';
 import {
   AreaChart,
   Area,
@@ -71,6 +75,8 @@ const parseDate = (d: any) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canCustomize = can(user?.role, 'customize_dashboard');
   const [reservations, setReservations] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -265,9 +271,11 @@ const Dashboard = () => {
           <div className="sync-status flex-center gap-1 text-secondary text-xs">
             <RefreshCw size={12} className="cursor-pointer" onClick={loadDashboard} style={{ cursor: 'pointer' }} /> Last synced: {lastSynced.toLocaleTimeString()}
           </div>
-          <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
-            <Settings2 size={14} /> Customize Dashboard
-          </button>
+          {canCustomize && (
+            <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
+              <Settings2 size={14} /> Customize Dashboard
+            </button>
+          )}
         </div>
       </div>
 
@@ -283,12 +291,16 @@ const Dashboard = () => {
           <span className="font-medium">Quick Actions</span>
         </div>
         <div className="flex gap-4">
-          <button className="btn-primary small flex-center gap-2" onClick={() => navigate('/reservations')}>
-            <PlusCircle size={16} /> New Reservation
-          </button>
-          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/catalog')}>
-            <PlusCircle size={16} /> Add Product
-          </button>
+          {can(user?.role, 'create_reservation') && (
+            <button className="btn-primary small flex-center gap-2" onClick={() => navigate('/reservations')}>
+              <PlusCircle size={16} /> New Reservation
+            </button>
+          )}
+          {can(user?.role, 'create_catalog') && (
+            <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/catalog')}>
+              <PlusCircle size={16} /> Add Product
+            </button>
+          )}
           <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/messaging')}>
             <MessageSquare size={16} /> Broadcast
           </button>
@@ -674,7 +686,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      {showPreferences && (
+      {showPreferences && canCustomize && (
         <div 
           className="modal-overlay" 
           onClick={() => setShowPreferences(false)}

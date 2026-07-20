@@ -10,6 +10,16 @@
 
 import { supabase } from './supabaseClient';
 
+// ── Realtime channel naming ─────────────────────────────────
+
+// Date.now() alone collides when React StrictMode double-invokes an effect
+// within the same millisecond: both mounts open supabase.channel() with the
+// same topic, so the second .on('postgres_changes', ...) call lands on an
+// already-subscribed channel and throws. A monotonic counter guarantees
+// uniqueness regardless of timing.
+let channelSeq = 0;
+const uniqueChannelName = (prefix) => `${prefix}:${Date.now()}:${channelSeq++}`;
+
 // ── Key-name conversion helpers ─────────────────────────────
 
 /** Convert a snake_case string to camelCase */
@@ -276,7 +286,7 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
 
   // Real-time channel
   const channel = supabase
-    .channel(`public:${table}:${Date.now()}`)
+    .channel(uniqueChannelName(`public:${table}`))
     .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
       doFetch();
     })
@@ -315,7 +325,7 @@ export const subscribeToDocument = (table, pkColumn, pkValue, callback) => {
   doFetch();
 
   const channel = supabase
-    .channel(`public:${table}:${pkColumn}:${pkValue}`)
+    .channel(uniqueChannelName(`public:${table}:${pkColumn}:${pkValue}`))
     .on('postgres_changes', {
       event: '*',
       schema: 'public',

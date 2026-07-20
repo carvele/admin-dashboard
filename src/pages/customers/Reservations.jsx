@@ -64,6 +64,8 @@ const CountdownTimer = ({ targetDate }) => {
 
 const Reservations = () => {
   const { user } = useAuth();
+  // Staff monitor reservations read-only; only full-access roles act on them.
+  const canManage = can(user?.role, 'assign_reservation');
   const navigate = useNavigate();
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -368,9 +370,11 @@ const Reservations = () => {
               Calendar
             </button>
           </div>
-          <button className="btn-primary flex-center gap-2" onClick={() => setIsModalOpen(true)}>
-            <Plus size={18} /> New Reservation
-          </button>
+          {can(user?.role, 'create_reservation') && (
+            <button className="btn-primary flex-center gap-2" onClick={() => setIsModalOpen(true)}>
+              <Plus size={18} /> New Reservation
+            </button>
+          )}
         </div>
       </div>
 
@@ -455,7 +459,9 @@ const Reservations = () => {
                           >
                             <Eye size={16} />
                           </button>
-                          {/* Lifecycle: Pending → To Pay → To Pickup → Completed */}
+                          {/* Lifecycle actions — full-access roles only; staff view read-only */}
+                          {canManage && (
+                          <>
                           {res.displayStatus === 'Pending' && (
                             <>
                               <button
@@ -521,6 +527,8 @@ const Reservations = () => {
                             >
                               <Calendar size={16} />
                             </button>
+                          )}
+                          </>
                           )}
 
                         </div>
@@ -883,33 +891,6 @@ const Reservations = () => {
         </div>
       )}
 
-      {/* ===== DELETE CONFIRM ===== */}
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
-          >
-            <div className="delete-icon-wrap">
-              <Trash2 size={32} />
-            </div>
-            <h2>Delete Reservation?</h2>
-            <p className="text-secondary mt-2">
-              Remove <strong>{deleteConfirm.id}</strong> for{' '}
-              {deleteConfirm.customerName || deleteConfirm.customer}? This cannot be undone.
-            </p>
-            <div className="modal-footer justify-center mt-4">
-              <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>
-                Cancel
-              </button>
-              <button className="btn-danger" onClick={handleDelete}>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
