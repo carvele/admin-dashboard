@@ -1,0 +1,124 @@
+// create-staff-account
+//
+// Invites a new staff member by email only. Does NOT create a `profiles` row —
+// that happens client-side on the SetPassword page once the invitee verifies
+// their email (by clicking the invite link) and chooses a password. This is
+// what keeps unverified invites out of Team Management and unable to log in.
+//
+// Caller must be an authenticated admin or owner (checked against their own
+// `profiles` row, not the client-supplied body).
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.1';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const ALLOWED_INVITE_ROLES = ['staff', 'admin'];
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return json({ error: 'Missing authorization header' }, 401);
+    }
+
+    // Client bound to the caller's own JWT — used only to identify who is calling.
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser();
+    if (callerError || !caller) {
+      return json({ error: 'Invalid or expired session' }, 401);
+    }
+
+    // Admin client — only ever used after the caller's own role is confirmed below.
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: callerProfile, error: profileError } = await adminClient
+      .from('profiles')
+      .select('role, deleted, is_blocked')
+      .eq('id', caller.id)
+      .maybeSingle();
+
+    if (
+      profileError ||
+      !callerProfile ||
+      callerProfile.deleted ||
+      callerProfile.is_blocked ||
+      !['admin', 'owner'].includes(callerProfile.role)
+    ) {
+      return json({ error: 'You do not have permission to invite staff.' }, 403);
+    }
+
+    const body = await req.json();
+    const email = (body?.email ?? '').toLowerCase().trim();
+    const role = body?.role;
+
+    if (!email || !email.includes('@')) {
+      return json({ error: 'A valid email address is required.' }, 400);
+    }
+    if (!ALLOWED_INVITE_ROLES.includes(role)) {
+      return json({ error: 'Role must be "staff" or "admin".' }, 400);
+    }
+
+    const siteUrl = Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
+
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+      email,
+      {
+        // user_metadata (spoofable by the user) — kept only for display/redirect.
+        // The authoritative role lives in app_metadata, set below.
+        data: { role },
+        redirectTo: `${siteUrl}/set-password`,
+      },
+    );
+
+    if (inviteError) {
+      if (inviteError.status === 422 || /already registered/i.test(inviteError.message)) {
+        return json(
+          {
+            error:
+              'This email already has an account (e.g. a customer sign-up). Invite a fresh address, ' +
+              'or use a + alias like name+staff@gmail.com for testing.',
+          },
+          409,
+        );
+      }
+      return json({ error: inviteError.message }, 500);
+    }
+
+    // Authoritative role assignment. app_metadata is writable ONLY by the service
+    // role — a user cannot change it via auth.updateUser (unlike user_metadata) —
+    // so activate-staff-account can trust staff_role when it creates the profile.
+    const { error: metaError } = await adminClient.auth.admin.updateUserById(
+      inviteData.user.id,
+      { app_metadata: { staff_role: role } },
+    );
+    if (metaError) {
+      console.error('[create-staff-account] Failed to set app_metadata:', metaError);
+      return json({ error: 'Invite sent but role assignment failed. Please retry.' }, 500);
+    }
+
+    return json({ userId: inviteData.user.id }, 200);
+  } catch (err) {
+    console.error('[create-staff-account] Unexpected error:', err);
+    return json({ error: 'Unexpected server error' }, 500);
+  }
+});
+
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}

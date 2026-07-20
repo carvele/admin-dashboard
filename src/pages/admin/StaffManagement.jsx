@@ -21,7 +21,6 @@ import {
 } from '../../services/staffService';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
-import { sanitizeText } from '../../utils/validation';
 import './StaffManagement.css';
 
 const EMPLOYMENT_STATUS_META = {
@@ -54,7 +53,7 @@ const StaffManagement = () => {
 
   // ── Create modal ─────────────────────────────────────────────
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ name: '', email: '', role: 'staff' });
+  const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
 
   // ── Subscribe to ALL staff (including deleted) ───────────────
   useEffect(() => {
@@ -130,7 +129,6 @@ const StaffManagement = () => {
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
-            name: sanitizeText(createForm.name),
             email: createForm.email.toLowerCase().trim(),
             role: createForm.role,
           }),
@@ -145,18 +143,18 @@ const StaffManagement = () => {
         }
         return;
       }
-      await logAction(user, 'Created new staff account', {
+      await logAction(user, 'Invited new staff account', {
         targetType: 'profile',
         targetId: result.userId,
         email: createForm.email,
         role: createForm.role,
       });
       toast.success(
-        `Invite sent to ${createForm.email}. They will receive an email to set their password and activate their account.`,
-        { duration: 6000 },
+        `Invite sent to ${createForm.email}. They'll verify their email via the link and set a password before their account is activated — they'll appear here once that's done.`,
+        { duration: 7000 },
       );
       setIsCreateModalOpen(false);
-      setCreateForm({ name: '', email: '', role: 'staff' });
+      setCreateForm({ email: '', role: 'staff' });
     } catch (err) {
       console.error('Staff creation error:', err);
       toast.error('Failed to create staff account: ' + err.message);
@@ -552,16 +550,6 @@ const StaffManagement = () => {
             </div>
             <form onSubmit={handleCreateAccount} className="modal-body">
               <div className="form-group">
-                <label className="label">Full Name</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
                 <label className="label">Email Address</label>
                 <input
                   type="email"
@@ -583,7 +571,8 @@ const StaffManagement = () => {
                 </select>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
-                An activation email will be sent. The staff member sets their own password when they accept the invite.
+                We'll email a verification link to this address. Once they click it and set a
+                password, their account activates and they'll appear in Team Management.
               </p>
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setIsCreateModalOpen(false)}>

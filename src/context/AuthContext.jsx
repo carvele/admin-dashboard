@@ -195,10 +195,18 @@ export const AuthProvider = ({ children }) => {
 
       // Only admin/staff/owner may access the dashboard
       if (!resolvedRole || resolvedRole === 'customer') {
-        await supabase.auth.signOut();
+        // Pending invite: the invite-email link already established a session for
+        // this user, but they haven't finished Set Password yet (no staff profile
+        // row). Leave the session alone so SetPassword.jsx can use it — rather
+        // than signing them out before they ever reach that page. Detected via
+        // app_metadata.staff_role, which is service-role-only and unforgeable.
+        const isPendingInvite = ['staff', 'admin'].includes(supabaseUser.app_metadata?.staff_role);
+        if (!isPendingInvite) {
+          await supabase.auth.signOut();
+          toast.error('Access denied. Admin portal is for staff only.');
+        }
         setUser(null);
         setIsLoading(false);
-        toast.error('Access denied. Admin portal is for staff only.');
         return;
       }
 
