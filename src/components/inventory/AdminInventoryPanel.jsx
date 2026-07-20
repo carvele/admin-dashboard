@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Upload } from 'lucide-react';
 import {
   addColor,
   addPattern,
@@ -15,7 +16,9 @@ import {
   deleteCategoryAdmin,
   getCategories,
   renameCategoryAdmin,
+  updateCategory,
 } from '../../services/productService';
+import { uploadToCloudinary } from '../../lib/storage';
 
 // ── Inline error dialog (replaces window.alert for deletion errors) ──────────
 const ErrorDialog = ({ message, onClose }) => (
@@ -94,6 +97,9 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   // Sub-category add form state
   const [newSubName, setNewSubName] = useState('');
   const [newSubParentId, setNewSubParentId] = useState('');
+
+  // Category image upload — id of the category currently mid-upload, or null
+  const [uploadingCatId, setUploadingCatId] = useState(null);
 
   const load = async () => {
     try {
@@ -266,6 +272,20 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
     }
   };
 
+  const handleCategoryImageUpload = async (catId, file) => {
+    if (!file) return;
+    setUploadingCatId(catId);
+    try {
+      const { secure_url } = await uploadToCloudinary(file);
+      await updateCategory(catId, { imageUrl: secure_url });
+      await load();
+    } catch (err) {
+      setError(err.message || 'Failed to upload category image.');
+    } finally {
+      setUploadingCatId(null);
+    }
+  };
+
   const itemRowStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -285,6 +305,50 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
     backgroundColor: 'transparent',
     flexShrink: 0,
   };
+
+  // Thumbnail + upload button shown next to a category/subcategory's name.
+  // Shared by the top-level list and the subcategory list below.
+  const renderImageControl = (cat) => (
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      {cat.imageUrl ? (
+        <img
+          src={cat.imageUrl}
+          alt=""
+          style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover', marginRight: '0.35rem' }}
+        />
+      ) : (
+        <div
+          title="No image set"
+          style={{
+            width: 24, height: 24, borderRadius: 4, marginRight: '0.35rem',
+            backgroundColor: 'var(--cream)', border: '1px dashed var(--border-color)',
+          }}
+        />
+      )}
+      <label
+        title="Upload image"
+        style={{ color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.35rem', display: 'flex' }}
+      >
+        <Upload size={14} />
+        <input
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => handleCategoryImageUpload(cat.id, e.target.files[0])}
+        />
+      </label>
+      {uploadingCatId === cat.id && (
+        <div
+          style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 4,
+          }}
+        >
+          <div className="loading-spinner" style={{ width: 14, height: 14 }} />
+        </div>
+      )}
+    </div>
+  );
 
   const scrollListStyle = {
     maxHeight: '220px',
@@ -408,6 +472,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                 ) : (
                   categoryTree.map((cat) => (
                     <li key={cat.id} style={itemRowStyle}>
+                      {renderImageControl(cat)}
                       <input
                         defaultValue={cat.name}
                         className="input-field"
@@ -486,6 +551,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                       </li>,
                       ...cat.subcategories.map((sub) => (
                         <li key={sub.id} style={{ ...itemRowStyle, marginLeft: '0.5rem' }}>
+                          {renderImageControl(sub)}
                           <input
                             defaultValue={sub.name}
                             className="input-field"

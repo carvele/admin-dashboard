@@ -276,10 +276,11 @@ const buildCategoryTree = (rows) => {
     id: parent.id,
     name: parent.name,
     slug: parent.slug,
+    imageUrl: parent.imageUrl,
     subcategories: rows
       .filter((r) => r.parentId === parent.id)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-      .map((s) => ({ id: s.id, name: s.name, slug: s.slug })),
+      .map((s) => ({ id: s.id, name: s.name, slug: s.slug, imageUrl: s.imageUrl })),
   }));
 };
 
