@@ -662,6 +662,35 @@ input:checked + .toggle-slider:before {
 .block { display: block; }
 .inline { display: inline; }
 .inline-block { display: inline-block; }
+.flex { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.rounded-full { border-radius: 9999px; }
+.text-accent { color: var(--accent); }
+.text-success { color: #16a34a; }
+.text-warning { color: #d97706; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+
+/* Badge system — `.badge` base + colour variants. Used on Dashboard
+   (stock alerts, weather, logistics) and elsewhere; none were defined. */
+.badge,
+.badge-danger,
+.badge-secondary,
+.badge-success {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge-danger { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
+.badge-success { background: var(--status-approved-bg, #e6f4ea); color: var(--status-approved-text, #1e7e34); }
+.badge-secondary { background: #eef0f2; color: #475569; }
+.badge.accent { background: rgba(212, 175, 55, 0.15); color: var(--accent); }
+.badge.secondary { background: #eef0f2; color: #475569; }
 .flex-row { flex-direction: row; }
 .flex-column { flex-direction: column; }
 .h-auto { height: auto; }
