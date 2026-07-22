@@ -246,28 +246,29 @@ const ClothingCatalog = () => {
             </button>
           ))}
         </div>
-        <div className="search-box">
-          <Search size={18} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-field pl-10"
-          />
-        </div>
-        <div className="color-filter ml-4">
-          <select 
-            className="input-field" 
-            style={{ width: 'auto', minWidth: '150px' }}
-            value={activeColor}
-            onChange={(e) => setActiveColor(e.target.value)}
-          >
-            <option value="All Colors">All Colors</option>
-            {COLOR_CATEGORIES.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+        <div className="catalog-toolbar-actions">
+          <div className="search-box">
+            <Search size={18} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-field pl-10"
+            />
+          </div>
+          <div className="color-filter">
+            <select
+              className="input-field"
+              value={activeColor}
+              onChange={(e) => setActiveColor(e.target.value)}
+            >
+              <option value="All Colors">All Colors</option>
+              {COLOR_CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
