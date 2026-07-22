@@ -1014,7 +1014,7 @@ const Settings = () => {
                   onClick={async () => {
                     if (
                       !window.confirm(
-                        'This will add demo data to your Firestore database. Continue?',
+                        'This will add demo data to your Supabase database. Continue?',
                       )
                     )
                       return;
