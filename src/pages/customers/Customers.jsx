@@ -16,11 +16,16 @@ import {
   Heart,
   Users,
 } from 'lucide-react';
+import { logAction } from '../../services/staffService';
+import { getLogsForTarget } from '../../lib/supabaseService';
+import HistoryTimeline from '../../components/HistoryTimeline';
 import {
   updateCustomer,
   deleteCustomer,
   sendNotification,
   getPaginatedCustomers,
+  getCustomerMeasurements,
+  saveCustomerMeasurements,
 } from '../../services/customerService';
 import { toast } from 'sonner';
 import {
@@ -113,9 +118,54 @@ const Customers = () => {
   };
 
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [custHistory, setCustHistory] = useState([]);
+  const [custHistoryLoading, setCustHistoryLoading] = useState(false);
+  // Body metrics live in `user_measurements`, not on the profile row — load them
+  // separately whenever a customer profile is opened.
+  const [custMeasurements, setCustMeasurements] = useState(null);
+
+  React.useEffect(() => {
+    if (!selectedCustomer?.docId) {
+      setCustMeasurements(null);
+      return;
+    }
+    let cancelled = false;
+    getCustomerMeasurements(selectedCustomer.docId)
+      .then((row) => { if (!cancelled) setCustMeasurements(row); })
+      .catch(() => { if (!cancelled) setCustMeasurements(null); });
+    return () => { cancelled = true; };
+  }, [selectedCustomer?.docId]);
+
+  // Load the account history feed whenever a customer profile is opened
+  React.useEffect(() => {
+    if (!selectedCustomer?.docId) {
+      setCustHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setCustHistoryLoading(true);
+    getLogsForTarget('profile', selectedCustomer.docId)
+      .then((logs) => {
+        if (cancelled) return;
+        setCustHistory(
+          logs.map((l) => ({
+            id: l.id,
+            typeLabel: `📝 ${l.action}`,
+            note: l.details?.note || null,
+            actorName: l.userName,
+            timestamp: l.timestamp,
+          })),
+        );
+      })
+      .finally(() => { if (!cancelled) setCustHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedCustomer?.docId]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+
+  // `profiles` has no status column — customer state is derived from is_blocked.
+  const statusLabel = (c) => (c?.isBlocked ? 'Inactive' : 'Active');
 
   const filteredCustomers = customers.filter(
     (c) =>
@@ -146,57 +196,96 @@ const Customers = () => {
 
   // --- EDIT CUSTOMER ---
   const startEdit = () => {
-    const m = selectedCustomer.measurements || {};
+    const m = custMeasurements?.measurements || {};
     setEditForm({
       name: getUserDisplayName(selectedCustomer),
       email: selectedCustomer.email,
       phone: selectedCustomer.phone,
-      status: selectedCustomer.status,
-      topBust: m.topBust || m.bust || '',
-      underBust: m.underBust || '',
-      waist: m.waist || '',
-      hip: m.hip || m.hips || '',
-      neck: m.neckBase || m.neck || '',
-      shoulderWidth: m.shoulderWidth || '',
-      armLength: m.armLength || '',
-      backLength: m.backLength || '',
-      insideLegLength: m.insideLegLength || '',
-      height: selectedCustomer.user_height_cm || selectedCustomer.height || m.height || '',
-      weight: selectedCustomer.user_weight_kg || '',
+      status: selectedCustomer.isBlocked ? 'Inactive' : 'Active',
+      // Read canonical jsonb keys, falling back to any legacy admin-written keys
+      topBust: m.bust ?? m.topBust ?? '',
+      underBust: m.underBust ?? '',
+      waist: m.waist ?? '',
+      hip: m.hips ?? m.hip ?? '',
+      neck: m.neck ?? m.neckBase ?? '',
+      shoulderWidth: m.shoulderWidth ?? '',
+      armLength: m.armLength ?? '',
+      backLength: m.torsoLength ?? m.backLength ?? '',
+      insideLegLength: m.inseam ?? m.insideLegLength ?? '',
+      height: custMeasurements?.height ?? '',
+      weight: custMeasurements?.weight ?? '',
     });
     setIsEditing(true);
   };
 
   const handleEditSave = async () => {
-    const toNum = (v) => (v ? parseFloat(v) : null);
-    const updated = {
-      name: editForm.name,
+    const toNum = (v) => (v === '' || v === null || v === undefined ? null : parseFloat(v));
+
+    // Split the single display name back into first/last (last token = surname).
+    const nameParts = (editForm.name || '').trim().split(/\s+/).filter(Boolean);
+    const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : (nameParts[0] || '');
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+
+    // Real `profiles` columns only. Status maps to the is_blocked flag
+    // (Active = not blocked, Inactive = blocked) — there is no status column.
+    const profileUpdates = {
+      firstName,
+      lastName,
       email: editForm.email,
       phone: editForm.phone,
-      status: editForm.status,
-      user_height_cm: toNum(editForm.height),
-      user_weight_kg: toNum(editForm.weight),
-      measurements: {
-        ...(selectedCustomer.measurements || {}),
-        topBust: toNum(editForm.topBust),
-        underBust: toNum(editForm.underBust),
-        waist: toNum(editForm.waist),
-        hip: toNum(editForm.hip),
-        neckBase: toNum(editForm.neck),
-        neck: toNum(editForm.neck),
-        shoulderWidth: toNum(editForm.shoulderWidth),
-        armLength: toNum(editForm.armLength),
-        backLength: toNum(editForm.backLength),
-        insideLegLength: toNum(editForm.insideLegLength),
-      },
+      isBlocked: editForm.status === 'Inactive',
     };
+
+    // Body metrics → user_measurements. Merge onto the existing jsonb so any
+    // keys the admin form doesn't surface (confidence, etc.) survive.
+    const measurements = {
+      ...(custMeasurements?.measurements || {}),
+      bust: toNum(editForm.topBust),
+      underBust: toNum(editForm.underBust),
+      waist: toNum(editForm.waist),
+      hips: toNum(editForm.hip),
+      neck: toNum(editForm.neck),
+      shoulderWidth: toNum(editForm.shoulderWidth),
+      armLength: toNum(editForm.armLength),
+      torsoLength: toNum(editForm.backLength),
+      inseam: toNum(editForm.insideLegLength),
+    };
+    const height = toNum(editForm.height);
+    const weight = toNum(editForm.weight);
+
     try {
-      await updateCustomer(selectedCustomer.docId, updated);
-      setSelectedCustomer({ ...selectedCustomer, ...updated });
+      await updateCustomer(selectedCustomer.docId, profileUpdates);
+      await saveCustomerMeasurements(selectedCustomer.docId, { height, weight, measurements });
+
+      // Audit: record which profile fields actually changed (from → to)
+      const changes = {};
+      const beforeName = getUserDisplayName(selectedCustomer);
+      if (editForm.name !== beforeName) changes.name = { from: beforeName ?? null, to: editForm.name };
+      ['email', 'phone'].forEach((f) => {
+        if (profileUpdates[f] !== undefined && profileUpdates[f] !== selectedCustomer[f]) {
+          changes[f] = { from: selectedCustomer[f] ?? null, to: profileUpdates[f] };
+        }
+      });
+      const beforeStatus = selectedCustomer.isBlocked ? 'Inactive' : 'Active';
+      if (editForm.status !== beforeStatus) {
+        changes.status = { from: beforeStatus, to: editForm.status };
+      }
+      await logAction(user, 'Updated customer profile', {
+        targetType: 'profile',
+        targetId: selectedCustomer.docId,
+        customerName: editForm.name,
+        changes,
+      });
+
+      // Reflect changes locally without a refetch
+      const patched = { ...selectedCustomer, firstName, lastName, name: undefined, email: editForm.email, phone: editForm.phone, isBlocked: profileUpdates.isBlocked };
+      setSelectedCustomer(patched);
+      setCustMeasurements({ ...(custMeasurements || {}), height, weight, measurements });
+      setCustomers((prev) => prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...patched } : c)));
       setIsEditing(false);
       toast.success(`Updated ${editForm.name}`);
     } catch (e) {
-      toast.error('Failed to update customer');
+      toast.error('Failed to update customer: ' + (e?.message || 'unknown error'));
     }
   };
 
@@ -204,6 +293,11 @@ const Customers = () => {
   const handleDelete = async () => {
     try {
       await deleteCustomer(deleteConfirm.docId);
+      await logAction(user, 'Archived customer account', {
+        targetType: 'profile',
+        targetId: deleteConfirm.docId,
+        customerName: getUserDisplayName(deleteConfirm),
+      });
       toast.success(`Removed customer ${getUserDisplayName(deleteConfirm)}`);
       setDeleteConfirm(null);
       setSelectedCustomer(null);
@@ -218,10 +312,15 @@ const Customers = () => {
     setSendingMsg(true);
     try {
       await sendNotification(
-        msgModal.docId, 
-        getUserDisplayName(msgModal), 
+        msgModal.docId,
+        getUserDisplayName(msgModal),
         msgText
       );
+      await logAction(user, 'Sent notification to customer', {
+        targetType: 'profile',
+        targetId: msgModal.docId,
+        customerName: getUserDisplayName(msgModal),
+      });
       toast.success('Message sent successfully');
       setMsgModal(null);
       setMsgText('');
@@ -390,9 +489,9 @@ const Customers = () => {
                       </td>
                       <td>
                         <span
-                          className={`status-chip status-chip-${(cust.status || 'active').toLowerCase()}`}
+                          className={`status-chip status-chip-${statusLabel(cust).toLowerCase()}`}
                         >
-                          {cust.status || 'Active'}
+                          {statusLabel(cust)}
                         </span>
                       </td>
                       <td>
@@ -551,9 +650,9 @@ const Customers = () => {
                   <>
                     <h3 className="profile-name-lg">{getUserDisplayName(selectedCustomer)}</h3>
                     <span
-                      className={`status-chip status-chip-${(selectedCustomer.status || 'active').toLowerCase()} mb-2`}
+                      className={`status-chip status-chip-${statusLabel(selectedCustomer).toLowerCase()} mb-2`}
                     >
-                      {selectedCustomer.status || 'Active'}
+                      {statusLabel(selectedCustomer)}
                     </span>
                     <p className="member-since">
                       <Calendar size={13} /> Member since {formatDate(selectedCustomer.createdAt || selectedCustomer.joinedAt)}
@@ -801,34 +900,28 @@ const Customers = () => {
                     </div>
                   ) : (
                     (() => {
-                      const m = selectedCustomer.measurements || {};
-                      const hasMeasurements = 
-                        selectedCustomer.measurements !== undefined && 
-                        selectedCustomer.measurements !== null &&
-                        Object.keys(selectedCustomer.measurements).length > 0;
-                        
-                      if (!hasMeasurements && !selectedCustomer.user_height_cm && !selectedCustomer.user_weight_kg) {
+                      const m = custMeasurements?.measurements || {};
+                      const height = custMeasurements?.height;
+                      const weight = custMeasurements?.weight;
+                      const hasMeasurements =
+                        m && Object.keys(m).some((k) => m[k] !== null && m[k] !== undefined && m[k] !== '');
+
+                      if (!hasMeasurements && !height && !weight) {
                         return <div className="empty-state">No AI scan or measurements saved yet.</div>;
                       }
 
                       const rows = [
-                        { label: 'Bust (Top)', value: m.topBust ?? m.bust },
+                        { label: 'Bust', value: m.bust ?? m.topBust },
                         { label: 'Under Bust', value: m.underBust },
                         { label: 'Waist', value: m.waist },
-                        { label: 'Hips', value: m.hip ?? m.hips },
-                        { label: 'Neck', value: m.neck },
-                        { label: 'Neck Base', value: m.neckBase },
+                        { label: 'Hips', value: m.hips ?? m.hip },
+                        { label: 'Neck', value: m.neck ?? m.neckBase },
                         { label: 'Shoulder', value: m.shoulderWidth },
-                        { label: 'Back Length', value: m.backLength },
+                        { label: 'Back / Torso', value: m.torsoLength ?? m.backLength },
                         { label: 'Arm Length', value: m.armLength },
-                        { label: 'Sleeve (CB)', value: m.sleeveLengthCenterBack },
-                        { label: 'Inside Leg', value: m.insideLegLength },
-                        {
-                          label: 'Height',
-                          value: selectedCustomer.user_height_cm ?? selectedCustomer.height ?? m.height,
-                          unit: 'cm',
-                        },
-                        { label: 'Weight', value: selectedCustomer.user_weight_kg, unit: 'kg' },
+                        { label: 'Inseam', value: m.inseam ?? m.insideLegLength ?? m.legLength },
+                        { label: 'Height', value: height, unit: 'cm' },
+                        { label: 'Weight', value: weight, unit: 'kg' },
                       ].filter((r) => r.value !== undefined && r.value !== null && r.value !== '');
 
                       return (
@@ -846,6 +939,18 @@ const Customers = () => {
                       );
                     })()
                   )}
+                </div>
+
+                {/* Account History */}
+                <div className="profile-section">
+                  <h4 className="section-title flex-center gap-2 justify-start">
+                    <Calendar size={18} /> Account History
+                  </h4>
+                  <HistoryTimeline
+                    entries={custHistory}
+                    loading={custHistoryLoading}
+                    emptyText="No account activity recorded for this customer yet."
+                  />
                 </div>
               </div>
             </div>

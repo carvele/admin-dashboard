@@ -90,6 +90,45 @@ export const deleteCustomer = (docId) => {
   return softDeleteDocument('profiles', docId);
 };
 
+// ── Measurements (public.user_measurements — one row per user) ─
+// NOTE: body metrics live in the dedicated `user_measurements` table, NOT on
+// `profiles`. The jsonb `measurements` column uses the same canonical keys the
+// mobile app reads/writes (bust, waist, hips, inseam, shoulderWidth, armLength,
+// torsoLength, legLength). height/weight are top-level numeric columns.
+
+/** Fetch the single measurements row for a customer (or null). */
+export const getCustomerMeasurements = async (userId) => {
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('user_measurements')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+};
+
+/**
+ * Upsert a customer's measurements. `measurements` is merged onto whatever the
+ * caller passes — callers should spread the existing jsonb first so keys the
+ * admin form doesn't surface (e.g. confidence data) are preserved.
+ * Writes raw column names directly (NO camel→snake conversion) so the jsonb
+ * inner keys keep their camelCase form the mobile app expects.
+ */
+export const saveCustomerMeasurements = async (userId, { height, weight, measurements }) => {
+  const payload = {
+    user_id: userId,
+    height: height ?? null,
+    weight: weight ?? null,
+    measurements: measurements ?? {},
+    measurement_source: 'admin_manual',
+  };
+  const { error } = await supabase
+    .from('user_measurements')
+    .upsert(payload, { onConflict: 'user_id' });
+  if (error) throw error;
+};
+
 // ── Reservations (re-exported from reservationService) ───────
 
 export const subscribeToReservations = (callback) => {
