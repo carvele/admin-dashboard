@@ -283,6 +283,7 @@
 .sp-btn-block:hover, .sp-btn-unblock:hover { opacity: 0.8; }
 
 /* ── History timeline ──────────────────────────────────── */
+/* Timeline row/dot/content styles now live in src/components/HistoryTimeline.css */
 .sp-history-section {
   border-top: 1.5px solid rgba(201, 168, 76, 0.2);
   padding-top: 1.25rem;
@@ -298,102 +299,6 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 1rem;
-}
-
-.sp-timeline-empty {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  padding: 0.75rem 0;
-}
-
-.sp-timeline {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.sp-timeline-item {
-  display: flex;
-  gap: 1rem;
-  position: relative;
-  padding-bottom: 1.25rem;
-}
-.sp-timeline-item:last-child { padding-bottom: 0; }
-.sp-timeline-item:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: 20px;
-  bottom: 0;
-  width: 2px;
-  background: var(--border-light, #e8e8e8);
-}
-
-.sp-tl-dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 3px;
-  border: 2.5px solid #fff;
-  box-shadow: 0 0 0 1.5px currentColor;
-}
-.dot-status { color: var(--color-gold, #c9a84c); background: rgba(201, 168, 76, 0.2); }
-.dot-block  { color: #c0392b;                    background: rgba(192, 57, 43, 0.12); }
-
-.sp-tl-content { flex: 1; }
-
-.sp-tl-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-bottom: 0.3rem;
-}
-
-.sp-tl-type {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-primary, #333);
-}
-
-.sp-tl-date {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.sp-tl-change {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  margin-bottom: 0.3rem;
-}
-.sp-tl-old  { color: var(--text-secondary); text-decoration: line-through; }
-.sp-tl-new  { font-weight: 600; color: var(--text-primary, #333); }
-.sp-tl-arrow { color: var(--text-secondary); flex-shrink: 0; }
-
-.sp-tl-note {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  font-style: italic;
-  margin: 0.2rem 0 0.25rem;
-  background: var(--bg-light, #f9f9f9);
-  border-left: 3px solid var(--border-light, #ddd);
-  padding: 0.3rem 0.6rem;
-  border-radius: 0 4px 4px 0;
-}
-
-.sp-tl-actor {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
 }
 
 /* ── Read-only status section (non-admin own profile) ───── */

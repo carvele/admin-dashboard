@@ -5,6 +5,7 @@
  * Designed to run ONCE from Settings → Developer Tools.
  */
 import { addDocument } from '../lib/supabaseService';
+import { supabase } from '../lib/supabaseClient';
 
 // --- Helpers ---
 const randomDate = (daysAgo) => {
@@ -82,7 +83,7 @@ const PRODUCTS = [
     season: 'All-Season',
     occasion: 'Formal',
     sizes: ['S', 'M', 'L'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: true,
   },
   {
@@ -97,7 +98,7 @@ const PRODUCTS = [
     season: 'Summer',
     occasion: 'Casual',
     sizes: ['XS', 'S', 'M', 'L', 'XL'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: false,
   },
   {
@@ -112,7 +113,7 @@ const PRODUCTS = [
     season: 'All-Season',
     occasion: 'Wedding',
     sizes: ['S', 'M', 'L'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: true,
   },
   {
@@ -127,7 +128,7 @@ const PRODUCTS = [
     season: 'Autumn',
     occasion: 'Business',
     sizes: ['S', 'M', 'L', 'XL'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: false,
   },
   {
@@ -142,7 +143,7 @@ const PRODUCTS = [
     season: 'All-Season',
     occasion: 'Party',
     sizes: ['XS', 'S', 'M'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: true,
   },
   {
@@ -157,7 +158,7 @@ const PRODUCTS = [
     season: 'Summer',
     occasion: 'Resort',
     sizes: ['S', 'M', 'L', 'XL'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: false,
   },
   {
@@ -172,7 +173,7 @@ const PRODUCTS = [
     season: 'All-Season',
     occasion: 'Business',
     sizes: ['S', 'M', 'L', 'XL', '2XL'],
-    visibility: 'Published',
+    visibility: 'public',
     featured: false,
   },
   {
@@ -187,12 +188,12 @@ const PRODUCTS = [
     season: 'Winter',
     occasion: 'Party',
     sizes: ['XS', 'S', 'M', 'L'],
-    visibility: 'Draft',
+    visibility: 'draft',
     featured: false,
   },
 ];
 
-const STATUSES = ['Pending', 'Confirmed', 'Fitting', 'Completed', 'Cancelled'];
+const STATUSES = ['Pending', 'To Pay', 'To Pickup', 'Completed', 'Cancelled'];
 
 export const seedDemoData = async (onProgress) => {
   if (import.meta.env.PROD) {
@@ -208,22 +209,26 @@ export const seedDemoData = async (onProgress) => {
     onProgress?.({ step, totalSteps, message: msg });
   };
 
-  // 1. Seed Customers
+  // products.created_by is a uuid FK, not free text — use the signed-in
+  // owner/admin running this tool rather than a fabricated identity.
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+  const createdBy = currentUser?.id ?? null;
+
+  // 1. Prepare demo customers (no DB write)
+  // There is no `users` table, and `public.profiles` rows are only ever
+  // created by the handle_new_user trigger on a real auth.users signup —
+  // direct client inserts into profiles are blocked by RLS (see
+  // 20260720170000_fix_profiles_insert_ownership.sql). A synthetic demo
+  // customer has no backing auth account, so it can't have a profiles row
+  // or a real id. Reservations below reference these by customer_name text
+  // only; customer_id is left null since there's no profiles row to point
+  // an FK at.
   const customerIds = [];
   for (const cust of CUSTOMERS) {
-    progress(`Creating customer: ${cust.name}`);
-    const id = await addDocument('users', {
-      ...cust,
-      role: 'customer',
-      lastOnline: randomDate(7),
-      createdAt: new Date(randomDate(90)),
-      measurements: {
-        bust: `${Math.floor(Math.random() * 10) + 32}"`,
-        waist: `${Math.floor(Math.random() * 8) + 26}"`,
-        hips: `${Math.floor(Math.random() * 10) + 34}"`,
-      },
-    });
-    customerIds.push({ id, name: cust.name });
+    progress(`Preparing customer: ${cust.name}`);
+    customerIds.push({ id: null, name: cust.name });
   }
 
   // 2. Seed Products
@@ -238,18 +243,19 @@ export const seedDemoData = async (onProgress) => {
       .toUpperCase();
     const sku = `${acronym}-${String(i + 1).padStart(3, '0')}`;
     progress(`Creating product: ${p.name}`);
+    const { featured, ...productFields } = p;
     const docId = await addDocument('products', {
-      ...p,
+      ...productFields,
       id: sku,
       stock: Math.floor(Math.random() * 15) + 3,
-      tags: p.featured ? ['Featured', 'New Arrival'] : ['New Arrival'],
+      isFeatured: featured,
+      tags: featured ? ['Featured', 'New Arrival'] : ['New Arrival'],
       imageUrl: '👗',
       images: [],
       description: `Premium ${p.material} ${p.category.toLowerCase()} for ${p.occasion.toLowerCase()} occasions.`,
       careInstructions: 'Dry clean recommended',
       styleCode: sku,
-      created_by: 'admin@jezsy.com',
-      timestamp: Date.now() - Math.floor(Math.random() * 86400000 * 60), // random within 60 days
+      created_by: createdBy,
     });
     productIds.push({ id: docId, name: p.name, sku, sizes: p.sizes, price: p.price });
   }
@@ -274,38 +280,52 @@ export const seedDemoData = async (onProgress) => {
   }
 
   // 4. Seed Reservations (20 entries spanning 90 days)
-  const staffNames = ['Admin', 'Staff Member'];
+  // staff_id / assigned_staff_id are FK-constrained to profiles.id, so they
+  // must stay null here (no real staff profile to point at) — unlike
+  // product_id, which can reference the products just seeded in step 2.
+  // appointment_time is left null too: the validate_reservation_time
+  // trigger only enforces store-hours/slot-capacity checks when both date
+  // and appointment_time are set, so leaving it null keeps seeding simple.
   for (let i = 0; i < 20; i++) {
     const cust = pick(customerIds);
     const prod = pick(productIds);
     const status = pick(STATUSES);
     const daysAgo = Math.floor(Math.random() * 90);
+    const rentalPrice = prod.price;
+    const deposit = Math.round(rentalPrice * 0.5 * 100) / 100;
     progress(`Creating reservation ${i + 1}/20`);
     await addDocument('reservations', {
-      id: `RES-${String(i + 1).padStart(3, '0')}`,
-      customer: cust.name,
-      customer_id: cust.id,
-      outfit: prod.name,
+      display_id: `RES-SEED-${Date.now().toString(36).toUpperCase()}-${String(i + 1).padStart(3, '0')}`,
+      customer_id: null,
+      customer_name: cust.name,
+      product_id: prod.id,
+      product_name: prod.name,
       size: pick(PRODUCTS.find((p) => p.name === prod.name)?.sizes || ['M']),
-      date: randomDate(daysAgo),
+      quantity: 1,
+      rental_price: rentalPrice,
+      deposit,
+      date: randomDate(daysAgo).slice(0, 10),
       status,
-      staff: status === 'Pending' ? 'Unassigned' : pick(staffNames),
-      assigned_staff_id: status === 'Pending' ? '' : 'seeded',
+      staff_id: null,
+      assigned_staff_id: null,
       countdown: status === 'Pending',
-      deposit: Math.random() > 0.4,
+      payment_status: status === 'Pending' ? 'Pending' : 'Paid',
+      payment_type: 'Deposit',
     });
   }
 
-  // 5. Seed Conversations (5 threads tied to customers)
+  // 5. Seed Conversations (5 threads)
+  // conversations.customer_id is a nullable FK to profiles — left null here
+  // since demo customers have no backing profiles row (see step 1). There is
+  // no name/text column on conversations to record the demo customer by, so
+  // the association only lives in-memory via convNames below.
   const convIds = [];
+  const convNames = [];
   for (let i = 0; i < 5; i++) {
     const cust = customerIds[i % customerIds.length];
     progress(`Creating conversation with ${cust.name}`);
-    const convId = `conv_seed_${i + 1}`;
-    await addDocument('conversations', {
-      id: convId,
-      customerName: cust.name,
-      customerId: cust.id,
+    const docId = await addDocument('conversations', {
+      customerId: null,
       lastMessage: pick([
         'Thank you for the update!',
         'When will my fitting be scheduled?',
@@ -313,10 +333,11 @@ export const seedDemoData = async (onProgress) => {
         'Can I reschedule my appointment?',
         'Is the gown available in size S?',
       ]),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      unread: Math.floor(Math.random() * 3),
+      lastMessageTime: new Date().toISOString(),
+      unreadCount: Math.floor(Math.random() * 3),
     });
-    convIds.push(convId);
+    convIds.push(docId);
+    convNames.push(cust.name);
   }
 
   // 6. Seed Messages (15 messages across conversations)
@@ -335,18 +356,15 @@ export const seedDemoData = async (onProgress) => {
     'I would like to reserve the midnight gown.',
   ];
   for (let i = 0; i < 15; i++) {
-    const convId = convIds[i % convIds.length];
+    const convIdx = i % convIds.length;
+    const convId = convIds[convIdx];
     const isStaff = i % 2 === 0;
     progress(`Creating message ${i + 1}/15`);
     await addDocument('messages', {
-      id: i + 1,
       conversationId: convId,
-      sender: isStaff ? 'staff' : 'customer',
+      senderId: null,
+      senderName: isStaff ? 'Staff' : convNames[convIdx],
       text: isStaff ? pick(staffMessages) : pick(customerMessages),
-      time: new Date(Date.now() - (15 - i) * 3600000).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
     });
   }
 

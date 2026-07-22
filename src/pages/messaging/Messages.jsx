@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -34,6 +34,13 @@ import 'react-loading-skeleton/dist/skeleton.css';
 import './Messages.css';
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+// public.messages has no dedicated "reservation summary" column, so the
+// structured card data is encoded into `text` behind this marker prefix and
+// parsed back out in renderBubble. Keeps the feature working with the real
+// schema instead of the nonexistent isReservationSummary/reservationData
+// fields the previous code tried to write.
+const RESERVATION_CARD_PREFIX = '__RES_CARD__';
 
 const Messages = () => {
   const { user } = useAuth();
@@ -98,9 +105,15 @@ const Messages = () => {
 
   useEffect(() => {
     const unsub = subscribeToConversations((data) => {
+      // lastMessageTime/updatedAt/createdAt are plain ISO strings from
+      // Supabase (not Firestore {seconds} timestamps), so parse with Date.
       const sortedConv = [...data].sort((a, b) => {
-        const timeA = Math.max(a.updatedAt?.seconds || 0, a.createdAt?.seconds || 0);
-        const timeB = Math.max(b.updatedAt?.seconds || 0, b.createdAt?.seconds || 0);
+        const timeA = Math.max(
+          new Date(a.lastMessageTime || a.updatedAt || a.createdAt || 0).getTime(),
+        );
+        const timeB = Math.max(
+          new Date(b.lastMessageTime || b.updatedAt || b.createdAt || 0).getTime(),
+        );
         return timeB - timeA;
       });
       setConversations(sortedConv);
@@ -118,9 +131,9 @@ const Messages = () => {
     const unsub = subscribeToMessages((data) => {
       const filtered = data.filter((m) => m.conversationId === convKey);
       const sorted = [...filtered].sort((a, b) => {
-        const tA = a.createdAt?.seconds || a.customId || 0;
-        const tB = b.createdAt?.seconds || b.customId || 0;
-        return tA > tB ? 1 : -1;
+        const tA = new Date(a.createdAt || 0).getTime();
+        const tB = new Date(b.createdAt || 0).getTime();
+        return tA - tB;
       });
       setMessages(sorted);
     });
@@ -128,26 +141,27 @@ const Messages = () => {
   }, [activeChat?.id, activeChat?.customId]);
 
   // ── Send text ──────────────────────────────────────────────────────────
+  // public.messages only has: conversation_id, sender_id, sender_name, text,
+  // image_url, created_at, read_at, reactions — no sender/message_type/time
+  // columns. Sending those extra keys made every send fail outright.
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
     const convKey = activeChat.customId || activeChat.id;
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const nowIso = new Date().toISOString();
     try {
       await sendMessage({
-        id: Date.now(),
         conversationId: convKey,
-        sender: 'staff',
+        senderId: user?.id ?? null,
+        senderName: user?.name ?? user?.email ?? 'Staff',
         text: newMessage,
-        messageType: 'text',
-        time,
       });
       await updateConversation(activeChat.docId, {
         lastMessage: newMessage,
-        time,
+        lastMessageTime: nowIso,
       });
-      await logAction(user, 'Sent message to customer', { customerName: activeChat.customerName });
+      await logAction(user, 'Sent message to customer', { customerName: getConvName(activeChat) });
       setNewMessage('');
     } catch (err) {
       console.error(err);
@@ -163,24 +177,22 @@ const Messages = () => {
     setIsUploadingImage(true);
 
     const convKey = activeChat.customId || activeChat.id;
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const nowIso = new Date().toISOString();
 
     try {
       const imageUrl = await uploadChatImage(file, convKey);
       await sendMessage({
-        id: Date.now(),
         conversationId: convKey,
-        sender: 'staff',
+        senderId: user?.id ?? null,
+        senderName: user?.name ?? user?.email ?? 'Staff',
         text: '',
         imageUrl,
-        messageType: 'image',
-        time,
       });
       await updateConversation(activeChat.docId, {
         lastMessage: '📷 Photo',
-        time,
+        lastMessageTime: nowIso,
       });
-      await logAction(user, 'Sent image to customer', { customerName: activeChat.customerName });
+      await logAction(user, 'Sent image to customer', { customerName: getConvName(activeChat) });
     } catch (err) {
       console.error('Image send failed:', err);
     } finally {
@@ -220,14 +232,46 @@ const Messages = () => {
     }
   };
 
-  const startNewConversation = async (customer) => {
-    const existing = conversations.find(
-      (c) =>
-        c.customerName ===
-        (customer.name ||
-          customer.first_name ||
-          `${customer.first_name || ''} ${customer.last_name || ''}`.trim()),
+  // Load the customer list eagerly (not just when the "New Conversation"
+  // modal opens) — it's needed to resolve names below, since public.conversations
+  // only stores customer_id, no denormalized name column.
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  // ── Resolve a conversation's customer display name ─────────────────────
+  // conversations has no customer_name column (only customer_id), so the
+  // name must be looked up from the customers list. Without this, every
+  // conv.customerName is undefined — which not only shows blank names but
+  // silently breaks the sidebar search: `''.includes(anything)` is false,
+  // so typing any character wiped out the entire conversation list.
+  const customersById = useMemo(() => {
+    const map = {};
+    allCustomers.forEach((c) => {
+      const key = c.docId || c.id;
+      if (key) map[key] = c;
+    });
+    return map;
+  }, [allCustomers]);
+
+  const getConvName = useCallback((conv) => {
+    if (!conv) return 'Unknown Customer';
+    if (conv.customerName) return conv.customerName;
+    const cust = customersById[conv.customerId];
+    if (!cust) return 'Unknown Customer';
+    return (
+      cust.name ||
+      `${cust.firstName || cust.first_name || ''} ${cust.lastName || cust.last_name || ''}`.trim() ||
+      cust.email ||
+      'Unknown Customer'
     );
+  }, [customersById]);
+
+  // public.conversations only has: customer_id, last_message, last_message_time,
+  // unread_count, created_at, updated_at — no customer_name/time/unread columns.
+  const startNewConversation = async (customer) => {
+    const customerId = customer.docId || customer.id || '';
+    const existing = conversations.find((c) => c.customerId === customerId);
     if (existing) {
       setActiveChat(existing);
       setShowNewConvModal(false);
@@ -236,16 +280,13 @@ const Messages = () => {
     try {
       const customerName =
         customer.name ||
-        `${customer.first_name || ''} ${customer.last_name || ''}`.trim() ||
+        `${customer.firstName || customer.first_name || ''} ${customer.lastName || customer.last_name || ''}`.trim() ||
         customer.email;
-      const customerId = customer.docId || customer.id || '';
       await createConversation({
-        id: `conv_${Date.now()}`,
-        customerName,
         customerId,
         lastMessage: 'Conversation started by staff',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        unread: 0,
+        lastMessageTime: new Date().toISOString(),
+        unreadCount: 0,
       });
       await logAction(user, 'Started new conversation', { customerName, customerId });
       setShowNewConvModal(false);
@@ -261,28 +302,24 @@ const Messages = () => {
       try {
         const convKey = conv.customId || conv.id;
         await sendMessage({
-          id: Date.now(),
           conversationId: convKey,
-          sender: 'staff',
-          isReservationSummary: true,
-          reservationData: resContext,
-          text: `Reservation Summary: ${resContext.productName} on ${resContext.date}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderId: user?.id ?? null,
+          senderName: user?.name ?? user?.email ?? 'Staff',
+          text: RESERVATION_CARD_PREFIX + JSON.stringify(resContext),
         });
         await updateConversation(conv.docId, {
           lastMessage: `📋 Reservation: ${resContext.productName}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          updatedAt: new Date(),
+          lastMessageTime: new Date().toISOString(),
         });
         await logAction(user, 'Sent reservation summary to customer', {
-          customerName: conv.customerName,
+          customerName: getConvName(conv),
           reservationId: resContext.id,
         });
       } catch (err) {
         console.error('Failed to send reservation card:', err);
       }
     },
-    [user],
+    [user, getConvName],
   );
 
   useEffect(() => {
@@ -310,15 +347,12 @@ const Messages = () => {
       if (existing) {
         proceed(existing);
       } else {
-        const customerName = buyerName;
         const customerId = buyerId;
         createConversation({
-          id: `conv_${Date.now()}`,
-          customerName,
           customerId,
           lastMessage: 'Conversation started by staff',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          unread: 0,
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
         }).then(() => {
           const waitForConv = setInterval(() => {
             setConversations((prev) => {
@@ -341,16 +375,29 @@ const Messages = () => {
   const convKey = activeChat?.customId || activeChat?.id;
   const activeMessages = messages
     .filter((m) => activeChat && m.conversationId === convKey)
-    .sort((a, b) => {
-      const timeA = a.createdAt?.seconds || 0;
-      const timeB = b.createdAt?.seconds || 0;
-      return timeA - timeB;
-    });
+    .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
   // ── Message bubble renderer ────────────────────────────────────────────
   const renderBubble = (msg, index) => {
-    const isSent = msg.sender === 'staff';
+    // messages has no `sender` column — the reliable signal is sender_id.
+    // A message is FROM THE CUSTOMER only when sender_id matches this
+    // conversation's customer_id; everything else (staff's own id, or null,
+    // per how the admin app writes it) is an outgoing/staff message.
+    const isSent = msg.senderId !== activeChat?.customerId;
     const groupedReactions = getGroupedReactions(msg.reactions);
+    const isReservationCard = typeof msg.text === 'string' && msg.text.startsWith(RESERVATION_CARD_PREFIX);
+    const reservationData = isReservationCard
+      ? (() => {
+          try {
+            return JSON.parse(msg.text.slice(RESERVATION_CARD_PREFIX.length));
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const msgTime = msg.createdAt
+      ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '';
 
     return (
       <div
@@ -360,44 +407,44 @@ const Messages = () => {
         {!isSent && activeChat && (
           <div
             className="avatar small-av"
-            style={{ backgroundColor: getAvatarColor(activeChat.customerName || 'User') }}
+            style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
           >
-            {getInitials(activeChat.customerName || 'User')[0]}
+            {getInitials(getConvName(activeChat))[0]}
           </div>
         )}
 
         <div className="bubble-col">
           {/* Reservation card */}
-          {msg.isReservationSummary && msg.reservationData ? (
+          {isReservationCard && reservationData ? (
             <div className="message-bubble bubbles-received">
               <div className="reservation-card">
                 <div className="res-card-header">
                   <Calendar size={15} />
                   <span>Reservation Summary</span>
                 </div>
-                {msg.reservationData.imageUrl && (
+                {reservationData.imageUrl && (
                   <img
-                    src={msg.reservationData.imageUrl}
-                    alt={msg.reservationData.productName}
+                    src={reservationData.imageUrl}
+                    alt={reservationData.productName}
                     className="res-card-img"
                   />
                 )}
                 <div className="res-card-body">
-                  <div className="res-card-product">{msg.reservationData.productName}</div>
+                  <div className="res-card-product">{reservationData.productName}</div>
                   <div className="res-card-rows">
-                    <div className="res-card-row"><Tag size={12} /><span>Size {msg.reservationData.size}</span></div>
-                    <div className="res-card-row"><Calendar size={12} /><span>{msg.reservationData.date}</span></div>
-                    <div className="res-card-row"><Clock size={12} /><span>{msg.reservationData.time}</span></div>
+                    <div className="res-card-row"><Tag size={12} /><span>Size {reservationData.size}</span></div>
+                    <div className="res-card-row"><Calendar size={12} /><span>{reservationData.date}</span></div>
+                    <div className="res-card-row"><Clock size={12} /><span>{reservationData.time}</span></div>
                   </div>
                   <div className="res-card-status">
                     <span className="res-status-dot" />
-                    {msg.reservationData.status}
+                    {reservationData.status}
                   </div>
-                  <div className="res-card-deposit">Deposit: {msg.reservationData.deposit}</div>
+                  <div className="res-card-deposit">Deposit: {reservationData.deposit}</div>
                 </div>
-                <div className="res-card-footer">📌 Ref #{msg.reservationData.id?.slice(-6)}</div>
+                <div className="res-card-footer">📌 Ref #{reservationData.id?.slice(-6)}</div>
               </div>
-              <span className="msg-time">{msg.time}</span>
+              <span className="msg-time">{msgTime}</span>
             </div>
 
           ) : (
@@ -431,15 +478,7 @@ const Messages = () => {
                 </p>
               )}
 
-              <span className="msg-time">
-                {msg.time ||
-                  (msg.createdAt?.seconds
-                    ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : '')}
-              </span>
+              <span className="msg-time">{msgTime}</span>
 
               {/* Reaction trigger button (visible on hover) */}
               <button
@@ -538,33 +577,37 @@ const Messages = () => {
         <div className="conversation-list">
           {conversations
             .filter((conv) =>
-              (conv.customerName || '').toLowerCase().includes(convSearchTerm.toLowerCase()),
+              getConvName(conv).toLowerCase().includes(convSearchTerm.toLowerCase()),
             )
             .map((conv) => (
               <div
                 key={conv.id}
-                className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unread > 0 ? 'unread' : ''}`}
+                className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unreadCount > 0 ? 'unread' : ''}`}
                 onClick={() => {
                   setActiveChat(conv);
-                  if (conv.unread > 0) {
-                    updateConversation(conv.docId, { unread: 0 });
+                  if (conv.unreadCount > 0) {
+                    updateConversation(conv.docId, { unreadCount: 0 });
                   }
                 }}
               >
                 <div
                   className="avatar"
-                  style={{ backgroundColor: getAvatarColor(conv.customerName || 'User') }}
+                  style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
                 >
-                  {(conv.customerName || 'User').split(' ').map((n) => n[0]).join('')}
+                  {getConvName(conv).split(' ').map((n) => n[0]).join('')}
                 </div>
                 <div className="conv-details">
                   <div className="conv-header">
-                    <h4>{conv.customerName}</h4>
-                    <span className="time">{conv.time}</span>
+                    <h4>{getConvName(conv)}</h4>
+                    <span className="time">
+                      {conv.lastMessageTime
+                        ? new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : ''}
+                    </span>
                   </div>
                   <div className="conv-preview">
                     <p>{conv.lastMessage}</p>
-                    {conv.unread > 0 && <span className="unread-badge">{conv.unread}</span>}
+                    {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
                   </div>
                 </div>
               </div>
@@ -578,10 +621,11 @@ const Messages = () => {
           <>
             {/* Active Reservation Banner */}
             {(() => {
+              const activeChatName = getConvName(activeChat);
               const activeRes = allReservations.find(
                 (r) =>
                   r.customerId === activeChat?.customerId ||
-                  (r.customerName || r.customer) === activeChat?.customerName,
+                  (r.customerName || r.customer) === activeChatName,
               );
               if (!activeRes) return null;
               const resDate = activeRes.reservationDate?.toDate
@@ -622,19 +666,19 @@ const Messages = () => {
               <div className="flex-center gap-3">
                 <div
                   className="avatar"
-                  style={{ backgroundColor: getAvatarColor(activeChat.customerName || 'User') }}
+                  style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
                 >
-                  {(activeChat.customerName || 'User').split(' ').map((n) => n[0]).join('')}
+                  {getConvName(activeChat).split(' ').map((n) => n[0]).join('')}
                 </div>
                 <div>
-                  <h3>{activeChat.customerName}</h3>
+                  <h3>{getConvName(activeChat)}</h3>
                   <p className="status-text online">● Active</p>
                 </div>
               </div>
               <button
                 className="btn-outline small flex-center gap-2"
                 onClick={() =>
-                  navigate(`/customers?search=${encodeURIComponent(activeChat.customerName || '')}`)
+                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
                 }
               >
                 <User size={14} /> View Profile
@@ -751,7 +795,7 @@ const Messages = () => {
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 {allCustomers
                   .filter((c) => {
-                    const name = (c.name || `${c.first_name || ''} ${c.last_name || ''}`).toLowerCase();
+                    const name = (c.name || `${c.firstName || ''} ${c.lastName || ''}`).toLowerCase();
                     const email = (c.email || '').toLowerCase();
                     return (
                       name.includes(custSearchTerm.toLowerCase()) ||
@@ -774,7 +818,7 @@ const Messages = () => {
                       <div className="conv-details">
                         <h4>
                           {c.name ||
-                            `${c.first_name || ''} ${c.last_name || ''}`.trim() ||
+                            `${c.firstName || ''} ${c.lastName || ''}`.trim() ||
                             'Unknown'}
                         </h4>
                         <p className="text-secondary text-sm">{c.email}</p>

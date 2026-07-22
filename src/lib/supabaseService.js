@@ -74,6 +74,17 @@ const handleError = (error, context) => {
 // ── Generic CRUD helpers ────────────────────────────────────
 
 /**
+ * Tables that actually have a `deleted` column (soft-delete support).
+ * Confirmed against the live schema — most tables (conversations, messages,
+ * categories, devices, notifications, stock_movements, logs, ...) do NOT
+ * have this column, so it must never be assumed present.
+ */
+const DELETED_TABLES = [
+  'products', 'profiles', 'inventory', 'wardrobe_items',
+  'saved_outfits', 'reservations', 'pose_guides',
+];
+
+/**
  * Fetch all rows from a table (soft-delete filtered by default).
  * @param {string} table
  * @param {boolean} includeDeleted
@@ -81,15 +92,8 @@ const handleError = (error, context) => {
  */
 export const getCollection = async (table, includeDeleted = false, maxResults = 0) => {
   let q = supabase.from(table).select('*');
-  if (!includeDeleted) {
-    // Only filter deleted if the table actually has a deleted column
-    const DELETED_TABLES = [
-      'products', 'profiles', 'inventory',
-      'wardrobe_items', 'saved_outfits',
-    ];
-    if (DELETED_TABLES.includes(table)) {
-      q = q.eq('deleted', false);
-    }
+  if (!includeDeleted && DELETED_TABLES.includes(table)) {
+    q = q.eq('deleted', false);
   }
   if (maxResults > 0) q = q.limit(maxResults);
 
@@ -112,10 +116,9 @@ export const getDocument = async (table, id) => {
  * @returns {string} uuid of the created row
  */
 export const addDocument = async (table, data) => {
-  const payload = toSnake({
-    ...data,
-    deleted: data.deleted ?? false,
-  });
+  const payload = toSnake(
+    DELETED_TABLES.includes(table) ? { ...data, deleted: data.deleted ?? false } : data,
+  );
   // Remove auto-managed columns
   delete payload.id;
   delete payload.created_at;
@@ -195,9 +198,8 @@ export const getPaginatedCollection = async (
 ) => {
   let q = supabase.from(table).select('*', { count: 'exact' });
 
-  if (!includeDeleted) {
-    const DELETED_TABLES = ['products', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
-    if (DELETED_TABLES.includes(table)) q = q.eq('deleted', false);
+  if (!includeDeleted && DELETED_TABLES.includes(table)) {
+    q = q.eq('deleted', false);
   }
 
   // Apply filters: { column: value } or { column: ['in', [v1, v2]] }
@@ -246,6 +248,51 @@ export const logAction = async (user, action, targetInfo = {}) => {
   }
 };
 
+/**
+ * Fetch the audit trail for one target entity (a product, a profile, etc.),
+ * newest first.
+ */
+export const getLogsForTarget = async (targetType, targetId, limit = 50) => {
+  const { data, error } = await supabase
+    .from('logs')
+    .select('*')
+    .eq('target_type', targetType)
+    .eq('target_id', String(targetId))
+    .order('timestamp', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[Supabase] getLogsForTarget failed:', error.message);
+    return [];
+  }
+  return (data ?? []).map(normaliseRow);
+};
+
+/**
+ * Fetch a page of the full audit log, newest first, with optional filters.
+ * @param {Object} [filters]
+ * @param {string} [filters.targetType]
+ * @param {string} [filters.userId]
+ * @param {string} [filters.actionSearch] - case-insensitive substring match on action
+ * @param {string} [filters.from] - ISO date, inclusive lower bound on timestamp
+ * @param {string} [filters.to]   - ISO date, inclusive upper bound on timestamp
+ */
+export const getPaginatedLogs = async (page = 0, pageSize = 25, filters = {}) => {
+  let q = supabase.from('logs').select('*', { count: 'exact' });
+  if (filters.targetType) q = q.eq('target_type', filters.targetType);
+  if (filters.userId) q = q.eq('user_id', filters.userId);
+  if (filters.actionSearch) q = q.ilike('action', `%${filters.actionSearch}%`);
+  if (filters.from) q = q.gte('timestamp', filters.from);
+  if (filters.to) q = q.lte('timestamp', filters.to);
+  q = q.order('timestamp', { ascending: false }).range(page * pageSize, page * pageSize + pageSize - 1);
+
+  const { data, error, count } = await q;
+  if (error) {
+    console.error('[Supabase] getPaginatedLogs failed:', error.message);
+    return { rows: [], total: 0 };
+  }
+  return { rows: (data ?? []).map(normaliseRow), total: count ?? 0 };
+};
+
 // ── Real-time subscription helpers ─────────────────────────
 
 /**
@@ -266,9 +313,8 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
   // Initial load
   const doFetch = async () => {
     let q = supabase.from(table).select('*');
-    if (!includeDeleted) {
-      const DELETED_TABLES = ['products', 'profiles', 'inventory', 'wardrobe_items', 'saved_outfits'];
-      if (DELETED_TABLES.includes(table)) q = q.eq('deleted', false);
+    if (!includeDeleted && DELETED_TABLES.includes(table)) {
+      q = q.eq('deleted', false);
     }
     for (const [col, val] of Object.entries(filters)) {
       q = q.eq(col, val);

@@ -5,19 +5,6 @@
  */
 
 /**
- * Stock status calculation thresholds
- * Based on currentStock / stockBaseline percentage
- */
-export enum StockStatus {
-  NO_STOCK = 'No Stock', // 0%
-  CRITICAL = 'Critical', // 1–25%
-  VERY_LOW = 'Very Low', // 26–50%
-  LOW = 'Low', // 51–75%
-  HEALTHY = 'Healthy', // 76–199%
-  OVERSTOCK = 'Overstock', // ≥200%
-}
-
-/**
  * Type of stock movement change
  */
 export enum StockMovementType {
@@ -72,7 +59,7 @@ export interface Product {
  */
 export interface ProductInventoryView extends Product {
   currentStock: number; // Sum of all stock_movements[].delta
-  stockStatus: StockStatus; // Calculated from currentStock/stockBaseline
+  stockStatus: string; // Label from utils/stockStatus.js's getStockHealth()
   stockPercentage: number; // (currentStock / stockBaseline) * 100
 }
 
@@ -114,7 +101,7 @@ export interface CreateStockMovementRequest {
  * Dashboard filter/sort options
  */
 export interface InventoryFilter {
-  status?: StockStatus | 'all';
+  status?: string | 'all';
   search?: string; // Product name search
   sortBy?: 'name' | 'status' | 'stock' | 'dateAdded';
   sortOrder?: 'asc' | 'desc';

@@ -1,6 +1,6 @@
-import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from './stockHealth';
+import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from './stockStatus';
 
-describe('Stock Health Utility Logic', () => {
+describe('Stock Status Utility Logic', () => {
   const TOTAL_CAPACITY = 10;
 
   describe('Integer Range Tier Mapping (reserved = 0)', () => {
@@ -13,29 +13,29 @@ describe('Stock Health Utility Logic', () => {
       });
     });
 
-    test('Low Stock tier (6-7 units)', () => {
+    test('Low tier (6-7 units)', () => {
       [6, 7].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('low');
-        expect(health.label).toBe('Low Stock');
+        expect(health.label).toBe('Low');
         expect(health.percent).toBe(available * 10);
       });
     });
 
-    test('Very Low Stock tier (4-5 units)', () => {
+    test('Very Low tier (4-5 units)', () => {
       [4, 5].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('very-low');
-        expect(health.label).toBe('Very Low Stock');
+        expect(health.label).toBe('Very Low');
         expect(health.percent).toBe(available * 10);
       });
     });
 
-    test('Critical Stock tier (1-3 units)', () => {
+    test('Critical tier (1-3 units)', () => {
       [1, 2, 3].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('critical');
-        expect(health.label).toBe('Critical Stock');
+        expect(health.label).toBe('Critical');
         expect(health.percent).toBe(available * 10);
       });
     });
@@ -50,9 +50,9 @@ describe('Stock Health Utility Logic', () => {
 
   describe('Demand-Adjusted Scoring / Escalation', () => {
     test('Reserved stock escalates tier due to demand pressure', () => {
-      // 6 units available (normally Low Stock, ratio 0.6)
+      // 6 units available (normally Low, ratio 0.6)
       // With 4 units reserved (demand pressure 0.4), score is 0.6 - 0.4 * 0.25 = 0.5.
-      // A score of 0.5 is not > 0.50, so it falls to Very Low Stock!
+      // A score of 0.5 is not > 0.50, so it falls to Very Low!
       const normalHealth = getStockHealth(6, TOTAL_CAPACITY, 0);
       expect(normalHealth.tier).toBe('low');
 

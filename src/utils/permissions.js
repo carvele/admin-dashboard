@@ -59,6 +59,9 @@ const PERMISSIONS = {
   // ── Team management (staff = no access) ────────────────────
   manage_staff: FULL,
 
+  // ── Activity log (owner/admin only — not exposed to staff) ──
+  view_logs: FULL,
+
   // ── Areas the user did not re-scope: existing behavior kept ─
   view_analytics: FULL,
   export_analytics: [OWNER],

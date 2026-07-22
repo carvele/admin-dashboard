@@ -58,7 +58,7 @@ import { getCustomers } from '../../services/customerService';
 // @ts-ignore
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
-import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockHealth';
+import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 import { motion } from 'framer-motion';

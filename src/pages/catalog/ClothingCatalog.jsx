@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Box, Flame } from 'lucide-react';
-import { getStockHealth } from '../../utils/stockHealth';
+import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import {
   getProducts,
@@ -306,7 +306,13 @@ const ClothingCatalog = () => {
           const isRealImage = displayUrl && displayUrl.startsWith('http');
 
           return (
-            <div key={item.id} className={`product-card card ${item.deleted ? 'archived-card' : ''}`}>
+            <div
+              key={item.id}
+              className={`product-card card ${item.deleted ? 'archived-card' : ''}`}
+              onClick={() => navigate('/catalog/view/' + item.docId)}
+              style={{ cursor: 'pointer' }}
+              title="View product details"
+            >
               <div className="product-image-area">
                 {item.deleted && (
                   <div className="archived-overlay">
@@ -443,10 +449,10 @@ const ClothingCatalog = () => {
                   <Star fill="var(--warning)" color="var(--warning)" size={14} />
                   <span style={{ fontWeight: 600 }}>{(item.rating || 0).toFixed(1)}</span>
                   <span className="text-secondary ml-1">({item.reviewCount || 0} reviews)</span>
-                  <button 
-                    className="btn-link p-0 ml-2" 
+                  <button
+                    className="btn-link p-0 ml-2"
                     style={{ fontSize: '0.85rem', textDecoration: 'underline' }}
-                    onClick={() => setSelectedProductForReviews(item)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedProductForReviews(item); }}
                   >
                     View
                   </button>
@@ -479,14 +485,14 @@ const ClothingCatalog = () => {
                     <button
                       key={tag}
                       className={`catalog-tag-toggle ${(item.tags || []).includes(tag) ? 'active' : ''}`}
-                      onClick={() => toggleTag(item, tag)}
+                      onClick={(e) => { e.stopPropagation(); toggleTag(item, tag); }}
                     >
                       <TagIcon size={12} /> {tag}
                     </button>
                   ))}
                   <button
                     className={`catalog-tag-toggle ${item.isFeatured ? 'active' : ''}`}
-                    onClick={() => toggleFeature(item)}
+                    onClick={(e) => { e.stopPropagation(); toggleFeature(item); }}
                     style={{ 
                       borderColor: item.isFeatured ? '#ffd700' : 'transparent', 
                       color: item.isFeatured ? '#b8860b' : 'var(--text-secondary)',
@@ -505,7 +511,7 @@ const ClothingCatalog = () => {
                       <button
                         className="btn-outline btn-sm flex-center gap-1"
                         style={{ borderColor: 'var(--stock-healthy)', color: 'var(--stock-healthy)' }}
-                        onClick={() => handleRestore(item)}
+                        onClick={(e) => { e.stopPropagation(); handleRestore(item); }}
                       >
                         <ArchiveRestore size={14} /> Restore
                       </button>
@@ -513,14 +519,14 @@ const ClothingCatalog = () => {
                       <>
                         <button
                           className="btn-outline btn-sm flex-center gap-1"
-                          onClick={() => navigate('/catalog/edit/' + item.docId)}
+                          onClick={(e) => { e.stopPropagation(); navigate('/catalog/edit/' + item.docId); }}
                         >
                           <Edit size={14} /> Edit
                         </button>
                         {can(user?.role, 'archive_catalog') && (
                           <button
                             className="btn-outline btn-sm btn-archive-outline flex-center gap-1"
-                            onClick={() => setArchiveConfirm(item)}
+                            onClick={(e) => { e.stopPropagation(); setArchiveConfirm(item); }}
                           >
                             <Archive size={14} /> Archive
                           </button>
