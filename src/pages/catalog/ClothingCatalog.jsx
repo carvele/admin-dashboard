@@ -142,7 +142,12 @@ const ClothingCatalog = () => {
       .toLowerCase()
       .includes((searchTerm || '').toLowerCase());
     const matchesCat = activeCategory === 'All' || item.category === activeCategory;
-    const matchesColor = activeColor === 'All Colors' || item.baseColor === activeColor;
+    // A product can have several colours (comma-joined in `color`); match if the
+    // selected colour is any of them. Fall back to baseColor for legacy rows.
+    const itemColors = item.color
+      ? String(item.color).split(',').map((c) => c.trim()).filter(Boolean)
+      : (item.baseColor ? [item.baseColor] : []);
+    const matchesColor = activeColor === 'All Colors' || itemColors.includes(activeColor);
     return matchesSearch && matchesCat && matchesColor;
   });
 
