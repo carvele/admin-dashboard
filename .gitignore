@@ -7,3 +7,18 @@ dist/
 .env.production.local
 .DS_Store
 .vscode/
+
+# Secrets / credentials — never commit (per SECURITY_HARDENING_PLAN.md item 1)
+serviceAccountKey.json
+database_dump.json
+*.key.json
+
+# Scratch / working files that must not be swept into a commit
+Chapter 2.pdf
+Chapter_2_extracted.txt
+FINAL_REQUIREMENTS_CONTENT.md
+FINAL REQUIREMENTS/
+Hardware_Requirements_Revised.txt
+Hardware_Requirements_Subsections_Revised.txt
+Remaining_Sections_Revised.txt
+read_docx.py
