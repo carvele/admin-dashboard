@@ -105,17 +105,26 @@ const Settings = () => {
         if (sErr) throw sErr;
         const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
 
-        // Fetch categories
-        const { data: cats, error: cErr } = await supabase
-          .from('categories')
-          .select('*')
-          .eq('deleted', false)
-          .order('order', { ascending: true });
-        if (cErr) throw cErr;
+        // Fetch categories. The taxonomy rebuild replaced the old shape: the
+        // table now uses a parent_id hierarchy + `sort_order`, with NO
+        // `deleted` or `order` columns (querying those threw 42703 and was the
+        // cause of the "Failed to load settings" toast). Kept non-fatal so a
+        // categories problem never blocks the rest of the settings from loading.
+        try {
+          const { data: cats, error: cErr } = await supabase
+            .from('categories')
+            .select('*')
+            .order('sort_order', { ascending: true });
+          if (cErr) throw cErr;
 
-        const sortedCats = (cats ?? []).map((c) => ({ ...c }));
-        setCategories(sortedCats);
-        setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
+          const sortedCats = (cats ?? []).map((c) => ({ ...c }));
+          setCategories(sortedCats);
+          setInitialCategories(JSON.parse(JSON.stringify(sortedCats)));
+        } catch (catErr) {
+          console.error('Error loading categories:', catErr?.message ?? catErr);
+          setCategories([]);
+          setInitialCategories([]);
+        }
 
         setFormData((prev) => ({
           ...prev,
