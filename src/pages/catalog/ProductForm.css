@@ -286,5 +286,35 @@
   border-color: var(--charcoal) !important;
   transform: scale(1.03);
 }
+
+/* Colour multi-select chips — same interaction model as .size-btn but sized
+   for word-length colour names (Midnight Azure, etc.). */
+.color-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.625rem;
+  cursor: pointer;
+  background-color: white;
+  color: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.color-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #9ca3af;
+}
+.color-chip.active {
+  background-color: var(--charcoal);
+  color: #fff;
+  border-color: var(--charcoal);
+  transform: scale(1.03);
+}
 .relative { position: relative; }
 .absolute { position: absolute; }

@@ -50,8 +50,9 @@ const ProductForm = ({ readOnly = false }) => {
     price: '',
     description: '',
     material: '',
-    color: '',
-    baseColor: '', // Populated from color_list on mount
+    color: '', // Derived on save from `colors` (comma-joined; mobile app splits on ',')
+    colors: [], // Multi-select available colours the customer can choose from
+    baseColor: '', // Primary colour (colors[0]) — used for admin catalog filtering
     pattern: 'Solid', // Populated from pattern_list on mount
     careInstructions: '',
     fitAndSizing: '',
@@ -134,10 +135,16 @@ const ProductForm = ({ readOnly = false }) => {
           const docParams = await getProductById(id);
           if (docParams) {
              setOldData(docParams);
+             // Colours are stored comma-joined in `color`; fall back to the
+             // legacy single `baseColor` so older products still populate.
+             const parsedColors = docParams.color
+               ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
+               : (docParams.baseColor ? [docParams.baseColor] : []);
              setFormData(prev => ({
                 ...prev,
                 ...docParams,
                 sizes: docParams.sizes || [],
+                colors: parsedColors,
                 images: docParams.images || [],
                 measurements: docParams.measurements || {},
                 tags: docParams.tags || []
@@ -300,6 +307,14 @@ const ProductForm = ({ readOnly = false }) => {
     setFormData({ ...formData, sizes: newSizes });
   };
 
+  const toggleColor = (colorName) => {
+    const current = formData.colors || [];
+    const next = current.includes(colorName)
+      ? current.filter((c) => c !== colorName)
+      : [...current, colorName];
+    setFormData({ ...formData, colors: next });
+  };
+
   const setAsPrimary = (index) => {
     const newImages = [...formData.images];
     const item = newImages.splice(index, 1)[0];
@@ -355,9 +370,11 @@ const ProductForm = ({ readOnly = false }) => {
 
     // 1. Validate Form
     const { isValid, errors } = validateForm(formData, productRules);
-    if (!isValid || formData.sizes.length === 0) {
+    if (!isValid || formData.sizes.length === 0 || (formData.colors || []).length === 0) {
       const errorMsg =
-        formData.sizes.length === 0 ? 'At least one size is required' : Object.values(errors)[0];
+        formData.sizes.length === 0 ? 'At least one size is required'
+        : (formData.colors || []).length === 0 ? 'At least one color is required'
+        : Object.values(errors)[0];
       toast.error(errorMsg);
       return;
     }
@@ -396,7 +413,9 @@ const ProductForm = ({ readOnly = false }) => {
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
         material: sanitizeText(formData.material),
-        color: sanitizeText(formData.color),
+        // Persist the selected colours comma-joined; the mobile product page
+        // splits `color` on ',' to render its colour picker.
+        color: (formData.colors || []).join(', '),
         careInstructions: sanitizeText(formData.careInstructions),
         fitAndSizing: formData.fitAndSizing,
         styleCode: formData.styleCode,
@@ -412,8 +431,8 @@ const ProductForm = ({ readOnly = false }) => {
         onSale: formData.onSale,
         discountPercentage: parseInt(formData.discountPercentage) || 0,
         salePrice: formData.onSale ? parseFloat(formData.salePrice) : null,
-        // New Categorization
-        baseColor: formData.baseColor,
+        // New Categorization — primary colour drives admin catalog filtering
+        baseColor: (formData.colors || [])[0] || '',
         pattern: formData.pattern,
         measurements: formData.measurements,
 
@@ -790,23 +809,40 @@ const ProductForm = ({ readOnly = false }) => {
            <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
               <Palette size={14} /> Material & Aesthetics
            </h2>
+
+           {/* Available Colors — multi-select, like sizes. Customers pick one
+               of these on the product page; stored comma-joined in `color`. */}
+           <div className="mb-6">
+              <label className="label">Available Colors *</label>
+              {colorList.length === 0 ? (
+                 <p className="text-sm text-secondary mt-2">
+                    No colors defined yet. Add colors in Settings to enable selection.
+                 </p>
+              ) : (
+                 <div className="flex flex-wrap gap-3 mt-3">
+                    {colorList.map((c) => (
+                       <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleColor(c.name)}
+                          className={`color-chip ${(formData.colors || []).includes(c.name) ? 'active' : ''}`}
+                       >
+                          {c.name}
+                       </button>
+                    ))}
+                 </div>
+              )}
+              {(formData.colors || []).length > 0 && (
+                 <p className="text-xs text-secondary mt-2">
+                    {formData.colors.length} selected · primary (for filtering): <strong>{formData.colors[0]}</strong>
+                 </p>
+              )}
+           </div>
+
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                  <label className="label">Material / Fabric</label>
                  <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Display Color Name</label>
-                 <input type="text" name="color" className="input-field" placeholder="e.g. Midnight Azure" value={formData.color} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Color *</label>
-                 <select name="baseColor" className="input-field" value={formData.baseColor} onChange={handleChange} required>
-                    <option value="" disabled>Select a color</option>
-                    {colorList.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                 </select>
               </div>
               <div>
                  <label className="label">Pattern</label>
