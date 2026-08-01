@@ -16,10 +16,12 @@ Target: **Cloudflare Pages** (free tier). Chosen because it's the only major fre
 
 ## Step 1 — Create the Cloudflare Pages project
 
+> **Who can do this step:** `admin-dashboard` lives under `carvele`'s **personal** GitHub account (not a shared organization). GitHub generally does not let a collaborator authorize third-party GitHub Apps (like Cloudflare's) on someone else's personal repo — only the **owner** can approve that "Connect to Git" step. If you're not `carvele`, either have them do this one step (2 minutes, using the settings below), or move the repo into a shared GitHub organization first so either of you can authorize app installs going forward.
+
 1. Sign up / log in at <https://dash.cloudflare.com>.
 2. **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-3. Authorize GitHub and select the `admin-dashboard` repository.
-4. Configure the build:
+3. Authorize GitHub. When asked which repositories to grant access to, choose **"Only select repositories"** (not "All repositories") and pick just `admin-dashboard` — least-privilege, and it won't expose unrelated repos.
+4. Select the `admin-dashboard` repository. Configure the build:
    - **Production branch:** `main`
    - **Framework preset:** Vite
    - **Build command:** `npm run build`
@@ -70,13 +72,17 @@ curl -s -i -X OPTIONS "https://wufcmtndotfvxvvxkamv.supabase.co/functions/v1/cre
 
 The cloud name and unsigned preset ship in the public bundle, so anyone can read them and upload to your account. Cloudinary only receives **images** here (product images, category images, GCash QR) — 3D models and avatars go to Supabase Storage — so the preset can be locked to images safely.
 
-In the **Cloudinary console** → **Settings** (gear) → **Upload** → **Upload presets** → edit `ml_style_items`:
+In the **Cloudinary console** → **Settings** (gear) → **Upload** → **Upload presets** → edit `ml_style_items`. Verified against Cloudinary's current console UI (2026) — there is **no** "max file size" field anywhere in the preset editor; free-tier accounts already cap image uploads at **10 MB** automatically regardless of preset, so no action is needed for that. What you can actually set, all free and console-only:
 
-- **Allowed formats:** `jpg, jpeg, png, webp` (images only)
-- **Max file size:** e.g. 10 MB
-- **Folder:** a fixed destination folder (e.g. `jezsy/`)
-- Enable **moderation** / incoming transformation limits if available
-- Keep the preset **Unsigned** (the app requires it), but constrained as above
+- **Optimize and Deliver tab → Allowed formats:** `jpg, jpeg, png, webp` (images only) — the single highest-value setting; rejects non-image files entirely.
+- **General tab → Asset folder:** a fixed destination folder, e.g. `jezsy` — keeps all uploads contained in one place.
+- **General tab → Disallow public ID:** turn **on** — stops a caller from choosing their own filename/ID and overwriting or impersonating an existing asset.
+- **General tab → Generated public ID:** leave on "Auto-generate an unguessable public ID value" (the default) — already prevents overwrite collisions.
+- **Transform tab → Incoming transformation:** add something like `c_limit,w_2000,q_auto,f_auto` — auto-shrinks/compresses anything oversized the moment it's uploaded. This is the practical substitute for a size cap, and also cuts storage/bandwidth cost.
+- Keep the preset **Unsigned** (the app requires it) — signing mode is already correct.
+- **Moderation** (Manage and Analyze / Addons tabs): manual moderation (hold-for-approval) is usable free; AI moderation add-ons are paid — skip unless already available on your plan.
+
+A hard byte cap (`max_file_size`) does exist as a real preset property, but it's **API-only** — not exposed in the console UI at all — and would need one Admin API call to set. Given the 10 MB plan ceiling already applies, this isn't necessary for a free-tier internal tool; skip it.
 
 A signed-upload flow (an edge function signs each request) is more correct but a bigger lift — do that only if these console constraints prove insufficient.
 
