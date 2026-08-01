@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
+import { countsAsRevenue } from '../utils/reservationStatus';
 import {
   getCollection,
   getDocument,
@@ -88,6 +89,118 @@ export const updateCustomer = (docId, updates) => {
 /** Soft-delete a customer profile. */
 export const deleteCustomer = (docId) => {
   return softDeleteDocument('profiles', docId);
+};
+
+// ── Engagement stats (derived — no such columns exist on profiles) ──
+// The Customers page used to render `engagementScore`, `totalSpent`,
+// `wardrobeItems`, `reservations` and `preferredSizes` straight off the profile
+// row. None of those columns exist, so every customer displayed 0 / "None yet".
+// These are computed here from the real `reservations` + `wardrobe_items` data.
+
+/**
+ * How the 0–100 engagement score is built. Kept explicit (and surfaced in the
+ * UI) so it reads as a defined metric rather than a magic number.
+ *   Recency   (max 40) — activity in the last 30 days scores full, decaying to
+ *                        0 once the last activity is 180+ days old.
+ *   Frequency (max 40) — 10 points per reservation.
+ *   Wardrobe  (max 20) — 4 points per saved wardrobe item.
+ */
+export const ENGAGEMENT_FORMULA =
+  'Recency (40) + Reservations (10 each, max 40) + Saved items (4 each, max 20)';
+
+const scoreEngagement = ({ reservationCount, wardrobeCount, lastActivity }) => {
+  let recency = 0;
+  if (lastActivity) {
+    const days = (Date.now() - new Date(lastActivity).getTime()) / 86_400_000;
+    if (days <= 30) recency = 40;
+    else if (days >= 180) recency = 0;
+    else recency = Math.round(40 * (1 - (days - 30) / 150));
+  }
+  const frequency = Math.min(reservationCount * 10, 40);
+  const wardrobe = Math.min(wardrobeCount * 4, 20);
+  return Math.max(0, Math.min(100, recency + frequency + wardrobe));
+};
+
+/**
+ * Compute engagement stats for many customers at once.
+ * Two queries total regardless of how many customers are passed, so paging the
+ * customer list doesn't fan out into an N+1.
+ *
+ * @param {string[]} customerIds
+ * @returns {Promise<Record<string, object>>} keyed by customer id
+ */
+export const getCustomerStatsBatch = async (customerIds) => {
+  const ids = (customerIds ?? []).filter(Boolean);
+  if (ids.length === 0) return {};
+
+  const [resResult, wardrobeResult] = await Promise.all([
+    supabase
+      .from('reservations')
+      .select('customer_id, status, payment_status, rental_price, size, created_at')
+      .in('customer_id', ids)
+      .eq('deleted', false),
+    supabase
+      .from('wardrobe_items')
+      .select('user_id')
+      .in('user_id', ids)
+      .eq('deleted', false),
+  ]);
+
+  if (resResult.error) throw resResult.error;
+  if (wardrobeResult.error) throw wardrobeResult.error;
+
+  const wardrobeCounts = {};
+  for (const row of wardrobeResult.data ?? []) {
+    wardrobeCounts[row.user_id] = (wardrobeCounts[row.user_id] ?? 0) + 1;
+  }
+
+  const byCustomer = {};
+  for (const id of ids) {
+    byCustomer[id] = {
+      reservationCount: 0,
+      completedCount: 0,
+      totalSpent: 0,
+      sizeTally: {},
+      lastActivity: null,
+    };
+  }
+
+  for (const r of resResult.data ?? []) {
+    const bucket = byCustomer[r.customer_id];
+    if (!bucket) continue;
+
+    bucket.reservationCount += 1;
+    if (r.status === 'Completed') bucket.completedCount += 1;
+    if (countsAsRevenue(r)) bucket.totalSpent += Number(r.rental_price) || 0;
+    if (r.size) bucket.sizeTally[r.size] = (bucket.sizeTally[r.size] ?? 0) + 1;
+    if (r.created_at && (!bucket.lastActivity || r.created_at > bucket.lastActivity)) {
+      bucket.lastActivity = r.created_at;
+    }
+  }
+
+  const stats = {};
+  for (const id of ids) {
+    const b = byCustomer[id];
+    const wardrobeCount = wardrobeCounts[id] ?? 0;
+    stats[id] = {
+      reservationCount: b.reservationCount,
+      completedCount: b.completedCount,
+      totalSpent: b.totalSpent,
+      wardrobeCount,
+      lastActivity: b.lastActivity,
+      // Most-booked sizes first, top 3.
+      preferredSizes: Object.entries(b.sizeTally)
+        .sort((a, z) => z[1] - a[1])
+        .slice(0, 3)
+        .map(([size]) => size),
+      engagementScore: scoreEngagement({
+        reservationCount: b.reservationCount,
+        wardrobeCount,
+        lastActivity: b.lastActivity,
+      }),
+    };
+  }
+  return stats;
 };
 
 // ── Measurements (public.user_measurements — one row per user) ─

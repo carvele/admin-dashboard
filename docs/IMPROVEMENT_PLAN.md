@@ -8,10 +8,10 @@ Priority key: **P0** = wrong/fake data users see now · **P1** = security/data-i
 
 ## P0 — Users are seeing wrong or fake data
 
-### 1. Customer engagement metrics are always zero/empty
-**What:** `Customers.jsx` and `Dashboard.tsx` display `engagementScore`, `totalSpent`, `wardrobeItems`, `reservations` (count), `preferredSizes`, and `lastActive` per customer. A repo-wide search shows **none of these are ever computed** — nothing in `src/services/` sets them, and `profiles` has no such columns. So every customer shows `0` lifetime value, `0%` engagement, `0` reservations, "None yet" sizes, etc.
-**Why:** The whole "Customer Health Score / Lifetime Value / Purchase Summary" section is decorative — it looks like analytics but reflects nothing. Same for the Dashboard "Active Customers"/engagement framing.
-**How:** Add a `getCustomerStats(userId)` (or a batched version) in `customerService.js` that derives these from real tables — count + sum of `reservations` by `customer_id`, count of `wardrobe_items` by `user_id`, most-recent `last_online`/activity, and a defined formula for engagement. Enrich the customer list/detail with the results. Decide the engagement formula explicitly (e.g. weighted recency + reservation count + wardrobe activity) rather than leaving a fake number.
+### 1. Customer engagement metrics are always zero/empty — ✅ DONE (2026-07-24)
+**What:** `Customers.jsx` and `Dashboard.tsx` displayed `engagementScore`, `totalSpent`, `wardrobeItems`, `reservations` (count), `preferredSizes`, and `lastActive` per customer. **None were ever computed** — `profiles` has no such columns — so every customer showed 0 / "None yet".
+**Fixed:** Added `getCustomerStatsBatch()` in `customerService.js` — two queries for a whole page (no N+1) deriving real figures from `reservations` + `wardrobe_items`: reservation count, completed count, lifetime spend, wardrobe count, preferred sizes (ranked by frequency), and last activity. Engagement is now an explicit documented formula (`ENGAGEMENT_FORMULA`, surfaced in the UI): recency (40) + reservations (10 each, max 40) + saved items (4 each, max 20). Revenue eligibility goes through the new `utils/reservationStatus.js` so cancelled/pre-approval reservations never inflate spend. Covered by 11 tests in `customerService.test.js`.
+**Also found and fixed:** `profiles` has no `last_online` column either, so "Online Now" and "Last seen" were *also* always empty. Replaced with real "Active (30 days)" / "Last Activity" derived from reservation history.
 
 ### 2. Dashboard "Operational Insight" weather is fully simulated
 **What:** `Dashboard.tsx` (~line 193) computes weather from `new Date().getHours() % 4` and a hardcoded advice map — no weather API.

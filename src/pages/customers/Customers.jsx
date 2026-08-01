@@ -26,13 +26,14 @@ import {
   getPaginatedCustomers,
   getCustomerMeasurements,
   saveCustomerMeasurements,
+  getCustomerStatsBatch,
+  ENGAGEMENT_FORMULA,
 } from '../../services/customerService';
 import { toast } from 'sonner';
 import {
   getAvatarColor,
   getUserDisplayName,
   formatRelativeTime,
-  isOnline,
   formatCurrency,
   formatDate,
   getHealthLabel,
@@ -67,15 +68,28 @@ const Customers = () => {
       if (signal?.aborted) return;
 
       const appUsers = result.data.filter((u) => !u.role || u.role === 'customer');
-      
+
+      // Engagement figures aren't columns on `profiles` — derive them from real
+      // reservation/wardrobe data (batched: 2 queries for the whole page).
+      let enriched = appUsers;
+      try {
+        const stats = await getCustomerStatsBatch(appUsers.map((u) => u.docId ?? u.id));
+        enriched = appUsers.map((u) => ({ ...u, ...(stats[u.docId ?? u.id] ?? {}) }));
+      } catch (statsErr) {
+        // Never let a stats failure blank out the customer list itself.
+        console.error('Failed to load customer stats:', statsErr?.message ?? statsErr);
+      }
+
+      if (signal?.aborted) return;
+
       // Sort newly joined users to the top locally
-      appUsers.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || a.joinedAt?.toMillis?.() || a.lastOnline || 0;
-        const timeB = b.createdAt?.toMillis?.() || b.joinedAt?.toMillis?.() || b.lastOnline || 0;
+      enriched.sort((a, b) => {
+        const timeA = new Date(a.createdAt ?? 0).getTime() || 0;
+        const timeB = new Date(b.createdAt ?? 0).getTime() || 0;
         return timeB - timeA;
       });
       setCustomers((prev) => {
-        const d = loadMore ? [...prev, ...appUsers] : appUsers;
+        const d = loadMore ? [...prev, ...enriched] : enriched;
         const unique = [];
         const seen = new Set();
         d.forEach((user) => {
@@ -177,13 +191,15 @@ const Customers = () => {
 
   // Stats
   const totalCustomers = customers.length;
-  const activeCount = customers.filter((c) => isOnline(c.lastOnline)).length;
+  // There is no presence/last_online column anywhere in the schema, so a live
+  // "online now" figure is not derivable — this reports real recent activity
+  // (a reservation in the last 30 days) instead of a value that was always 0.
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const activeCount = customers.filter(
+    (c) => c.lastActivity && Date.now() - new Date(c.lastActivity).getTime() < THIRTY_DAYS,
+  ).length;
   const newThisMonth = customers.filter((c) => {
-    // Android writes 'createdAt'; admin-created users may have 'joinedAt'
-    const rawTs = c.createdAt || c.joinedAt;
-    const joined =
-      rawTs?.toDate?.() ||
-      (rawTs?.seconds ? new Date(rawTs.seconds * 1000) : new Date(rawTs || 0));
+    const joined = new Date(c.createdAt ?? 0);
     const now = new Date();
     return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
   }).length;
@@ -365,7 +381,7 @@ const Customers = () => {
           </div>
           <div>
             <p className="cstat-value">{activeCount}</p>
-            <p className="cstat-label">Online Now</p>
+            <p className="cstat-label">Active (30 days)</p>
           </div>
         </div>
         <div className="cstat-card">
@@ -418,7 +434,7 @@ const Customers = () => {
                 <thead>
                   <tr>
                     <th>Customer</th>
-                    <th>Last Online</th>
+                    <th>Last Activity</th>
                     <th>Engagement</th>
                     <th>Lifetime Value</th>
                     <th>Status</th>
@@ -452,7 +468,17 @@ const Customers = () => {
                               </div>
                             )}
                             <span
-                              className={`online-dot ${isOnline(cust.lastOnline) ? 'online online-pulse' : 'offline'}`}
+                              className={`online-dot ${
+                                cust.lastActivity &&
+                                Date.now() - new Date(cust.lastActivity).getTime() < THIRTY_DAYS
+                                  ? 'online'
+                                  : 'offline'
+                              }`}
+                              title={
+                                cust.lastActivity
+                                  ? `Last activity ${formatRelativeTime(cust.lastActivity)}`
+                                  : 'No activity yet'
+                              }
                             ></span>
                           </div>
                           <div>
@@ -463,20 +489,18 @@ const Customers = () => {
                       </td>
                       <td>
                         <div className="last-online-cell">
-                          <span
-                            className={`last-online-text ${isOnline(cust.lastOnline) ? 'text-online' : ''}`}
-                          >
-                            {formatRelativeTime(cust.lastOnline)}
+                          <span className="last-online-text">
+                            {cust.lastActivity ? formatRelativeTime(cust.lastActivity) : '—'}
                           </span>
                         </div>
                       </td>
                       <td>
                         <div className="engagement-chips">
                           <span className="eng-chip">
-                            <ShoppingBag size={12} /> {cust.reservations || 0}
+                            <ShoppingBag size={12} /> {cust.reservationCount || 0}
                           </span>
                           <span className="eng-chip">
-                            <Heart size={12} /> {cust.wardrobeItems || 0}
+                            <Heart size={12} /> {cust.wardrobeCount || 0}
                           </span>
                         </div>
                       </td>
@@ -658,8 +682,10 @@ const Customers = () => {
                       <Calendar size={13} /> Member since {formatDate(selectedCustomer.createdAt || selectedCustomer.joinedAt)}
                     </p>
                     <p className="last-seen-tag">
-                      <Clock size={13} /> Last seen{' '}
-                      {formatRelativeTime(selectedCustomer.lastOnline)}
+                      <Clock size={13} /> Last activity{' '}
+                      {selectedCustomer.lastActivity
+                        ? formatRelativeTime(selectedCustomer.lastActivity)
+                        : '— none yet'}
                     </p>
                   </>
                 )}
@@ -696,11 +722,11 @@ const Customers = () => {
 
                 <div className="profile-stats">
                   <div className="p-stat">
-                    <h4>{selectedCustomer.reservations || 0}</h4>
+                    <h4>{selectedCustomer.reservationCount || 0}</h4>
                     <p>Reservations</p>
                   </div>
                   <div className="p-stat">
-                    <h4>{selectedCustomer.wardrobeItems || 0}</h4>
+                    <h4>{selectedCustomer.wardrobeCount || 0}</h4>
                     <p>Saved Items</p>
                   </div>
                 </div>
@@ -744,6 +770,9 @@ const Customers = () => {
                         {getHealthLabel(selectedCustomer.engagementScore || 0).label}
                       </span>
                     </div>
+                    <p className="text-secondary text-xs mt-1" title={ENGAGEMENT_FORMULA}>
+                      {ENGAGEMENT_FORMULA}
+                    </p>
                   </div>
                 </div>
 
