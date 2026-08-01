@@ -159,6 +159,8 @@ const Login = () => {
               <input
                 type="email"
                 className="input-field"
+                name="email"
+                autoComplete="username"
                 placeholder="admin@jezsy.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -172,6 +174,8 @@ const Login = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="input-field"
+                  name="password"
+                  autoComplete="current-password"
                   placeholder="Enter password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
