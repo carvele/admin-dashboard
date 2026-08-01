@@ -17,7 +17,7 @@ import {
   ChevronRight,
   Settings2,
 } from 'lucide-react';
-import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockHealth';
+import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockStatus';
 import {
   subscribeToInventory,
   subscribeToProducts,
@@ -31,6 +31,7 @@ import {
   recordBoutiqueSale,
   subscribeToCategories,
   persistDemandScore,
+  logStockMovement,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -158,7 +159,7 @@ const Inventory = () => {
     setSortConfig({ key, direction });
   };
 
-  // Sorting uses the shared getStockPriority from stockHealth utility
+  // Sorting uses the shared getStockPriority from the stockStatus utility
   // (demand-aware priority: 1 = worst, 5 = best)
 
   const sortedInv = [...inventory].sort((a, b) => {
@@ -250,7 +251,7 @@ const Inventory = () => {
     });
   }, []);
 
-  // getStockStatus is replaced by the shared getStockHealth() from stockHealth.js
+  // getStockStatus is replaced by the shared getStockHealth() from stockStatus.js
 
   // --- ACTIONS ---
   const syncProductStock = async (productDocId, sku) => {
@@ -306,6 +307,13 @@ const Inventory = () => {
         available: restockModal.available + qty,
       });
       await syncProductStock(restockModal.productDocId, restockModal.sku);
+      await logStockMovement(
+        restockModal.productDocId,
+        restockModal.total,
+        restockModal.total + qty,
+        'restock',
+        `Restock: +${qty} units of ${restockModal.item} (size ${restockModal.size})`,
+      );
       await logAction(user, 'Restocked inventory item', {
         itemName: restockModal.item,
         size: restockModal.size,
@@ -366,6 +374,15 @@ const Inventory = () => {
         available: t - r,
       });
       await syncProductStock(editModal.productDocId, editModal.sku);
+      if (t !== editModal.total) {
+        await logStockMovement(
+          editModal.productDocId,
+          editModal.total,
+          t,
+          'manual_adjustment',
+          `Manual edit of ${editModal.item} (size ${editModal.size})`,
+        );
+      }
       await logAction(user, 'Updated inventory item details', {
         itemName: editModal.item,
         size: editModal.size,
@@ -382,6 +399,13 @@ const Inventory = () => {
     try {
       await archiveInventoryItem(item.docId);
       await syncProductStock(item.productDocId, item.sku);
+      await logStockMovement(
+        item.productDocId,
+        item.total,
+        0,
+        'correction',
+        `Archived inventory row: ${item.item} (size ${item.size}), ${item.total} units removed from circulation`,
+      );
       await logAction(user, 'Archived inventory item', { itemName: item.item, size: item.size });
       toast.success(`Archived ${item.item} (${item.size}) from inventory`);
     } catch (e) {
@@ -395,6 +419,13 @@ const Inventory = () => {
     try {
       await restoreInventoryItem(item.docId);
       await syncProductStock(item.productDocId, item.sku);
+      await logStockMovement(
+        item.productDocId,
+        0,
+        item.total,
+        'correction',
+        `Restored inventory row: ${item.item} (size ${item.size}), ${item.total} units returned to circulation`,
+      );
       await logAction(user, 'Restored inventory item', { itemName: item.item, size: item.size });
       toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
     } catch (e) {
@@ -433,7 +464,7 @@ const Inventory = () => {
         toast.error('Product not found or unlinked');
         return;
       }
-      await updateProduct(productDocId, { visibility: 'Published' });
+      await updateProduct(productDocId, { visibility: 'public' });
       await logAction(user, 'Added product to user app', {
         itemName: inv.item,
         sku: inv.sku

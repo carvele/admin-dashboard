@@ -14,16 +14,31 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.1';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// CORS origin allow-list. Set ALLOWED_ORIGINS in the function's env (comma-
+// separated, e.g. "https://admin.jezsy.com,https://staging.jezsy.com") to lock
+// this down. Defaults to '*' so behaviour is unchanged until configured.
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '*')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowOrigin = ALLOWED_ORIGINS.includes('*')
+    ? '*'
+    : (ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? ''));
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
+}
 
 const ALLOWED_ROLES = ['staff', 'admin'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
 
   try {
@@ -95,6 +110,6 @@ Deno.serve(async (req) => {
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
   });
 }

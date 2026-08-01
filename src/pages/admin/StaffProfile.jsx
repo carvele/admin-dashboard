@@ -20,11 +20,12 @@ import {
   ShieldAlert,
   ShieldCheck,
   Clock,
-  ChevronRight,
   Briefcase,
   AlertTriangle,
   X,
 } from 'lucide-react';
+import HistoryTimeline from '../../components/HistoryTimeline';
+import { getLogsForTarget } from '../../lib/supabaseService';
 import './StaffProfile.css';
 
 // ── helpers ──────────────────────────────────────────────────
@@ -98,44 +99,32 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
   );
 };
 
-// ── History Timeline ──────────────────────────────────────────
+// ── History Timeline adapters ───────────────────────────────────
+// The staff account has two audit trails: staff_status_history (employment/
+// block changes via the update_staff_status RPC) and the generic logs table
+// (invite/archive/reactivate/role changes via logAction). Both map onto the
+// shared HistoryTimeline's entry shape and merge into one time-sorted feed.
 
-const HistoryTimeline = ({ history, loading }) => {
-  if (loading) {
-    return <div className="sp-timeline-empty"><Loader size={20} className="spin" /> Loading history…</div>;
-  }
-  if (!history.length) {
-    return <div className="sp-timeline-empty">No status changes recorded yet.</div>;
-  }
-  return (
-    <ul className="sp-timeline">
-      {history.map((entry) => (
-        <li key={entry.id} className="sp-timeline-item">
-          <div className={`sp-tl-dot ${entry.change_type === 'block_status' ? 'dot-block' : 'dot-status'}`} />
-          <div className="sp-tl-content">
-            <div className="sp-tl-header">
-              <span className="sp-tl-type">
-                {entry.change_type === 'block_status' ? '🔒 Block Status' : '💼 Employment Status'}
-              </span>
-              <span className="sp-tl-date">
-                {new Date(entry.effective_date).toLocaleString('en-PH', {
-                  dateStyle: 'medium', timeStyle: 'short',
-                })}
-              </span>
-            </div>
-            <div className="sp-tl-change">
-              <span className="sp-tl-old">{formatValue(entry.change_type, entry.previous_value)}</span>
-              <ChevronRight size={14} className="sp-tl-arrow" />
-              <span className="sp-tl-new">{formatValue(entry.change_type, entry.new_value)}</span>
-            </div>
-            {entry.note && <p className="sp-tl-note">"{entry.note}"</p>}
-            <span className="sp-tl-actor">by {actorName(entry)}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-};
+const toTimelineEntries = (statusHistory, logs) =>
+  [
+    ...statusHistory.map((entry) => ({
+      id: `sh-${entry.id}`,
+      dotVariant: entry.change_type === 'block_status' ? 'block' : 'status',
+      typeLabel: entry.change_type === 'block_status' ? '🔒 Block Status' : '💼 Employment Status',
+      previousValue: formatValue(entry.change_type, entry.previous_value),
+      newValue: formatValue(entry.change_type, entry.new_value),
+      note: entry.note,
+      actorName: actorName(entry),
+      timestamp: entry.effective_date,
+    })),
+    ...logs.map((l) => ({
+      id: `log-${l.id}`,
+      typeLabel: `📝 ${l.action}`,
+      note: l.details?.note || null,
+      actorName: l.userName,
+      timestamp: l.timestamp,
+    })),
+  ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
 // ── Main Component ────────────────────────────────────────────
 
@@ -192,8 +181,11 @@ const StaffProfile = () => {
 
   const loadHistory = useCallback(async () => {
     try {
-      const rows = await getStaffStatusHistory(id);
-      setHistory(rows);
+      const [rows, logs] = await Promise.all([
+        getStaffStatusHistory(id),
+        getLogsForTarget('profile', id),
+      ]);
+      setHistory(toTimelineEntries(rows, logs));
     } catch { /* non-fatal */ } finally {
       setHistLoading(false);
     }
@@ -493,7 +485,7 @@ const StaffProfile = () => {
               <div className="sp-history-title">
                 <Clock size={16} /> Status Change History
               </div>
-              <HistoryTimeline history={history} loading={histLoading} />
+              <HistoryTimeline entries={history} loading={histLoading} emptyText="No status changes recorded yet." />
             </div>
           </section>
         )}

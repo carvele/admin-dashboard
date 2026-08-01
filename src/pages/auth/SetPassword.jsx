@@ -78,6 +78,23 @@ const SetPassword = () => {
         throw new Error(result.error || 'Failed to activate your account.');
       }
 
+      // Offer to save the new credential to the browser's password manager, so
+      // it autofills on the login step that follows. Best-effort: only Chromium
+      // supports the Credential Management API, and it needs a secure context —
+      // the readonly email + autocomplete attributes cover other browsers.
+      try {
+        if (window.PasswordCredential) {
+          const cred = new window.PasswordCredential({
+            id: session.user.email,
+            password,
+            name: session.user.email,
+          });
+          await navigator.credentials.store(cred);
+        }
+      } catch (credErr) {
+        console.warn('Could not offer to save password:', credErr?.message ?? credErr);
+      }
+
       // Sign out the short-lived invite session so they log in cleanly with
       // their new password (and go through the normal device check).
       await supabase.auth.signOut();
@@ -163,11 +180,26 @@ const SetPassword = () => {
 
           {status !== 'success' && (
             <form onSubmit={handleSubmit} className="login-form">
+              {/* Read-only email gives the browser/password-manager a username
+                  to associate with the new password, so it offers to save it. */}
+              <div className="form-group">
+                <label className="label">Email</label>
+                <input
+                  type="email"
+                  className="input-field"
+                  name="username"
+                  autoComplete="username"
+                  value={session.user.email}
+                  readOnly
+                />
+              </div>
               <div className="form-group">
                 <label className="label">New Password</label>
                 <input
                   type="password"
                   className="input-field"
+                  name="new-password"
+                  autoComplete="new-password"
                   placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -180,6 +212,8 @@ const SetPassword = () => {
                 <input
                   type="password"
                   className="input-field"
+                  name="confirm-password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={status === 'saving'}

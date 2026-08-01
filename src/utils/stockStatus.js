@@ -1,24 +1,33 @@
 /**
- * @fileoverview stockHealth.js
+ * @fileoverview stockStatus.js
  * Centralized, pure-function module for all 5-tier demand-driven inventory
- * stock health logic. Used by Inventory page, Dashboard, and any future views.
+ * stock status logic. Used by Inventory page, Clothing Catalog, Dashboard,
+ * and the Sidebar low-stock badge.
+ *
+ * This is the single canonical stock-status vocabulary for the app — it
+ * replaces two previously-competing systems that used different label text
+ * for equivalent tiers (stockHealth.js's "Very Low Stock"/"Critical Stock"
+ * vs. calculateStock.ts's baseline-percentage "Very Low"/"Critical", which
+ * was unused by any real UI and has been removed). Labels here are the
+ * short form so StatusBadge's icon lookup (keyed on these exact strings)
+ * never silently falls back to a "?" icon.
  *
  * --- HOW THE TIERS WORK ---
- * Stock health is NOT just a raw ratio. It accounts for demand pressure:
+ * Stock status is NOT just a raw ratio. It accounts for demand pressure:
  *   effectiveRatio  = available / total           (raw fill level, 0→1)
  *   demandPressure  = reserved / total            (how much is committed, 0→1)
  *   adjustedScore   = effectiveRatio - (demandPressure × DEMAND_WEIGHT)
  *
  * When reservations are high, the adjustedScore shrinks → tier escalates upward.
  * Example:
- *   60% available + 0% reserved  → score 0.60 → "Low Stock"
- *   60% available + 40% reserved → score 0.50 → "Very Low Stock" (escalated!)
+ *   60% available + 0% reserved  → score 0.60 → "Low"
+ *   60% available + 40% reserved → score 0.50 → "Very Low" (escalated!)
  *
  * --- TIERS ---
  *   > 0.75  → Healthy
- *   > 0.50  → Low Stock
- *   > 0.25  → Very Low Stock
- *   > 0.00  → Critical Stock
+ *   > 0.50  → Low
+ *   > 0.25  → Very Low
+ *   > 0.00  → Critical
  *   = 0.00  → No Stock
  */
 
@@ -26,7 +35,7 @@
 const DEMAND_WEIGHT = 0.25;
 
 /**
- * @typedef {Object} StockHealth
+ * @typedef {Object} StockStatus
  * @property {'healthy'|'low'|'very-low'|'critical'|'no-stock'} tier
  * @property {string} label            - Human-readable label
  * @property {string} color            - CSS var reference for text/fill color
@@ -36,16 +45,16 @@ const DEMAND_WEIGHT = 0.25;
  * @property {'none'|'low'|'moderate'|'high'} demandLevel - Pressure descriptor
  * @property {string} urgencyTooltip   - Explanation string for staff tooltip
  * @property {number} priority         - Sort priority: 1 (worst) → 5 (best)
- * @property {number} demandScore      - Raw 0–100 demand pressure for Firestore storage
+ * @property {number} demandScore      - Raw 0–100 demand pressure for persistence
  */
 
 /**
- * Computes the full stock health object for a given inventory item.
+ * Computes the full stock status object for a given inventory item.
  *
  * @param {number} available - Units currently free to reserve
  * @param {number} total     - Total units ever stocked (capacity)
  * @param {number} [reserved=0] - Units currently held by active reservations
- * @returns {StockHealth}
+ * @returns {StockStatus}
  */
 export const getStockHealth = (available, total, reserved = 0) => {
   // --- Guard: zero-total means nothing was ever stocked ---
@@ -83,7 +92,7 @@ export const getStockHealth = (available, total, reserved = 0) => {
   else if (demandPressure > 0)     demandLevel = 'low';
   else                             demandLevel = 'none';
 
-  // Demand score stored to Firestore (0–100 integer)
+  // Demand score persisted for later reference (0–100 integer)
   const demandScore = Math.round(demandPressure * 100);
 
   // --- Tier classification via adjustedScore ---
@@ -124,13 +133,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   if (adjustedScore > 0.50) {
     return {
       tier: 'low',
-      label: 'Low Stock',
+      label: 'Low',
       color: 'var(--stock-low)',
       bgColor: 'var(--stock-low-bg)',
       percent,
       adjustedScore,
       demandLevel,
-      urgencyTooltip: buildTooltip('Low Stock', percent, demandLevel, safeReserved, safeTotal),
+      urgencyTooltip: buildTooltip('Low', percent, demandLevel, safeReserved, safeTotal),
       priority: 4,
       demandScore,
     };
@@ -139,13 +148,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   if (adjustedScore > 0.35) {
     return {
       tier: 'very-low',
-      label: 'Very Low Stock',
+      label: 'Very Low',
       color: 'var(--stock-very-low)',
       bgColor: 'var(--stock-very-low-bg)',
       percent,
       adjustedScore,
       demandLevel,
-      urgencyTooltip: buildTooltip('Very Low Stock', percent, demandLevel, safeReserved, safeTotal),
+      urgencyTooltip: buildTooltip('Very Low', percent, demandLevel, safeReserved, safeTotal),
       priority: 3,
       demandScore,
     };
@@ -154,13 +163,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   // adjustedScore > 0 (already handled available===0 above)
   return {
     tier: 'critical',
-    label: 'Critical Stock',
+    label: 'Critical',
     color: 'var(--stock-critical)',
     bgColor: 'var(--stock-critical-bg)',
     percent,
     adjustedScore,
     demandLevel,
-    urgencyTooltip: buildTooltip('Critical Stock', percent, demandLevel, safeReserved, safeTotal),
+    urgencyTooltip: buildTooltip('Critical', percent, demandLevel, safeReserved, safeTotal),
     priority: 2,
     demandScore,
   };
@@ -184,17 +193,17 @@ function buildTooltip(tierLabel, percent, demandLevel, reserved, total) {
   }[demandLevel];
 
   const actionNote = {
-    'Healthy':        'No action needed. Monitor regularly.',
-    'Low Stock':      'Consider scheduling a restock in the near future.',
-    'Very Low Stock': 'Restock advised — stock may run out soon especially with current demand.',
-    'Critical Stock': 'Urgent restock required. Risk of stockout for incoming reservations.',
+    'Healthy':   'No action needed. Monitor regularly.',
+    'Low':       'Consider scheduling a restock in the near future.',
+    'Very Low':  'Restock advised — stock may run out soon especially with current demand.',
+    'Critical':  'Urgent restock required. Risk of stockout for incoming reservations.',
   }[tierLabel] || '';
 
   return `${tierLabel}: ${demandNote} ${actionNote}`.trim();
 }
 
 /**
- * Returns only the sort priority integer. Useful when the full health object
+ * Returns only the sort priority integer. Useful when the full status object
  * is not needed (e.g., for sorting only).
  * @param {number} available
  * @param {number} total

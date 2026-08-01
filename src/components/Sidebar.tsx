@@ -16,16 +16,17 @@ import {
   X,
   Shield,
   AlertTriangle,
+  ScrollText,
 } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
 // @ts-ignore
 // @ts-ignore
 import { subscribeToCollection } from '../lib/supabaseService';
-import { getStockHealth } from '../utils/stockHealth';
+import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings'];
+const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -111,6 +112,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
     { to: '/devices', icon: Shield, label: 'Device Management', admin: true },
     { to: '/staff', icon: Users, label: 'Team Management', admin: true },
+    { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
     { to: '/settings', icon: Settings, label: 'System Settings', admin: true },
   ];
 

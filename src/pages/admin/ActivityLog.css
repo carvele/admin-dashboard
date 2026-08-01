@@ -1,0 +1,132 @@
+/* ============================================================
+   ActivityLog.css
+   JezSy Admin — Activity Log page
+   ============================================================ */
+
+.al-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  align-items: center;
+}
+
+.al-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 220px;
+  color: var(--text-secondary);
+}
+.al-search .input-field { flex: 1; }
+
+.al-filter-select { width: 160px; }
+.al-filter-date { width: 150px; }
+
+.al-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+}
+
+.al-table thead th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  background: var(--bg-light, #faf9f6);
+  padding: 0.75rem 1rem;
+  border-bottom: 1.5px solid var(--border-light, #eee);
+}
+
+.al-row {
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+.al-row:hover { background: var(--bg-light, #faf9f6); }
+.al-row-open { background: var(--bg-light, #faf9f6); }
+
+.al-row td { padding: 0.7rem 1rem; vertical-align: middle; }
+
+.al-when { white-space: nowrap; color: var(--text-secondary); font-size: 0.8rem; }
+.al-who { font-weight: 600; }
+.al-action { max-width: 320px; }
+
+.al-target-chip {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 0.15rem 0.6rem;
+  text-transform: capitalize;
+  background: #eee;
+  color: #555;
+}
+.al-target-product     { background: #e8f0fe; color: #1a56b0; }
+.al-target-inventory   { background: #e6f7ec; color: #1a7d3a; }
+.al-target-profile     { background: #fdf0e6; color: #b05e1a; }
+.al-target-reservation { background: #f3e8fd; color: #7a1ab0; }
+.al-target-device      { background: #fde8e8; color: #c0392b; }
+
+.al-expand { width: 36px; color: var(--text-secondary); }
+.al-expand svg { transition: transform 0.15s; }
+.al-chevron-open { transform: rotate(180deg); }
+
+.al-details-row td {
+  padding: 0;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.al-details {
+  padding: 0.85rem 1.25rem 1rem;
+  background: var(--bg-light, #faf9f6);
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.al-details code {
+  background: #fff;
+  border: 1px solid var(--border-light, #e5e5e5);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.78rem;
+}
+.al-details pre {
+  margin: 0;
+  background: #fff;
+  border: 1px solid var(--border-light, #e5e5e5);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.76rem;
+  overflow-x: auto;
+  max-height: 260px;
+}
+
+.al-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.al-page-btns { display: flex; gap: 0.5rem; }
+
+@media (max-width: 640px) {
+  .al-filter-select, .al-filter-date { width: 100%; }
+  .al-when { font-size: 0.72rem; }
+  .al-action { max-width: 160px; }
+}

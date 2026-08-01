@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles } from 'lucide-react';
+import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles, Edit2 } from 'lucide-react';
 import {
   createProduct,
   updateProduct,
@@ -8,7 +8,11 @@ import {
   getCategories,
   createInventoryItem,
   getInventory,
+  getStockMovements,
 } from '../../services/productService';
+import { logAction } from '../../services/staffService';
+import { getLogsForTarget } from '../../lib/supabaseService';
+import HistoryTimeline from '../../components/HistoryTimeline';
 import { routeAndUploadFile, deleteFile } from '../../lib/storage';
 import { getReservationsByProduct } from '../../services/reservationService';
 import {
@@ -24,7 +28,7 @@ import { Logger } from '../../utils/Logger';
 import { toast } from 'sonner';
 import './ProductForm.css';
 
-const ProductForm = () => {
+const ProductForm = ({ readOnly = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -35,6 +39,8 @@ const ProductForm = () => {
   const [oldData, setOldData] = useState(null); // To track changes for sync
   const [orderHistory, setOrderHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [productHistory, setProductHistory] = useState([]);
+  const [loadingProductHistory, setLoadingProductHistory] = useState(false);
 
   // Uniqlo-like details
   const [formData, setFormData] = useState({
@@ -44,15 +50,16 @@ const ProductForm = () => {
     price: '',
     description: '',
     material: '',
-    color: '',
-    baseColor: '', // Populated from color_list on mount
+    color: '', // Derived on save from `colors` (comma-joined; mobile app splits on ',')
+    colors: [], // Multi-select available colours the customer can choose from
+    baseColor: '', // Primary colour (colors[0]) — used for admin catalog filtering
     pattern: 'Solid', // Populated from pattern_list on mount
     careInstructions: '',
     fitAndSizing: '',
     styleCode: '',
     season: 'All-Season',
     occasion: '',
-    visibility: 'Draft',
+    visibility: 'draft',
     isFeatured: false,
     isAlterable: false,
     isNewArrival: false,
@@ -128,10 +135,16 @@ const ProductForm = () => {
           const docParams = await getProductById(id);
           if (docParams) {
              setOldData(docParams);
+             // Colours are stored comma-joined in `color`; fall back to the
+             // legacy single `baseColor` so older products still populate.
+             const parsedColors = docParams.color
+               ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
+               : (docParams.baseColor ? [docParams.baseColor] : []);
              setFormData(prev => ({
                 ...prev,
                 ...docParams,
                 sizes: docParams.sizes || [],
+                colors: parsedColors,
                 images: docParams.images || [],
                 measurements: docParams.measurements || {},
                 tags: docParams.tags || []
@@ -146,6 +159,44 @@ const ProductForm = () => {
                 console.error("Failed fetching order history", err);
              } finally {
                 setLoadingHistory(false);
+             }
+
+             // Fetch product history: stock ledger + audit log, merged newest-first
+             setLoadingProductHistory(true);
+             try {
+                const [movements, logs] = await Promise.all([
+                   getStockMovements(id),
+                   getLogsForTarget('product', id),
+                ]);
+                const MOVEMENT_LABELS = {
+                   restock: '📦 Restock',
+                   sale: '🛒 In-Store Sale',
+                   reservation: '📅 Reservation',
+                   manual_adjustment: '✏️ Stock Adjustment',
+                   correction: '🔧 Stock Correction',
+                };
+                const entries = [
+                   ...movements.map((m) => ({
+                      id: `sm-${m.id}`,
+                      typeLabel: MOVEMENT_LABELS[m.changeType] || m.changeType,
+                      previousValue: `${m.previousStock} units`,
+                      newValue: `${m.newStock} units`,
+                      note: m.note,
+                      timestamp: m.createdAt,
+                   })),
+                   ...logs.map((l) => ({
+                      id: `log-${l.id}`,
+                      typeLabel: `📝 ${l.action}`,
+                      note: null,
+                      actorName: l.userName,
+                      timestamp: l.timestamp,
+                   })),
+                ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                setProductHistory(entries);
+             } catch (err) {
+                console.error("Failed fetching product history", err);
+             } finally {
+                setLoadingProductHistory(false);
              }
           } else {
              toast.error('Product not found.');
@@ -256,6 +307,14 @@ const ProductForm = () => {
     setFormData({ ...formData, sizes: newSizes });
   };
 
+  const toggleColor = (colorName) => {
+    const current = formData.colors || [];
+    const next = current.includes(colorName)
+      ? current.filter((c) => c !== colorName)
+      : [...current, colorName];
+    setFormData({ ...formData, colors: next });
+  };
+
   const setAsPrimary = (index) => {
     const newImages = [...formData.images];
     const item = newImages.splice(index, 1)[0];
@@ -307,12 +366,15 @@ const ProductForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
 
     // 1. Validate Form
     const { isValid, errors } = validateForm(formData, productRules);
-    if (!isValid || formData.sizes.length === 0) {
+    if (!isValid || formData.sizes.length === 0 || (formData.colors || []).length === 0) {
       const errorMsg =
-        formData.sizes.length === 0 ? 'At least one size is required' : Object.values(errors)[0];
+        formData.sizes.length === 0 ? 'At least one size is required'
+        : (formData.colors || []).length === 0 ? 'At least one color is required'
+        : Object.values(errors)[0];
       toast.error(errorMsg);
       return;
     }
@@ -351,7 +413,9 @@ const ProductForm = () => {
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
         material: sanitizeText(formData.material),
-        color: sanitizeText(formData.color),
+        // Persist the selected colours comma-joined; the mobile product page
+        // splits `color` on ',' to render its colour picker.
+        color: (formData.colors || []).join(', '),
         careInstructions: sanitizeText(formData.careInstructions),
         fitAndSizing: formData.fitAndSizing,
         styleCode: formData.styleCode,
@@ -367,8 +431,8 @@ const ProductForm = () => {
         onSale: formData.onSale,
         discountPercentage: parseInt(formData.discountPercentage) || 0,
         salePrice: formData.onSale ? parseFloat(formData.salePrice) : null,
-        // New Categorization
-        baseColor: formData.baseColor,
+        // New Categorization — primary colour drives admin catalog filtering
+        baseColor: (formData.colors || [])[0] || '',
         pattern: formData.pattern,
         measurements: formData.measurements,
 
@@ -409,13 +473,19 @@ const ProductForm = () => {
           console.error('[DEBUG] Checking/Adding missing sizes failed:', invErr);
         }
 
+        await logAction(user, 'Updated product details', {
+          targetType: 'product',
+          targetId: id,
+          productName: payload.name,
+        });
+
         console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
         payload.created_by = user?.id || null;
         payload.stock = 0;
         payload.status = 'Out of Stock';
-        payload.visibility = 'Draft';
+        payload.visibility = 'draft';
         payload.tags = ['New Arrival'];
 
         console.log('[DEBUG] Creating product in Firestore...', payload);
@@ -438,6 +508,12 @@ const ProductForm = () => {
         );
         await Promise.all(inventoryPromises);
         console.log('[DEBUG] Inventory items created successfully');
+
+        await logAction(user, 'Created new product', {
+          targetType: 'product',
+          targetId: newDocId,
+          productName: payload.name,
+        });
         toast.success('Product created successfully!');
       }
 
@@ -458,7 +534,7 @@ const ProductForm = () => {
   };  if (loading) return <div className="p-8">Loading product data...</div>;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6">
       {/* ── Page Header ── */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => navigate('/catalog')} className="btn-secondary p-2">
@@ -466,18 +542,34 @@ const ProductForm = () => {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-             <h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1>
+             <h1 className="text-2xl font-bold">
+                {readOnly ? 'Product Details' : isEditing ? 'Edit Product' : 'Add New Product'}
+             </h1>
              {formData.styleCode && (
                 <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">
                   SKU: {formData.styleCode}
                 </span>
              )}
           </div>
-          <p className="text-sm text-secondary mt-0.5">Fill in the details below — required fields are marked with *</p>
+          <p className="text-sm text-secondary mt-0.5">
+            {readOnly
+              ? 'Viewing in read-only mode — switch to Edit to make changes.'
+              : 'Fill in the details below — required fields are marked with *'}
+          </p>
         </div>
+        {readOnly && (
+          <button
+            type="button"
+            onClick={() => navigate('/catalog/edit/' + id)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Edit2 size={16} /> Edit Product
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <fieldset disabled={readOnly} style={readOnly ? { border: 0, padding: 0, margin: 0 } : undefined}>
 
         {/* ══════════════════════════════════════════════
             ZONE A — Identity & Quick Status
@@ -535,8 +627,8 @@ const ProductForm = () => {
                    <div className="flex items-center justify-between">
                       <label className="label mb-0">Visibility</label>
                       <select name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
-                        <option value="Draft">Draft</option>
-                        <option value="Published">Published</option>
+                        <option value="draft">Draft</option>
+                        <option value="public">Published</option>
                       </select>
                    </div>
                    <div className="flex flex-wrap gap-4">
@@ -564,8 +656,8 @@ const ProductForm = () => {
                    <div>
                       <label className="label">Visibility</label>
                       <select name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
-                        <option value="Draft">Draft</option>
-                        <option value="Published">Published</option>
+                        <option value="draft">Draft</option>
+                        <option value="public">Published</option>
                       </select>
                    </div>
                    <div className="flex flex-col gap-2 pt-2">
@@ -655,7 +747,7 @@ const ProductForm = () => {
               {/* Existing Images */}
               {formData.images.map((url, idx) => (
                 <div key={`exist-${idx}`} className="gallery-item relative border rounded-lg overflow-hidden group shadow-sm bg-gray-50">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <img src={url} alt="" className="w-full h-full object-contain" />
                   {idx === 0 && <div className="primary-badge">PRIMARY COVER</div>}
                   
                   <div className="gallery-overlay">
@@ -680,7 +772,7 @@ const ProductForm = () => {
               {/* Previews */}
               {previews.map((url, idx) => (
                 <div key={`prev-${idx}`} className="gallery-item relative border-2 border-dashed border-primary/50 rounded-lg overflow-hidden group bg-gray-50/50">
-                  <img src={url} alt="" className="w-full h-full object-cover opacity-70" />
+                  <img src={url} alt="" className="w-full h-full object-contain opacity-70" />
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" onClick={() => removeSelectedFile(idx)} className="p-1.5 bg-red-500 rounded-full text-white shadow-lg"><X size={16} /></button>
                   </div>
@@ -717,23 +809,40 @@ const ProductForm = () => {
            <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
               <Palette size={14} /> Material & Aesthetics
            </h2>
+
+           {/* Available Colors — multi-select, like sizes. Customers pick one
+               of these on the product page; stored comma-joined in `color`. */}
+           <div className="mb-6">
+              <label className="label">Available Colors *</label>
+              {colorList.length === 0 ? (
+                 <p className="text-sm text-secondary mt-2">
+                    No colors defined yet. Add colors in Settings to enable selection.
+                 </p>
+              ) : (
+                 <div className="flex flex-wrap gap-3 mt-3">
+                    {colorList.map((c) => (
+                       <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleColor(c.name)}
+                          className={`color-chip ${(formData.colors || []).includes(c.name) ? 'active' : ''}`}
+                       >
+                          {c.name}
+                       </button>
+                    ))}
+                 </div>
+              )}
+              {(formData.colors || []).length > 0 && (
+                 <p className="text-xs text-secondary mt-2">
+                    {formData.colors.length} selected · primary (for filtering): <strong>{formData.colors[0]}</strong>
+                 </p>
+              )}
+           </div>
+
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                  <label className="label">Material / Fabric</label>
                  <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Display Color Name</label>
-                 <input type="text" name="color" className="input-field" placeholder="e.g. Midnight Azure" value={formData.color} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Color *</label>
-                 <select name="baseColor" className="input-field" value={formData.baseColor} onChange={handleChange} required>
-                    <option value="" disabled>Select a color</option>
-                    {colorList.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                 </select>
               </div>
               <div>
                  <label className="label">Pattern</label>
@@ -890,12 +999,30 @@ const ProductForm = () => {
         </section>
         )}
 
+        {isEditing && (
+        <section className="card p-6">
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Layers size={14} /> Product History
+           </h2>
+           <HistoryTimeline
+              entries={productHistory}
+              loading={loadingProductHistory}
+              emptyText="No stock movements or changes recorded for this product yet."
+           />
+        </section>
+        )}
+        </fieldset>
+
         {/* Actions */}
         <div className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 bg-white/80 backdrop-blur-sm p-4 border-t z-20">
-           <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">Cancel</button>
-           <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Processing...' : (isEditing ? 'Update Product' : 'Create Product')}
+           <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">
+              {readOnly ? 'Back to Catalog' : 'Cancel'}
            </button>
+           {!readOnly && (
+             <button type="submit" className="btn-primary" disabled={saving}>
+                {saving ? 'Processing...' : (isEditing ? 'Update Product' : 'Create Product')}
+             </button>
+           )}
         </div>
       </form>
     </div>

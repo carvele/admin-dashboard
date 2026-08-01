@@ -471,6 +471,100 @@ input:checked + .toggle-slider:before {
   display: flex;
   align-items: center;
 }
+/* Used across ProductForm/ClothingCatalog/Inventory/StaffManagement/ARAssets/
+   Analytics/ImageWithFallback but never actually defined anywhere — every
+   flex-col container was silently falling back to the flex default (row),
+   which stretched sibling items to match each other's height instead of
+   stacking them. That's what caused checkbox rows like Featured Item /
+   Alterable / Force New Arrival to overlap in the product form. */
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+/* Also missing app-wide — an <img class="w-full h-full object-cover"> with
+   neither rule defined renders at its natural intrinsic size instead of
+   filling its container, so overflow:hidden on the parent just clips an
+   arbitrary corner of the photo instead of a proper centered crop. */
+.w-full {
+  width: 100%;
+}
+.h-full {
+  height: 100%;
+}
+
+/* ── Batch fix: audited the live DOM of the Product Details/Edit page against
+   every loaded stylesheet's actual rules and found ~40 more utility classes
+   used across the app but never defined anywhere (same root cause as
+   flex-col/w-full/h-full above). Adding the verified-missing, non-cosmetic-
+   only set here — this is what was behind the "components too close
+   together" / "panel doesn't fit" reports beyond the flex-col/image fixes. */
+.flex-1 { flex: 1 1 0%; }
+.flex-wrap { flex-wrap: wrap; }
+.justify-center { justify-content: center; }
+.max-w-sm { max-width: 24rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.overflow-x-auto { overflow-x: auto; }
+.sticky { position: sticky; }
+.z-20 { z-index: 20; }
+.bottom-0 { bottom: 0; }
+.border { border-width: 1px; border-style: solid; border-color: var(--border-light, #e5e5e5); }
+.border-b { border-bottom-width: 1px; border-bottom-style: solid; border-color: var(--border-light, #e5e5e5); }
+.border-t { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light, #e5e5e5); }
+.border-transparent { border-color: transparent; }
+.rounded { border-radius: 0.25rem; }
+.rounded-md { border-radius: 0.375rem; }
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-6 { padding-top: 1.5rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.gap-1 { gap: 0.25rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.w-4 { width: 1rem; }
+.h-4 { height: 1rem; }
+.w-32 { width: 8rem; }
+.font-semibold { font-weight: 600; }
+.italic { font-style: italic; }
+.text-left { text-align: left; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.tracking-wider { letter-spacing: 0.05em; }
+.leading-tight { line-height: 1.25; }
+.transition-colors { transition-property: color, background-color, border-color; transition-duration: 150ms; }
+.transition-transform { transition-property: transform; transition-duration: 150ms; }
+.shadow-inner { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+.bg-gray-100 { background-color: #f3f4f6; }
+.bg-white { background-color: #fff; }
+.text-danger { color: #dc2626; }
+.text-primary { color: var(--color-gold, #c9a84c); }
+.text-gray-400 { color: #9ca3af; }
+.text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }
+.text-gray-900 { color: #111827; }
+.accent-primary { accent-color: var(--color-gold, #c9a84c); }
+.accent-red-500 { accent-color: #ef4444; }
+.backdrop-blur-sm { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.border-gray-200 { border-color: #e5e7eb; }
+.border-gray-300 { border-color: #d1d5db; }
+.text-yellow-400 { color: #facc15; }
+/* Opacity-modifier variants (Tailwind's bg-color/NN syntax) — same missing-
+   utility problem, just with a slash in the class name. */
+.bg-white\/80 { background-color: rgba(255, 255, 255, 0.8); }
+.bg-light\/30 { background-color: rgba(250, 249, 246, 0.3); }
+.bg-primary\/10 { background-color: rgba(201, 168, 76, 0.1); }
+.bg-red-500\/80 { background-color: rgba(239, 68, 68, 0.8); }
 .gap-2 {
   gap: 0.5rem;
 }
@@ -545,6 +639,97 @@ input:checked + .toggle-slider:before {
 .mb-0 {
   margin-bottom: 0;
 }
+
+/* ── Additional missing utilities (audit 2026-07-22) ─────────────
+   Same hand-rolled-utility gap as before: classes used in JSX across
+   Settings, Dashboard, Reservations, ProductForm, Inventory, ARAssets,
+   Analytics that were never defined anywhere. Standard definitions. */
+.p-0 { padding: 0; }
+.p-8 { padding: 2rem; }
+.px-0 { padding-left: 0; padding-right: 0; }
+.px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.pt-0 { padding-top: 0; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mt-5 { margin-top: 1.25rem; }
+.mr-2 { margin-right: 0.5rem; }
+.ml-1 { margin-left: 0.25rem; }
+.ml-4 { margin-left: 1rem; }
+.gap-10 { gap: 2.5rem; }
+.block { display: block; }
+.inline { display: inline; }
+.inline-block { display: inline-block; }
+.flex { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.rounded-full { border-radius: 9999px; }
+.text-accent { color: var(--accent); }
+.text-success { color: #16a34a; }
+.text-warning { color: #d97706; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+
+/* Badge system — `.badge` base + colour variants. Used on Dashboard
+   (stock alerts, weather, logistics) and elsewhere; none were defined. */
+.badge,
+.badge-danger,
+.badge-secondary,
+.badge-success {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge-danger { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
+.badge-success { background: var(--status-approved-bg, #e6f4ea); color: var(--status-approved-text, #1e7e34); }
+.badge-secondary { background: #eef0f2; color: #475569; }
+.badge.accent { background: rgba(212, 175, 55, 0.15); color: var(--accent); }
+.badge.secondary { background: #eef0f2; color: #475569; }
+.flex-row { flex-direction: row; }
+.flex-column { flex-direction: column; }
+.h-auto { height: auto; }
+.w-72 { width: 18rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-tl-lg { border-top-left-radius: 0.5rem; }
+.border-0 { border-width: 0; }
+.border-secondary { border-color: var(--border-light, #e5e5e5); }
+.divide-y > * + * { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light, #e5e5e5); }
+.opacity-0 { opacity: 0; }
+.opacity-30 { opacity: 0.3; }
+.opacity-50 { opacity: 0.5; }
+.opacity-70 { opacity: 0.7; }
+.opacity-100 { opacity: 1; }
+.transition-opacity { transition-property: opacity; transition-duration: 150ms; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.underline { text-decoration: underline; }
+.leading-relaxed { line-height: 1.625; }
+.text-gold { color: var(--color-gold, #c9a84c); }
+.text-charcoal { color: var(--charcoal); }
+.bg-cream { background-color: var(--cream); }
+
+/* Grid system — `grid` + `grid-cols-*` were used together but never defined,
+   so multi-column layouts (ProductForm, Inventory, ARAssets) collapsed to a
+   single stacked column. `md:` variants apply at Tailwind's 768px breakpoint. */
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.col-span-2 { grid-column: span 2 / span 2; }
+@media (min-width: 768px) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Animation utilities — keyframes `spin` and `pageFadeIn` already existed but
+   had no class wired to them, so Loader2 spinners were completely static. */
+.animate-spin { animation: spin 1s linear infinite; }
+.animate-fade-in { animation: pageFadeIn 0.3s ease-out; }
 
 /* Status badges */
 .status-badge {
@@ -872,7 +1057,12 @@ input:checked + .toggle-slider:before {
   border-bottom: none;
 }
 
-.measurement-table-container input[type="text"] {
+/* Scoped to `td` so this only targets the per-size value cells in the grid —
+   it was previously matching ANY text input in the container, including the
+   "Add metric" search field in the toolbar above, whose flat 0.5rem padding
+   overrode that field's .pl-10 (higher specificity: element+attribute
+   selector beats a single class), pushing its text under the ruler icon. */
+.measurement-table-container td input[type="text"] {
   border: 1px solid transparent;
   background: transparent;
   padding: 0.5rem;
@@ -881,7 +1071,7 @@ input:checked + .toggle-slider:before {
   transition: all 0.2s;
 }
 
-.measurement-table-container input[type="text"]:focus {
+.measurement-table-container td input[type="text"]:focus {
   border-color: var(--accent);
   background: var(--white);
   box-shadow: 0 0 0 3px var(--focus-ring);

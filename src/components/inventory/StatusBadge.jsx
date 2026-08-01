@@ -10,26 +10,25 @@
  */
 
 import React from 'react';
-import { StockStatus } from '../../types/inventory';
 import '../StatusBadge.css';
 
 /**
- * Get icon for status (for semantic purposes, not color-coding)
+ * Get icon for status (for semantic purposes, not color-coding).
+ * Keyed on the exact label strings produced by utils/stockStatus.js —
+ * the single canonical stock-status vocabulary for the app.
  */
 const getStatusIcon = (status) => {
   switch (status) {
-    case StockStatus.NO_STOCK:
+    case 'No Stock':
       return '✕'; // Empty
-    case StockStatus.CRITICAL:
+    case 'Critical':
       return '⚠'; // Warning
-    case StockStatus.VERY_LOW:
+    case 'Very Low':
       return '⬇'; // Low arrow
-    case StockStatus.LOW:
+    case 'Low':
       return '→'; // At level
-    case StockStatus.HEALTHY:
+    case 'Healthy':
       return '✓'; // Check
-    case StockStatus.OVERSTOCK:
-      return '↑'; // High arrow
     default:
       return '?';
   }
@@ -37,7 +36,7 @@ const getStatusIcon = (status) => {
 
 /**
  * StatusBadge component
- * @param {string} status - One of StockStatus enum values
+ * @param {string} status - One of utils/stockStatus.js's label strings
  * @param {boolean} [showLabel=true] - Whether to show text label
  */
 const StatusBadge = ({ status, showLabel = true }) => {

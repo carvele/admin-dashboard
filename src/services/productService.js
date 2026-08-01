@@ -220,6 +220,47 @@ export const persistDemandScore = async (docId, demandScore, tier, adjustedScore
   }
 };
 
+// ── Stock movement ledger ────────────────────────────────────
+
+/**
+ * Append an immutable row to the stock_movements ledger.
+ * change_type must be one of: 'manual_adjustment' | 'restock' | 'correction'
+ * | 'sale' | 'reservation' (DB CHECK constraint).
+ * Ledger rows are product-level; per-size context goes in the note.
+ * Fire-and-forget: a ledger failure must never block the stock operation itself.
+ */
+export const logStockMovement = async (productId, previousStock, newStock, changeType, note = '') => {
+  if (!productId) return;
+  try {
+    const { error } = await supabase.from('stock_movements').insert({
+      product_id: productId,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      delta: newStock - previousStock,
+      change_type: changeType,
+      note: note || null,
+    });
+    if (error) console.warn('[StockLedger] insert failed:', error.message);
+  } catch (err) {
+    console.warn('[StockLedger] insert threw:', err);
+  }
+};
+
+/** Fetch the stock-movement ledger for one product, newest first. */
+export const getStockMovements = async (productId, limit = 50) => {
+  const { data, error } = await supabase
+    .from('stock_movements')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.warn('[StockLedger] fetch failed:', error.message);
+    return [];
+  }
+  return (data ?? []).map(toCamel);
+};
+
 /** Record an in-store walk-in sale: deduct stock + create a completed reservation. */
 export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
   if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
@@ -229,6 +270,15 @@ export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePric
     total: inventoryItem.total - quantity,
     available: inventoryItem.available - quantity,
   });
+
+  // 1b. Ledger entry (product-level; size noted)
+  await logStockMovement(
+    inventoryItem.productDocId,
+    inventoryItem.total,
+    inventoryItem.total - quantity,
+    'sale',
+    `Walk-in sale: ${quantity}× ${inventoryItem.item} (size ${inventoryItem.size})`,
+  );
 
   // 2. Create virtual completed reservation
   const now = new Date().toISOString();

@@ -25,6 +25,7 @@ const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
+const ActivityLog = lazy(() => import('../pages/admin/ActivityLog'));
 
 // Suspense fallback
 const PageLoader = () => (
@@ -269,6 +270,18 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
+          {/* Read-only product detail — any authenticated staff can view,
+              unlike catalog/new and catalog/edit which are admin-only */}
+          <Route
+            path="catalog/view/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ProductForm readOnly />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="ar-assets"
             element={
@@ -336,6 +349,18 @@ const AnimatedRoutes = () => {
                 <RequireAdmin>
                   <Suspense fallback={<PageLoader />}>
                     <Settings />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="activity-log"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <ActivityLog />
                   </Suspense>
                 </RequireAdmin>
               </ProtectedRoute>

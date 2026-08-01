@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 // @ts-ignore
 import { getReservations } from '../../services/reservationService';
+// @ts-ignore
+import { getUserDisplayName, formatRelativeTime } from '../../utils/helpers';
 
 const defaultPreferences = {
   statTotalReservations: true,
@@ -58,7 +60,7 @@ import { getCustomers } from '../../services/customerService';
 // @ts-ignore
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
-import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockHealth';
+import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 import { motion } from 'framer-motion';
@@ -75,7 +77,7 @@ const parseDate = (d: any) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuth() as { user: any };
   const canCustomize = can(user?.role, 'customize_dashboard');
   const [reservations, setReservations] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -140,7 +142,8 @@ const Dashboard = () => {
   );
 
   const totalReservations = reservations.length;
-  const activeCustomers = customers.filter((c) => c.status === 'Active').length;
+  // profiles has no `status` column — "active" = not blocked
+  const activeCustomers = customers.filter((c) => !c.isBlocked).length;
   const pendingRequests = reservations.filter(
     (r) => r.status === 'Pending' || r.status === 'Request Approval' || r.status === 'To Pay'
   ).length;
@@ -184,9 +187,7 @@ const Dashboard = () => {
   // 2. Unified Activity Feed (Last 10 events)
   const activityFeed = [
     ...reservations.map(r => ({ type: 'reservation', date: parseDate(r.createdAt || r.date), desc: `${r.customerName || 'A customer'} booked ${r.productName || 'an outfit'}`, user: r.customerName })),
-    ...customers.map(c => ({ type: 'customer', date: parseDate(c.createdAt || c.id), desc: `New customer ${c.name} joined`, user: c.name })),
-    // Add mock staff actions for vitality
-    { type: 'staff', date: new Date(Date.now() - 15 * 60 * 1000), desc: 'Admin updated Gown category pricing', user: 'Admin' }
+    ...customers.map(c => ({ type: 'customer', date: parseDate(c.createdAt || c.id), desc: `New customer ${getUserDisplayName(c)} joined`, user: getUserDisplayName(c) })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
 
   // 3. Weather Insight logic (Simulation)
@@ -297,11 +298,11 @@ const Dashboard = () => {
             </button>
           )}
           {can(user?.role, 'create_catalog') && (
-            <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/catalog')}>
+            <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/catalog/new')}>
               <PlusCircle size={16} /> Add Product
             </button>
           )}
-          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/messaging')}>
+          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/messages')}>
             <MessageSquare size={16} /> Broadcast
           </button>
         </div>
@@ -571,11 +572,11 @@ const Dashboard = () => {
                   className="avatar-small"
                   style={{ backgroundColor: `hsl(${200 + i * 40}, 50%, 50%)` }}
                 >
-                  {(c.name || 'U')[0]}
+                  {getUserDisplayName(c)[0]?.toUpperCase() || 'U'}
                 </div>
                 <div className="item-details">
-                  <h4>{c.name}</h4>
-                  <p>{c.lastActive}</p>
+                  <h4>{getUserDisplayName(c)}</h4>
+                  <p>{c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : c.email}</p>
                 </div>
                 <button className="icon-btn small" onClick={() => navigate('/customers')}>
                   <Users size={16} />
