@@ -183,7 +183,12 @@ const Reservations = () => {
 
     try {
       if (action === 'approve_pay') {
-        await updateReservation(res.docId, { status: 'To Pay' });
+        // 'Confirmed' is the stored value; the display mapping above turns it
+        // back into "To Pay" for staff. Writing the label instead meant the DB
+        // never saw an accepted reservation: no payment deadline was stamped,
+        // the customer was never told to pay, the app showed no Pay button,
+        // and the unpaid sweep never picked it up.
+        await updateReservation(res.docId, { status: 'Confirmed' });
         toast.success(`Reservation ${id} approved for payment`);
       } else if (action === 'ready_pickup') {
         await updateReservation(res.docId, {
@@ -260,18 +265,22 @@ const Reservations = () => {
     }
   };
 
-  const handleToggleDeposit = async (res) => {
+  // Was handleToggleDeposit, which wrote a boolean into `deposit` -- a numeric
+  // column holding the amount owed. Postgres rejects that outright, so the
+  // control silently did nothing; had it succeeded it would have destroyed the
+  // figure the customer is being charged. Paid/unpaid belongs to payment_status.
+  const handleTogglePaid = async (res) => {
+    const nextPaid = res.paymentStatus !== 'Paid';
     try {
-      const newDepositValue = !res.deposit;
-      await updateReservation(res.docId, { deposit: newDepositValue });
-      setViewModal((prev) => prev ? { ...prev, deposit: newDepositValue } : prev);
-      await logAction(user, newDepositValue ? 'Marked deposit as paid' : 'Marked deposit as unpaid', {
+      await updateReservation(res.docId, { paymentStatus: nextPaid ? 'Paid' : 'Pending' });
+      setViewModal((prev) => prev ? { ...prev, paymentStatus: nextPaid ? 'Paid' : 'Pending' } : prev);
+      await logAction(user, nextPaid ? 'Marked payment as received' : 'Marked payment as unpaid', {
         reservationId: res.id,
         customer: res.customerName || res.customer,
       });
-      toast.success(newDepositValue ? 'Deposit marked as paid' : 'Deposit marked as unpaid');
+      toast.success(nextPaid ? 'Payment marked as received' : 'Payment marked as unpaid');
     } catch (e) {
-      toast.error('Failed to update deposit status');
+      toast.error('Failed to update payment status');
     }
   };
 
@@ -286,6 +295,24 @@ const Reservations = () => {
       toast.success('Payment verified successfully');
     } catch (e) {
       toast.error('Failed to verify payment');
+    }
+  };
+
+  // A receipt only leaves 'Submitted' when a person has looked at it. Rejecting
+  // returns it to unpaid rather than cancelling outright, so a customer who
+  // sent the wrong image can try again inside whatever time is left -- an
+  // unreadable screenshot is not the same as refusing to pay.
+  const handleRejectReceipt = async (res) => {
+    try {
+      await updateReservation(res.docId, { paymentStatus: 'Pending', receiptUrl: null });
+      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev);
+      await logAction(user, 'Rejected payment receipt', {
+        reservationId: res.id,
+        customer: res.customerName || res.customer,
+      });
+      toast.error('Receipt rejected — the customer can upload another');
+    } catch {
+      toast.error('Failed to reject the receipt');
     }
   };
 
@@ -797,18 +824,25 @@ const Reservations = () => {
                 <StatusBadge status={viewModal.displayStatus || 'Pending'} />
               </div>
               <div className="detail-row">
-                <span className="detail-label">Deposit</span>
+                <span className="detail-label">Amount Due</span>
                 <div className="flex-center gap-2">
-                  <span className={viewModal.deposit ? 'text-success' : 'text-secondary'}>
-                    {viewModal.deposit ? 'Paid ✓' : 'Unpaid ✗'}
+                  {/* deposit is the amount owed, not a paid flag. Reading it as
+                      a boolean made every reservation with a non-zero balance
+                      show "Paid", which is the opposite of the truth. Whether
+                      money arrived is payment_status. */}
+                  <span className="text-secondary">
+                    ₱{Number(viewModal.deposit || 0).toFixed(2)}
+                  </span>
+                  <span className={viewModal.paymentStatus === 'Paid' ? 'text-success' : 'text-secondary'}>
+                    {viewModal.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid ✗'}
                   </span>
                   {viewModal.displayStatus !== 'Completed' && viewModal.displayStatus !== 'Cancelled' && (
                     <button
-                      className={viewModal.deposit ? 'btn-outline small' : 'btn-primary small'}
+                      className={viewModal.paymentStatus === 'Paid' ? 'btn-outline small' : 'btn-primary small'}
                       style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
-                      onClick={() => handleToggleDeposit(viewModal)}
+                      onClick={() => handleTogglePaid(viewModal)}
                     >
-                      {viewModal.deposit ? 'Mark Unpaid' : 'Mark as Paid'}
+                      {viewModal.paymentStatus === 'Paid' ? 'Mark Unpaid' : 'Mark as Paid'}
                     </button>
                   )}
                 </div>
@@ -828,14 +862,28 @@ const Reservations = () => {
                 <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: '8px' }}>
                     <span className="detail-label">Receipt Uploaded</span>
-                    {viewModal.paymentStatus === 'Processing' && (
-                      <button
-                        className="btn-primary small"
-                        style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
-                        onClick={() => handleVerifyPayment(viewModal)}
-                      >
-                        Verify Payment
-                      </button>
+                    {/* 'Submitted' is what the app writes when a customer sends
+                        a transfer receipt. This was gated on 'Processing',
+                        which nothing ever sets, so the button never appeared
+                        and no receipt could be actioned at all. */}
+                    {(viewModal.paymentStatus === 'Submitted' ||
+                      viewModal.paymentStatus === 'Processing') && (
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          className="btn-primary small"
+                          style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                          onClick={() => handleVerifyPayment(viewModal)}
+                        >
+                          Verify Payment
+                        </button>
+                        <button
+                          className="btn-outline small"
+                          style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                          onClick={() => handleRejectReceipt(viewModal)}
+                        >
+                          Reject
+                        </button>
+                      </div>
                     )}
                   </div>
                   <a href={viewModal.receiptUrl} target="_blank" rel="noopener noreferrer">
@@ -872,7 +920,10 @@ const Reservations = () => {
                         }),
                         time: resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         status,
-                        deposit: viewModal.deposit ? 'Paid ✓' : 'Unpaid',
+                        // Same fix as the detail row: the amount is not a flag,
+                        // so a message to the customer must not claim they have
+                        // paid merely because a balance exists.
+                        deposit: viewModal.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid',
                         imageUrl: viewModal.imageUrl || '',
                         customerName: cName,
                       },
