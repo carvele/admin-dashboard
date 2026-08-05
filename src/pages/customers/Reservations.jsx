@@ -19,8 +19,11 @@ import {
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
+import ReservationCard from '../../components/reservations/ReservationCard';
+import '../../components/reservations/ReservationBoard.css';
 import {
   subscribeToReservations,
+  subscribeToReservationItems,
   adjustInventoryForReservation,
   updateReservation,
   createReservation,
@@ -64,12 +67,37 @@ const CountdownTimer = ({ targetDate }) => {
   );
 };
 
+// The three columns are the work queue. Completed and Cancelled are history,
+// not work, so they stay in List view rather than adding dead columns staff
+// scroll past all day.
+const BOARD_COLUMNS = [
+  {
+    status: 'Pending',
+    label: 'Pending review',
+    icon: Clock,
+    empty: 'Nothing waiting on a decision.',
+  },
+  {
+    status: 'To Pay',
+    label: 'Awaiting payment',
+    icon: CheckCircle,
+    empty: 'No one owes anything right now.',
+  },
+  {
+    status: 'To Pickup',
+    label: 'Ready for pickup',
+    icon: Shirt,
+    empty: 'Nothing waiting to be collected.',
+  },
+];
+
 const Reservations = () => {
   const { user } = useAuth();
   // Staff monitor reservations read-only; only full-access roles act on them.
   const canManage = can(user?.role, 'assign_reservation');
   const navigate = useNavigate();
   const [reservations, setReservations] = useState([]);
+  const [itemsByReservation, setItemsByReservation] = useState({});
   const [loading, setLoading] = useState(true);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -98,6 +126,8 @@ const Reservations = () => {
       setLoading(false);
     });
 
+    const unsubI = subscribeToReservationItems(setItemsByReservation);
+
     const unsubC = subscribeToCustomers((data) => {
       setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
     });
@@ -108,6 +138,7 @@ const Reservations = () => {
 
     return () => {
       unsubR();
+      unsubI();
       unsubC();
       unsubP();
     };
@@ -126,7 +157,10 @@ const Reservations = () => {
   };
 
   const [statusFilter, setStatusFilter] = useState('All');
-  const [viewMode, setViewMode] = useState('table');
+  // Board first: the day-to-day job is working the queue, and a flat table
+  // gave no sense of what needs doing next. List view is still there for
+  // scanning history.
+  const [viewMode, setViewMode] = useState('board');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
@@ -168,8 +202,23 @@ const Reservations = () => {
     if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
     if (displayStatus === 'Active') displayStatus = 'Completed';
 
+    // Falls back to the reservation's own product columns when the lines
+    // have not arrived (or an older row predates them), so a card always
+    // shows what was reserved rather than nothing.
+    const lines = itemsByReservation[r.id]?.length
+      ? itemsByReservation[r.id]
+      : [{
+          id: r.id,
+          productId: r.productId,
+          productName: r.productName || r.outfit,
+          size: r.size,
+          color: r.color,
+          quantity: r.quantity ?? 1,
+        }];
+
     return {
       ...r,
+      lines,
       displayStatus: displayStatus,
       displayDate: parseDate(r.reservationDate || r.date),
       displayName: r.customerName || r.customer || 'Unknown Customer'
@@ -195,6 +244,31 @@ const Reservations = () => {
     await adjustInventoryForReservation(outfit, size, delta, isConsume);
   };
 
+  // A reservation can hold several products, so stock has to move for every
+  // line. Adjusting only the reservation's own product columns would leave
+  // every item after the first uncounted -- reserved stock silently wrong.
+  // Quantity is honoured too: 2 of something moves 2.
+  const adjustStockForReservation = async (res, deltaPerUnit, isConsume = false) => {
+    const lines = itemsByReservation[res.id]?.length
+      ? itemsByReservation[res.id]
+      : [{
+          productId: res.productId,
+          productName: res.productName || res.outfit,
+          size: res.size,
+          quantity: res.quantity ?? 1,
+        }];
+
+    for (const line of lines) {
+      const qty = Math.max(1, line.quantity ?? 1);
+      await adjustStock(
+        line.productId || line.productName,
+        line.size,
+        deltaPerUnit * qty,
+        isConsume,
+      );
+    }
+  };
+
   // --- LIFECYCLE ACTIONS ---
   // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
   // Also backwards compatible with Confirmed and Fitting
@@ -218,18 +292,18 @@ const Reservations = () => {
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
-        await adjustStock(res.productId || res.productName || res.outfit, res.size, -1);
+        await adjustStockForReservation(res, -1);
         toast.success(`Reservation ${id} payment received — stock reserved and ready for pickup`);
       } else if (action === 'complete') {
         await updateReservation(res.docId, { status: 'Completed' });
         // Consume reserved stock (item purchased/picked up forever)
-        await adjustStock(res.productId || res.productName || res.outfit, res.size, 1, true);
+        await adjustStockForReservation(res, 1, true);
         toast.success(`Reservation ${id} completed — stock consumed permanently`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Only restore stock if it was confirmed/to-pickup/active (stock was deducted)
         if (res.status === 'Confirmed' || res.status === 'Fitting' || res.status === 'To Pickup' || res.status === 'Active') {
-          await adjustStock(res.productId || res.productName || res.outfit, res.size, 1);
+          await adjustStockForReservation(res, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
       }
@@ -406,6 +480,12 @@ const Reservations = () => {
         <div className="header-actions">
           <div className="view-toggle">
             <button
+              className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
+              onClick={() => setViewMode('board')}
+            >
+              Board
+            </button>
+            <button
               className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
               onClick={() => setViewMode('table')}
             >
@@ -457,6 +537,41 @@ const Reservations = () => {
 
         {loading ? (
           <div className="p-4"><SkeletonTable columns={7} rows={5} /></div>
+        ) : viewMode === 'board' ? (
+          <div className="res-board">
+            {BOARD_COLUMNS.map((column) => {
+              const cards = filteredReservations.filter(
+                (r) => r.displayStatus === column.status,
+              );
+              return (
+                <section key={column.status} className="res-board-col">
+                  <h2 className="res-board-col-head">
+                    <column.icon size={16} aria-hidden="true" />
+                    {column.label}
+                    <span className="res-board-count">{cards.length}</span>
+                  </h2>
+
+                  {cards.length === 0 ? (
+                    <p className="res-board-empty">{column.empty}</p>
+                  ) : (
+                    cards.map((res) => (
+                      <ReservationCard
+                        key={res.id}
+                        res={res}
+                        canManage={canManage}
+                        onView={() => setViewModal(res)}
+                        onAction={handleAction}
+                        onReschedule={() => {
+                          setRescheduleModal(res);
+                          setNewDate(res.date);
+                        }}
+                      />
+                    ))
+                  )}
+                </section>
+              );
+            })}
+          </div>
         ) : viewMode === 'table' ? (
           <div className="table-container">
             <table className="table">

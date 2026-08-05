@@ -88,6 +88,22 @@ export const subscribeToReservations = (callback) => {
   }, {}, true /* includeDeleted so cancelled/history are accessible */);
 };
 
+// A reservation can hold several products; the lines live in
+// reservation_items. The reservation row's own product columns only ever
+// describe the first line, so anything showing what was actually reserved
+// has to read these.
+export const subscribeToReservationItems = (callback) => {
+  return subscribeToCollection('reservation_items', (rows) => {
+    const byReservation = {};
+    for (const row of rows) {
+      const key = row.reservationId;
+      if (!key) continue;
+      (byReservation[key] ||= []).push(row);
+    }
+    callback(byReservation);
+  });
+};
+
 // ── One-time fetches ─────────────────────────────────────────
 
 export const getReservations = async (maxResults = 0) => {
