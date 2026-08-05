@@ -76,7 +76,15 @@ const normaliseReservation = (row) => {
 
 export const subscribeToReservations = (callback) => {
   return subscribeToCollection('reservations', (rows) => {
-    callback(rows.map(normaliseReservation));
+    // subscribeToCollection issues no ORDER BY, so Postgres returns rows in
+    // whatever order it likes (typically insertion order) -- newest was
+    // landing at the bottom of the list instead of the top.
+    const sorted = [...rows].sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+    callback(sorted.map(normaliseReservation));
   }, {}, true /* includeDeleted so cancelled/history are accessible */);
 };
 

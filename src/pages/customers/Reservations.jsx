@@ -15,8 +15,9 @@ import {
   UserCheck,
   Shirt,
   MessageSquare,
+  X,
 } from 'lucide-react';
-import StatusBadge from '../../components/inventory/StatusBadge';
+import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import {
   subscribeToReservations,
@@ -27,6 +28,7 @@ import {
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
+import { resolveSignedStorageUrl } from '../../lib/storage';
 import { logAction } from '../../services/staffService';
 import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
@@ -128,6 +130,25 @@ const Reservations = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
+  const [receiptModalUrl, setReceiptModalUrl] = useState(null);
+  // receipt_url on the row is a bare storage path in a private bucket, not a
+  // usable URL -- resolve it to a signed URL whenever the detail modal opens
+  // on a reservation that has one.
+  const [resolvedReceiptUrl, setResolvedReceiptUrl] = useState(null);
+  const [receiptLoadFailed, setReceiptLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setResolvedReceiptUrl(null);
+    setReceiptLoadFailed(false);
+    if (!viewModal?.receiptUrl) return;
+    let cancelled = false;
+    resolveSignedStorageUrl('payment_receipts', viewModal.receiptUrl).then((url) => {
+      if (cancelled) return;
+      if (url) setResolvedReceiptUrl(url);
+      else setReceiptLoadFailed(true);
+    });
+    return () => { cancelled = true; };
+  }, [viewModal?.receiptUrl]);
 
   const [newRes, setNewRes] = useState({
     customer: '',
@@ -886,13 +907,27 @@ const Reservations = () => {
                       </div>
                     )}
                   </div>
-                  <a href={viewModal.receiptUrl} target="_blank" rel="noopener noreferrer">
-                    <img 
-                      src={viewModal.receiptUrl} 
-                      alt="Receipt" 
-                      style={{ height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border)' }} 
-                    />
-                  </a>
+                  {receiptLoadFailed ? (
+                    <div className="text-danger text-sm">
+                      Could not load this receipt. It may have been removed, or you may not have permission to view it.
+                    </div>
+                  ) : resolvedReceiptUrl ? (
+                    <button
+                      type="button"
+                      className="receipt-thumb-btn"
+                      onClick={() => setReceiptModalUrl(resolvedReceiptUrl)}
+                      style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+                      aria-label="View full-size receipt"
+                    >
+                      <img
+                        src={resolvedReceiptUrl}
+                        alt="Receipt"
+                        style={{ height: '150px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface, #f4f4f4)' }}
+                      />
+                    </button>
+                  ) : (
+                    <div className="text-secondary text-sm">Loading receipt…</div>
+                  )}
                 </div>
               )}
             </div>
@@ -937,6 +972,30 @@ const Reservations = () => {
               <button className="btn-outline" onClick={() => setViewModal(null)}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {receiptModalUrl && (
+        <div className="modal-overlay" onClick={() => setReceiptModalUrl(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
+          >
+            <div className="modal-header">
+              <h3>Payment Receipt</h3>
+              <button className="btn-icon" onClick={() => setReceiptModalUrl(null)} aria-label="Close receipt">
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', maxHeight: '75vh', overflow: 'auto' }}>
+              <img
+                src={receiptModalUrl}
+                alt="Payment receipt, full size"
+                style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: '8px' }}
+              />
             </div>
           </div>
         </div>

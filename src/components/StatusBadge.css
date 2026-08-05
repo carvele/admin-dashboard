@@ -38,12 +38,12 @@
   color: white;
 }
 
-.status-confirmed {
+.status-confirmed, .status-to-pay {
   background-color: var(--status-confirmed-bg);
   color: var(--status-confirmed-text);
 }
 
-.status-fitting {
+.status-fitting, .status-to-pickup {
   background-color: var(--status-fitting-bg);
   color: var(--status-fitting-text);
 }
