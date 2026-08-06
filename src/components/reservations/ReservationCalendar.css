@@ -52,6 +52,7 @@
 }
 
 .res-calendar-cell {
+  position: relative;
   aspect-ratio: 1 / 0.85;
   min-height: 56px;
   border: 1px solid var(--border-color);
@@ -76,9 +77,36 @@
   background: var(--status-confirmed-bg);
 }
 
+.res-calendar-cell-urgent {
+  border-color: var(--status-cancelled-text, #a32d2d);
+  border-width: 2px;
+}
+
 .res-calendar-daynum {
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.res-calendar-count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--status-confirmed-bg);
+  color: var(--status-confirmed-text);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.res-calendar-cell-urgent .res-calendar-count {
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
 }
 
 .res-calendar-dots {
@@ -99,11 +127,6 @@
 .cal-dot-topickup { background: var(--status-fitting-text); }
 .cal-dot-completed { background: var(--status-completed-text); }
 .cal-dot-cancelled { background: var(--status-cancelled-text); }
-
-.res-calendar-more {
-  font-size: 0.62rem;
-  color: var(--text-secondary);
-}
 
 .res-calendar-agenda {
   margin-top: 18px;
@@ -139,6 +162,16 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 8px 10px;
+}
+
+.res-calendar-agenda-item-urgent {
+  border-color: var(--status-cancelled-text, #a32d2d);
+}
+
+.res-calendar-agenda-deadline {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .res-calendar-agenda-time {

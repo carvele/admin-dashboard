@@ -23,6 +23,7 @@ import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
+import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -362,6 +363,41 @@ const Reservations = () => {
     }
   };
 
+  // Shared by the modal footer, the board card, and the table row -- used to
+  // live only in the modal's onClick, which meant messaging a customer about
+  // a reservation required opening the full detail modal first every time.
+  const handleMessageBuyer = (res) => {
+    const cName = res.customerName || res.customer;
+    const pName = res.productName || res.outfit;
+    const resDate = parseDate(res.reservationDate || res.date);
+    const resId = (res.id || res.docId || '').toUpperCase();
+    const status = res.displayStatus || 'Pending';
+
+    navigate('/messages', {
+      state: {
+        buyerId: res.customerId || '',
+        buyerName: cName,
+        autoSendReservation: true,
+        reservationContext: {
+          id: resId,
+          productName: pName,
+          size: res.size || 'N/A',
+          date: resDate.toLocaleDateString('en-PH', {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+          }),
+          time: resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status,
+          // The amount is not a flag, so a message to the customer must not
+          // claim they have paid merely because a balance exists.
+          deposit: res.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid',
+          imageUrl: res.imageUrl || '',
+          customerName: cName,
+        },
+      },
+    });
+    setViewModal(null);
+  };
+
   // Was handleToggleDeposit, which wrote a boolean into `deposit` -- a numeric
   // column holding the amount owed. Postgres rejects that outright, so the
   // control silently did nothing; had it succeeded it would have destroyed the
@@ -567,6 +603,7 @@ const Reservations = () => {
                           setRescheduleModal(res);
                           setNewDate(res.date);
                         }}
+                        onMessage={() => handleMessageBuyer(res)}
                       />
                     ))
                   )}
@@ -614,11 +651,20 @@ const Reservations = () => {
                       </td>
                       <td>
                         <StatusBadge status={res.displayStatus} />
-                        {res.paymentStatus === 'Processing' && res.receiptUrl && (
+                        {isAwaitingReceipt(res) && (
                           <div className="text-gold text-xs mt-1 font-medium bg-cream p-1 rounded inline-block border" style={{ borderColor: 'var(--border-color)' }}>
                             Receipt Uploaded
                           </div>
                         )}
+                        {(() => {
+                          const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+                          if (!deadline) return null;
+                          return (
+                            <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                              {deadline.label} to pay
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td>
                         <div className="action-buttons">
@@ -628,6 +674,13 @@ const Reservations = () => {
                             onClick={() => setViewModal(res)}
                           >
                             <Eye size={16} />
+                          </button>
+                          <button
+                            className="action-icon"
+                            title="Message Buyer"
+                            onClick={() => handleMessageBuyer(res)}
+                          >
+                            <MessageSquare size={16} />
                           </button>
                           {/* Lifecycle actions — full-access roles only; staff view read-only.
                               Same PRIMARY_ACTION map as the board, so the two views never
@@ -686,6 +739,7 @@ const Reservations = () => {
           <ReservationCalendar
             reservations={filteredReservations}
             onView={(res) => setViewModal(res)}
+            onMessage={handleMessageBuyer}
           />
         )}
       </div>
@@ -914,13 +968,26 @@ const Reservations = () => {
                 <span className="detail-label">Customer</span>
                 <strong>{viewModal.customerName || viewModal.customer || 'Unknown'}</strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Outfit</span>
-                {viewModal.productName || viewModal.outfit}
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Size</span>
-                <span className="size-badge">{viewModal.size}</span>
+              <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span className="detail-label" style={{ marginBottom: '6px' }}>
+                  {(viewModal.lines?.length ?? 1) > 1 ? `Items (${viewModal.lines.length})` : 'Item'}
+                </span>
+                <ul className="res-card-lines" style={{ width: '100%' }}>
+                  {(viewModal.lines?.length ? viewModal.lines : [{
+                    id: viewModal.id,
+                    productName: viewModal.productName || viewModal.outfit,
+                    size: viewModal.size,
+                    quantity: viewModal.quantity ?? 1,
+                  }]).map((line, index) => (
+                    <li key={line.id ?? `${line.productId}-${index}`}>
+                      <span className="res-card-line-name">
+                        {line.productName || 'Unnamed item'}
+                        {line.size ? `, ${line.size}` : ''}
+                      </span>
+                      <span className="res-card-line-qty">x{line.quantity ?? 1}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Date</span>
@@ -957,9 +1024,26 @@ const Reservations = () => {
               <div className="detail-row">
                 <span className="detail-label">Payment</span>
                 <div>
-                  <div className={`font-medium ${viewModal.paymentStatus === 'Processing' ? 'text-gold' : viewModal.paymentStatus === 'Paid' ? 'text-success' : 'text-danger'}`}>
+                  <div className={`font-medium ${
+                    viewModal.paymentStatus === 'Paid' ? 'text-success'
+                    // Submitted/Processing both mean "receipt sent, awaiting staff
+                    // review" -- neither is a flat "nothing has happened" unpaid
+                    // state, so both get the same in-review color rather than
+                    // Submitted falling through to the same red as truly unpaid.
+                    : (viewModal.paymentStatus === 'Submitted' || viewModal.paymentStatus === 'Processing') ? 'text-gold'
+                    : 'text-danger'
+                  }`}>
                     {viewModal.paymentStatus || 'Unpaid'}
                   </div>
+                  {(() => {
+                    const deadline = viewModal.displayStatus === 'To Pay' ? formatPaymentDeadline(viewModal.paymentDueAt) : null;
+                    if (!deadline) return null;
+                    return (
+                      <div className={`text-sm font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                        {deadline.label} to pay
+                      </div>
+                    );
+                  })()}
                   {viewModal.paymentType && (
                     <div className="text-secondary text-sm">{viewModal.paymentType}</div>
                   )}
@@ -1020,38 +1104,7 @@ const Reservations = () => {
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <button
                 className="btn-primary flex-center gap-2"
-                onClick={() => {
-                  const cName = viewModal.customerName || viewModal.customer;
-                  const pName = viewModal.productName || viewModal.outfit;
-                  const resDate = parseDate(viewModal.reservationDate || viewModal.date);
-                  const resId = (viewModal.id || viewModal.docId || '').toUpperCase();
-                  const status = viewModal.displayStatus || 'Pending';
-
-                  navigate('/messages', {
-                    state: {
-                      buyerId: viewModal.customerId || '',
-                      buyerName: cName,
-                      autoSendReservation: true,
-                      reservationContext: {
-                        id: resId,
-                        productName: pName,
-                        size: viewModal.size || 'N/A',
-                        date: resDate.toLocaleDateString('en-PH', {
-                          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-                        }),
-                        time: resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        status,
-                        // Same fix as the detail row: the amount is not a flag,
-                        // so a message to the customer must not claim they have
-                        // paid merely because a balance exists.
-                        deposit: viewModal.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid',
-                        imageUrl: viewModal.imageUrl || '',
-                        customerName: cName,
-                      },
-                    },
-                  });
-                  setViewModal(null);
-                }}
+                onClick={() => handleMessageBuyer(viewModal)}
               >
                 <MessageSquare size={16} /> Message Buyer
               </button>
