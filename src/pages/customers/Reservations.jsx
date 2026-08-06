@@ -23,7 +23,7 @@ import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
-import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -304,8 +304,10 @@ const Reservations = () => {
         toast.success(`Reservation ${id} completed — stock consumed permanently`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Only restore stock if it was confirmed/to-pickup/active (stock was deducted)
-        if (res.status === 'Confirmed' || res.status === 'Fitting' || res.status === 'To Pickup' || res.status === 'Active') {
+        // Only 'To Pickup' ever deducted stock (see ready_pickup above). Restoring
+        // from Confirmed/Fitting/Active handed back stock that was never taken,
+        // ratcheting `available` up on every abandoned-after-approval booking.
+        if (res.status === 'To Pickup') {
           await adjustStockForReservation(res, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
@@ -346,10 +348,19 @@ const Reservations = () => {
     )
       return;
     try {
+      // Moving the appointment invalidates the old payment window: the trigger
+      // only stamps on entry to an awaiting-payment status and COALESCEs, so
+      // without this the deadline can outlast the new appointment, or have
+      // already expired for one moved further out.
+      const stillAwaitingPayment =
+        rescheduleModal.displayStatus === 'To Pay' &&
+        !['paid', 'submitted'].includes(String(rescheduleModal.paymentStatus || '').toLowerCase());
+
       await updateReservation(rescheduleModal.docId, {
         reservationDate: new Date(newDate),
         date: new Date(newDate), // Fallback for Android which parses 'date'
         countdown: true,
+        ...(stillAwaitingPayment ? { payment_due_at: computePaymentDueAt(newDate) } : {}),
       });
       await logAction(user, 'Rescheduled reservation', {
         reservationId: rescheduleModal.id,
