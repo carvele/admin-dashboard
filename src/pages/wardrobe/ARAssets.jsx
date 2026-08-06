@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Upload,
   Camera,
@@ -31,6 +32,7 @@ const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/uplo
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 const ARAssets = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('assets');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [configAsset, setConfigAsset] = useState(null);
@@ -362,7 +364,7 @@ const ARAssets = () => {
           <div className="card-header">
             <h3>Global 3D Asset Library</h3>
             <div className="flex gap-2">
-              <button className="btn-outline" onClick={() => window.location.href='/catalog/new'}>
+              <button className="btn-outline" onClick={() => navigate('/catalog/new')}>
                 Create AR Product
               </button>
               <button
