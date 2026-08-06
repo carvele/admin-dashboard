@@ -297,10 +297,14 @@ export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePric
     deleted: false,
   });
 
-  // 3. Audit log
+  // 3. Audit log -- targets the product (not the inventory row) to match
+  // getStockMovements/getLogsForTarget('product', id), which is what
+  // ProductForm's history panel actually queries. This entry used to target
+  // 'inventory' + the row id, a combination nothing ever queried, so it was
+  // captured but never visible anywhere.
   await logAction(user, 'Recorded In-Store Sale', {
-    targetType: 'inventory',
-    targetId: inventoryItem.docId,
+    targetType: 'product',
+    targetId: inventoryItem.productDocId,
     itemName: inventoryItem.item,
     size: inventoryItem.size,
     quantitySold: quantity,
