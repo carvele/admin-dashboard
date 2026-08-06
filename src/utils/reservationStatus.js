@@ -42,6 +42,37 @@ export const REVENUE_STATUSES = [
   'Completed',
 ];
 
+/**
+ * Statuses that hold physical stock.
+ *
+ * This existed as two disagreeing definitions: recalculateAllInventoryStock
+ * counted Pending as holding stock, while adjustStockForReservation only ever
+ * moved stock at 'To Pickup'. Running the sync and running the lifecycle
+ * therefore produced different numbers for the same reality, which is how a
+ * unit ended up reserved against a reservation that had already been cancelled.
+ *
+ * Stock is held from approval onward: once staff accept a request the item is
+ * promised to that customer, so it must stop being sellable even though payment
+ * has not landed yet. Pending is deliberately excluded -- an unvetted request
+ * must never be able to lock stock, or a burst of requests would empty the
+ * shelf without a single approval.
+ *
+ * 'To Pay' is the display label for stored 'Confirmed', but older rows may
+ * carry it literally; 'Fitting' and 'Active' are legacy mid-flow states. All
+ * are included so historical rows reconcile correctly.
+ */
+export const STOCK_HOLDING_STATUSES = [
+  'Approved',
+  'Confirmed',
+  'To Pay',
+  'To Pickup',
+  'Fitting',
+  'Active',
+];
+
+/** Does this status currently hold a unit out of sellable stock? */
+export const holdsStock = (status) => STOCK_HOLDING_STATUSES.includes(status);
+
 export const isCancelled = (status) => CANCELLED_STATUSES.includes(status);
 export const isPending = (status) => PENDING_STATUSES.includes(status);
 

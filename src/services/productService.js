@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
+import { STOCK_HOLDING_STATUSES } from '../utils/reservationStatus';
 import {
   getCollection,
   getDocument,
@@ -459,13 +460,15 @@ export const deleteCategoryAdmin = async (id, name, isSubcategory = false) => {
  * Healing function for data mismatches.
  */
 export const recalculateAllInventoryStock = async () => {
-  const ACTIVE_STATUSES = ['Pending', 'To Pay', 'To Pickup', 'Confirmed', 'Fitting'];
-
-  // 1. Get all active reservations
+  // Shared with the reservation lifecycle. This list used to be inline here and
+  // included 'Pending', while the lifecycle only ever moved stock at
+  // 'To Pickup' -- so a sync and a status change disagreed about the same
+  // reservation, stranding units as reserved against bookings already cancelled.
+  // 1. Get all reservations currently holding stock
   const { data: activeRes, error: resErr } = await supabase
     .from('reservations')
     .select('product_id, product_name, size, quantity')
-    .in('status', ACTIVE_STATUSES);
+    .in('status', STOCK_HOLDING_STATUSES);
   if (resErr) throw resErr;
 
   // 2. Get all inventory items

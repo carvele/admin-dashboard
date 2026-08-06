@@ -28,12 +28,29 @@ import {
  * Combine a date string or epoch and a time string ("HH:MM") into a timestamptz.
  * Returns null if inputs are invalid.
  */
-const buildTimestamp = (date, timeStr) => {
-  if (!date) return null;
-  const d = date instanceof Date ? date : (typeof date === 'number' ? new Date(date) : new Date(date));
-  if (isNaN(d.getTime())) return null;
+const toDate = (value) => {
+  if (!value) return null;
+  const d = value instanceof Date ? value : (typeof value === 'number' ? new Date(value) : new Date(value));
+  return isNaN(d.getTime()) ? null : d;
+};
 
-  const datePart = d.toISOString().split('T')[0]; // "YYYY-MM-DD"
+/**
+ * "YYYY-MM-DD" in the local calendar. toISOString() would convert to UTC first,
+ * which for Manila (UTC+8) rolls any time before 08:00 back to the previous
+ * day -- so a 07:00 booking on the 6th was stored as the 5th.
+ */
+const toLocalDateString = (date) => {
+  const d = toDate(date);
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const buildTimestamp = (date, timeStr) => {
+  const d = toDate(date);
+  if (!d) return null;
+
+  const datePart = toLocalDateString(d);
 
   if (!timeStr || typeof timeStr !== 'string') return d.toISOString();
   return `${datePart}T${timeStr.padStart(5, '0')}:00+08:00`;
@@ -46,7 +63,15 @@ const extractTime = (isoStr) => {
   if (!isoStr) return '';
   try {
     const d = new Date(isoStr);
-    return d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false });
+    // Locale is not timezone: without an explicit timeZone this rendered in
+    // the staff machine's zone, so any laptop not set to Manila showed every
+    // appointment at the wrong hour. Matches the zone the RPC writes with.
+    return d.toLocaleTimeString('en-PH', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Manila',
+    });
   } catch {
     return '';
   }
@@ -142,6 +167,28 @@ export const getReservationsByProduct = async (productId, productName) => {
     (byName ?? []).forEach((row) => results.set(row.id, row));
   }
 
+  // 3. By line item. The reservation's own product columns describe only the
+  // first line, so a product reserved as any later line is invisible to the
+  // two lookups above.
+  if (productId) {
+    const { data: lines } = await supabase
+      .from('reservation_items')
+      .select('reservation_id')
+      .eq('product_id', productId);
+
+    const missingIds = (lines ?? [])
+      .map((line) => line.reservation_id)
+      .filter((rid) => rid && !results.has(rid));
+
+    if (missingIds.length > 0) {
+      const { data: byLine } = await supabase
+        .from('reservations')
+        .select('*')
+        .in('id', Array.from(new Set(missingIds)));
+      (byLine ?? []).forEach((row) => results.set(row.id, row));
+    }
+  }
+
   return Array.from(results.values())
     .map(normaliseReservation)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -152,12 +199,10 @@ export const getReservationsByProduct = async (productId, productName) => {
 export const createReservation = async (data) => {
   // Combine date + appointmentTime string → appointment_time timestamptz
   const appointmentTs = buildTimestamp(data.date, data.appointmentTime);
-  const returnTs = data.returnDate
-    ? (data.returnDate instanceof Date ? data.returnDate.toISOString() : new Date(data.returnDate).toISOString())
-    : null;
-  const dateTs = data.date
-    ? (data.date instanceof Date ? data.date.toISOString() : new Date(data.date).toISOString())
-    : null;
+  // `date` and `return_date` are DATE columns, so they take the local calendar
+  // day rather than a UTC-shifted timestamp.
+  const returnTs = toLocalDateString(data.returnDate);
+  const dateTs = toLocalDateString(data.date);
 
   const { appointmentTime, ...rest } = data;
   return addDocument('reservations', {
@@ -182,6 +227,10 @@ export const updateReservation = (docId, updates) => {
     }
     delete updates.appointmentTime; // remove camelCase before sending to Supabase
   }
+  // A Date here would serialise to a UTC ISO string and shift the DATE column
+  // back a day for any local time before 08:00.
+  if (updates.date) updates = { ...updates, date: toLocalDateString(updates.date) };
+  if (updates.reservationDate) updates = { ...updates, reservationDate: toLocalDateString(updates.reservationDate) };
   return updateDocument('reservations', docId, updates);
 };
 
