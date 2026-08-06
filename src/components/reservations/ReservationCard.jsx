@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { Eye, Calendar, XCircle } from 'lucide-react';
+import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
 
@@ -21,7 +21,7 @@ const initialsOf = (name) =>
     .join('')
     .toUpperCase();
 
-const ReservationCard = ({ res, canManage, onView, onAction, onReschedule }) => {
+const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage }) => {
   const primary = PRIMARY_ACTION[res.displayStatus];
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
@@ -80,6 +80,9 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule }) => 
         )}
         <button className="btn-outline res-card-icon" onClick={onView} aria-label="View details" title="View details">
           <Eye size={15} />
+        </button>
+        <button className="btn-outline res-card-icon" onClick={onMessage} aria-label="Message buyer" title="Message buyer">
+          <MessageSquare size={15} />
         </button>
         {canManage && (
           <>

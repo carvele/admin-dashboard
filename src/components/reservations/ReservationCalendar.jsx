@@ -9,8 +9,9 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, MessageSquare } from 'lucide-react';
 import StatusBadge from '../ReservationStatusBadge';
+import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import './ReservationCalendar.css';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -43,7 +44,7 @@ const STATUS_DOT_CLASS = {
   Cancelled: 'cal-dot-cancelled',
 };
 
-const ReservationCalendar = ({ reservations, onView }) => {
+const ReservationCalendar = ({ reservations, onView, onMessage }) => {
   const [monthDate, setMonthDate] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date());
 
@@ -103,6 +104,12 @@ const ReservationCalendar = ({ reservations, onView }) => {
           const isToday = sameDay(d, new Date());
           const isSelected = sameDay(d, selectedDay);
           const dayRes = byDay.get(d.toDateString()) || [];
+          // A day with a payment about to lapse needs to stand out on the
+          // whole-month scan, not just be discoverable by clicking in --
+          // a 6px dot buried among others didn't do that.
+          const hasUrgent = dayRes.some(
+            (res) => res.displayStatus === 'To Pay' && formatPaymentDeadline(res.paymentDueAt)?.urgent,
+          );
           return (
             <button
               key={d.toISOString()}
@@ -112,19 +119,22 @@ const ReservationCalendar = ({ reservations, onView }) => {
                 !inMonth && 'res-calendar-cell-out',
                 isToday && 'res-calendar-cell-today',
                 isSelected && 'res-calendar-cell-selected',
+                hasUrgent && 'res-calendar-cell-urgent',
               ].filter(Boolean).join(' ')}
               onClick={() => setSelectedDay(d)}
               aria-pressed={isSelected}
-              aria-label={`${d.toLocaleDateString([], { month: 'long', day: 'numeric' })}${dayRes.length ? `, ${dayRes.length} reservation${dayRes.length === 1 ? '' : 's'}` : ''}`}
+              aria-label={`${d.toLocaleDateString([], { month: 'long', day: 'numeric' })}${dayRes.length ? `, ${dayRes.length} reservation${dayRes.length === 1 ? '' : 's'}` : ''}${hasUrgent ? ', payment due soon' : ''}`}
             >
               <span className="res-calendar-daynum">{d.getDate()}</span>
               {dayRes.length > 0 && (
-                <span className="res-calendar-dots">
-                  {dayRes.slice(0, 4).map((res, i) => (
-                    <span key={res.id ?? i} className={`res-calendar-dot ${STATUS_DOT_CLASS[res.displayStatus] || ''}`} />
-                  ))}
-                  {dayRes.length > 4 && <span className="res-calendar-more">+{dayRes.length - 4}</span>}
-                </span>
+                <>
+                  <span className="res-calendar-count">{dayRes.length}</span>
+                  <span className="res-calendar-dots">
+                    {dayRes.slice(0, 4).map((res, i) => (
+                      <span key={res.id ?? i} className={`res-calendar-dot ${STATUS_DOT_CLASS[res.displayStatus] || ''}`} />
+                    ))}
+                  </span>
+                </>
               )}
             </button>
           );
@@ -139,29 +149,49 @@ const ReservationCalendar = ({ reservations, onView }) => {
           <p className="res-calendar-agenda-empty">No reservations scheduled.</p>
         ) : (
           <ul className="res-calendar-agenda-list">
-            {selectedDayReservations.map((res) => (
-              <li key={res.id} className="res-calendar-agenda-item">
-                <div className="res-calendar-agenda-time">
-                  {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div className="res-calendar-agenda-main">
-                  <p className="res-calendar-agenda-name">{res.displayName}</p>
-                  <p className="res-calendar-agenda-items">
-                    {(res.lines || []).map((l) => l.productName).filter(Boolean).join(', ') || res.productName || res.outfit}
-                  </p>
-                </div>
-                <StatusBadge status={res.displayStatus} showLabel={false} />
-                <button
-                  type="button"
-                  className="btn-outline res-card-icon"
-                  onClick={() => onView(res)}
-                  aria-label={`View details for ${res.displayName}`}
-                  title="View details"
-                >
-                  <Eye size={15} />
-                </button>
-              </li>
-            ))}
+            {selectedDayReservations.map((res) => {
+              const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+              const itemNames = (res.lines || []).map((l) => l.productName).filter(Boolean);
+              return (
+                <li key={res.id} className={`res-calendar-agenda-item${deadline?.urgent ? ' res-calendar-agenda-item-urgent' : ''}`}>
+                  <div className="res-calendar-agenda-time">
+                    {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="res-calendar-agenda-main">
+                    <p className="res-calendar-agenda-name">{res.displayName}</p>
+                    <p className="res-calendar-agenda-items">
+                      {itemNames.length > 1
+                        ? `${itemNames[0]} +${itemNames.length - 1} more`
+                        : itemNames[0] || res.productName || res.outfit}
+                    </p>
+                    {deadline && (
+                      <p className={`res-calendar-agenda-deadline ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                        {deadline.label} to pay
+                      </p>
+                    )}
+                  </div>
+                  <StatusBadge status={res.displayStatus} showLabel={false} />
+                  <button
+                    type="button"
+                    className="btn-outline res-card-icon"
+                    onClick={() => onMessage?.(res)}
+                    aria-label={`Message ${res.displayName}`}
+                    title="Message buyer"
+                  >
+                    <MessageSquare size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline res-card-icon"
+                    onClick={() => onView(res)}
+                    aria-label={`View details for ${res.displayName}`}
+                    title="View details"
+                  >
+                    <Eye size={15} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
