@@ -315,6 +315,8 @@ const Inventory = () => {
         `Restock: +${qty} units of ${restockModal.item} (size ${restockModal.size})`,
       );
       await logAction(user, 'Restocked inventory item', {
+        targetType: 'product',
+        targetId: restockModal.productDocId,
         itemName: restockModal.item,
         size: restockModal.size,
         qtyAdded: qty,
@@ -384,6 +386,8 @@ const Inventory = () => {
         );
       }
       await logAction(user, 'Updated inventory item details', {
+        targetType: 'product',
+        targetId: editModal.productDocId,
         itemName: editModal.item,
         size: editModal.size,
       });
@@ -406,7 +410,12 @@ const Inventory = () => {
         'correction',
         `Archived inventory row: ${item.item} (size ${item.size}), ${item.total} units removed from circulation`,
       );
-      await logAction(user, 'Archived inventory item', { itemName: item.item, size: item.size });
+      await logAction(user, 'Archived inventory item', {
+        targetType: 'product',
+        targetId: item.productDocId,
+        itemName: item.item,
+        size: item.size,
+      });
       toast.success(`Archived ${item.item} (${item.size}) from inventory`);
     } catch (e) {
       toast.error('Failed to archive item');
@@ -426,7 +435,12 @@ const Inventory = () => {
         'correction',
         `Restored inventory row: ${item.item} (size ${item.size}), ${item.total} units returned to circulation`,
       );
-      await logAction(user, 'Restored inventory item', { itemName: item.item, size: item.size });
+      await logAction(user, 'Restored inventory item', {
+        targetType: 'product',
+        targetId: item.productDocId,
+        itemName: item.item,
+        size: item.size,
+      });
       toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
     } catch (e) {
       toast.error('Failed to restore item');
