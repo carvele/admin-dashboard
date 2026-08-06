@@ -796,7 +796,7 @@ const ProductForm = ({ readOnly = false }) => {
                     <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
                  </div>
               </div>
-              <button type="button" onClick={() => window.open('/ar-assets', '_blank')} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+              <button type="button" onClick={() => navigate('/ar-assets')} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
                 Configure AR Assets
               </button>
            </div>

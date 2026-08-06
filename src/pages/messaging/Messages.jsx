@@ -52,6 +52,7 @@ const Messages = () => {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageModalUrl, setImageModalUrl] = useState(null);
 
   // Reaction popover: { msgId, anchorRect }
   const [reactionPopover, setReactionPopover] = useState(null);
@@ -462,13 +463,18 @@ const Messages = () => {
             >
               {/* Image */}
               {msg.imageUrl && (
-                <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                <button
+                  type="button"
+                  onClick={() => setImageModalUrl(msg.imageUrl)}
+                  style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'block' }}
+                  aria-label="View full-size image"
+                >
                   <img
                     src={msg.imageUrl}
                     alt="Chat image"
                     className="chat-image-thumb"
                   />
-                </a>
+                </button>
               )}
 
               {/* Text */}
@@ -829,6 +835,30 @@ const Messages = () => {
                   <p className="text-secondary text-center py-4">No customers found</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageModalUrl && (
+        <div className="modal-overlay" onClick={() => setImageModalUrl(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
+          >
+            <div className="modal-header">
+              <h3>Image</h3>
+              <button className="btn-icon" onClick={() => setImageModalUrl(null)} aria-label="Close image">
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', maxHeight: '75vh', overflow: 'auto' }}>
+              <img
+                src={imageModalUrl}
+                alt="Full size chat attachment"
+                style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: '8px' }}
+              />
             </div>
           </div>
         </div>
