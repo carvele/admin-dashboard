@@ -20,6 +20,7 @@ import {
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import ReservationCard from '../../components/reservations/ReservationCard';
+import ReservationCalendar from '../../components/reservations/ReservationCalendar';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import {
@@ -682,11 +683,10 @@ const Reservations = () => {
             {/* Pagination removed for Real-Time stream */}
           </div>
         ) : (
-          <div className="calendar-placeholder-view">
-            <Calendar size={48} className="text-secondary mb-4" />
-            <h3>Calendar View</h3>
-            <p className="text-secondary">Interactive scheduling calendar is initialized here.</p>
-          </div>
+          <ReservationCalendar
+            reservations={filteredReservations}
+            onView={(res) => setViewModal(res)}
+          />
         )}
       </div>
 
