@@ -24,6 +24,7 @@ import ReservationCalendar from '../../components/reservations/ReservationCalend
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
+import { holdsStock } from '../../utils/reservationStatus';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -287,7 +288,12 @@ const Reservations = () => {
         // the customer was never told to pay, the app showed no Pay button,
         // and the unpaid sweep never picked it up.
         await updateReservation(res.docId, { status: 'Confirmed' });
-        toast.success(`Reservation ${id} approved for payment`);
+        // Stock is committed at approval, not at pickup: once staff accept, the
+        // item is promised to this customer and must stop being sellable even
+        // though payment has not landed. Deducting only at ready_pickup meant
+        // two customers could both be approved for the same last unit.
+        await adjustStockForReservation(res, -1);
+        toast.success(`Reservation ${id} approved for payment — stock held`);
       } else if (action === 'ready_pickup') {
         await updateReservation(res.docId, {
           status: 'To Pickup',
@@ -295,8 +301,9 @@ const Reservations = () => {
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
-        await adjustStockForReservation(res, -1);
-        toast.success(`Reservation ${id} payment received — stock reserved and ready for pickup`);
+        // No stock movement here: approval already held it, and both statuses
+        // are in STOCK_HOLDING_STATUSES.
+        toast.success(`Reservation ${id} payment received — ready for pickup`);
       } else if (action === 'complete') {
         await updateReservation(res.docId, { status: 'Completed' });
         // Consume reserved stock (item purchased/picked up forever)
@@ -304,10 +311,11 @@ const Reservations = () => {
         toast.success(`Reservation ${id} completed — stock consumed permanently`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Only 'To Pickup' ever deducted stock (see ready_pickup above). Restoring
-        // from Confirmed/Fitting/Active handed back stock that was never taken,
-        // ratcheting `available` up on every abandoned-after-approval booking.
-        if (res.status === 'To Pickup') {
+        // Restore exactly when the previous status was holding stock. Using the
+        // shared predicate rather than a hand-listed set is the point: the old
+        // inline list included statuses that had never deducted, so cancelling
+        // handed back units that were never taken.
+        if (holdsStock(res.status)) {
           await adjustStockForReservation(res, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
