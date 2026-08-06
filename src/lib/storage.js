@@ -1,5 +1,36 @@
 import { supabase } from '../lib/supabaseClient';
 
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+/**
+ * Resolves a private-bucket object into a usable signed URL. The reservations
+ * table's receipt_url column holds a bare storage path (e.g.
+ * "{userId}/1234.jpg"), not a URL -- this mirrors the mobile app's
+ * resolveSignedStorageUrl so staff can actually view what a customer
+ * uploaded. Requires a staff-facing SELECT policy on the target bucket
+ * (payment_receipts: "Staff can read payment receipts").
+ */
+export const resolveSignedStorageUrl = async (bucket, value) => {
+  if (!value) return null;
+
+  let objectPath = value;
+  if (value.startsWith('http')) {
+    const marker = `/${bucket}/`;
+    const index = value.indexOf(marker);
+    if (index === -1) return value;
+    objectPath = value.slice(index + marker.length).split('?')[0];
+  }
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
+  if (error || !data) {
+    console.error(`[Storage] Failed to sign ${bucket}/${objectPath}:`, error?.message);
+    return null;
+  }
+  return data.signedUrl;
+};
+
 /**
  * Uploads a file to Supabase Storage and returns the public download URL.
  */
