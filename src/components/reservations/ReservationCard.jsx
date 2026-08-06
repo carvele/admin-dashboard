@@ -10,14 +10,7 @@
 import React from 'react';
 import { Eye, Calendar, XCircle } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
-
-// One primary action per column, so the common move is a single click and
-// everything rarer sits behind the secondary row.
-const PRIMARY_ACTION = {
-  Pending: { action: 'approve_pay', label: 'Approve' },
-  'To Pay': { action: 'ready_pickup', label: 'Mark paid' },
-  'To Pickup': { action: 'complete', label: 'Hand over' },
-};
+import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
 
 const initialsOf = (name) =>
   (name || '?')
@@ -32,9 +25,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule }) => 
   const primary = PRIMARY_ACTION[res.displayStatus];
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
-  const awaitingReceipt =
-    res.displayStatus === 'To Pay' &&
-    (res.paymentStatus === 'Submitted' || res.paymentStatus === 'Processing');
+  const awaitingReceipt = isAwaitingReceipt(res);
 
   return (
     <article className={`res-card${deadline?.urgent ? ' res-card-urgent' : ''}`}>

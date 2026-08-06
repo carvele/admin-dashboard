@@ -21,6 +21,7 @@ import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import ReservationCard from '../../components/reservations/ReservationCard';
 import '../../components/reservations/ReservationBoard.css';
+import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -579,7 +580,7 @@ const Reservations = () => {
                 <tr>
                   <th>ID</th>
                   <th>Customer</th>
-                  <th>Outfit & Size</th>
+                  <th>Items</th>
                   <th>Date & Time</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -593,8 +594,13 @@ const Reservations = () => {
                       <td className="font-mono text-sm">{res.id}</td>
                       <td className="font-medium">{res.displayName}</td>
                       <td>
-                        <div>{res.productName || res.outfit}</div>
-                        <div className="text-secondary text-sm">Size: {res.size}</div>
+                        {res.lines.map((line, index) => (
+                          <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm mt-1' : ''}>
+                            {line.productName || res.productName || res.outfit}
+                            {line.size ? ` (${line.size})` : ''}
+                            {(line.quantity ?? 1) > 1 ? ` x${line.quantity}` : ''}
+                          </div>
+                        ))}
                       </td>
                       <td>
                         <div>{res.displayDate.toLocaleDateString()}</div>
@@ -622,78 +628,43 @@ const Reservations = () => {
                           >
                             <Eye size={16} />
                           </button>
-                          {/* Lifecycle actions — full-access roles only; staff view read-only */}
+                          {/* Lifecycle actions — full-access roles only; staff view read-only.
+                              Same PRIMARY_ACTION map as the board, so the two views never
+                              show a different action for the same status again. */}
                           {canManage && (
-                          <>
-                          {res.displayStatus === 'Pending' && (
                             <>
-                              <button
-                                className="action-icon approve"
-                                title="Approve & Request Payment"
-                                onClick={() => handleAction(res.id, 'approve_pay')}
-                              >
-                                <CheckCircle size={16} />
-                              </button>
-                              <button
-                                className="action-icon reject"
-                                title="Cancel"
-                                onClick={() => handleAction(res.id, 'cancel')}
-                              >
-                                <XCircle size={16} />
-                              </button>
+                              {PRIMARY_ACTION[res.displayStatus] && (
+                                <button
+                                  className="action-icon approve"
+                                  title={isAwaitingReceipt(res) ? 'Verify Receipt' : PRIMARY_ACTION[res.displayStatus].label}
+                                  onClick={() => handleAction(res.id, PRIMARY_ACTION[res.displayStatus].action)}
+                                >
+                                  <CheckCircle size={16} />
+                                </button>
+                              )}
+                              {CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                                <>
+                                  <button
+                                    className="action-icon reschedule"
+                                    title="Reschedule"
+                                    onClick={() => {
+                                      setRescheduleModal(res);
+                                      setNewDate(res.date);
+                                    }}
+                                  >
+                                    <Calendar size={16} />
+                                  </button>
+                                  <button
+                                    className="action-icon reject"
+                                    title="Cancel"
+                                    onClick={() => handleAction(res.id, 'cancel')}
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
-                          {res.displayStatus === 'To Pay' && (
-                            <>
-                              <button
-                                className="action-icon approve"
-                                title="Mark Paid & Ready for Pickup"
-                                onClick={() => handleAction(res.id, 'ready_pickup')}
-                              >
-                                <CheckCircle size={16} />
-                              </button>
-                              <button
-                                className="action-icon reject"
-                                title="Cancel"
-                                onClick={() => handleAction(res.id, 'cancel')}
-                              >
-                                <XCircle size={16} />
-                              </button>
-                            </>
-                          )}
-                          {res.displayStatus === 'To Pickup' && (
-                            <>
-                              <button
-                                className="action-icon approve"
-                                title="Complete / Hand over"
-                                onClick={() => handleAction(res.id, 'complete')}
-                              >
-                                <CheckCircle size={16} />
-                              </button>
-                              <button
-                                className="action-icon reject"
-                                title="Cancel"
-                                onClick={() => handleAction(res.id, 'cancel')}
-                              >
-                                <XCircle size={16} />
-                              </button>
-                            </>
-                          )}
-                          {(res.displayStatus === 'Pending' || res.displayStatus === 'To Pay' || res.displayStatus === 'To Pickup') && (
-                            <button
-                              className="action-icon reschedule"
-                              title="Reschedule"
-                              onClick={() => {
-                                setRescheduleModal(res);
-                                setNewDate(res.date);
-                              }}
-                            >
-                              <Calendar size={16} />
-                            </button>
-                          )}
-                          </>
-                          )}
-
                         </div>
                       </td>
                     </tr>
