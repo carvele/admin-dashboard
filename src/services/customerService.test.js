@@ -55,14 +55,15 @@ describe('getCustomerStatsBatch', () => {
     await expect(getCustomerStatsBatch(null)).resolves.toEqual({});
   });
 
-  test('counts reservations and sums only revenue-eligible ones', async () => {
+  test('sums only reservations that have actually been handed over', async () => {
     setData([
-      // committed → counts toward spend
+      // handed over → earned
       { customer_id: CUST, status: 'Completed', rental_price: 1000, size: 'M', created_at: daysAgo(5) },
+      // approved and progressing, but the customer does not have the item yet
       { customer_id: CUST, status: 'Active', rental_price: 500, size: 'M', created_at: daysAgo(10) },
-      // cancelled → never counts toward spend
+      // cancelled → never
       { customer_id: CUST, status: 'Cancelled', rental_price: 9999, size: 'L', created_at: daysAgo(3) },
-      // pre-approval → counts as a reservation but not as spend
+      // pre-approval → a reservation, but nothing earned
       { customer_id: CUST, status: 'Pending', rental_price: 700, size: 'S', created_at: daysAgo(2) },
     ]);
 
@@ -70,15 +71,45 @@ describe('getCustomerStatsBatch', () => {
 
     expect(stats[CUST].reservationCount).toBe(4);
     expect(stats[CUST].completedCount).toBe(1);
-    expect(stats[CUST].totalSpent).toBe(1500); // 1000 + 500 only
+    expect(stats[CUST].totalSpent).toBe(1000);
   });
 
-  test('a paid reservation counts as revenue even in an early status', async () => {
+  // This is the defect the change exists to fix. The payment webhook sets
+  // payment_status to 'Paid' the moment the 50% deposit clears, so the old rule
+  // credited the customer with the full price of an item they had not received
+  // and had only half paid for.
+  test('a cleared deposit is not revenue until the item is handed over', async () => {
     setData([
-      { customer_id: CUST, status: 'To Pay', payment_status: 'Paid', rental_price: 250, created_at: daysAgo(1) },
+      {
+        customer_id: CUST,
+        status: 'To Pay',
+        payment_status: 'Paid',
+        payment_type: 'Deposit',
+        rental_price: 1890,
+        deposit: 945,
+        created_at: daysAgo(1),
+      },
     ]);
     const stats = await getCustomerStatsBatch([CUST]);
-    expect(stats[CUST].totalSpent).toBe(250);
+    expect(stats[CUST].totalSpent).toBe(0);
+  });
+
+  test('the same reservation counts in full once it is completed', async () => {
+    setData([
+      {
+        customer_id: CUST,
+        status: 'Completed',
+        payment_status: 'Paid',
+        payment_type: 'Deposit',
+        rental_price: 1890,
+        deposit: 945,
+        created_at: daysAgo(1),
+      },
+    ]);
+    const stats = await getCustomerStatsBatch([CUST]);
+    // At handover the balance has been collected in person, so cash and
+    // accrual agree on the full price.
+    expect(stats[CUST].totalSpent).toBe(1890);
   });
 
   test('does not leak one customer\'s reservations into another', async () => {
