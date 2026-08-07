@@ -238,6 +238,25 @@ export const deleteReservation = (docId) => {
   return deleteDocument('reservations', docId);
 };
 
+/**
+ * Records that the outstanding balance was collected in person.
+ *
+ * Goes through settle_reservation_balance rather than writing the columns
+ * directly. The RPC re-checks the caller's role, that the deposit has actually
+ * cleared, that a balance exists at all, and that it has not already been
+ * recorded -- none of which a bare column update would enforce, and all of
+ * which matter because this is the moment money changes hands with no
+ * electronic trail behind it.
+ */
+export const settleReservationBalance = async (reservationId, method = 'cash') => {
+  const { data, error } = await supabase.rpc('settle_reservation_balance', {
+    _reservation_id: reservationId,
+    _method: method,
+  });
+  if (error) throw error;
+  return data;
+};
+
 // ── Inventory adjustment ─────────────────────────────────────
 
 /**

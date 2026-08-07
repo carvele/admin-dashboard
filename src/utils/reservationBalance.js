@@ -48,3 +48,16 @@ export const isFullySettled = (res) => {
   if (String(res.paymentStatus ?? '').toLowerCase() !== 'paid') return false;
   return balanceDue(res) === 0;
 };
+
+/** Has the balance already been recorded as collected? */
+export const isBalanceSettled = (res) => Boolean(res?.balanceSettledAt);
+
+/**
+ * Outstanding after accounting for a recorded settlement.
+ *
+ * balanceDue answers "what does this reservation owe by its own arithmetic";
+ * this answers "what is still to collect right now". They differ the moment
+ * staff record the handover, and the card needs the second one.
+ */
+export const outstandingBalance = (res) =>
+  isBalanceSettled(res) ? 0 : balanceDue(res);

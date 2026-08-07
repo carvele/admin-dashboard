@@ -11,7 +11,7 @@ import React from 'react';
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
-import { balanceDue } from '../../utils/reservationBalance';
+import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatCurrency } from '../../utils/helpers';
 
 const initialsOf = (name) =>
@@ -28,7 +28,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
-  const balance = balanceDue(res);
+  const balance = outstandingBalance(res);
 
   return (
     <article className={`res-card${deadline?.urgent ? ' res-card-urgent' : ''}`}>
