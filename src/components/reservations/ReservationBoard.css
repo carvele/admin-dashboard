@@ -171,6 +171,12 @@
   font-weight: 600;
 }
 
+/* Money still to take at the counter. Uses the same gold as the payment
+   deadline chip: both mean "staff still have to do something about money". */
+.res-card-balance {
+  color: var(--gold, #8A6D3B);
+}
+
 .res-card-actions {
   display: flex;
   gap: 6px;
