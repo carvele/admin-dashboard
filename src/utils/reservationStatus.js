@@ -29,17 +29,31 @@ export const PENDING_STATUSES = ['Pending', 'Request Approval', 'To Pay'];
 export const CANCELLED_STATUSES = ['Cancelled'];
 
 /**
- * Statuses that represent committed business — i.e. the reservation was
- * approved and is progressing or finished. Used for lifetime-value revenue.
- * Deliberately excludes the pre-approval states (Pending / Request Approval)
- * and 'To Pay' (approved but money not yet taken), plus Cancelled.
+ * Statuses where the sale has actually been earned.
+ *
+ * Revenue is recognised when the performance obligation is satisfied -- when
+ * control of the item passes to the customer -- which for reserve-and-collect
+ * is the handover, not the deposit. A deposit is a liability until then, not
+ * income. That is the IFRS 15 / ASC 606 position and the ordinary retail one.
+ *
+ * Only 'Completed' qualifies, which conveniently makes cash and accrual agree:
+ * by the time staff hand the item over the balance has been collected in
+ * person, so the full price is both earned and received. Nothing here depends
+ * on recording that collection separately.
  */
-export const REVENUE_STATUSES = [
+export const EARNED_STATUSES = ['Completed'];
+
+/**
+ * Approved and progressing, but not yet earned. This is pipeline, not revenue.
+ * Kept separate so a future "committed business" figure has somewhere honest to
+ * come from rather than being folded back into lifetime spend.
+ */
+export const COMMITTED_STATUSES = [
   'Approved',
   'Confirmed',
   'To Pickup',
+  'Fitting',
   'Active',
-  'Completed',
 ];
 
 /**
@@ -76,12 +90,31 @@ export const holdsStock = (status) => STOCK_HOLDING_STATUSES.includes(status);
 export const isCancelled = (status) => CANCELLED_STATUSES.includes(status);
 export const isPending = (status) => PENDING_STATUSES.includes(status);
 
+const normalise = (status) =>
+  String(status ?? '')
+    .trim()
+    .toLowerCase();
+
 /**
  * Does this reservation count toward a customer's lifetime spend?
- * True when payment was actually taken, or when it reached a committed state.
+ *
+ * Only once it has been handed over. This used to return true the moment
+ * payment_status was 'Paid', which the payment webhook sets as soon as the 50%
+ * *deposit* clears -- so a customer who had paid 945 of 1890 had the full 1890
+ * added to their lifetime spend, and the >50,000 "high value" flag on the
+ * Customers page was reachable on money that had neither been earned nor
+ * received.
+ *
+ * Approved-and-progressing reservations are pipeline, not spend. They are in
+ * COMMITTED_STATUSES if a separate figure is ever wanted for them.
  */
 export const countsAsRevenue = (reservation) => {
-  if (!reservation || isCancelled(reservation.status)) return false;
-  if (reservation.payment_status === 'Paid' || reservation.paymentStatus === 'Paid') return true;
-  return REVENUE_STATUSES.includes(reservation.status);
+  if (!reservation) return false;
+  return EARNED_STATUSES.some((s) => normalise(s) === normalise(reservation.status));
+};
+
+/** Approved and in progress, but not yet earned. */
+export const isCommitted = (reservation) => {
+  if (!reservation) return false;
+  return COMMITTED_STATUSES.some((s) => normalise(s) === normalise(reservation.status));
 };
