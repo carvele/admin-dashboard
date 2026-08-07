@@ -11,7 +11,8 @@ import React from 'react';
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
-import { balanceDue } from '../../utils/reservationBalance';
+import { outstandingBalance } from '../../utils/reservationBalance';
+import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
 
 const initialsOf = (name) =>
@@ -23,12 +24,13 @@ const initialsOf = (name) =>
     .join('')
     .toUpperCase();
 
-const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage }) => {
+const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage, onResolveReschedule }) => {
   const primary = PRIMARY_ACTION[res.displayStatus];
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
-  const balance = balanceDue(res);
+  const balance = outstandingBalance(res);
+  const pendingReschedule = formatProposedAppointment(res);
 
   return (
     <article className={`res-card${deadline?.urgent ? ' res-card-urgent' : ''}`}>
@@ -80,6 +82,33 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
                 : ''}
         </span>
       </div>
+
+      {/* A pending request sits above the actions, not in the meta row: it is
+          work waiting on a decision, and the live booking above it still
+          stands until someone answers. */}
+      {pendingReschedule && (
+        <div className="res-card-reschedule">
+          <p className="res-card-reschedule-text">
+            Wants to move to <strong>{pendingReschedule}</strong>
+          </p>
+          {canManage && (
+            <div className="res-card-reschedule-actions">
+              <button
+                className="btn-primary res-card-reschedule-btn"
+                onClick={() => onResolveReschedule(res.id, true)}
+              >
+                Approve
+              </button>
+              <button
+                className="btn-outline res-card-reschedule-btn"
+                onClick={() => onResolveReschedule(res.id, false)}
+              >
+                Decline
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <footer className="res-card-actions">
         {canManage && primary && (

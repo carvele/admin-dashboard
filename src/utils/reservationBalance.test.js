@@ -1,4 +1,4 @@
-import { balanceDue, isDepositReservation, isFullySettled } from './reservationBalance';
+import { balanceDue, isDepositReservation, isFullySettled, outstandingBalance } from './reservationBalance';
 
 const deposit = (over = {}) => ({
   paymentType: 'Deposit',
@@ -58,5 +58,19 @@ describe('isFullySettled', () => {
 
   it('is false when nothing has been paid at all', () => {
     expect(isFullySettled(deposit({ paymentStatus: 'Pending' }))).toBe(false);
+  });
+});
+
+describe('outstandingBalance', () => {
+  it('is the balance while nothing has been recorded', () => {
+    expect(outstandingBalance(deposit())).toBe(945);
+  });
+
+  it('drops to zero once the collection is recorded', () => {
+    expect(outstandingBalance(deposit({ balanceSettledAt: '2026-08-07T10:00:00Z' }))).toBe(0);
+  });
+
+  it('is zero for a reservation paid in full up front', () => {
+    expect(outstandingBalance(deposit({ paymentType: 'Full', deposit: 1890 }))).toBe(0);
   });
 });

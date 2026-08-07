@@ -25,7 +25,8 @@ import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { holdsStock } from '../../utils/reservationStatus';
-import { balanceDue } from '../../utils/reservationBalance';
+import { outstandingBalance } from '../../utils/reservationBalance';
+import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
@@ -34,6 +35,8 @@ import {
   updateReservation,
   createReservation,
   repairReservationData,
+  settleReservationBalance,
+  resolveRescheduleRequest,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -278,6 +281,28 @@ const Reservations = () => {
   // --- LIFECYCLE ACTIONS ---
   // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
   // Also backwards compatible with Confirmed and Fitting
+  // Answering a customer's request to move their appointment. Approving
+  // re-checks the slot inside the RPC: it was free when they asked, but the
+  // request may have sat in the queue while another reservation took it, so a
+  // clash surfaces here rather than as a double-booked morning.
+  const handleResolveReschedule = async (id, approve) => {
+    const res = filteredReservations.find((r) => r.id === id);
+    if (!res) return;
+    try {
+      await resolveRescheduleRequest(id, approve);
+      toast.success(
+        approve
+          ? `Moved ${res.displayId || id} to ${formatProposedAppointment(res)}`
+          : `Declined the new time for ${res.displayId || id}`,
+      );
+      await logAction(user, `${approve ? 'Approved' : 'Declined'} reschedule request`, {
+        reservationId: id,
+      });
+    } catch (e) {
+      toast.error(e?.message || 'Could not answer that request.');
+    }
+  };
+
   const handleAction = async (id, action) => {
     const res = reservations.find((r) => r.id === id);
     if (!res) return;
@@ -307,10 +332,33 @@ const Reservations = () => {
         // are in STOCK_HOLDING_STATUSES.
         toast.success(`Reservation ${id} payment received — ready for pickup`);
       } else if (action === 'complete') {
+        // Handing over is the moment the rest of the money is taken, in cash,
+        // with no electronic trail. Completing without recording it was how a
+        // forgotten balance disappeared silently.
+        const outstanding = outstandingBalance(res);
+        if (outstanding > 0) {
+          if (
+            !window.confirm(
+              `${formatCurrency(outstanding)} is still owed on ${id}.\n\n` +
+                'Confirm you have collected it before handing the item over. ' +
+                'This is recorded against your account.',
+            )
+          ) {
+            return;
+          }
+          // Recorded before the status moves: if this throws, the reservation
+          // stays in To Pickup rather than completing with the money unlogged.
+          await settleReservationBalance(res.id);
+        }
+
         await updateReservation(res.docId, { status: 'Completed' });
         // Consume reserved stock (item purchased/picked up forever)
         await adjustStockForReservation(res, 1, true);
-        toast.success(`Reservation ${id} completed — stock consumed permanently`);
+        toast.success(
+          outstanding > 0
+            ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
+            : `Reservation ${id} completed — stock consumed permanently`,
+        );
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Restore exactly when the previous status was holding stock. Using the
@@ -412,8 +460,8 @@ const Reservations = () => {
           // claim they have paid merely because a balance exists. Nor may it say
           // "Paid" outright on a deposit reservation -- the webhook marks that
           // paid once the 50% clears, and this text goes to the customer.
-          deposit: balanceDue(res)
-            ? `Deposit paid, ${formatCurrency(balanceDue(res))} due on collection`
+          deposit: outstandingBalance(res)
+            ? `Deposit paid, ${formatCurrency(outstandingBalance(res))} due on collection`
             : res.paymentStatus === 'Paid'
               ? 'Paid in full ✓'
               : 'Unpaid',
@@ -626,6 +674,7 @@ const Reservations = () => {
                         canManage={canManage}
                         onView={() => setViewModal(res)}
                         onAction={handleAction}
+                        onResolveReschedule={handleResolveReschedule}
                         onReschedule={() => {
                           setRescheduleModal(res);
                           setNewDate(res.date);
@@ -1048,11 +1097,11 @@ const Reservations = () => {
                   )}
                 </div>
               </div>
-              {balanceDue(viewModal) > 0 && (
+              {outstandingBalance(viewModal) > 0 && (
                 <div className="detail-row">
                   <span className="detail-label">Balance on collection</span>
                   <span className="font-medium text-gold">
-                    {formatCurrency(balanceDue(viewModal))} to collect in person
+                    {formatCurrency(outstandingBalance(viewModal))} to collect in person
                   </span>
                 </div>
               )}
