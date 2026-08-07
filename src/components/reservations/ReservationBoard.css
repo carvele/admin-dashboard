@@ -195,3 +195,28 @@
   align-items: center;
   justify-content: center;
 }
+
+/* A reschedule the customer has asked for and nobody has answered yet. Sits
+   between the booking and the actions because it is a decision, not a detail. */
+.res-card-reschedule {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.res-card-reschedule-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.res-card-reschedule-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.res-card-reschedule-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+}

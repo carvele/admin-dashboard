@@ -370,3 +370,19 @@ export const repairReservationData = async (reservation) => {
   }
   return false;
 };
+
+/**
+ * Answers a customer's reschedule request.
+ *
+ * Approving re-checks the slot before moving the booking: the time was free
+ * when it was asked for, but the request may have sat in the queue while
+ * another reservation took it.
+ */
+export const resolveRescheduleRequest = async (reservationId, approve) => {
+  const { data, error } = await supabase.rpc('resolve_reschedule', {
+    _reservation_id: reservationId,
+    _approve: approve,
+  });
+  if (error) throw error;
+  return data;
+};

@@ -26,6 +26,7 @@ import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../.
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { holdsStock } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
+import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
@@ -35,6 +36,7 @@ import {
   createReservation,
   repairReservationData,
   settleReservationBalance,
+  resolveRescheduleRequest,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -279,6 +281,28 @@ const Reservations = () => {
   // --- LIFECYCLE ACTIONS ---
   // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
   // Also backwards compatible with Confirmed and Fitting
+  // Answering a customer's request to move their appointment. Approving
+  // re-checks the slot inside the RPC: it was free when they asked, but the
+  // request may have sat in the queue while another reservation took it, so a
+  // clash surfaces here rather than as a double-booked morning.
+  const handleResolveReschedule = async (id, approve) => {
+    const res = filteredReservations.find((r) => r.id === id);
+    if (!res) return;
+    try {
+      await resolveRescheduleRequest(id, approve);
+      toast.success(
+        approve
+          ? `Moved ${res.displayId || id} to ${formatProposedAppointment(res)}`
+          : `Declined the new time for ${res.displayId || id}`,
+      );
+      await logAction(user, `${approve ? 'Approved' : 'Declined'} reschedule request`, {
+        reservationId: id,
+      });
+    } catch (e) {
+      toast.error(e?.message || 'Could not answer that request.');
+    }
+  };
+
   const handleAction = async (id, action) => {
     const res = reservations.find((r) => r.id === id);
     if (!res) return;
@@ -650,6 +674,7 @@ const Reservations = () => {
                         canManage={canManage}
                         onView={() => setViewModal(res)}
                         onAction={handleAction}
+                        onResolveReschedule={handleResolveReschedule}
                         onReschedule={() => {
                           setRescheduleModal(res);
                           setNewDate(res.date);
