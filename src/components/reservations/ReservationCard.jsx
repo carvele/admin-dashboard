@@ -11,6 +11,8 @@ import React from 'react';
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
+import { balanceDue } from '../../utils/reservationBalance';
+import { formatCurrency } from '../../utils/helpers';
 
 const initialsOf = (name) =>
   (name || '?')
@@ -26,6 +28,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
+  const balance = balanceDue(res);
 
   return (
     <article className={`res-card${deadline?.urgent ? ' res-card-urgent' : ''}`}>
@@ -64,8 +67,17 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
           {', '}
           {res.displayDate?.toLocaleTimeString?.([], { hour: '2-digit', minute: '2-digit' })}
         </span>
-        <span className="res-card-total">
-          {res.paymentStatus === 'Paid' ? 'Paid' : awaitingReceipt ? 'Receipt to check' : ''}
+        {/* "Paid" alone was a half-truth on a deposit reservation: the webhook
+            marks it paid once the 50% clears, so this read Paid while the rest
+            was still owed at the counter. */}
+        <span className={`res-card-total${balance > 0 ? ' res-card-balance' : ''}`}>
+          {balance > 0
+            ? `${formatCurrency(balance)} to collect`
+            : res.paymentStatus === 'Paid'
+              ? 'Paid in full'
+              : awaitingReceipt
+                ? 'Receipt to check'
+                : ''}
         </span>
       </div>
 

@@ -25,6 +25,8 @@ import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { holdsStock } from '../../utils/reservationStatus';
+import { balanceDue } from '../../utils/reservationBalance';
+import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -407,8 +409,14 @@ const Reservations = () => {
           time: resDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           status,
           // The amount is not a flag, so a message to the customer must not
-          // claim they have paid merely because a balance exists.
-          deposit: res.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid',
+          // claim they have paid merely because a balance exists. Nor may it say
+          // "Paid" outright on a deposit reservation -- the webhook marks that
+          // paid once the 50% clears, and this text goes to the customer.
+          deposit: balanceDue(res)
+            ? `Deposit paid, ${formatCurrency(balanceDue(res))} due on collection`
+            : res.paymentStatus === 'Paid'
+              ? 'Paid in full ✓'
+              : 'Unpaid',
           imageUrl: res.imageUrl || '',
           customerName: cName,
         },
@@ -1040,6 +1048,14 @@ const Reservations = () => {
                   )}
                 </div>
               </div>
+              {balanceDue(viewModal) > 0 && (
+                <div className="detail-row">
+                  <span className="detail-label">Balance on collection</span>
+                  <span className="font-medium text-gold">
+                    {formatCurrency(balanceDue(viewModal))} to collect in person
+                  </span>
+                </div>
+              )}
               <div className="detail-row">
                 <span className="detail-label">Payment</span>
                 <div>
