@@ -25,7 +25,61 @@ import {
   createARAsset,
 } from '../../services/wardrobeService';
 import { routeAndUploadFile } from '../../lib/storage';
+import '@google/model-viewer';
 import './ARAssets.css';
+
+const parsePoint = (str) => {
+  const parts = (str || '').split(',').map(s => parseFloat(s.trim()));
+  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
+};
+const formatPoint = (p) => `${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}`;
+const toSpaceString = (pointStr) => {
+  const p = parsePoint(pointStr);
+  return `${p.x} ${p.y} ${p.z}`;
+};
+const toSpaceStringOffset = (pointStr, xOffset) => {
+  const p = parsePoint(pointStr);
+  return `${p.x + xOffset} ${p.y} ${p.z}`;
+};
+
+const PointSlider = ({ label, pointStr, onChange }) => {
+  const p = parsePoint(pointStr);
+  const handleUpdate = (axis, val) => {
+    onChange(formatPoint({ ...p, [axis]: parseFloat(val) }));
+  };
+  return (
+    <div className="point-slider-group">
+      <label>{label}</label>
+      <div className="slider-row">
+        <span>X:</span>
+        <input 
+          type="range" min="-1" max="1" step="0.01" 
+          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)} 
+          role="slider" aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
+        />
+        <span className="val">{p.x.toFixed(2)}</span>
+      </div>
+      <div className="slider-row">
+        <span>Y:</span>
+        <input 
+          type="range" min="0" max="2" step="0.01" 
+          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)} 
+          role="slider" aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
+        />
+        <span className="val">{p.y.toFixed(2)}</span>
+      </div>
+      <div className="slider-row">
+        <span>Z:</span>
+        <input 
+          type="range" min="-1" max="1" step="0.01" 
+          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)} 
+          role="slider" aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
+        />
+        <span className="val">{p.z.toFixed(2)}</span>
+      </div>
+    </div>
+  );
+};
 
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
@@ -629,57 +683,53 @@ const ARAssets = () => {
             <div className="modal-body align-modal-body">
               <div className="align-workspace">
                 <div className="align-preview-area">
-                  <div className="dummy-3d-model">
-                    <Shirt size={100} className="text-secondary opacity-50" />
-                    <div className="align-point shoulder-l"></div>
-                    <div className="align-point shoulder-r"></div>
-                    <div className="align-point waist-c"></div>
-                    <div className="align-point hips-l"></div>
-                    <div className="align-point hips-r"></div>
-                  </div>
+                  {configAsset && configAsset.model3DURL ? (
+                    <model-viewer
+                      src={configAsset.model3DURL}
+                      alt={configAsset.name}
+                      auto-rotate
+                      camera-controls
+                      ar
+                    >
+                      <button className="Hotspot" slot="hotspot-shoulder-l" data-position={toSpaceString(alignPoints.shoulderL)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-shoulder-r" data-position={toSpaceString(alignPoints.shoulderR)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-waist" data-position={toSpaceString(alignPoints.waist)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-hips-l" data-position={toSpaceStringOffset(alignPoints.hips, -0.15)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-hips-r" data-position={toSpaceStringOffset(alignPoints.hips, 0.15)} data-normal="0 0 1"></button>
+                    </model-viewer>
+                  ) : (
+                    <div className="dummy-3d-model">
+                      <Shirt size={100} className="text-secondary opacity-50" />
+                      <div className="align-point shoulder-l"></div>
+                      <div className="align-point shoulder-r"></div>
+                      <div className="align-point waist-c"></div>
+                      <div className="align-point hips-l"></div>
+                      <div className="align-point hips-r"></div>
+                    </div>
+                  )}
                 </div>
                 <div className="align-controls line-height-2">
                   <h4 className="mb-3">Point Coordinates</h4>
-                  <div className="form-group">
-                    <label className="label text-xs">Left Shoulder (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.shoulderL}
-                      onChange={(e) =>
-                        setAlignPoints({ ...alignPoints, shoulderL: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Right Shoulder (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.shoulderR}
-                      onChange={(e) =>
-                        setAlignPoints({ ...alignPoints, shoulderR: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Waist Center (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.waist}
-                      onChange={(e) => setAlignPoints({ ...alignPoints, waist: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Hips (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.hips}
-                      onChange={(e) => setAlignPoints({ ...alignPoints, hips: e.target.value })}
-                    />
-                  </div>
+                  <PointSlider
+                    label="Left Shoulder"
+                    pointStr={alignPoints.shoulderL}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderL: val })}
+                  />
+                  <PointSlider
+                    label="Right Shoulder"
+                    pointStr={alignPoints.shoulderR}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderR: val })}
+                  />
+                  <PointSlider
+                    label="Waist Center"
+                    pointStr={alignPoints.waist}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, waist: val })}
+                  />
+                  <PointSlider
+                    label="Hips"
+                    pointStr={alignPoints.hips}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, hips: val })}
+                  />
 
                   <button className="btn-primary full-width mt-4" onClick={saveAlignmentPoints}>
                     Save & Verify Points

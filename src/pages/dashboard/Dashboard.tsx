@@ -63,6 +63,8 @@ import { getInventory, subscribeToInventory } from '../../services/productServic
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
+// @ts-ignore
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
 
@@ -79,6 +81,30 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth() as { user: any };
   const canCustomize = can(user?.role, 'customize_dashboard');
+  
+  const loadDashboard = React.useCallback(async () => {
+    try {
+      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
+        getReservations(100),
+        getCustomers(100),
+        getInventory(100),
+        getARSessions(),
+        getSuggestedOutfits(),
+      ]);
+      setReservations(resData || []);
+      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
+      setInventory(invData || []);
+      setArSessionCount(arCount?.length || 0);
+      setSuggestedOutfits(outfitsData || []);
+      setLastSynced(new Date());
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+    }
+  }, []);
+
+  // Initialize realtime sync for global alerts and auto-refresh
+  useRealtimeSync(loadDashboard);
+
   const [reservations, setReservations] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -99,25 +125,7 @@ const Dashboard = () => {
     localStorage.setItem('dashboard_widget_prefs', JSON.stringify(nextPrefs));
   };
 
-  const loadDashboard = async () => {
-    try {
-      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
-        getReservations(100),
-        getCustomers(100),
-        getInventory(100),
-        getARSessions(),
-        getSuggestedOutfits(),
-      ]);
-      setReservations(resData || []);
-      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
-      setInventory(invData || []);
-      setArSessionCount(arCount?.length || 0);
-      setSuggestedOutfits(outfitsData || []);
-      setLastSynced(new Date());
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    }
-  };
+
 
   React.useEffect(() => {
     // Non-inventory data: load once, poll every 5 minutes
@@ -270,11 +278,14 @@ const Dashboard = () => {
             <CheckCircle2 size={16} /> Pipeline Healthy
           </div>
           <div className="sync-status flex-center gap-1 text-secondary text-xs">
-            <RefreshCw size={12} className="cursor-pointer" onClick={loadDashboard} style={{ cursor: 'pointer' }} /> Last synced: {lastSynced.toLocaleTimeString()}
+            Last synced: {lastSynced.toLocaleTimeString()}
           </div>
+          <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadDashboard}>
+            <RefreshCw size={14} /> Refresh
+          </button>
           {canCustomize && (
             <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
-              <Settings2 size={14} /> Customize Dashboard
+              <Settings2 size={14} /> Customize
             </button>
           )}
         </div>
@@ -578,7 +589,7 @@ const Dashboard = () => {
                   <h4>{getUserDisplayName(c)}</h4>
                   <p>{c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : c.email}</p>
                 </div>
-                <button className="icon-btn small" onClick={() => navigate('/customers')}>
+                <button className="icon-btn small" onClick={() => navigate(`/customers?id=${c.id}`)}>
                   <Users size={16} />
                 </button>
               </div>

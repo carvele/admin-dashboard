@@ -94,6 +94,7 @@ const normaliseReservation = (row) => {
     // date as JS Date object for UI components that call .toDate() style methods
     date: c.date ? new Date(c.date) : null,
     returnDate: c.returnDate ? new Date(c.returnDate) : null,
+    confirmedAt: c.confirmedAt ? new Date(c.confirmedAt) : null,
   };
 };
 
@@ -196,42 +197,88 @@ export const getReservationsByProduct = async (productId, productName) => {
 
 // ── Writes ────────────────────────────────────────────────────
 
-export const createReservation = async (data) => {
-  // Combine date + appointmentTime string → appointment_time timestamptz
-  const appointmentTs = buildTimestamp(data.date, data.appointmentTime);
-  // `date` and `return_date` are DATE columns, so they take the local calendar
-  // day rather than a UTC-shifted timestamp.
-  const returnTs = toLocalDateString(data.returnDate);
-  const dateTs = toLocalDateString(data.date);
+const ALLOWED_RESERVATION_FIELDS = new Set([
+  'id',
+  'display_id',
+  'customer_id',
+  'customer_name',
+  'product_id',
+  'product_name',
+  'image_url',
+  'date',
+  'return_date',
+  'appointment_time',
+  'status',
+  'size',
+  'deposit',
+  'deposit_amount',
+  'total_price',
+  'balance_due',
+  'payment_status',
+  'payment_due_at',
+  'confirmed_by_id',
+  'confirmed_by_name',
+  'confirmed_at',
+  'deleted',
+  'created_at',
+  'updated_at',
+  'reschedule_status',
+  'reschedule_requested_at',
+]);
 
-  const { appointmentTime, ...rest } = data;
-  return addDocument('reservations', {
-    ...rest,
+const sanitizeReservationPayload = (obj) => {
+  const clean = {};
+  const fieldMap = {
+    customerId: 'customer_id',
+    customerName: 'customer_name',
+    productId: 'product_id',
+    productName: 'product_name',
+    imageUrl: 'image_url',
+    rentalPrice: 'total_price',
+    depositAmount: 'deposit_amount',
+  };
+
+  for (const [key, val] of Object.entries(obj)) {
+    const mappedKey = fieldMap[key] || key;
+    if (ALLOWED_RESERVATION_FIELDS.has(mappedKey)) {
+      clean[mappedKey] = val;
+    }
+  }
+  return clean;
+};
+
+export const createReservation = async (data) => {
+  const appointmentTs = buildTimestamp(data.date || data.reservationDate, data.appointmentTime);
+  const returnTs = toLocalDateString(data.returnDate);
+  const dateTs = toLocalDateString(data.date || data.reservationDate);
+
+  const payload = sanitizeReservationPayload({
+    ...data,
     date: dateTs,
     return_date: returnTs,
     appointment_time: appointmentTs,
     deleted: false,
   });
+
+  return addDocument('reservations', payload);
 };
 
 export const updateReservation = (docId, updates) => {
-  // If updating date/appointmentTime, rebuild the combined timestamp
-  if (updates.date || updates.appointmentTime) {
-    const date = updates.date ?? undefined;
-    const time = updates.appointmentTime ?? undefined;
+  let payload = { ...updates };
+  if (payload.date || payload.reservationDate || payload.appointmentTime) {
+    const date = payload.date || payload.reservationDate || undefined;
+    const time = payload.appointmentTime ?? undefined;
     if (date || time) {
-      updates = {
-        ...updates,
-        appointment_time: buildTimestamp(date, time),
-      };
+      payload.appointment_time = buildTimestamp(date, time);
     }
-    delete updates.appointmentTime; // remove camelCase before sending to Supabase
+    delete payload.appointmentTime;
   }
-  // A Date here would serialise to a UTC ISO string and shift the DATE column
-  // back a day for any local time before 08:00.
-  if (updates.date) updates = { ...updates, date: toLocalDateString(updates.date) };
-  if (updates.reservationDate) updates = { ...updates, reservationDate: toLocalDateString(updates.reservationDate) };
-  return updateDocument('reservations', docId, updates);
+
+  if (payload.date || payload.reservationDate) {
+    payload.date = toLocalDateString(payload.date || payload.reservationDate);
+  }
+
+  return updateDocument('reservations', docId, sanitizeReservationPayload(payload));
 };
 
 export const deleteReservation = (docId) => {

@@ -83,6 +83,13 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         </span>
       </div>
 
+      {res.confirmedByName && (
+        <div className="res-card-staff-attribution" style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+          Accepted by <strong>{res.confirmedByName}</strong>
+          {res.confirmedAt && ` on ${new Date(res.confirmedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+        </div>
+      )}
+
       {/* A pending request sits above the actions, not in the meta row: it is
           work waiting on a decision, and the live booking above it still
           stands until someone answers. */}

@@ -16,6 +16,11 @@ import {
   Shirt,
   MessageSquare,
   X,
+  QrCode,
+  DollarSign,
+  ArrowUpDown,
+  ReceiptText,
+  PackageCheck,
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
@@ -118,13 +123,11 @@ const Reservations = () => {
     setLoading(true);
     // Real-time Reservations Listener
     const unsubR = subscribeToReservations((data) => {
-      console.log('DEBUG: REAL-TIME RESERVATIONS:', data);
-      
       // Auto-healing for broken data (Names or Product Names)
       data.forEach(res => {
         const cName = res.customerName || res.customer || '';
         const pName = res.productName || res.outfit || '';
-        const isId = (str) => /^[a-zA-Z0-9]{15,30}$/.test(str);
+        const isId = (str) => /^[a-zA-Z0-9-]{15,40}$/.test(str);
         
         if (isId(cName) || isId(pName) || !cName || !pName) {
           repairReservationData(res);
@@ -173,6 +176,15 @@ const Reservations = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrToken, setQrToken] = useState('');
+  const [qrResult, setQrResult] = useState(null);
+  // List view sort: { key: string, dir: 'asc'|'desc' }
+  const [listSort, setListSort] = useState({ key: 'date', dir: 'asc' });
+  const toggleSort = (key) => setListSort(prev => ({
+    key,
+    dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
+  }));
   const [receiptModalUrl, setReceiptModalUrl] = useState(null);
   // receipt_url on the row is a bare storage path in a private bucket, not a
   // usable URL -- resolve it to a signed URL whenever the detail modal opens
@@ -314,7 +326,12 @@ const Reservations = () => {
         // never saw an accepted reservation: no payment deadline was stamped,
         // the customer was never told to pay, the app showed no Pay button,
         // and the unpaid sweep never picked it up.
-        await updateReservation(res.docId, { status: 'Confirmed' });
+        await updateReservation(res.docId, { 
+          status: 'Confirmed',
+          confirmed_by_id: user?.uid || user?.id || null,
+          confirmed_by_name: user?.name || user?.email || 'Staff',
+          confirmed_at: new Date().toISOString()
+        });
         // Stock is committed at approval, not at pickup: once staff accept, the
         // item is promised to this customer and must stop being sellable even
         // though payment has not landed. Deducting only at ready_pickup meant
@@ -611,6 +628,15 @@ const Reservations = () => {
               Calendar
             </button>
           </div>
+          {canManage && (
+            <button
+              className="btn-outline flex-center gap-2"
+              onClick={() => { setShowQRModal(true); setQrToken(''); setQrResult(null); }}
+              title="Verify pickup token or scan QR"
+            >
+              <QrCode size={16} /> Verify Pickup
+            </button>
+          )}
           {can(user?.role, 'create_reservation') && (
             <button className="btn-primary flex-center gap-2" onClick={() => setIsModalOpen(true)}>
               <Plus size={18} /> New Reservation
@@ -689,127 +715,147 @@ const Reservations = () => {
           </div>
         ) : viewMode === 'table' ? (
           <div className="table-container">
-            <table className="table">
+            <table className="table res-list-table">
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Customer</th>
-                  <th>Items</th>
-                  <th>Date & Time</th>
+                  <th>
+                    <button className="sort-header-btn" onClick={() => toggleSort('customer')}>
+                      Customer <ArrowUpDown size={13} />
+                    </button>
+                  </th>
+                  <th>Item</th>
+                  <th>
+                    <button className="sort-header-btn" onClick={() => toggleSort('date')}>
+                      Date &amp; Time <ArrowUpDown size={13} />
+                    </button>
+                  </th>
                   <th>Status</th>
+                  <th>
+                    <button className="sort-header-btn" onClick={() => toggleSort('balance')}>
+                      Balance <ArrowUpDown size={13} />
+                    </button>
+                  </th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredReservations.map((res) => {
-                  const rDate = parseDate(res.reservationDate || res.date);
-                  return (
-                    <tr key={res.id}>
-                      <td className="font-mono text-sm">{res.id}</td>
-                      <td className="font-medium">{res.displayName}</td>
-                      <td>
-                        {res.lines.map((line, index) => (
-                          <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm mt-1' : ''}>
-                            {line.productName || res.productName || res.outfit}
-                            {line.size ? ` (${line.size})` : ''}
-                            {(line.quantity ?? 1) > 1 ? ` x${line.quantity}` : ''}
+                {[...filteredReservations]
+                  .sort((a, b) => {
+                    let va, vb;
+                    if (listSort.key === 'customer') { va = a.displayName; vb = b.displayName; }
+                    else if (listSort.key === 'balance') { va = outstandingBalance(a) || 0; vb = outstandingBalance(b) || 0; }
+                    else { va = a.displayDate?.getTime?.() || 0; vb = b.displayDate?.getTime?.() || 0; }
+                    if (va < vb) return listSort.dir === 'asc' ? -1 : 1;
+                    if (va > vb) return listSort.dir === 'asc' ? 1 : -1;
+                    return 0;
+                  })
+                  .map((res) => {
+                    const balance = outstandingBalance(res);
+                    const primaryAction = PRIMARY_ACTION[res.displayStatus];
+                    const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+                    const firstLine = res.lines[0];
+                    const imageUrl = res.imageUrl || firstLine?.imageUrl;
+                    return (
+                      <tr key={res.id}>
+                        <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>{res.id}</td>
+                        <td>
+                          <div className="res-customer-cell">
+                            <div className="res-cust-name">{res.displayName}</div>
                           </div>
-                        ))}
-                      </td>
-                      <td>
-                        <div>{res.displayDate.toLocaleDateString()}</div>
-                        <div className="text-secondary text-sm">
-                          {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        {res.countdown && (res.displayStatus === 'Pending' || res.displayStatus === 'Request Approval') && (
-                          <CountdownTimer targetDate={res.reservationDate || res.date} />
-                        )}
-                      </td>
-                      <td>
-                        <StatusBadge status={res.displayStatus} />
-                        {isAwaitingReceipt(res) && (
-                          <div className="text-gold text-xs mt-1 font-medium bg-cream p-1 rounded inline-block border" style={{ borderColor: 'var(--border-color)' }}>
-                            Receipt Uploaded
-                          </div>
-                        )}
-                        {(() => {
-                          const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
-                          if (!deadline) return null;
-                          return (
-                            <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
-                              {deadline.label} to pay
+                        </td>
+                        <td>
+                          <div className="res-item-cell">
+                            {imageUrl && (
+                              <img src={imageUrl} alt="" className="res-thumb" />
+                            )}
+                            <div className="res-item-info">
+                              {res.lines.map((line, index) => (
+                                <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary' : 'font-medium'}>
+                                  {line.productName || res.productName || res.outfit}
+                                  {line.size && <span className="size-pill">{line.size}</span>}
+                                  {(line.quantity ?? 1) > 1 && <span className="text-secondary text-sm"> ×{line.quantity}</span>}
+                                </div>
+                              ))}
                             </div>
-                          );
-                        })()}
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            className="action-icon view"
-                            title="View Details"
-                            onClick={() => setViewModal(res)}
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            className="action-icon"
-                            title="Message Buyer"
-                            onClick={() => handleMessageBuyer(res)}
-                          >
-                            <MessageSquare size={16} />
-                          </button>
-                          {/* Lifecycle actions — full-access roles only; staff view read-only.
-                              Same PRIMARY_ACTION map as the board, so the two views never
-                              show a different action for the same status again. */}
-                          {canManage && (
-                            <>
-                              {PRIMARY_ACTION[res.displayStatus] && (
-                                <button
-                                  className="action-icon approve"
-                                  title={isAwaitingReceipt(res) ? 'Verify Receipt' : PRIMARY_ACTION[res.displayStatus].label}
-                                  onClick={() => handleAction(res.id, PRIMARY_ACTION[res.displayStatus].action)}
-                                >
-                                  <CheckCircle size={16} />
-                                </button>
-                              )}
-                              {CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
-                                <>
-                                  <button
-                                    className="action-icon reschedule"
-                                    title="Reschedule"
-                                    onClick={() => {
-                                      setRescheduleModal(res);
-                                      setNewDate(res.date);
-                                    }}
-                                  >
-                                    <Calendar size={16} />
-                                  </button>
-                                  <button
-                                    className="action-icon reject"
-                                    title="Cancel"
-                                    onClick={() => handleAction(res.id, 'cancel')}
-                                  >
-                                    <XCircle size={16} />
-                                  </button>
-                                </>
-                              )}
-                            </>
+                          </div>
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <div className="font-medium">{res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                          <div className="text-secondary text-sm">
+                            {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                          {res.countdown && (res.displayStatus === 'Pending') && (
+                            <CountdownTimer targetDate={res.reservationDate || res.date} />
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          {deadline && (
+                            <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                              {deadline.label}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                            <StatusBadge status={res.displayStatus} />
+                            {isAwaitingReceipt(res) && (
+                              <span className="receipt-badge">📎 Receipt uploaded</span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {balance > 0 ? (
+                            <span className="balance-due-pill">
+                              <DollarSign size={11} /> {formatCurrency(balance)} due
+                            </span>
+                          ) : res.paymentStatus === 'Paid' ? (
+                            <span className="balance-paid-pill">✓ Paid</span>
+                          ) : (
+                            <span className="text-secondary text-sm">—</span>
+                          )}
+                          {res.rentalPrice > 0 && (
+                            <div className="text-xs text-secondary mt-1">{formatCurrency(res.rentalPrice)} total</div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="res-list-actions">
+                            <button className="res-action-btn view" title="View Details" onClick={() => setViewModal(res)}>
+                              <Eye size={14} />
+                            </button>
+                            <button className="res-action-btn msg" title="Message" onClick={() => handleMessageBuyer(res)}>
+                              <MessageSquare size={14} />
+                            </button>
+                            {canManage && primaryAction && (
+                              <button
+                                className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
+                                onClick={() => handleAction(res.id, primaryAction.action)}
+                              >
+                                {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
+                              </button>
+                            )}
+                            {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                              <button className="res-action-btn reschedule" title="Reschedule" onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}>
+                                <Calendar size={14} />
+                              </button>
+                            )}
+                            {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                              <button className="res-action-btn reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}>
+                                <XCircle size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 {filteredReservations.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="text-center py-8 text-secondary">
+                    <td colSpan="7" className="text-center py-8 text-secondary">
                       No reservations found
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-            {/* Pagination removed for Real-Time stream */}
           </div>
         ) : (
           <ReservationCalendar
@@ -819,6 +865,76 @@ const Reservations = () => {
           />
         )}
       </div>
+
+      {/* ===== QR / TOKEN VERIFICATION MODAL ===== */}
+      {showQRModal && (
+        <div className="modal-overlay" onClick={() => setShowQRModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><QrCode size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />Verify Pickup</h2>
+              <button className="close-btn" onClick={() => setShowQRModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="text-secondary text-sm mb-3">Enter the customer's pickup token (displayed in their app) to verify and complete handover.</p>
+              <div className="form-group">
+                <label className="label">Pickup Token / Reservation ID</label>
+                <input
+                  type="text"
+                  className="input-field font-mono"
+                  placeholder="e.g. RES-042"
+                  value={qrToken}
+                  onChange={(e) => { setQrToken(e.target.value.toUpperCase()); setQrResult(null); }}
+                  autoFocus
+                />
+              </div>
+              {qrResult && (
+                <div className={`qr-result ${qrResult.found ? 'qr-result-found' : 'qr-result-notfound'}`}>
+                  {qrResult.found ? (
+                    <>
+                      <div className="qr-result-name">✓ {qrResult.res.displayName}</div>
+                      <div className="qr-result-item">{qrResult.res.lines?.[0]?.productName || qrResult.res.productName || qrResult.res.outfit}</div>
+                      <div className="qr-result-date">{qrResult.res.displayDate?.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                      <div className="qr-result-status">{qrResult.res.displayStatus}</div>
+                    </>
+                  ) : (
+                    <div>⚠ No reservation found for token <strong>{qrToken}</strong></div>
+                  )}
+                </div>
+              )}
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setShowQRModal(false)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    const found = filteredReservations.find(r => r.id?.toUpperCase() === qrToken.trim().toUpperCase());
+                    if (found) {
+                      setQrResult({ found: true, res: found });
+                    } else {
+                      setQrResult({ found: false });
+                    }
+                  }}
+                >
+                  Look Up
+                </button>
+                {qrResult?.found && qrResult.res.displayStatus === 'To Pickup' && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ background: 'var(--status-completed-text)' }}
+                    onClick={async () => {
+                      await handleAction(qrResult.res.id, 'complete');
+                      setShowQRModal(false);
+                    }}
+                  >
+                    <PackageCheck size={15} /> Complete Pickup
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== NEW RESERVATION MODAL ===== */}
       {isModalOpen && (
@@ -1073,65 +1189,74 @@ const Reservations = () => {
                 <span className="detail-label">Status</span>
                 <StatusBadge status={viewModal.displayStatus || 'Pending'} />
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Amount Due</span>
-                <div className="flex-center gap-2">
-                  {/* deposit is the amount owed, not a paid flag. Reading it as
-                      a boolean made every reservation with a non-zero balance
-                      show "Paid", which is the opposite of the truth. Whether
-                      money arrived is payment_status. */}
-                  <span className="text-secondary">
-                    ₱{Number(viewModal.deposit || 0).toFixed(2)}
-                  </span>
-                  <span className={viewModal.paymentStatus === 'Paid' ? 'text-success' : 'text-secondary'}>
-                    {viewModal.paymentStatus === 'Paid' ? 'Paid ✓' : 'Unpaid ✗'}
-                  </span>
-                  {viewModal.displayStatus !== 'Completed' && viewModal.displayStatus !== 'Cancelled' && (
+              {/* Prominent Payment Status & Controls Card */}
+              <div className="payment-action-card">
+                <div className="payment-card-header">
+                  <div>
+                    <div className="payment-card-title">Payment Controls</div>
+                    <div className="payment-meta-row">
+                      <span className={`payment-status-pill ${
+                        (viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'paid'
+                        : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'submitted'
+                        : 'unpaid'
+                      }`}>
+                        {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'Paid ✓'
+                         : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'Receipt Submitted ⌛'
+                         : 'Unpaid ✗'}
+                      </span>
+                      <span className="text-secondary text-sm font-medium">
+                        Deposit Due: ₱{Number(viewModal.deposit || 0).toFixed(2)}
+                      </span>
+                      {viewModal.paymentType && (
+                        <span className="text-secondary text-sm">({viewModal.paymentType})</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="payment-action-buttons">
                     <button
-                      className={viewModal.paymentStatus === 'Paid' ? 'btn-outline small' : 'btn-primary small'}
-                      style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                      className={`btn-pay-toggle ${(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'is-paid' : 'is-unpaid'}`}
                       onClick={() => handleTogglePaid(viewModal)}
                     >
-                      {viewModal.paymentStatus === 'Paid' ? 'Mark Unpaid' : 'Mark as Paid'}
+                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Mark as Paid'}
                     </button>
-                  )}
-                </div>
-              </div>
-              {outstandingBalance(viewModal) > 0 && (
-                <div className="detail-row">
-                  <span className="detail-label">Balance on collection</span>
-                  <span className="font-medium text-gold">
-                    {formatCurrency(outstandingBalance(viewModal))} to collect in person
-                  </span>
-                </div>
-              )}
-              <div className="detail-row">
-                <span className="detail-label">Payment</span>
-                <div>
-                  <div className={`font-medium ${
-                    viewModal.paymentStatus === 'Paid' ? 'text-success'
-                    // Submitted/Processing both mean "receipt sent, awaiting staff
-                    // review" -- neither is a flat "nothing has happened" unpaid
-                    // state, so both get the same in-review color rather than
-                    // Submitted falling through to the same red as truly unpaid.
-                    : (viewModal.paymentStatus === 'Submitted' || viewModal.paymentStatus === 'Processing') ? 'text-gold'
-                    : 'text-danger'
-                  }`}>
-                    {viewModal.paymentStatus || 'Unpaid'}
                   </div>
-                  {(() => {
-                    const deadline = viewModal.displayStatus === 'To Pay' ? formatPaymentDeadline(viewModal.paymentDueAt) : null;
-                    if (!deadline) return null;
-                    return (
-                      <div className={`text-sm font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
-                        {deadline.label} to pay
-                      </div>
-                    );
-                  })()}
-                  {viewModal.paymentType && (
-                    <div className="text-secondary text-sm">{viewModal.paymentType}</div>
-                  )}
                 </div>
+
+                {outstandingBalance(viewModal) > 0 && (
+                  <div className="payment-card-body">
+                    <div className="balance-info-row">
+                      <div>
+                        <span className="text-sm text-secondary">Balance Owed at Pickup: </span>
+                        <strong className="text-gold">{formatCurrency(outstandingBalance(viewModal))}</strong>
+                      </div>
+                      {canManage && (
+                        <button
+                          className="btn-collect-balance"
+                          onClick={async () => {
+                            try {
+                              await settleReservationBalance(viewModal.id);
+                              setViewModal(prev => prev ? { ...prev, paymentStatus: 'Paid' } : prev);
+                              toast.success(`Recorded collection of ${formatCurrency(outstandingBalance(viewModal))}`);
+                            } catch (e) {
+                              toast.error(e?.message || 'Failed to record balance collection');
+                            }
+                          }}
+                        >
+                          Record Collection
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {(() => {
+                  const deadline = viewModal.displayStatus === 'To Pay' ? formatPaymentDeadline(viewModal.paymentDueAt) : null;
+                  if (!deadline) return null;
+                  return (
+                    <div className={`payment-deadline-banner ${deadline.urgent ? 'urgent' : ''}`}>
+                      ⏰ Payment Deadline: {deadline.label}
+                    </div>
+                  );
+                })()}
               </div>
               {viewModal.receiptUrl && (
                 <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
