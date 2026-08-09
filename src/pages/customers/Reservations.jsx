@@ -314,7 +314,12 @@ const Reservations = () => {
         // never saw an accepted reservation: no payment deadline was stamped,
         // the customer was never told to pay, the app showed no Pay button,
         // and the unpaid sweep never picked it up.
-        await updateReservation(res.docId, { status: 'Confirmed' });
+        await updateReservation(res.docId, { 
+          status: 'Confirmed',
+          confirmed_by_id: user?.uid || user?.id || null,
+          confirmed_by_name: user?.name || user?.email || 'Staff',
+          confirmed_at: new Date().toISOString()
+        });
         // Stock is committed at approval, not at pickup: once staff accept, the
         // item is promised to this customer and must stop being sellable even
         // though payment has not landed. Deducting only at ready_pickup meant

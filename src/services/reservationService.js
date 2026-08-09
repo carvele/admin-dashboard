@@ -94,6 +94,7 @@ const normaliseReservation = (row) => {
     // date as JS Date object for UI components that call .toDate() style methods
     date: c.date ? new Date(c.date) : null,
     returnDate: c.returnDate ? new Date(c.returnDate) : null,
+    confirmedAt: c.confirmedAt ? new Date(c.confirmedAt) : null,
   };
 };
 

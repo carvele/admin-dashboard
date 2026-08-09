@@ -63,6 +63,8 @@ import { getInventory, subscribeToInventory } from '../../services/productServic
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
+// @ts-ignore
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
 
@@ -79,6 +81,12 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth() as { user: any };
   const canCustomize = can(user?.role, 'customize_dashboard');
+  
+  // Initialize realtime sync for global alerts and auto-refresh
+  useRealtimeSync(() => {
+    loadDashboard();
+  });
+
   const [reservations, setReservations] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
