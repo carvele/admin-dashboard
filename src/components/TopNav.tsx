@@ -18,9 +18,10 @@ interface TopNavProps {
 }
 
 const TopNav = ({ user, onHamburger }: TopNavProps) => {
-  const { logout, isAdminUnlocked } = useAuth();
+  const { logout, isAdminUnlocked } = useAuth() as any;
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -292,29 +293,58 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           )}
         </div>
 
-        <div className="user-menu">
-          <div
-            className="avatar"
-            style={{ backgroundColor: getAvatarColor((user as any)?.name || 'A') }}
+        <div className="user-menu-wrapper" style={{ position: 'relative' }}>
+          <button 
+            className="user-menu-btn" 
+            onClick={() => setShowUserDropdown(!showUserDropdown)}
+            aria-expanded={showUserDropdown}
+            aria-haspopup="true"
           >
-            {initials}
-          </div>
-          <div className="user-info">
-            <span className="user-name">{(user as any)?.name || 'Staff Member'}</span>
-            <span
-              className="user-role-top"
-              style={{
-                fontSize: '0.75rem',
-                color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)',
-                fontWeight: 500,
-              }}
+            <div
+              className="avatar"
+              style={{ backgroundColor: getAvatarColor((user as any)?.name || 'A') }}
             >
-              {isAdminUnlocked ? 'Owner (Super Admin)' : 'Sales Staff'}
-            </span>
-          </div>
-          <button className="icon-btn logout-btn" onClick={logout} title="Logout">
-            <LogOut size={18} />
+              {initials}
+            </div>
+            <div className="user-info">
+              <span className="user-name">{(user as any)?.name || 'Staff Member'}</span>
+              <span
+                className="user-role-top"
+                style={{
+                  fontSize: '0.75rem',
+                  color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontWeight: 500,
+                }}
+              >
+                {isAdminUnlocked ? 'Owner (Super Admin)' : 'Sales Staff'}
+              </span>
+            </div>
           </button>
+
+          {showUserDropdown && (
+            <div className="user-dropdown card">
+              <div className="user-dropdown-header">
+                <div className="avatar" style={{ backgroundColor: getAvatarColor((user as any)?.name || 'A') }}>
+                  {initials}
+                </div>
+                <div className="user-info">
+                  <span className="user-name">{(user as any)?.name || 'Staff Member'}</span>
+                  <span className="user-role-top">
+                    {isAdminUnlocked ? 'Owner (Super Admin)' : 'Sales Staff'}
+                  </span>
+                </div>
+              </div>
+              <div className="user-dropdown-actions">
+                <button className="user-dropdown-item destructive" onClick={() => {
+                  setShowUserDropdown(false);
+                  logout();
+                }}>
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

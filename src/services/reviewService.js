@@ -63,3 +63,78 @@ export const deleteReview = async (reviewId) => {
 
   if (error) throw error;
 };
+
+/**
+ * Fetch all reviews with pagination, optional rating filter, and optional product search.
+ */
+export const getAllReviews = async (page = 1, limit = 20, rating = null, search = '') => {
+  let query = supabase
+    .from('reviews')
+    .select(`
+      id,
+      product_id,
+      user_id,
+      rating,
+      comment,
+      images,
+      created_at,
+      profiles (first_name, last_name, email),
+      products (name)
+    `, { count: 'exact' });
+
+  if (rating) {
+    query = query.eq('rating', rating);
+  }
+
+  // We can't do ilike on related table directly in PostgREST unless we use !inner,
+  // but if the relationship is simple, we might just filter client-side or use !inner.
+  // Using !inner for products to allow search.
+  if (search) {
+    query = supabase
+      .from('reviews')
+      .select(`
+        id,
+        product_id,
+        user_id,
+        rating,
+        comment,
+        images,
+        created_at,
+        profiles (first_name, last_name, email),
+        products!inner (name)
+      `, { count: 'exact' })
+      .ilike('products.name', `%${search}%`);
+      
+    if (rating) {
+      query = query.eq('rating', rating);
+    }
+  }
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  query = query.order('created_at', { ascending: false }).range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) throw error;
+
+  const formatted = (data || []).map(row => {
+    const firstName = row.profiles?.first_name || '';
+    const lastName = row.profiles?.last_name || '';
+    return {
+      id: row.id,
+      productId: row.product_id,
+      productName: row.products?.name || 'Unknown Product',
+      userId: row.user_id,
+      rating: Number(row.rating),
+      comment: row.comment,
+      images: row.images,
+      createdAt: row.created_at,
+      // Since verified_purchase might not exist, default false
+      verifiedPurchase: row.verified_purchase || false,
+      userName: [firstName, lastName].filter(Boolean).join(' ') || 'Guest Explorer',
+    };
+  });
+
+  return { reviews: formatted, count };
+};

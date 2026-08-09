@@ -41,6 +41,7 @@ import {
 import { can } from '../../utils/permissions';
 import { useAuth } from '../../context/AuthContext';
 import SkeletonTable from '../../components/SkeletonTable';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './Customers.css';
 
 // ── Component ────────────────────────────────────────────────
@@ -347,6 +348,15 @@ const Customers = () => {
     }
   };
 
+  const getCustomerTags = (cust) => {
+    const tags = [];
+    if ((cust.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: '#a16207', bg: '#fef9c3' });
+    if ((cust.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: '#065f46', bg: '#d1fae5' });
+    if (cust.hasMeasurements || (cust.topBust && cust.waist)) tags.push({ label: '📏 Fit Profile', color: '#1e40af', bg: '#dbeafe' });
+    if (cust.isBlocked) tags.push({ label: '⛔ Blocked', color: '#991b1b', bg: '#fee2e2' });
+    return tags;
+  };
+
   return (
     <div className="page-container">
       <div className="page-header d-flex justify-between align-center">
@@ -484,6 +494,15 @@ const Customers = () => {
                           <div>
                             <p className="font-medium">{getUserDisplayName(cust)}</p>
                             <p className="text-secondary text-sm">{cust.email}</p>
+                            {getCustomerTags(cust).length > 0 && (
+                              <div className="customer-tags">
+                                {getCustomerTags(cust).map(tag => (
+                                  <span key={tag.label} className="cust-tag" style={{ color: tag.color, backgroundColor: tag.bg }}>
+                                    {tag.label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -678,6 +697,21 @@ const Customers = () => {
                     >
                       {statusLabel(selectedCustomer)}
                     </span>
+                    {(() => {
+                      const tags = [];
+                      if ((selectedCustomer.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: '#a16207', bg: '#fef9c3' });
+                      if ((selectedCustomer.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: '#065f46', bg: '#d1fae5' });
+                      if (custMeasurements && Object.values(custMeasurements).some(v => v)) tags.push({ label: '📏 Fit Profile', color: '#1e40af', bg: '#dbeafe' });
+                      if (selectedCustomer.isBlocked) tags.push({ label: '⛔ Blocked', color: '#991b1b', bg: '#fee2e2' });
+                      if (tags.length === 0) return null;
+                      return (
+                        <div className="customer-tags mt-2">
+                          {tags.map(tag => (
+                            <span key={tag.label} className="cust-tag" style={{ color: tag.color, backgroundColor: tag.bg }}>{tag.label}</span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <p className="member-since">
                       <Calendar size={13} /> Member since {formatDate(selectedCustomer.createdAt || selectedCustomer.joinedAt)}
                     </p>
@@ -988,31 +1022,15 @@ const Customers = () => {
       )}
 
       {/* ===== DELETE CONFIRM ===== */}
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
-          >
-            <div className="delete-icon-wrap">
-              <Trash2 size={32} />
-            </div>
-            <h2>Delete Customer?</h2>
-            <p className="text-secondary mt-2">
-              Remove <strong>{getUserDisplayName(deleteConfirm)}</strong>? This cannot be undone.
-            </p>
-            <div className="modal-footer justify-center mt-4">
-              <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>
-                Cancel
-              </button>
-              <button className="btn-danger" onClick={handleDelete}>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        title="Delete Customer?"
+        message={`Remove ${getUserDisplayName(deleteConfirm)}? This cannot be undone.`}
+        confirmText="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
       {/* ===== SEND MESSAGE MODAL ===== */}
       {msgModal && (
         <div className="modal-overlay" onClick={() => setMsgModal(null)}>

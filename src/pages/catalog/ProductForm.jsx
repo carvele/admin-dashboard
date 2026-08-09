@@ -20,6 +20,7 @@ import {
 } from '../../services/wardrobeService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
@@ -41,6 +42,7 @@ const ProductForm = ({ readOnly = false }) => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [productHistory, setProductHistory] = useState([]);
   const [loadingProductHistory, setLoadingProductHistory] = useState(false);
+  const [showArConfirm, setShowArConfirm] = useState(false);
 
   // Uniqlo-like details
   const [formData, setFormData] = useState({
@@ -631,10 +633,7 @@ const ProductForm = ({ readOnly = false }) => {
                         <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
                         <span className="text-xs font-bold uppercase text-secondary">Featured</span>
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                        <span className="text-xs font-bold uppercase text-secondary">Alterable</span>
-                      </label>
+
                    </div>
                 </div>
              </div>
@@ -656,10 +655,7 @@ const ProductForm = ({ readOnly = false }) => {
                         <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
                         <span className="text-sm font-medium group-hover:text-primary transition-colors">Featured Item</span>
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer group">
-                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                        <span className="text-sm font-medium group-hover:text-primary transition-colors">Alterable</span>
-                      </label>
+
                       <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
                          <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
                          <div style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -787,7 +783,7 @@ const ProductForm = ({ readOnly = false }) => {
                     <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
                  </div>
               </div>
-              <button type="button" onClick={() => navigate('/ar-assets')} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+              <button type="button" onClick={() => readOnly ? navigate('/ar-assets') : setShowArConfirm(true)} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
                 Configure AR Assets
               </button>
            </div>
@@ -864,7 +860,13 @@ const ProductForm = ({ readOnly = false }) => {
               <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
                  <Ruler size={14} /> Sizing & Measurement Grid
               </h2>
-              <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm font-bold text-primary transition-colors">ALTERABLE</span>
+                </label>
+                <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+              </div>
            </div>
 
            <div className="mb-6">
@@ -1016,6 +1018,15 @@ const ProductForm = ({ readOnly = false }) => {
            )}
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={showArConfirm}
+        title="Unsaved Changes"
+        message="You may have unsaved changes on this product. Are you sure you want to leave and configure AR Assets? Any unsaved data will be lost."
+        confirmText="Leave Page"
+        onConfirm={() => navigate('/ar-assets')}
+        onCancel={() => setShowArConfirm(false)}
+      />
     </div>
   );
 };

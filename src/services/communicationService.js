@@ -40,12 +40,12 @@ export const sendMessage = (data) => addDocument('messages', data);
  * @returns {Promise<string>} Public URL
  */
 export const uploadChatImage = async (file, conversationId) => {
-  const filename = `chat-images/${conversationId}/${Date.now()}_${file.name}`;
+  const filename = `${conversationId}/${Date.now()}_${file.name}`;
   const { data, error } = await supabase.storage
-    .from('avatars') // reuse avatars bucket or create 'chat-images' bucket
+    .from('chat-images')
     .upload(filename, file, { upsert: false });
   if (error) throw error;
-  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(data.path);
+  const { data: urlData } = supabase.storage.from('chat-images').getPublicUrl(data.path);
   return urlData.publicUrl;
 };
 

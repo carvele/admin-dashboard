@@ -21,6 +21,7 @@ import {
 } from '../../services/staffService';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './StaffManagement.css';
 
 const EMPLOYMENT_STATUS_META = {
@@ -41,6 +42,10 @@ const StaffManagement = () => {
   // ── UI state ─────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+
+  const [roleToggleConfirm, setRoleToggleConfirm] = useState(null);
+  const [removeConfirm, setRemoveConfirm] = useState(null);
 
   // ── Archived-tab extras ──────────────────────────────────────
   // Map<staffId, latestNote> — loaded once when switching to archived tab
@@ -102,14 +107,16 @@ const StaffManagement = () => {
 
   const filteredActive = activeStaff.filter(
     (s) =>
-      getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()),
+      (roleFilter === 'all' || s.role === roleFilter) &&
+      (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
   const filteredArchived = archivedStaff.filter(
     (s) =>
-      getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()),
+      (roleFilter === 'all' || s.role === roleFilter) &&
+      (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
   // ── Actions: Active tab ───────────────────────────────────────
@@ -161,35 +168,9 @@ const StaffManagement = () => {
     }
   };
 
-  const handleRemove = async (member) => {
-    if (member.role === 'owner') {
-      toast.error('The master Owner account cannot be removed.');
-      return;
-    }
-    const name = getDisplayName(member);
-    if (!window.confirm(`Are you sure you want to archive ${name}?`)) return;
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ deleted: true, updated_at: new Date().toISOString() })
-        .eq('id', member.id);
-      if (error) throw error;
-      await logAction(user, 'Archived staff member', {
-        targetType: 'profile',
-        targetId: member.id,
-        staffName: name,
-      });
-      toast.success(`${name} has been archived`);
-    } catch (err) {
-      toast.error('Failed to archive staff member');
-    }
-  };
-
-  const toggleRole = async (member) => {
-    if (member.role === 'owner') {
-      toast.error('The Owner role cannot be downgraded. It is permanent.');
-      return;
-    }
+  const confirmRoleToggle = async () => {
+    if (!roleToggleConfirm) return;
+    const member = roleToggleConfirm;
     const newRole = member.role === 'admin' ? 'staff' : 'admin';
     const name = getDisplayName(member);
     try {
@@ -207,7 +188,48 @@ const StaffManagement = () => {
       toast.success(`${name} is now ${newRole}`);
     } catch (err) {
       toast.error('Failed to update role');
+    } finally {
+      setRoleToggleConfirm(null);
     }
+  };
+
+  const confirmRemove = async () => {
+    if (!removeConfirm) return;
+    const member = removeConfirm;
+    const name = getDisplayName(member);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .eq('id', member.id);
+      if (error) throw error;
+      await logAction(user, 'Archived staff member', {
+        targetType: 'profile',
+        targetId: member.id,
+        staffName: name,
+      });
+      toast.success(`${name} has been archived`);
+    } catch (err) {
+      toast.error('Failed to archive staff member');
+    } finally {
+      setRemoveConfirm(null);
+    }
+  };
+
+  const toggleRole = async (member) => {
+    if (member.role === 'owner') {
+      toast.error('The Owner role cannot be downgraded. It is permanent.');
+      return;
+    }
+    setRoleToggleConfirm(member);
+  };
+
+  const handleRemove = async (member) => {
+    if (member.role === 'owner') {
+      toast.error('The master Owner account cannot be removed.');
+      return;
+    }
+    setRemoveConfirm(member);
   };
 
   // ── Actions: Archived tab ─────────────────────────────────────
@@ -489,8 +511,8 @@ const StaffManagement = () => {
           </button>
         </div>
 
-        {/* ── Search ── */}
-        <div className="card-toolbar">
+        {/* ── Search and Filter ── */}
+        <div className="card-toolbar" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
@@ -501,6 +523,17 @@ const StaffManagement = () => {
               className="input-field pl-10"
             />
           </div>
+          <select 
+            className="input-field" 
+            value={roleFilter} 
+            onChange={(e) => setRoleFilter(e.target.value)}
+            style={{ minWidth: '150px' }}
+          >
+            <option value="all">All Roles</option>
+            <option value="owner">Owner</option>
+            <option value="admin">Admin</option>
+            <option value="staff">Staff</option>
+          </select>
         </div>
 
         {/* ── Table ── */}
@@ -640,6 +673,24 @@ const StaffManagement = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!roleToggleConfirm}
+        title="Change Role?"
+        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'admin' ? 'Staff' : 'Admin'}?`}
+        confirmText="Change Role"
+        onConfirm={confirmRoleToggle}
+        onCancel={() => setRoleToggleConfirm(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!removeConfirm}
+        title="Archive Staff Member?"
+        message={`Are you sure you want to archive ${getDisplayName(removeConfirm)}?`}
+        confirmText="Archive"
+        onConfirm={confirmRemove}
+        onCancel={() => setRemoveConfirm(null)}
+      />
     </div>
   );
 };

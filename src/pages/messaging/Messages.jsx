@@ -14,6 +14,8 @@ import {
   Calendar,
   Clock,
   Tag,
+  Zap,
+  Ruler,
 } from 'lucide-react';
 import {
   subscribeToConversations,
@@ -42,6 +44,40 @@ const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 // fields the previous code tried to write.
 const RESERVATION_CARD_PREFIX = '__RES_CARD__';
 
+const QUICK_REPLY_TEMPLATES = [
+  'Reservation confirmed! Please complete your payment to secure your slot.',
+  'Reminder: Your pickup is scheduled. Please bring your deposit receipt.',
+  'Hi! We have your outfit ready for fitting. See you soon! 😊',
+  'Thank you for your reservation. Our store is at [location] — store hours are 10am–7pm.',
+];
+
+const formatResDate = (res) => {
+  if (!res) return '';
+  const d = res.reservationDate?.toDate
+    ? res.reservationDate.toDate()
+    : res.reservationDate?.seconds
+    ? new Date(res.reservationDate.seconds * 1000)
+    : res.date?.toDate
+    ? res.date.toDate()
+    : res.date?.seconds
+    ? new Date(res.date.seconds * 1000)
+    : res.date || res.reservationDate
+    ? new Date(res.date || res.reservationDate)
+    : null;
+  if (!d || isNaN(d.getTime())) return 'Date N/A';
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const getResStatusColor = (status) => {
+  const s = (status || '').toLowerCase();
+  if (s === 'confirmed') return '#10b981';
+  if (s === 'pending') return '#f59e0b';
+  if (s === 'fitting') return '#8b5cf6';
+  if (s === 'completed') return '#3b82f6';
+  if (s === 'cancelled') return '#ef4444';
+  return '#6b7280';
+};
+
 const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +86,7 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
@@ -86,11 +123,22 @@ const Messages = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Close reaction popover on outside click
+  const quickReplyRef = useRef(null);
+  const attachMenuRef = useRef(null);
+
+  // Close reaction popover & popovers on outside click
   useEffect(() => {
-    const handler = () => setReactionPopover(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const handler = (e) => {
+      setReactionPopover(null);
+      if (quickReplyRef.current && !quickReplyRef.current.contains(e.target)) {
+        setShowQuickReplies(false);
+      }
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
+        setShowAttachMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => {
@@ -727,21 +775,55 @@ const Messages = () => {
             </div>
           )}
           <form onSubmit={handleSend} className="chat-form">
-            <div className="attach-wrapper">
+            <div className="quick-reply-wrapper" ref={quickReplyRef}>
+              <button
+                type="button"
+                className="icon-btn qr-icon-btn"
+                aria-label="Quick reply templates"
+                onClick={() => {
+                  setShowQuickReplies(!showQuickReplies);
+                  setShowAttachMenu(false);
+                }}
+                title="Quick reply templates"
+              >
+                <Zap size={20} />
+              </button>
+
+              {showQuickReplies && (
+                <div className="quick-reply-popover">
+                  {QUICK_REPLY_TEMPLATES.map((template, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="quick-reply-btn"
+                      onClick={() => {
+                        setNewMessage(template);
+                        setShowQuickReplies(false);
+                      }}
+                    >
+                      {template}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="attach-wrapper" ref={attachMenuRef}>
               <button
                 type="button"
                 className="icon-btn"
                 aria-label="Attach file"
-                onClick={() => setShowAttachMenu(!showAttachMenu)}
+                onClick={() => {
+                  setShowAttachMenu(!showAttachMenu);
+                  setShowQuickReplies(false);
+                }}
               >
                 <Paperclip size={20} />
               </button>
 
               {showAttachMenu && (
                 <div className="attach-menu card">
-                  <button type="button" className="attach-item">
-                    <Shirt size={16} /> Suggest Outfit
-                  </button>
+
                   <button
                     type="button"
                     className="attach-item"
@@ -769,6 +851,112 @@ const Messages = () => {
             </button>
           </form>
         </div>
+      </div>
+
+      {/* Customer Context Sidebar */}
+      <div className="context-panel card">
+        <div className="context-panel-header">
+          <h3>Customer Context</h3>
+        </div>
+
+        {activeChat ? (
+          <div className="context-panel-body">
+            {/* Customer Avatar & Name */}
+            <div className="context-customer-info">
+              <div
+                className="avatar large-av"
+                style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
+              >
+                {getInitials(getConvName(activeChat))}
+              </div>
+              <h4 className="context-customer-name">{getConvName(activeChat)}</h4>
+              <button
+                className="btn-outline small full-width flex-center gap-2 mt-2"
+                onClick={() =>
+                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                }
+              >
+                <User size={14} /> View Profile
+              </button>
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Active Reservations */}
+            <div className="context-section">
+              <h4 className="context-section-title">Active Reservations</h4>
+              {(() => {
+                const customerResList = allReservations.filter(
+                  (r) =>
+                    r.customerId === activeChat.customerId ||
+                    (r.customerName || r.customer) === getConvName(activeChat)
+                );
+                if (customerResList.length === 0) {
+                  return (
+                    <p className="text-secondary text-sm" style={{ margin: '0.25rem 0' }}>
+                      No active reservations
+                    </p>
+                  );
+                }
+                return customerResList.map((res, index) => {
+                  const statusColor = getResStatusColor(res.status);
+                  const dep = res.deposit || res.depositAmount;
+                  const bal = res.balance || res.balanceAmount;
+                  const depStr = dep ? (String(dep).startsWith('₱') ? dep : `₱${dep}`) : '₱0';
+                  const balStr = bal ? (String(bal).startsWith('₱') ? bal : `₱${bal}`) : '₱0';
+                  return (
+                    <div key={res.id || res.docId || `res-${index}`} className="context-res-item">
+                      <div className="context-res-name">
+                        {res.productName || res.outfit || 'Outfit Reservation'}
+                      </div>
+                      <div className="context-res-status">
+                        <span
+                          className="context-res-dot"
+                          style={{ backgroundColor: statusColor }}
+                        />
+                        <span style={{ color: statusColor, fontWeight: 600, textTransform: 'capitalize' }}>
+                          {res.status || 'Pending'}
+                        </span>
+                      </div>
+                      <div className="context-res-date">
+                        <Calendar size={12} />
+                        <span>{formatResDate(res)}</span>
+                      </div>
+                      <div className="context-res-finance">
+                        Deposit: {depStr} · Balance: {balStr}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Fit Profile */}
+            <div className="context-section">
+              <h4 className="context-section-title">Fit Profile</h4>
+              <p className="context-fit-note">
+                Body measurements available in Customer Profile
+              </p>
+              <button
+                className="btn-outline small full-width flex-center gap-2 mt-2"
+                onClick={() =>
+                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                }
+              >
+                <Ruler size={14} /> View Customer Profile
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="context-panel-empty">
+            <User size={36} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+            <p className="text-secondary text-sm text-center">
+              Select a conversation to view customer context
+            </p>
+          </div>
+        )}
       </div>
 
       {/* New Conversation Modal */}

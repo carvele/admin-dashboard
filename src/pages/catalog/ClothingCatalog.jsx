@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Box, Flame } from 'lucide-react';
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import {
   getProducts,
   updateProduct,
@@ -240,18 +241,26 @@ const ClothingCatalog = () => {
       </div>
 
       <div className="catalog-toolbar card">
-        <div className="cat-filters">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              className={`cat-btn ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-        <div className="catalog-toolbar-actions">
+        <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
+          {isAdminUnlocked && (
+            <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
+              <button
+                className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
+                onClick={() => setViewMode('active')}
+                style={{ margin: 0 }}
+              >
+                Active ({catalog.filter(c => !c.deleted).length})
+              </button>
+              <button
+                className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
+                onClick={() => setViewMode('archived')}
+                style={{ margin: 0 }}
+              >
+                <Archive size={14} /> Archived ({catalog.filter(c => c.deleted).length})
+              </button>
+            </div>
+          )}
+          
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
@@ -262,6 +271,19 @@ const ClothingCatalog = () => {
               className="input-field pl-10"
             />
           </div>
+          
+          <div className="category-filter">
+            <select
+              className="input-field"
+              value={activeCategory}
+              onChange={(e) => setActiveCategory(e.target.value)}
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="color-filter">
             <select
               className="input-field"
@@ -276,24 +298,6 @@ const ClothingCatalog = () => {
           </div>
         </div>
       </div>
-
-      {/* Active / Archived Segment Toggle */}
-      {isAdminUnlocked && (
-        <div className="archive-toggle-row">
-          <button
-            className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
-            onClick={() => setViewMode('active')}
-          >
-            Active ({catalog.filter(c => !c.deleted).length})
-          </button>
-          <button
-            className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
-            onClick={() => setViewMode('archived')}
-          >
-            <Archive size={14} /> Archived ({catalog.filter(c => c.deleted).length})
-          </button>
-        </div>
-      )}
 
       <div className="catalog-grid-display">
         {filteredCatalog.map((item) => {
@@ -354,37 +358,7 @@ const ClothingCatalog = () => {
                   </div>
                 )}
 
-                {/* Quick AR Toggle */}
-                <div className="ar-quick-toggle" style={{
-                  position: 'absolute',
-                  top: '10px',
-                  left: '10px',
-                  zIndex: 20
-                }}>
-                  <button
-                    className="icon-btn-light"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleTag(item, 'AR Try-On');
-                    }}
-                    title={(item.tags || []).includes('AR Try-On') ? "Disable AR Try-On" : "Enable AR Try-On"}
-                    style={{ 
-                      width: '32px', 
-                      height: '32px',
-                      backgroundColor: (item.tags || []).includes('AR Try-On') ? '#8B6F5C' : 'white',
-                      color: (item.tags || []).includes('AR Try-On') ? 'white' : '#8B6F5C',
-                      border: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: '50%',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Box size={16} />
-                  </button>
-                </div>
+
 
                 {item.onSale && (
                   <div className="sale-badge" style={{
@@ -572,37 +546,15 @@ const ClothingCatalog = () => {
         ) : null}
       </div>
 
-      {/* Archive Confirm Modal */}
-      {archiveConfirm && (
-        <div className="modal-overlay" onClick={() => setArchiveConfirm(null)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
-          >
-            <div className="archive-icon-wrap">
-              <Archive size={32} />
-            </div>
-            <h2>Archive Product?</h2>
-            <p className="text-secondary mt-2">
-              Move <strong>{archiveConfirm.name}</strong> to the archive? All inventory
-              variants and history will be preserved. You can restore it at any time.
-            </p>
-            <div className="modal-footer justify-center mt-4">
-              <button
-                className="btn-outline"
-                onClick={() => setArchiveConfirm(null)}
-                disabled={isArchiving}
-              >
-                Cancel
-              </button>
-              <button className="btn-archive" onClick={handleArchive} disabled={isArchiving}>
-                {isArchiving ? 'Archiving...' : 'Archive'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!archiveConfirm}
+        title="Archive Product?"
+        message={`Move ${archiveConfirm?.name} to the archive? All inventory variants and history will be preserved. You can restore it at any time.`}
+        confirmText="Archive"
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveConfirm(null)}
+        isLoading={isArchiving}
+      />
 
       {selectedProductForReviews && (
         <ProductReviewsModal 

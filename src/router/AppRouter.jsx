@@ -17,10 +17,12 @@ const Messages = lazy(() => import('../pages/messaging/Messages'));
 const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
 const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions'));
 const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
+const Reviews = lazy(() => import('../pages/catalog/Reviews'));
 const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
 const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
 const Inventory = lazy(() => import('../pages/catalog/Inventory'));
 const Analytics = lazy(() => import('../pages/admin/Analytics'));
+const Announcements = lazy(() => import('../pages/admin/Announcements'));
 const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
@@ -245,6 +247,16 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="reviews"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Reviews />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Admin / Owner only routes */}
           <Route
@@ -290,6 +302,18 @@ const AnimatedRoutes = () => {
                 <RequireAdmin>
                   <Suspense fallback={<PageLoader />}>
                     <ARAssets />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="announcements"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <Announcements />
                   </Suspense>
                 </RequireAdmin>
               </ProtectedRoute>

@@ -278,11 +278,14 @@ const Dashboard = () => {
             <CheckCircle2 size={16} /> Pipeline Healthy
           </div>
           <div className="sync-status flex-center gap-1 text-secondary text-xs">
-            <RefreshCw size={12} className="cursor-pointer" onClick={loadDashboard} style={{ cursor: 'pointer' }} /> Last synced: {lastSynced.toLocaleTimeString()}
+            Last synced: {lastSynced.toLocaleTimeString()}
           </div>
+          <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadDashboard}>
+            <RefreshCw size={14} /> Refresh
+          </button>
           {canCustomize && (
             <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
-              <Settings2 size={14} /> Customize Dashboard
+              <Settings2 size={14} /> Customize
             </button>
           )}
         </div>
@@ -586,7 +589,7 @@ const Dashboard = () => {
                   <h4>{getUserDisplayName(c)}</h4>
                   <p>{c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : c.email}</p>
                 </div>
-                <button className="icon-btn small" onClick={() => navigate('/customers')}>
+                <button className="icon-btn small" onClick={() => navigate(`/customers?id=${c.id}`)}>
                   <Users size={16} />
                 </button>
               </div>

@@ -9,6 +9,7 @@ import {
   Shirt,
   Layers,
   Grid,
+  Star,
   View,
   PackageSearch,
   BarChart3,
@@ -18,6 +19,7 @@ import {
   AlertTriangle,
   ScrollText,
   UserX,
+  Megaphone,
 } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +29,7 @@ import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log', '/account-deletion'];
+const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -96,6 +98,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const allLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', admin: false },
     { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: false },
+    { to: '/reviews', icon: Star, label: 'Review Moderation', admin: false },
     { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false, alertType: stockAlert },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
@@ -111,6 +114,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/outfits', icon: Layers, label: 'Outfit Suggestions', admin: false },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
     { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
+    { to: '/announcements', icon: Megaphone, label: 'Announcements', admin: true },
     { to: '/devices', icon: Shield, label: 'Device Management', admin: true },
     { to: '/staff', icon: Users, label: 'Team Management', admin: true },
     { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
@@ -126,8 +130,8 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
           <div>
-            <h2>JezSy Collection</h2>
-            <span className="brand-subtitle">Fashion Management</span>
+            <h2 className="font-serif">JezSy Couture</h2>
+            <span className="brand-subtitle accent-pink-text">by Ms. Jholy</span>
           </div>
           <button className="sidebar-close-btn" onClick={onClose}>
             <X size={20} />

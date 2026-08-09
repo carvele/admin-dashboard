@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { Logger } from '../utils/Logger';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -75,13 +76,13 @@ export const routeAndUploadFile = async (file, folderPath = 'catalog-assets') =>
   const isAvatar = folderPath === 'avatars';
 
   if (is3DModel) {
-    console.log(`[Storage] Routing ${file.name} to Supabase Storage (ar-models)...`);
+    Logger.info(`[Storage] Routing ${file.name} to Supabase Storage (ar-models)...`);
     return await uploadToSupabase(file, 'ar-models', folderPath);
   } else if (isAvatar) {
-    console.log(`[Storage] Routing ${file.name} to Supabase Storage (avatars)...`);
+    Logger.info(`[Storage] Routing ${file.name} to Supabase Storage (avatars)...`);
     return await uploadToSupabase(file, 'avatars', folderPath);
   } else {
-    console.log(`[Storage] Routing ${file.name} to Cloudinary...`);
+    Logger.info(`[Storage] Routing ${file.name} to Cloudinary...`);
     const { secure_url } = await uploadToCloudinary(file);
     return secure_url;
   }

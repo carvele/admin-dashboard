@@ -11,7 +11,11 @@
   --black: #000000;
 
   --text-primary: #1f1c18;
-  --text-secondary: #6b615a;
+  --text-secondary: #544b45; /* Darkened for WCAG AA */
+
+  --pink-accent: #ec4899;
+  --pink-soft: #fdf2f8;
+  --pink-border: #fbcfe8;
 
   --border-color: #efe9db;
   --focus-ring: rgba(212, 175, 55, 0.4);
@@ -60,6 +64,7 @@
   --z-popover: 500;
   --z-toast: 9999;
 
+  --font-serif: 'Playfair Display', Georgia, serif;
   font-family:
     'Outfit',
     system-ui,
@@ -141,6 +146,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4, h5, h6, .brand-logo, .font-serif {
+  font-family: var(--font-serif);
+}
+
 /* Basic Layout resets */
 a {
   text-decoration: none;
@@ -167,6 +176,16 @@ button {
 }
 
 /* Utility Classes */
+.badge-pink {
+  background-color: var(--pink-soft);
+  color: var(--pink-accent);
+  border: 1px solid var(--pink-border);
+}
+
+.accent-pink-text {
+  color: var(--pink-accent);
+}
+
 .card {
   background-color: var(--white);
   border-radius: 12px;
