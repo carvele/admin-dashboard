@@ -19,6 +19,12 @@ jest.mock('../../services/wardrobeService', () => ({
   subscribeToSuggestedOutfits: jest.fn(() => jest.fn()),
   subscribeToARSessions: jest.fn(() => jest.fn()),
 }));
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { email: 'admin@jezsy.com' },
+    role: 'owner',
+  }),
+}));
 
 // Mock Recharts to avoid ResizeObserver issues
 jest.mock('recharts', () => {

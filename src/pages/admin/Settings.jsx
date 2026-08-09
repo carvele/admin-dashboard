@@ -377,33 +377,35 @@ const Settings = () => {
                     </div>
                   </div>
                 )}
-                <button
-                  type="button"
-                  className="btn-outline border-danger text-danger"
-                  disabled={!!seedProgress}
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        'This will add demo data to your Supabase database. Continue?',
+                {process.env.NODE_ENV === 'development' && (
+                  <button
+                    type="button"
+                    className="btn-outline border-danger text-danger"
+                    disabled={!!seedProgress}
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          'This will add demo data to your Supabase database. Continue?',
+                        )
                       )
-                    )
-                      return;
-                    try {
-                      const { seedDemoData } = await import('../../dev-utils/seedDemoData');
-                      const result = await seedDemoData((p) => setSeedProgress(p));
-                      toast.success(
-                        `Seeded: ${result.customers} customers, ${result.products} products, ${result.reservations} reservations, ${result.conversations} conversations, ${result.messages} messages`,
-                      );
-                      await logAction(user, 'Seeded demo data', result);
-                    } catch (err) {
-                      toast.error('Seeding failed: ' + err.message);
-                    } finally {
-                      setSeedProgress(null);
-                    }
-                  }}
-                >
-                  {seedProgress ? 'Seeding in progress...' : '🌱 Seed Demo Data'}
-                </button>
+                        return;
+                      try {
+                        const { seedDemoData } = await import('../../dev-utils/seedDemoData');
+                        const result = await seedDemoData((p) => setSeedProgress(p));
+                        toast.success(
+                          `Seeded: ${result.customers} customers, ${result.products} products, ${result.reservations} reservations, ${result.conversations} conversations, ${result.messages} messages`,
+                        );
+                        await logAction(user, 'Seeded demo data', result);
+                      } catch (err) {
+                        toast.error('Seeding failed: ' + err.message);
+                      } finally {
+                        setSeedProgress(null);
+                      }
+                    }}
+                  >
+                    {seedProgress ? 'Seeding in progress...' : '🌱 Seed Demo Data'}
+                  </button>
+                )}
               </div>
             </div>
           )}

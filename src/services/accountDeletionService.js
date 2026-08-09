@@ -1,0 +1,113 @@
+/**
+ * accountDeletionService.js
+ *
+ * Processing side of public.account_deletion_requests. The mobile app files
+ * requests (see jezsy-mobile-app/app/profile/account-settings.tsx); this is
+ * the staff-facing queue that acts on them.
+ *
+ * Actual erasure runs server-side in two privileged steps neither of which
+ * can happen from this client:
+ *  1. public.process_account_deletion(_request_id) -- a SECURITY DEFINER RPC
+ *     that scrubs/erases/anonymizes the public schema (blocked if the
+ *     customer still has an open reservation or in-flight payment).
+ *  2. auth.admin.deleteUser -- revokes the login itself. Requires the
+ *     service-role key, so it runs inside the process-account-deletion Edge
+ *     Function, never here.
+ * This file only ever calls the Edge Function for the mutation; it reads
+ * directly from Supabase for the queue list.
+ */
+
+import { supabase } from '../lib/supabaseClient';
+import { toCamel } from '../lib/supabaseService';
+
+/** Pending requests, joined to the customer's current (pre-scrub) profile. */
+export const getPendingDeletionRequests = async () => {
+  const { data, error } = await supabase
+    .from('account_deletion_requests')
+    .select(`
+      id,
+      user_id,
+      reason,
+      status,
+      created_at,
+      profiles (
+        first_name,
+        last_name,
+        email,
+        phone
+      )
+    `)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    ...toCamel(row),
+    docId: row.id,
+    customerName:
+      [row.profiles?.first_name, row.profiles?.last_name].filter(Boolean).join(' ') || 'Unknown customer',
+    customerEmail: row.profiles?.email ?? null,
+    customerPhone: row.profiles?.phone ?? null,
+  }));
+};
+
+/**
+ * Any reservation/payment obligations that would currently block processing.
+ * Purely informational (a preview before staff commit) -- the RPC re-checks
+ * the same condition itself and is the actual enforcement point, since this
+ * can go stale between the preview and the click.
+ */
+export const getBlockingObligations = async (userId) => {
+  const [{ data: reservations, error: resErr }, { data: payments, error: payErr }] = await Promise.all([
+    supabase
+      .from('reservations')
+      .select('id, display_id, status')
+      .eq('customer_id', userId)
+      .not('status', 'in', '("Completed","Cancelled")'),
+    supabase
+      .from('payments')
+      .select('id, status')
+      .eq('user_id', userId)
+      .in('status', ['awaiting_payment', 'processing']),
+  ]);
+
+  if (resErr) throw resErr;
+  if (payErr) throw payErr;
+
+  return {
+    reservations: reservations || [],
+    payments: payments || [],
+  };
+};
+
+/**
+ * Calls the process-account-deletion Edge Function, which runs the DB-side
+ * scrub then revokes the login. Returns { blocked: true, ... } if the RPC
+ * found an open obligation instead of processing.
+ */
+export const processAccountDeletion = async (requestId) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error('Your session has expired. Please log in again.');
+
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-account-deletion`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ request_id: requestId }),
+    },
+  );
+
+  const body = await res.json().catch(() => ({}));
+
+  if (!res.ok && res.status !== 207) {
+    throw new Error(body?.error || 'Failed to process this deletion request.');
+  }
+
+  return body;
+};

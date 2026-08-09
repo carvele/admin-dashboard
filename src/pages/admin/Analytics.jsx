@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -139,24 +139,33 @@ const Analytics = () => {
   };
 
   // Filter Data
-  const filteredReservations = reservations.filter(r => isInRange(parseResDate(r)));
-  const filteredCustomers = customers.filter(c => isInRange(parseResDate(c)));
+  const filteredReservations = useMemo(
+    () => reservations.filter(r => isInRange(parseResDate(r))),
+    [reservations, startDate, endDate]
+  );
+  const filteredCustomers = useMemo(
+    () => customers.filter(c => isInRange(parseResDate(c))),
+    [customers, startDate, endDate]
+  );
   const currentTotalCustomers = customers.length; // Absolute total
 
   // Compute Revenue and Growth
-  let totalRev = 0;
-  const completedOrConfirmed = filteredReservations.filter(
-    (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
-  );
-  completedOrConfirmed.forEach((r) => {
-    const outfitName = r.productName || r.outfit;
-    const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-    if (item) {
-      totalRev += Number(item.price) || 0;
-    } else {
-      totalRev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
-    }
-  });
+  const { totalRev, completedOrConfirmed } = useMemo(() => {
+    let rev = 0;
+    const list = filteredReservations.filter(
+      (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
+    );
+    list.forEach((r) => {
+      const outfitName = r.productName || r.outfit;
+      const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
+      if (item) {
+        rev += Number(item.price) || 0;
+      } else {
+        rev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
+      }
+    });
+    return { totalRev: rev, completedOrConfirmed: list };
+  }, [filteredReservations, catalog]);
 
   const getGrowth = (list, dateField = null) => {
     const start = new Date(startDate);
@@ -178,39 +187,45 @@ const Analytics = () => {
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
   };
 
-  const revDelta = getGrowth(completedOrConfirmed);
-  const custDelta = getGrowth(customers);
-  const resDelta = getGrowth(reservations);
+  const revDelta = useMemo(() => getGrowth(completedOrConfirmed), [completedOrConfirmed, startDate, endDate]);
+  const custDelta = useMemo(() => getGrowth(customers), [customers, startDate, endDate]);
+  const resDelta = useMemo(() => getGrowth(reservations), [reservations, startDate, endDate]);
 
   // New Visualization: Revenue by Category
-  const categoryRev = {};
-  completedOrConfirmed.forEach(r => {
-    const outfitName = r.productName || r.outfit;
-    const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
-    const cat = item?.category || 'Uncategorized';
-    const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
-    categoryRev[cat] = (categoryRev[cat] || 0) + val;
-  });
+  const categoryShareData = useMemo(() => {
+    const categoryRev = {};
+    completedOrConfirmed.forEach(r => {
+      const outfitName = r.productName || r.outfit;
+      const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
+      const cat = item?.category || 'Uncategorized';
+      const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
+      categoryRev[cat] = (categoryRev[cat] || 0) + val;
+    });
 
-  const categoryShareData = Object.entries(categoryRev)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a,b) => b.value - a.value);
+    return Object.entries(categoryRev)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a,b) => b.value - a.value);
+  }, [completedOrConfirmed, catalog]);
 
   const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
 
   // Status Funnel
-  const statusCounts = {};
-  filteredReservations.forEach(r => {
-    statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-  });
-  const funnelData = Object.entries(statusCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a,b) => b.count - a.count);
+  const funnelData = useMemo(() => {
+    const statusCounts = {};
+    filteredReservations.forEach(r => {
+      statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+    });
+    return Object.entries(statusCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a,b) => b.count - a.count);
+  }, [filteredReservations]);
 
   // Avg Rating
-  const avgRating = feedback.length > 0 
-    ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
-    : 0;
+  const avgRating = useMemo(() => {
+    return feedback.length > 0 
+      ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
+      : 0;
+  }, [feedback]);
 
   // Inventory Health - Active items only
   const activeCatalog = catalog.filter(p => p.deleted !== true);

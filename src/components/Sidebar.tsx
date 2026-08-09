@@ -17,6 +17,7 @@ import {
   Shield,
   AlertTriangle,
   ScrollText,
+  UserX,
 } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
@@ -26,7 +27,7 @@ import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log'];
+const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log', '/account-deletion'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -113,6 +114,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/devices', icon: Shield, label: 'Device Management', admin: true },
     { to: '/staff', icon: Users, label: 'Team Management', admin: true },
     { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
+    { to: '/account-deletion', icon: UserX, label: 'Account Deletion Requests', admin: true },
     { to: '/settings', icon: Settings, label: 'System Settings', admin: true },
   ];
 

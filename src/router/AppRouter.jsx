@@ -26,6 +26,7 @@ const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
 const ActivityLog = lazy(() => import('../pages/admin/ActivityLog'));
+const AccountDeletionRequests = lazy(() => import('../pages/admin/AccountDeletionRequests'));
 
 // Suspense fallback
 const PageLoader = () => (
@@ -361,6 +362,20 @@ const AnimatedRoutes = () => {
                 <RequireAdmin>
                   <Suspense fallback={<PageLoader />}>
                     <ActivityLog />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          {/* Irreversible action (erases data + revokes login) -- owner/admin
+              only, same tier as staff management and system settings. */}
+          <Route
+            path="account-deletion"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <AccountDeletionRequests />
                   </Suspense>
                 </RequireAdmin>
               </ProtectedRoute>

@@ -731,6 +731,7 @@ const Messages = () => {
               <button
                 type="button"
                 className="icon-btn"
+                aria-label="Attach file"
                 onClick={() => setShowAttachMenu(!showAttachMenu)}
               >
                 <Paperclip size={20} />
@@ -763,7 +764,7 @@ const Messages = () => {
               onChange={(e) => setNewMessage(e.target.value)}
             />
 
-            <button type="submit" className="send-btn" disabled={!newMessage.trim()}>
+            <button type="submit" className="send-btn" aria-label="Send message" disabled={!newMessage.trim()}>
               <Send size={18} />
             </button>
           </form>
