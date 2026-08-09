@@ -118,13 +118,11 @@ const Reservations = () => {
     setLoading(true);
     // Real-time Reservations Listener
     const unsubR = subscribeToReservations((data) => {
-      console.log('DEBUG: REAL-TIME RESERVATIONS:', data);
-      
       // Auto-healing for broken data (Names or Product Names)
       data.forEach(res => {
         const cName = res.customerName || res.customer || '';
         const pName = res.productName || res.outfit || '';
-        const isId = (str) => /^[a-zA-Z0-9]{15,30}$/.test(str);
+        const isId = (str) => /^[a-zA-Z0-9-]{15,40}$/.test(str);
         
         if (isId(cName) || isId(pName) || !cName || !pName) {
           repairReservationData(res);

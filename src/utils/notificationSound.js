@@ -19,7 +19,7 @@ export const playReservationAlert = () => {
   try {
     initAudio();
     if (audioContext.state === 'suspended') {
-      audioContext.resume();
+      audioContext.resume().catch(() => {});
     }
     
     const osc1 = audioContext.createOscillator();
@@ -45,6 +45,12 @@ export const playReservationAlert = () => {
     
     osc1.stop(audioContext.currentTime + 1.0);
     osc2.stop(audioContext.currentTime + 1.15);
+
+    osc2.onended = () => {
+      try {
+        gainNode.disconnect();
+      } catch (e) {}
+    };
   } catch (err) {
     console.warn('Audio playback failed:', err);
   }
@@ -57,7 +63,7 @@ export const playMessageAlert = () => {
   try {
     initAudio();
     if (audioContext.state === 'suspended') {
-      audioContext.resume();
+      audioContext.resume().catch(() => {});
     }
     
     const osc = audioContext.createOscillator();
@@ -76,6 +82,12 @@ export const playMessageAlert = () => {
 
     osc.start(audioContext.currentTime);
     osc.stop(audioContext.currentTime + 0.2);
+
+    osc.onended = () => {
+      try {
+        gainNode.disconnect();
+      } catch (e) {}
+    };
   } catch (err) {
     console.warn('Audio playback failed:', err);
   }

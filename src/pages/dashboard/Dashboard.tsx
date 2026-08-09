@@ -82,10 +82,28 @@ const Dashboard = () => {
   const { user } = useAuth() as { user: any };
   const canCustomize = can(user?.role, 'customize_dashboard');
   
+  const loadDashboard = React.useCallback(async () => {
+    try {
+      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
+        getReservations(100),
+        getCustomers(100),
+        getInventory(100),
+        getARSessions(),
+        getSuggestedOutfits(),
+      ]);
+      setReservations(resData || []);
+      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
+      setInventory(invData || []);
+      setArSessionCount(arCount?.length || 0);
+      setSuggestedOutfits(outfitsData || []);
+      setLastSynced(new Date());
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+    }
+  }, []);
+
   // Initialize realtime sync for global alerts and auto-refresh
-  useRealtimeSync(() => {
-    loadDashboard();
-  });
+  useRealtimeSync(loadDashboard);
 
   const [reservations, setReservations] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -107,25 +125,7 @@ const Dashboard = () => {
     localStorage.setItem('dashboard_widget_prefs', JSON.stringify(nextPrefs));
   };
 
-  const loadDashboard = async () => {
-    try {
-      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
-        getReservations(100),
-        getCustomers(100),
-        getInventory(100),
-        getARSessions(),
-        getSuggestedOutfits(),
-      ]);
-      setReservations(resData || []);
-      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
-      setInventory(invData || []);
-      setArSessionCount(arCount?.length || 0);
-      setSuggestedOutfits(outfitsData || []);
-      setLastSynced(new Date());
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    }
-  };
+
 
   React.useEffect(() => {
     // Non-inventory data: load once, poll every 5 minutes

@@ -400,10 +400,7 @@ const ProductForm = ({ readOnly = false }) => {
           const url = await routeAndUploadFile(selectedFiles[i]);
           if (url) uploadedImages.push(url);
         }
-      }
-
-      console.log('[DEBUG] All images handled. Preparing payload...');
-      const finalImages = [...formData.images, ...uploadedImages];
+      }      const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
         name: sanitizeText(formData.name),
@@ -440,7 +437,6 @@ const ProductForm = ({ readOnly = false }) => {
       };
 
       if (isEditing) {
-        console.log('[DEBUG] Updating product in Firestore...', { id, payload });
         await updateProduct(id, payload);
 
         // Fetch current inventory and check if any new sizes were added
@@ -467,10 +463,9 @@ const ProductForm = ({ readOnly = false }) => {
               }),
             );
             await Promise.all(inventoryPromises);
-            console.log('[DEBUG] Missing inventory items created successfully');
           }
         } catch(invErr) {
-          console.error('[DEBUG] Checking/Adding missing sizes failed:', invErr);
+          console.error('Checking/Adding missing sizes failed:', invErr);
         }
 
         await logAction(user, 'Updated product details', {
@@ -479,7 +474,6 @@ const ProductForm = ({ readOnly = false }) => {
           productName: payload.name,
         });
 
-        console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
         payload.created_by = user?.id || null;
@@ -488,9 +482,7 @@ const ProductForm = ({ readOnly = false }) => {
         payload.visibility = 'draft';
         payload.tags = ['New Arrival'];
 
-        console.log('[DEBUG] Creating product in Firestore...', payload);
         const newDocId = await createProduct(payload);
-        console.log('[DEBUG] Firestore create SUCCESS. Doc ID:', newDocId);
 
         // Init inventory per size in parallel
         Logger.info(`Initializing inventory for new product ${newDocId}...`);
@@ -507,7 +499,6 @@ const ProductForm = ({ readOnly = false }) => {
           }),
         );
         await Promise.all(inventoryPromises);
-        console.log('[DEBUG] Inventory items created successfully');
 
         await logAction(user, 'Created new product', {
           targetType: 'product',
