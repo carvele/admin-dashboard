@@ -255,11 +255,12 @@ const Messages = () => {
 
     const convKey = activeChat.customId || activeChat.id;
     const nowIso = new Date().toISOString();
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
     try {
       await sendMessage({
         conversationId: convKey,
         senderId: user?.id ?? null,
-        senderName: user?.name ?? user?.email ?? 'Staff',
+        senderName: senderDisplayName,
         text: newMessage,
       });
       await updateConversation(activeChat.docId, {
@@ -283,13 +284,14 @@ const Messages = () => {
 
     const convKey = activeChat.customId || activeChat.id;
     const nowIso = new Date().toISOString();
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
 
     try {
       const imageUrl = await uploadChatImage(file, convKey);
       await sendMessage({
         conversationId: convKey,
         senderId: user?.id ?? null,
-        senderName: user?.name ?? user?.email ?? 'Staff',
+        senderName: senderDisplayName,
         text: '',
         imageUrl,
       });
@@ -1164,16 +1166,8 @@ const Messages = () => {
             <div className="context-section">
               <h4 className="context-section-title">Fit Profile</h4>
               <p className="context-fit-note">
-                Body measurements available in Customer Profile
+                Customer body measurements and fit recommendations are accessible via the main profile view.
               </p>
-              <button
-                className="btn-outline small full-width flex-center gap-2 mt-2"
-                onClick={() =>
-                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
-                }
-              >
-                <Ruler size={14} /> View Customer Profile
-              </button>
             </div>
           </div>
         ) : (
