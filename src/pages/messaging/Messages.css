@@ -69,6 +69,10 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--charcoal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
 }
 .conversation-item.unread h4 {
   font-weight: 700;
@@ -77,6 +81,25 @@
 .time {
   font-size: 0.75rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chat-date-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1.25rem 0 0.75rem 0;
+}
+.chat-date-divider span {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.75rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .conv-preview {

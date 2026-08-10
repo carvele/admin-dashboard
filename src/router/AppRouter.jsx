@@ -12,10 +12,8 @@ const SetPassword = lazy(() => import('../pages/auth/SetPassword'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazy(() => import('../pages/customers/Reservations'));
 const Customers = lazy(() => import('../pages/customers/Customers'));
-const Feedbacks = lazy(() => import('../pages/customers/Feedbacks'));
 const Messages = lazy(() => import('../pages/messaging/Messages'));
 const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
-const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions'));
 const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
 const Reviews = lazy(() => import('../pages/catalog/Reviews'));
 const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
@@ -23,7 +21,6 @@ const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
 const Inventory = lazy(() => import('../pages/catalog/Inventory'));
 const Analytics = lazy(() => import('../pages/admin/Analytics'));
 const Announcements = lazy(() => import('../pages/admin/Announcements'));
-const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
@@ -187,16 +184,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="feedbacks"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <Feedbacks />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="messages"
             element={
@@ -217,16 +205,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="outfits"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <OutfitSuggestions />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="inventory"
             element={
@@ -331,18 +310,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="devices"
-            element={
-              <ProtectedRoute>
-                <RequireAdmin>
-                  <Suspense fallback={<PageLoader />}>
-                    <DeviceManagement />
-                  </Suspense>
-                </RequireAdmin>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="staff"
             element={

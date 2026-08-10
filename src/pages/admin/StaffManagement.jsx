@@ -101,7 +101,7 @@ const StaffManagement = () => {
   const archivedStaff = staff.filter((s) => s.deleted === true);
 
   const getDisplayName = (m) =>
-    [m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown';
+    m ? ([m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown') : 'Unknown';
   const getDisplayRole = (role) =>
     role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff';
 
@@ -574,7 +574,7 @@ const StaffManagement = () => {
       {/* ── Create Staff Modal ── */}
       {isCreateModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: 400 }}>
+          <div className="modal-content" style={{ maxWidth: 540 }}>
             <div className="modal-header">
               <h2>Invite Staff Member</h2>
               <button className="close-btn" onClick={() => setIsCreateModalOpen(false)}>
@@ -603,7 +603,7 @@ const StaffManagement = () => {
                   <option value="admin">Admin (Full Access)</option>
                 </select>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
                 We'll email a verification link to this address. Once they click it and set a
                 password, their account activates and they'll appear in Team Management.
               </p>
@@ -621,7 +621,7 @@ const StaffManagement = () => {
       {/* ── Reactivate Modal ── */}
       {reactivateMember && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: 420 }}>
+          <div className="modal-content" style={{ maxWidth: 540 }}>
             <div className="modal-header">
               <h2>Reactivate Staff Account</h2>
               <button

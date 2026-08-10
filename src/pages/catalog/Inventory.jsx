@@ -1004,7 +1004,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
               <h2>Restock Item</h2>
@@ -1062,7 +1062,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 420 }}
+            style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <h2>
@@ -1153,7 +1153,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <div className="flex-center gap-2">

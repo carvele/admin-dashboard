@@ -5,9 +5,7 @@ import {
   CalendarCheck,
   Users,
   MessageSquare,
-  MessageSquarePlus,
   Shirt,
-  Layers,
   Grid,
   Star,
   View,
@@ -15,7 +13,6 @@ import {
   BarChart3,
   Settings,
   X,
-  Shield,
   AlertTriangle,
   ScrollText,
   UserX,
@@ -29,7 +26,7 @@ import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/devices', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements'];
+const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -102,7 +99,6 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false, alertType: stockAlert },
     { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
-    { to: '/feedbacks', icon: MessageSquarePlus, label: 'Feedback & Suggestions', admin: false },
     {
       to: '/messages',
       icon: MessageSquare,
@@ -111,11 +107,9 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       badge: unreadMessages > 0 ? unreadMessages : null,
     },
     { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
-    { to: '/outfits', icon: Layers, label: 'Outfit Suggestions', admin: false },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
     { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
     { to: '/announcements', icon: Megaphone, label: 'Announcements', admin: true },
-    { to: '/devices', icon: Shield, label: 'Device Management', admin: true },
     { to: '/staff', icon: Users, label: 'Team Management', admin: true },
     { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
     { to: '/account-deletion', icon: UserX, label: 'Account Deletion Requests', admin: true },

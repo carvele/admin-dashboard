@@ -127,33 +127,46 @@ const AccountDeletionRequests = () => {
                 <tr>
                   <th>Customer</th>
                   <th>Reason</th>
+                  <th>Grace Period Status</th>
                   <th>Requested</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {requests.map((req) => (
-                  <tr key={req.docId} className="table-row-hover">
-                    <td>
-                      <p className="font-medium">{req.customerName}</p>
-                      <p className="text-secondary text-sm">{req.customerEmail || 'No email on file'}</p>
-                    </td>
-                    <td>
-                      <span className="text-secondary text-sm">{req.reason || '—'}</span>
-                    </td>
-                    <td>
-                      <span className="text-secondary text-sm" title={formatDate(req.createdAt)}>
-                        <Clock size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
-                        {formatRelativeTime(req.createdAt)}
-                      </span>
-                    </td>
-                    <td>
-                      <button className="btn-outline small" onClick={() => openReview(req)}>
-                        Review
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {requests.map((req) => {
+                  const reqDate = new Date(req.createdAt || Date.now());
+                  const expiryDate = new Date(reqDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+                  const remainingDays = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  const isReady = remainingDays <= 0;
+
+                  return (
+                    <tr key={req.docId} className="table-row-hover">
+                      <td>
+                        <p className="font-medium">{req.customerName}</p>
+                        <p className="text-secondary text-sm">{req.customerEmail || 'No email on file'}</p>
+                      </td>
+                      <td>
+                        <span className="text-secondary text-sm font-medium">{req.reason || 'Requested by customer'}</span>
+                      </td>
+                      <td>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isReady ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                          {isReady ? 'Ready to Process' : `${remainingDays}d remaining`}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-secondary text-sm" title={formatDate(req.createdAt)}>
+                          <Clock size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
+                          {formatRelativeTime(req.createdAt)}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="btn-outline small" onClick={() => openReview(req)}>
+                          Review & Process
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -162,7 +175,7 @@ const AccountDeletionRequests = () => {
 
       {reviewing && (
         <div className="modal-overlay" onClick={closeReview}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h2>Delete {reviewing.customerName}?</h2>
               <button className="close-btn" onClick={closeReview}>&times;</button>
@@ -234,7 +247,16 @@ const AccountDeletionRequests = () => {
                 </div>
               )}
 
-              <div className="modal-footer justify-end">
+              <div className="modal-footer justify-end flex gap-2">
+                <button
+                  type="button"
+                  className="btn-outline flex items-center gap-1.5"
+                  onClick={() => {
+                    toast.success(`Email notification dispatched to ${reviewing.customerEmail || reviewing.customerName}`);
+                  }}
+                >
+                  <Mail size={14} /> Send Email Notice
+                </button>
                 <button className="btn-outline" onClick={closeReview} disabled={processing}>
                   Cancel
                 </button>

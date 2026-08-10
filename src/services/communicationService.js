@@ -57,26 +57,30 @@ export const uploadChatImage = async (file, conversationId) => {
  * @param {string} emoji - Emoji character to store
  */
 export const addReaction = async (messageDocId, userId, emoji) => {
-  // Fetch existing reactions
-  const { data: msg } = await supabase
-    .from('messages')
-    .select('id') // we can't easily merge jsonb on client, just update full reactions
-    .eq('id', messageDocId)
-    .maybeSingle();
-  if (!msg) return;
+  try {
+    const { data: msg } = await supabase
+      .from('messages')
+      .select('reactions')
+      .eq('id', messageDocId)
+      .maybeSingle();
 
-  // Use Postgres jsonb merge via RPC or direct update with merged object
-  // For simplicity, we use a raw update with the jsonb || operator via rpc
-  await supabase.rpc('merge_message_reaction', {
-    p_message_id: messageDocId,
-    p_user_id: userId,
-    p_emoji: emoji,
-  }).then(({ error }) => {
-    if (error) {
-      // Fallback: fetch, merge, update
-      console.warn('[communicationService] RPC merge_message_reaction not available, falling back');
+    const currentReactions = msg?.reactions || {};
+    const updatedReactions = { ...currentReactions };
+
+    // Toggle reaction: if already set to this emoji, remove it
+    if (currentReactions[userId] === emoji) {
+      delete updatedReactions[userId];
+    } else {
+      updatedReactions[userId] = emoji;
     }
-  });
+
+    await supabase
+      .from('messages')
+      .update({ reactions: updatedReactions })
+      .eq('id', messageDocId);
+  } catch (err) {
+    console.error('Error updating reaction:', err);
+  }
 };
 
 // --- Notifications ---

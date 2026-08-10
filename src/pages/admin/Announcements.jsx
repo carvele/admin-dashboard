@@ -157,30 +157,32 @@ const Announcements = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h2>New Broadcast</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>×</button>
+              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+                &times;
+              </button>
             </div>
-            
-            <form onSubmit={handleSubmit}>
+
+            <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-group">
-                <label>Title *</label>
+                <label className="label">Title *</label>
                 <input
                   type="text"
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
-                  className="form-input"
+                  className="input-field"
                   placeholder="E.g., Summer Sale is Live!"
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label>Type</label>
+                <label className="label">Type</label>
                 <select
                   name="type"
                   value={formData.type}
                   onChange={handleInputChange}
-                  className="form-select"
+                  className="input-field"
                 >
                   <option value="promo">Promotion</option>
                   <option value="system">System / Alert</option>
@@ -188,33 +190,34 @@ const Announcements = () => {
               </div>
 
               <div className="form-group">
-                <label>Message *</label>
+                <label className="label">Message *</label>
                 <textarea
                   name="body"
                   value={formData.body}
                   onChange={handleInputChange}
-                  className="form-textarea"
+                  className="input-field"
+                  style={{ minHeight: 110, resize: 'vertical' }}
                   placeholder="Type the announcement message..."
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label>Expires At (Optional)</label>
+                <label className="label">Expires At (Optional)</label>
                 <input
                   type="datetime-local"
                   name="expires_at"
                   value={formData.expires_at}
                   onChange={handleInputChange}
-                  className="form-input"
+                  className="input-field"
                 />
               </div>
 
-              <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setIsModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="submit-btn">
+                <button type="submit" className="btn-primary">
                   Broadcast Now
                 </button>
               </div>

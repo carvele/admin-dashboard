@@ -29,7 +29,7 @@ import {
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
-import { getAvatarColor, getInitials } from '../../utils/helpers';
+import { getAvatarColor, getInitials, formatSmartDateTime } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -87,6 +87,7 @@ const Messages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
@@ -445,7 +446,7 @@ const Messages = () => {
         })()
       : null;
     const msgTime = msg.createdAt
-      ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? formatSmartDateTime(msg.createdAt, { short: true })
       : '';
 
     return (
@@ -655,7 +656,7 @@ const Messages = () => {
                     <h4>{getConvName(conv)}</h4>
                     <span className="time">
                       {conv.lastMessageTime
-                        ? new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        ? formatSmartDateTime(conv.lastMessageTime, { short: true })
                         : ''}
                     </span>
                   </div>
@@ -740,7 +741,23 @@ const Messages = () => {
             </div>
 
             <div className="chat-history">
-              {activeMessages.map((msg, index) => renderBubble(msg, index))}
+              {activeMessages.map((msg, index) => {
+                const msgDate = new Date(msg.createdAt || Date.now());
+                const prevMsg = activeMessages[index - 1];
+                const prevDate = prevMsg ? new Date(prevMsg.createdAt || Date.now()) : null;
+                const showDivider = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+
+                return (
+                  <React.Fragment key={msg.id || msg.docId || `msg-${index}`}>
+                    {showDivider && (
+                      <div className="chat-date-divider">
+                        <span>{formatSmartDateTime(msgDate).split(' ')[0]}</span>
+                      </div>
+                    )}
+                    {renderBubble(msg, index)}
+                  </React.Fragment>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           </>
@@ -816,6 +833,7 @@ const Messages = () => {
                 onClick={() => {
                   setShowAttachMenu(!showAttachMenu);
                   setShowQuickReplies(false);
+                  setShowEmojiPicker(false);
                 }}
               >
                 <Paperclip size={20} />
@@ -823,7 +841,6 @@ const Messages = () => {
 
               {showAttachMenu && (
                 <div className="attach-menu card">
-
                   <button
                     type="button"
                     className="attach-item"
@@ -834,6 +851,56 @@ const Messages = () => {
                   >
                     <ImageIcon size={16} /> Send Image
                   </button>
+                </div>
+              )}
+            </div>
+
+            <div className="relative" style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Insert Emoji"
+                onClick={() => {
+                  setShowEmojiPicker(!showEmojiPicker);
+                  setShowAttachMenu(false);
+                  setShowQuickReplies(false);
+                }}
+                title="Insert Emoji"
+                style={{ fontSize: '1.1rem' }}
+              >
+                😊
+              </button>
+
+              {showEmojiPicker && (
+                <div
+                  className="card p-2 flex gap-2"
+                  style={{
+                    position: 'absolute',
+                    bottom: '45px',
+                    left: 0,
+                    zIndex: 100,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    maxWidth: '220px',
+                    background: '#fff',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                  }}
+                >
+                  {['😊', '❤️', '👍', '✨', '👗', '🎉', '🙏', '🔥', '😂', '😮', '😢', '😍'].map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', padding: '4px' }}
+                      onClick={() => {
+                        setNewMessage((prev) => prev + e);
+                        setShowEmojiPicker(false);
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

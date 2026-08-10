@@ -444,7 +444,7 @@ const Customers = () => {
                 <thead>
                   <tr>
                     <th>Customer</th>
-                    <th>Last Activity</th>
+                    <th title="Last time customer opened or engaged with the mobile app">Last Seen</th>
                     <th>Engagement</th>
                     <th>Lifetime Value</th>
                     <th>Status</th>
@@ -479,15 +479,15 @@ const Customers = () => {
                             )}
                             <span
                               className={`online-dot ${
-                                cust.lastActivity &&
-                                Date.now() - new Date(cust.lastActivity).getTime() < THIRTY_DAYS
+                                (cust.lastOnline || cust.lastActivity) &&
+                                Date.now() - new Date(cust.lastOnline || cust.lastActivity).getTime() < 5 * 60 * 1000
                                   ? 'online'
                                   : 'offline'
                               }`}
                               title={
-                                cust.lastActivity
-                                  ? `Last activity ${formatRelativeTime(cust.lastActivity)}`
-                                  : 'No activity yet'
+                                (cust.lastOnline || cust.lastActivity)
+                                  ? `Last seen ${formatRelativeTime(cust.lastOnline || cust.lastActivity)}`
+                                  : 'Offline'
                               }
                             ></span>
                           </div>
@@ -509,7 +509,7 @@ const Customers = () => {
                       <td>
                         <div className="last-online-cell">
                           <span className="last-online-text">
-                            {cust.lastActivity ? formatRelativeTime(cust.lastActivity) : '—'}
+                            {(cust.lastOnline || cust.lastActivity) ? formatRelativeTime(cust.lastOnline || cust.lastActivity) : '—'}
                           </span>
                         </div>
                       </td>
@@ -550,11 +550,13 @@ const Customers = () => {
                           </button>
                           {can(user?.role, 'delete_customer') && (
                             <button
-                              className="icon-btn-small text-danger"
-                              title="Delete"
-                              onClick={() => setDeleteConfirm(cust)}
+                              className="btn-outline small text-danger"
+                              title="Request Account Deactivation"
+                              onClick={() => {
+                                setDeleteConfirm(cust);
+                              }}
                             >
-                              <Trash2 size={15} />
+                              Deactivate
                             </button>
                           )}
                         </div>
@@ -1034,7 +1036,7 @@ const Customers = () => {
       {/* ===== SEND MESSAGE MODAL ===== */}
       {msgModal && (
         <div className="modal-overlay" onClick={() => setMsgModal(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 450 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
             <div className="modal-header">
               <h2>Message {getUserDisplayName(msgModal)}</h2>
               <button className="close-btn" onClick={() => setMsgModal(null)}>&times;</button>
