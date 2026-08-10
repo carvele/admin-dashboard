@@ -1248,6 +1248,12 @@ const Reservations = () => {
                       {viewModal.paymentType && (
                         <span className="text-secondary text-sm">({viewModal.paymentType})</span>
                       )}
+                      {viewModal.paymentMethod && (
+                        <span className="text-secondary text-sm"> · Method: <strong>{viewModal.paymentMethod}</strong></span>
+                      )}
+                      {viewModal.providerRef && (
+                        <span className="text-secondary text-sm"> · Ref: <code className="text-xs">{viewModal.providerRef}</code></span>
+                      )}
                     </div>
                   </div>
                   <div className="payment-action-buttons">

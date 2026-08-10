@@ -73,12 +73,72 @@ export const subscribeToPoseGuides = (callback) =>
   subscribeToCollection('pose_guides', callback);
 
 export const createPoseGuide = (data) => {
-  // Use supabaseService directly or upsert since id is custom
-  const { id, name, category } = data;
+  const {
+    id,
+    name,
+    category,
+    image_url = null,
+    description = null,
+    occasion = null,
+    style_tags = [],
+    difficulty = 'easy',
+    is_featured = false,
+    base_pose_type = 'front',
+  } = data;
   return import('../lib/supabaseService').then(({ upsertDocument }) => 
-    upsertDocument('pose_guides', { id, name, category })
+    upsertDocument('pose_guides', {
+      id,
+      name,
+      category,
+      image_url,
+      description,
+      occasion,
+      style_tags,
+      difficulty,
+      is_featured,
+      base_pose_type,
+      deleted: false,
+    })
   );
 };
 
+export const updatePoseGuide = (docId, updates) =>
+  updateDocument('pose_guides', docId, updates);
+
 export const deletePoseGuide = (docId) =>
   deleteDocument('pose_guides', docId);
+
+// ── Pose Guide Products ──────────────────────────────────────
+
+export const getPoseGuideProducts = async (poseId) => {
+  const { supabase } = await import('../lib/supabaseService');
+  const { data, error } = await supabase
+    .from('pose_guide_products')
+    .select('*, product:products(*)')
+    .eq('pose_guide_id', poseId);
+  if (error) {
+    console.error('Error fetching pose_guide_products:', error);
+    return [];
+  }
+  return data || [];
+};
+
+export const linkProductToPose = async (poseId, productId) => {
+  const { supabase } = await import('../lib/supabaseService');
+  const { data, error } = await supabase
+    .from('pose_guide_products')
+    .upsert({ pose_guide_id: poseId, product_id: productId }, { onConflict: 'pose_guide_id,product_id' });
+  if (error) throw error;
+  return data;
+};
+
+export const unlinkProductFromPose = async (poseId, productId) => {
+  const { supabase } = await import('../lib/supabaseService');
+  const { error } = await supabase
+    .from('pose_guide_products')
+    .delete()
+    .eq('pose_guide_id', poseId)
+    .eq('product_id', productId);
+  if (error) throw error;
+};
+
