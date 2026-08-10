@@ -18,7 +18,9 @@ import {
   Zap,
   Ruler,
   ShoppingBag,
+  Bell,
 } from 'lucide-react';
+import SendNotificationModal from '../../components/SendNotificationModal';
 import {
   subscribeToConversations,
   subscribeToMessages,
@@ -105,6 +107,7 @@ const Messages = () => {
   );
 
   const [showNewConvModal, setShowNewConvModal] = useState(false);
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [allCustomers, setAllCustomers] = useState([]);
 
   const [custSearchInput, setCustSearchInput] = useState('');
@@ -1061,6 +1064,12 @@ const Messages = () => {
               >
                 <User size={14} /> View Profile
               </button>
+              <button
+                className="btn-outline small full-width flex-center gap-2 mt-2 text-gold"
+                onClick={() => setShowNotifyModal(true)}
+              >
+                <Bell size={14} /> Send Push Notification
+              </button>
             </div>
 
             <hr className="context-divider" />
@@ -1272,6 +1281,16 @@ const Messages = () => {
             </div>
           </div>
         </div>
+      )}
+      {showNotifyModal && activeChat && (
+        <SendNotificationModal
+          customer={{
+            id: activeChat.customerId,
+            name: getConvName(activeChat),
+            email: activeChat.customerEmail,
+          }}
+          onClose={() => setShowNotifyModal(false)}
+        />
       )}
     </div>
   );

@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
+import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -48,6 +49,7 @@ const Analytics = () => {
   const [catalog, setCatalog] = useState([]);
   const [arLogs, setArLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [poseGuides, setPoseGuides] = useState([]);
   
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
@@ -96,6 +98,7 @@ const Analytics = () => {
     const unsubCat = subscribeToCollection('products', setCatalog, {}, true);
     const unsubAR = subscribeToCollection('ar_sessions', setArLogs);
     const unsubFeed = subscribeToCollection('feedback', setFeedback, {}, true);
+    const unsubPoses = subscribeToCollection('pose_guides', setPoseGuides);
 
     return () => {
       unsubR();
@@ -103,6 +106,7 @@ const Analytics = () => {
       unsubCat();
       unsubAR();
       unsubFeed();
+      unsubPoses();
     };
   }, []);
 
@@ -403,9 +407,16 @@ const Analytics = () => {
             </button>
             {exportRef && (
               <div className="dropdown-menu">
-                <button onClick={() => handleExport('csv')}>Excel (CSV)</button>
-                <button onClick={() => handleExport('xlsx')}>Excel (.xlsx)</button>
-                <button onClick={() => handleExport('pdf')}>PDF Report</button>
+                <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
+                <button onClick={() => handleExport('xlsx')}>Revenue Summary (.xlsx)</button>
+                <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
+                <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
+                <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
+                  👗 Garment Performance (CSV)
+                </button>
+                <button onClick={() => { exportInventoryDepreciationReport(catalog, reservations); setExportRef(false); }}>
+                  📊 Depreciation & ROI (CSV)
+                </button>
               </div>
             )}
           </div>
@@ -601,7 +612,7 @@ const Analytics = () => {
             <div className="card-header border-none">
               <h3>AR Try-On Performance</h3>
             </div>
-            <div className="chart-container" style={{ height: 300 }}>
+            <div className="chart-container" style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dynamicConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -612,6 +623,33 @@ const Analytics = () => {
                   <Bar dataKey="reserved" name="Reservations" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="p-4 border-t mt-2">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 mb-3">Top Style Poses (Engagement)</h4>
+              <div className="space-y-2">
+                {poseGuides.slice(0, 4).map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                    <div className="flex items-center gap-3">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="w-7 h-9 object-cover rounded" />
+                      ) : (
+                        <div className="w-7 h-9 bg-slate-800 rounded flex items-center justify-center text-[10px] text-white">📸</div>
+                      )}
+                      <div>
+                        <p className="font-bold text-gray-900">{p.name}</p>
+                        <p className="text-[10px] text-gray-500">{p.occasion || 'General'} · {p.difficulty || 'Easy'}</p>
+                      </div>
+                    </div>
+                    <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-[11px]">
+                      {p.category || 'Style Hint'}
+                    </span>
+                  </div>
+                ))}
+                {poseGuides.length === 0 && (
+                  <p className="text-xs text-gray-400">No style pose activity recorded yet.</p>
+                )}
+              </div>
             </div>
           </div>
         )}

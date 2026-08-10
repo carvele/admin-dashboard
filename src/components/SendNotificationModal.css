@@ -1,0 +1,47 @@
+.notification-modal {
+  max-width: 480px;
+  width: 90%;
+  border-radius: 12px;
+  background: var(--card-bg, #1e1e24);
+  color: var(--text-color, #f4f4f6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.notification-modal .form-group {
+  margin-bottom: 16px;
+}
+
+.notification-modal .form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary, #a0a0ab);
+  margin-bottom: 6px;
+}
+
+.notification-modal .form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--input-bg, #141418);
+  border: 1px solid var(--border-color, #2d2d38);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.notification-modal .form-input:focus {
+  border-color: #c9a96e;
+  outline: none;
+}
+
+.notification-modal .form-input.textarea {
+  resize: vertical;
+}
+
+.notification-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
