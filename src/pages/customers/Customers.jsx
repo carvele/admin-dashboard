@@ -127,6 +127,12 @@ const Customers = () => {
     []
   );
 
+  React.useEffect(() => {
+    return () => {
+      debouncedSearch.cancel?.();
+    };
+  }, [debouncedSearch]);
+
   const handleSearchChange = (e) => {
     setSearchInput(e.target.value);
     debouncedSearch(e.target.value);

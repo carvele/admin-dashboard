@@ -734,7 +734,7 @@ const ProductForm = ({ readOnly = false }) => {
                  <label className="label">Regular Rental Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
-                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" />
+                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
                  </div>
               </div>
 
@@ -750,7 +750,7 @@ const ProductForm = ({ readOnly = false }) => {
                    </label>
                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600">₱</span>
-                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" />
+                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
                    </div>
                 </div>
               )}
