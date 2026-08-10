@@ -57,6 +57,35 @@ export const formatRelativeTime = (timestamp) => {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+// ── Smart date & time formatter ────────────────────────────
+export const formatSmartDateTime = (ts, options = {}) => {
+  if (!ts) return 'Unknown';
+  const date = typeof ts === 'number' ? new Date(ts) : (ts?.seconds ? new Date(ts.seconds * 1000) : new Date(ts));
+  if (isNaN(date.getTime())) return 'Unknown';
+
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 3600 * 24));
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  if (options.short) {
+    if (isToday) return timeStr;
+    if (isYesterday) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  if (isToday) return `Today ${timeStr}`;
+  if (isYesterday) return `Yesterday ${timeStr}`;
+  if (diffDays < 7) return `${date.toLocaleDateString([], { weekday: 'short' })} ${timeStr}`;
+  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timeStr}`;
+};
+
 // ── Online status check ─────────────────────────────────────
 export const isOnline = (timestamp) => {
   if (!timestamp) return false;

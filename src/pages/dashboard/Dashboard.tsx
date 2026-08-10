@@ -39,7 +39,7 @@ import {
 // @ts-ignore
 import { getReservations } from '../../services/reservationService';
 // @ts-ignore
-import { getUserDisplayName, formatRelativeTime } from '../../utils/helpers';
+import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
 
 const defaultPreferences = {
   statTotalReservations: true,
@@ -587,7 +587,9 @@ const Dashboard = () => {
                 </div>
                 <div className="item-details">
                   <h4>{getUserDisplayName(c)}</h4>
-                  <p>{c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : c.email}</p>
+                  <p className="text-xs text-secondary">
+                    Joined {c.createdAt ? formatDate(c.createdAt) : 'N/A'} • {c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : (c.email || 'No activity')}
+                  </p>
                 </div>
                 <button className="icon-btn small" onClick={() => navigate(`/customers?id=${c.id}`)}>
                   <Users size={16} />
@@ -648,7 +650,7 @@ const Dashboard = () => {
             ) : (
               todayLogistics.map((item, idx) => (
                 <div key={idx} className={`logistics-row ${item.actionType.toLowerCase()}`}>
-                  <div className="logistics-time">{item.timeStr}</div>
+                  <div className="logistics-time">{item.date ? formatSmartDateTime(item.date) : item.timeStr}</div>
                   <div className="logistics-point"></div>
                   <div className="logistics-info">
                     <div className="flex-between align-center">
@@ -689,7 +691,7 @@ const Dashboard = () => {
                 </div>
                 <div className="activity-pulse-content">
                   <p className="text-sm">{item.desc}</p>
-                  <span className="text-xs text-secondary">{item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-xs text-secondary">{formatSmartDateTime(item.date)}</span>
                 </div>
               </div>
             ))}

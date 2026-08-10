@@ -21,6 +21,8 @@ import {
   ArrowUpDown,
   ReceiptText,
   PackageCheck,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
@@ -32,7 +34,7 @@ import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservat
 import { holdsStock } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
-import { formatCurrency } from '../../utils/helpers';
+import { formatCurrency, formatSmartDateTime } from '../../utils/helpers';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -214,6 +216,11 @@ const Reservations = () => {
     deposit: false,
   });
   const [newDate, setNewDate] = useState('');
+  const [expandedRows, setExpandedRows] = useState({});
+
+  const toggleExpandRow = (resId) => {
+    setExpandedRows((prev) => ({ ...prev, [resId]: !prev[resId] }));
+  };
 
   const filteredReservations = reservations.map(r => {
     // Normalize status to Sentence Case, mapping legacy states to new ones for display if desired
@@ -569,7 +576,8 @@ const Reservations = () => {
     );
     const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
 
-    const mockId = `RES-${String(reservations.length + 1).padStart(3, '0')}`;
+    const year = new Date().getFullYear();
+    const mockId = `ORD-${year}-${String(reservations.length + 1).padStart(5, '0')}`;
     // Find productId and imageUrl if possible
     const matchedProduct = products.find((p) => p.name === newRes.outfit);
     try {
@@ -756,9 +764,30 @@ const Reservations = () => {
                     const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
                     const firstLine = res.lines[0];
                     const imageUrl = res.imageUrl || firstLine?.imageUrl;
+                    const isExpanded = !!expandedRows[res.id];
+                    const hasMultipleLines = res.lines.length > 1;
+                    const resYear = res.createdAt ? new Date(res.createdAt).getFullYear() : new Date().getFullYear();
+                    const formattedId = res.id?.startsWith('ORD-') || res.id?.startsWith('RES-') 
+                      ? res.id 
+                      : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`;
+
                     return (
                       <tr key={res.id}>
-                        <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>{res.id}</td>
+                        <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>
+                          <div className="flex items-center gap-1">
+                            {hasMultipleLines && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandRow(res.id)}
+                                className="p-0.5 hover:bg-gray-100 rounded text-gray-500"
+                                title={isExpanded ? "Collapse items" : "Expand items"}
+                              >
+                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </button>
+                            )}
+                            <span>{formattedId}</span>
+                          </div>
+                        </td>
                         <td>
                           <div className="res-customer-cell">
                             <div className="res-cust-name">{res.displayName}</div>
@@ -770,13 +799,22 @@ const Reservations = () => {
                               <img src={imageUrl} alt="" className="res-thumb" />
                             )}
                             <div className="res-item-info">
-                              {res.lines.map((line, index) => (
-                                <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary' : 'font-medium'}>
+                              {(hasMultipleLines && !isExpanded ? res.lines.slice(0, 1) : res.lines).map((line, index) => (
+                                <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary pt-1 border-t border-dashed mt-1' : 'font-medium'}>
                                   {line.productName || res.productName || res.outfit}
-                                  {line.size && <span className="size-pill">{line.size}</span>}
+                                  {line.size && <span className="size-pill ml-1">{line.size}</span>}
                                   {(line.quantity ?? 1) > 1 && <span className="text-secondary text-sm"> ×{line.quantity}</span>}
                                 </div>
                               ))}
+                              {hasMultipleLines && !isExpanded && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandRow(res.id)}
+                                  className="text-[11px] text-primary font-bold hover:underline mt-1 block"
+                                >
+                                  +{res.lines.length - 1} more item{res.lines.length - 1 > 1 ? 's' : ''} (click to expand)
+                                </button>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -881,7 +919,7 @@ const Reservations = () => {
                 <input
                   type="text"
                   className="input-field font-mono"
-                  placeholder="e.g. RES-042"
+                  placeholder="e.g. ORD-2026-00042"
                   value={qrToken}
                   onChange={(e) => { setQrToken(e.target.value.toUpperCase()); setQrResult(null); }}
                   autoFocus
@@ -1049,7 +1087,7 @@ const Reservations = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <h2>Reschedule {rescheduleModal.id}</h2>
@@ -1097,7 +1135,7 @@ const Reservations = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 480 }}
+            style={{ maxWidth: 640 }}
           >
             <div className="modal-header">
               <h2>Reservation Details</h2>

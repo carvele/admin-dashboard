@@ -502,6 +502,88 @@ const ARAssets = () => {
         </div>
       )}
 
+      {activeTab === 'poses' && (
+        <div className="space-y-6 mt-4">
+          <div className="card p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-bold">AR Pose Guides & Calibration Specs</h3>
+                <p className="text-secondary text-sm">
+                  Pose reference guides used by the mobile app&apos;s MediaPipe Pose Detection engine for calibration and virtual fitting overlays.
+                </p>
+              </div>
+              <button
+                className="btn-primary flex-center gap-2"
+                onClick={() => setIsPoseModalOpen(true)}
+              >
+                <Plus size={16} /> Add Pose Guide
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
+              {displayPoses.map((pose) => (
+                <div key={pose.id} className="border rounded-xl p-4 bg-gray-50/50 hover:shadow-md transition-all relative group">
+                  <div className="h-40 bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden mb-3">
+                    <Camera size={36} className="text-indigo-400 opacity-60" />
+                    <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-mono px-2 py-0.5 rounded">
+                      {pose.id}
+                    </div>
+                    <div className="absolute bottom-2 right-2 bg-indigo-500/80 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                      {pose.category || 'Calibration'}
+                    </div>
+                  </div>
+                  <h4 className="font-bold text-sm text-gray-900">{pose.name}</h4>
+                  <p className="text-xs text-secondary mt-1">MediaPipe 33-keypoint tracking ready</p>
+                  
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t">
+                    <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                      <Check size={12} /> Mobile Active
+                    </span>
+                    {pose.docId && (
+                      <button
+                        className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
+                        onClick={() => handleDeletePose(pose)}
+                        title="Delete Pose"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card p-6 border-2 border-indigo-100 bg-indigo-50/10">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-2 flex items-center gap-2">
+              <View size={16} /> Mobile AR Pose Detection Integration Status
+            </h3>
+            <p className="text-xs text-indigo-700 mb-4">
+              Side-by-side verification between Admin Pose Specifications and Mobile App Runtime (MediaPipe 33 Landmarks).
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-4 rounded-xl border border-indigo-200">
+                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Admin Specification</h4>
+                <ul className="text-xs text-gray-600 space-y-1.5">
+                  <li>• Keypoints: 33 body landmarks (Shoulders, Hips, Elbows, Knees)</li>
+                  <li>• Tracking Model: MediaPipe Full Body Heavy</li>
+                  <li>• Calibration Threshold: 85% confidence score</li>
+                </ul>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-indigo-200">
+                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Mobile App Compatibility</h4>
+                <ul className="text-xs text-gray-600 space-y-1.5">
+                  <li>• Package: react-native-mediapipe-posedetection</li>
+                  <li>• Background Removal: @six33/react-native-bg-removal</li>
+                  <li>• Real-time FPS: 30 FPS camera feed overlay</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Link Assets Modal */}
       {isLinkModalOpen && productToLink && (
         <div className="modal-overlay" onClick={() => setIsLinkModalOpen(false)}>

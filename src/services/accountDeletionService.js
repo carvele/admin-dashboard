@@ -30,7 +30,7 @@ export const getPendingDeletionRequests = async () => {
       reason,
       status,
       created_at,
-      profiles (
+      profiles!user_id (
         first_name,
         last_name,
         email,

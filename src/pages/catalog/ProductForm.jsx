@@ -145,6 +145,24 @@ const ProductForm = ({ readOnly = false }) => {
              setFormData(prev => ({
                 ...prev,
                 ...docParams,
+                name: docParams.name || '',
+                category: docParams.category || prev.category || 'Tops',
+                subCategory: docParams.subCategory || '',
+                price: docParams.price ?? '',
+                description: docParams.description || '',
+                material: docParams.material || '',
+                color: docParams.color || '',
+                baseColor: docParams.baseColor || '',
+                pattern: docParams.pattern || 'Solid',
+                careInstructions: docParams.careInstructions || '',
+                fitAndSizing: docParams.fitAndSizing || '',
+                styleCode: docParams.styleCode || '',
+                season: docParams.season || 'All-Season',
+                occasion: docParams.occasion || '',
+                visibility: docParams.visibility || 'draft',
+                discountPercentage: docParams.discountPercentage ?? 0,
+                salePrice: docParams.salePrice ?? '',
+                isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
                 sizes: docParams.sizes || [],
                 colors: parsedColors,
                 images: docParams.images || [],
@@ -422,6 +440,7 @@ const ProductForm = ({ readOnly = false }) => {
         occasion: formData.occasion,
         visibility: formData.visibility,
         isFeatured: formData.isFeatured,
+        isNewArrival: formData.isNewArrival,
         isAlterable: formData.isAlterable,
         updated_by: user?.id || null,
         images: finalImages,
@@ -589,7 +608,7 @@ const ProductForm = ({ readOnly = false }) => {
                   </div>
                   <div>
                     <label className="label">Category *</label>
-                    <select name="category" className="input-field" value={formData.category} onChange={handleChange}>
+                    <select name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
                       {categories.map((c) => (
                         <option key={c.name} value={c.name}>{c.name}</option>
                       ))}
@@ -600,7 +619,7 @@ const ProductForm = ({ readOnly = false }) => {
                     <select
                       name="subCategory"
                       className="input-field"
-                      value={formData.subCategory}
+                      value={formData.subCategory || ''}
                       onChange={handleChange}
                       disabled={!categories.find((c) => c.name === formData.category)?.subcategories?.length}
                     >
@@ -790,64 +809,47 @@ const ProductForm = ({ readOnly = false }) => {
         </section>
 
         {/* ══════════════════════════════════════════════
-            ZONE D — Composition & Specs
+            ZONE D — Material & Color
         ══════════════════════════════════════════════ */}
         <section className="card p-6">
            <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Palette size={14} /> Material & Aesthetics
+              <Palette size={14} /> Material & Color
            </h2>
 
-           {/* Available Colors — multi-select, like sizes. Customers pick one
-               of these on the product page; stored comma-joined in `color`. */}
-           <div className="mb-6">
-              <label className="label">Available Colors *</label>
-              {colorList.length === 0 ? (
-                 <p className="text-sm text-secondary mt-2">
-                    No colors defined yet. Add colors in Settings to enable selection.
-                 </p>
-              ) : (
-                 <div className="flex flex-wrap gap-3 mt-3">
-                    {colorList.map((c) => (
-                       <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => toggleColor(c.name)}
-                          className={`color-chip ${(formData.colors || []).includes(c.name) ? 'active' : ''}`}
-                       >
-                          {c.name}
-                       </button>
-                    ))}
-                 </div>
-              )}
-              {(formData.colors || []).length > 0 && (
-                 <p className="text-xs text-secondary mt-2">
-                    {formData.colors.length} selected · primary (for filtering): <strong>{formData.colors[0]}</strong>
-                 </p>
-              )}
-           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                 <label className="label">Product Color *</label>
+                 {colorList.length === 0 ? (
+                    <p className="text-sm text-secondary mt-2">
+                       No colors defined yet. Add colors in Settings to enable selection.
+                    </p>
+                 ) : (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                       {colorList.map((c) => {
+                          const isSelected = (formData.colors || []).includes(c.name);
+                          return (
+                             <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => toggleColor(c.name)}
+                                className={`color-chip ${isSelected ? 'active' : ''}`}
+                             >
+                                {c.name}
+                             </button>
+                          );
+                       })}
+                    </div>
+                 )}
+                  {(formData.colors || []).length > 0 && (
+                     <p className="text-xs text-secondary mt-2">
+                        Selected color(s): <strong>{(formData.colors || []).join(', ')}</strong>
+                     </p>
+                  )}
+              </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                  <label className="label">Material / Fabric</label>
-                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Pattern</label>
-                 <select name="pattern" className="input-field" value={formData.pattern} onChange={handleChange}>
-                    {patternList.map((p) => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
-                    ))}
-                 </select>
-              </div>
-              <div>
-                 <label className="label">Collection / Season</label>
-                 <select name="season" className="input-field" value={formData.season} onChange={handleChange}>
-                    {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                 </select>
-              </div>
-              <div>
-                 <label className="label">Occasion</label>
-                 <input type="text" name="occasion" className="input-field" placeholder="e.g. Wedding, GALA" value={formData.occasion} onChange={handleChange} />
+                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
               </div>
            </div>
         </section>
@@ -892,7 +894,7 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="border-t pt-6">
               <div className="mb-4" style={{ maxWidth: '20rem' }}>
                  <label className="label">Fit Type</label>
-                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing} onChange={handleChange}>
+                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
                     <option value="">Standard Fit</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
@@ -920,26 +922,60 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="space-y-4">
               <div>
                  <label className="label">Full Description</label>
-                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description} onChange={handleChange} />
+                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
               </div>
               <div>
                  <label className="label">Care Instructions</label>
-                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions} onChange={handleChange} />
+                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
               </div>
               <div>
-                 <label className="label flex items-center gap-2"><TagIcon size={14} /> Tags (Comma separated)</label>
-                 <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="AR Try-On, New Arrival, High-End" 
-                    value={formData.tags?.join(', ') || ''} 
-                    onChange={(e) => {
-                       const value = e.target.value;
-                       // Split only on commas to preserve multi-word tags like "New Arrival"
-                       const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
-                       setFormData(prev => ({ ...prev, tags }));
-                    }} 
-                 />
+                 <label className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</label>
+                 <div className="flex flex-wrap gap-3">
+                    {[
+                       { label: 'New Arrival', stateKey: 'isNewArrival' },
+                       { label: 'AR Try-On', tagValue: 'AR Try-On' },
+                       { label: 'Limited Edition', tagValue: 'Limited Edition' },
+                       { label: 'Sale', stateKey: 'onSale' }
+                    ].map((item) => {
+                       const isChecked = item.stateKey 
+                          ? formData[item.stateKey] 
+                          : (formData.tags || []).includes(item.tagValue);
+                       
+                       return (
+                          <button
+                             key={item.label}
+                             type="button"
+                             onClick={() => {
+                                if (item.stateKey) {
+                                   const newChecked = !formData[item.stateKey];
+                                   setFormData(prev => {
+                                      const tags = new Set(prev.tags || []);
+                                      if (newChecked) tags.add(item.label);
+                                      else tags.delete(item.label);
+                                      return { ...prev, [item.stateKey]: newChecked, tags: Array.from(tags) };
+                                   });
+                                } else {
+                                   setFormData(prev => {
+                                      const current = prev.tags || [];
+                                      const updated = current.includes(item.tagValue)
+                                         ? current.filter(t => t !== item.tagValue)
+                                         : [...current, item.tagValue];
+                                      return { ...prev, tags: updated };
+                                   });
+                                }
+                             }}
+                             className={`px-4 py-2 rounded-lg border-2 text-xs font-bold transition-all flex items-center gap-2 ${
+                                isChecked
+                                   ? 'bg-primary text-white border-primary shadow-sm'
+                                   : 'bg-white text-secondary border-gray-200 hover:border-gray-300'
+                             }`}
+                          >
+                             <span>{isChecked ? '✓' : '+'}</span>
+                             <span>{item.label}</span>
+                          </button>
+                       );
+                    })}
+                 </div>
               </div>
            </div>
         </section>

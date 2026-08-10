@@ -8,7 +8,7 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <AppRouter />
-        <Toaster position="top-right" richColors closeButton />
+        <Toaster position="top-right" richColors closeButton dismissible duration={4000} />
       </AuthProvider>
     </ErrorBoundary>
   );
