@@ -463,20 +463,24 @@ const Messages = () => {
           lastMessage: 'Conversation started by staff',
           lastMessageTime: new Date().toISOString(),
           unreadCount: 0,
-        }).then(() => {
-          const waitForConv = setInterval(() => {
-            setConversations((prev) => {
-              const found = prev.find(
-                (c) => c.customerId === buyerId || c.customerName === buyerName,
-              );
-              if (found) {
-                clearInterval(waitForConv);
-                proceed(found);
-              }
-              return prev;
-            });
-          }, 300);
-          setTimeout(() => clearInterval(waitForConv), 5000);
+        }).then((newConv) => {
+          if (newConv) {
+            // Use the returned conversation directly
+            proceed(newConv);
+          } else {
+            // Conversation created but not returned inline — the Realtime
+            // subscription on `conversations` will deliver it shortly.
+            // Check once after a short delay as a fallback.
+            setTimeout(() => {
+              setConversations((prev) => {
+                const found = prev.find(
+                  (c) => c.customerId === buyerId || c.customerName === buyerName,
+                );
+                if (found) proceed(found);
+                return prev;
+              });
+            }, 1000);
+          }
         });
       }
     }

@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return json({ error: 'Missing authorization header' }, 401);
+      return json(req, { error: 'Missing authorization header' }, 401);
     }
 
     // Client bound to the caller's own JWT — used only to identify who is calling.
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     });
     const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser();
     if (callerError || !caller) {
-      return json({ error: 'Invalid or expired session' }, 401);
+      return json(req, { error: 'Invalid or expired session' }, 401);
     }
 
     // Admin client — only ever used after the caller's own role is confirmed below.
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       callerProfile.is_blocked ||
       !['admin', 'owner'].includes(callerProfile.role)
     ) {
-      return json({ error: 'You do not have permission to invite staff.' }, 403);
+      return json(req, { error: 'You do not have permission to invite staff.' }, 403);
     }
 
     const body = await req.json();
@@ -80,10 +80,10 @@ Deno.serve(async (req) => {
     const role = body?.role;
 
     if (!email || !email.includes('@')) {
-      return json({ error: 'A valid email address is required.' }, 400);
+      return json(req, { error: 'A valid email address is required.' }, 400);
     }
     if (!ALLOWED_INVITE_ROLES.includes(role)) {
-      return json({ error: 'Role must be "staff" or "admin".' }, 400);
+      return json(req, { error: 'Role must be "staff" or "admin".' }, 400);
     }
 
     const siteUrl = Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
     if (inviteError) {
       if (inviteError.status === 422 || /already registered/i.test(inviteError.message)) {
         return json(
+          req,
           {
             error:
               'This email already has an account (e.g. a customer sign-up). Invite a fresh address, ' +
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
           409,
         );
       }
-      return json({ error: inviteError.message }, 500);
+      return json(req, { error: inviteError.message }, 500);
     }
 
     // Authoritative role assignment. app_metadata is writable ONLY by the service
@@ -121,17 +122,17 @@ Deno.serve(async (req) => {
     );
     if (metaError) {
       console.error('[create-staff-account] Failed to set app_metadata:', metaError);
-      return json({ error: 'Invite sent but role assignment failed. Please retry.' }, 500);
+      return json(req, { error: 'Invite sent but role assignment failed. Please retry.' }, 500);
     }
 
-    return json({ userId: inviteData.user.id }, 200);
+    return json(req, { userId: inviteData.user.id }, 200);
   } catch (err) {
     console.error('[create-staff-account] Unexpected error:', err);
-    return json({ error: 'Unexpected server error' }, 500);
+    return json(req, { error: 'Unexpected server error' }, 500);
   }
 });
 
-function json(body: unknown, status: number) {
+function json(req: Request, body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },

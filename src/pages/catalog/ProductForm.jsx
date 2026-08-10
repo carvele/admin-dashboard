@@ -485,6 +485,22 @@ const ProductForm = ({ readOnly = false }) => {
             );
             await Promise.all(inventoryPromises);
           }
+
+          // Soft-delete inventory for sizes that were removed from the product
+          const removedInventory = allInv.filter(
+            (inv) =>
+              ((inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode) &&
+              !payload.sizes.includes(inv.size) &&
+              !inv.deleted
+          );
+          if (removedInventory.length > 0) {
+            const now = new Date().toISOString();
+            await supabase
+              .from('inventory')
+              .update({ deleted: true, deleted_at: now, updated_at: now })
+              .in('id', removedInventory.map((inv) => inv.id));
+            Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
+          }
         } catch(invErr) {
           console.error('Checking/Adding missing sizes failed:', invErr);
         }
