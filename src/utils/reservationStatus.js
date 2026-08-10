@@ -17,6 +17,7 @@ export const RESERVATION_STATUSES = [
   'Approved',
   'Confirmed',
   'To Pickup',
+  'Fitting',
   'Active',
   'Completed',
   'Cancelled',

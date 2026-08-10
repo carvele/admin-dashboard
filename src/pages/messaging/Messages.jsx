@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
 import {
   Search,
   Send,
@@ -16,6 +17,7 @@ import {
   Tag,
   Zap,
   Ruler,
+  ShoppingBag,
 } from 'lucide-react';
 import {
   subscribeToConversations,
@@ -126,6 +128,59 @@ const Messages = () => {
 
   const quickReplyRef = useRef(null);
   const attachMenuRef = useRef(null);
+
+  const [productPreviews, setProductPreviews] = useState({});
+  const productPreviewsRef = useRef({});
+  productPreviewsRef.current = productPreviews;
+
+  // Fetch product details for messages with contextType === 'product'
+  useEffect(() => {
+    const missing = [
+      ...new Set(
+        messages
+          .filter((m) => m.contextType === 'product' && m.contextRef)
+          .map((m) => m.contextRef)
+      ),
+    ].filter((id) => productPreviewsRef.current[id] === undefined);
+
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('products')
+          .select('id, name, price, sale_price, on_sale, image_url, category, tags')
+          .in('id', missing);
+
+        if (cancelled) return;
+
+        setProductPreviews((prev) => {
+          const next = { ...prev };
+          for (const id of missing) next[id] = null;
+          for (const item of data || []) {
+            next[item.id] = {
+              id: item.id,
+              name: item.name,
+              price: item.price,
+              salePrice: item.sale_price,
+              onSale: item.on_sale,
+              imageUrl: item.image_url,
+              category: item.category,
+              tags: item.tags,
+            };
+          }
+          return next;
+        });
+      } catch (err) {
+        console.error('Error fetching product previews for chat:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages]);
 
   // Close reaction popover & popovers on outside click
   useEffect(() => {
@@ -510,6 +565,65 @@ const Messages = () => {
                 if (btn) btn.style.opacity = '0';
               }}
             >
+              {/* Product Context Card */}
+              {msg.contextType === 'product' ? (
+                (() => {
+                  const product = msg.contextRef ? productPreviews[msg.contextRef] : null;
+                  return (
+                    <div
+                      className="msg-product-card"
+                      onClick={() => {
+                        const searchParam = product?.name || msg.contextLabel;
+                        if (searchParam) {
+                          navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
+                        }
+                      }}
+                      title="Click to view product in catalog"
+                    >
+                      <div className="msg-product-header">
+                        <ShoppingBag size={13} />
+                        <span>Question about product</span>
+                      </div>
+                      {product ? (
+                        <div className="msg-product-content">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="msg-product-img" />
+                          ) : (
+                            <div className="msg-product-img-placeholder"><ShoppingBag size={18} /></div>
+                          )}
+                          <div className="msg-product-details">
+                            <div className="msg-product-name">{product.name}</div>
+                            <div className="msg-product-price">
+                              {product.onSale && product.salePrice ? (
+                                <>
+                                  <span className="msg-price-sale">₱{Number(product.salePrice).toLocaleString()}</span>
+                                  <span className="msg-price-original">₱{Number(product.price).toLocaleString()}</span>
+                                </>
+                              ) : (
+                                <span>₱{Number(product.price).toLocaleString()}</span>
+                              )}
+                            </div>
+                            {msg.contextLabel && (
+                              <div className="msg-product-tag">{msg.contextLabel}</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : msg.contextLabel ? (
+                        <div className="msg-product-label-only">
+                          <span className="msg-product-name">{msg.contextLabel}</span>
+                        </div>
+                      ) : (
+                        <div className="msg-product-loading">Loading product details...</div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : msg.contextLabel ? (
+                <div className="msg-context-chip">
+                  <span>Re: {msg.contextLabel}</span>
+                </div>
+              ) : null}
+
               {/* Image */}
               {msg.imageUrl && (
                 <button
@@ -992,6 +1106,52 @@ const Messages = () => {
                       <div className="context-res-finance">
                         Deposit: {depStr} · Balance: {balStr}
                       </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Inquired Products */}
+            <div className="context-section">
+              <h4 className="context-section-title">Inquired Products</h4>
+              {(() => {
+                const productMsgs = messages.filter(
+                  (m) => m.contextType === 'product' && (m.contextRef || m.contextLabel)
+                );
+                const uniqueProductIds = [...new Set(productMsgs.map((m) => m.contextRef).filter(Boolean))];
+                if (uniqueProductIds.length === 0 && productMsgs.length === 0) {
+                  return (
+                    <p className="text-secondary text-sm" style={{ margin: '0.25rem 0' }}>
+                      No product inquiries in chat
+                    </p>
+                  );
+                }
+                return uniqueProductIds.map((pId) => {
+                  const p = productPreviews[pId];
+                  return (
+                    <div
+                      key={pId}
+                      className="context-res-item"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        if (p?.name) {
+                          navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
+                        }
+                      }}
+                      title="Click to view product in catalog"
+                    >
+                      <div className="context-res-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <ShoppingBag size={14} style={{ color: 'var(--accent, #8b5cf6)' }} />
+                        <span>{p?.name || 'Loading Product...'}</span>
+                      </div>
+                      {p && (
+                        <div className="context-res-finance" style={{ marginTop: '0.25rem' }}>
+                          Price: ₱{Number(p.onSale && p.salePrice ? p.salePrice : p.price).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   );
                 });
