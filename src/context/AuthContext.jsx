@@ -83,23 +83,39 @@ export const AuthProvider = ({ children }) => {
 
     try {
       // --- 1. Fingerprint ---
-      let visitorId = null;
-      try {
-        const stored = localStorage.getItem('_jz_fp_id');
-        if (stored) visitorId = atob(stored);
-      } catch {
-        // ignore decoding errors
-      }
+      // Device fingerprints are hashed before storing — cannot be reversed.
+      // The plaintext fingerprint is only held in memory for the current session.
+      const hashFP = async (fp) => {
+        const enc = new TextEncoder().encode(fp);
+        const hash = await crypto.subtle.digest('SHA-256', enc);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      };
 
+      let visitorId = null;
       try {
         const fp = await withTimeout(FingerprintJS.load(), 3000);
         const result = await fp.get();
         visitorId = result.visitorId;
-        localStorage.setItem('_jz_fp_id', btoa(visitorId));
+        const hashed = await hashFP(visitorId);
+        localStorage.setItem('_jz_fp_hash', hashed);
       } catch {
+        // FingerprintJS failed — try to reuse a previously stored ID via a
+        // fallback random token (the hash of the old value is lost, but we
+        // generate a new stable one).
+        const legacyStored = localStorage.getItem('_jz_fp_id');
+        if (legacyStored) {
+          try { visitorId = atob(legacyStored); } catch { /* ignore */ }
+          // Migrate legacy base64 to hashed format
+          if (visitorId) {
+            const hashed = await hashFP(visitorId);
+            localStorage.setItem('_jz_fp_hash', hashed);
+            localStorage.removeItem('_jz_fp_id');
+          }
+        }
         if (!visitorId) {
           visitorId = 'sb_' + Math.random().toString(36).substr(2, 9);
-          localStorage.setItem('_jz_fp_id', btoa(visitorId));
+          const hashed = await hashFP(visitorId);
+          localStorage.setItem('_jz_fp_hash', hashed);
         }
       }
       setDeviceFingerprint(visitorId);
@@ -294,14 +310,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    const savedFingerprint = localStorage.getItem('_jz_fp_id');
+    const savedFPHash = localStorage.getItem('_jz_fp_hash');
     clearDeviceChannel();
     await supabase.auth.signOut();
     setUser(null);
     setDeviceStatus('checking');
     localStorage.clear();
     sessionStorage.clear();
-    if (savedFingerprint) localStorage.setItem('_jz_fp_id', savedFingerprint);
+    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
     toast.info('Logged out successfully');
   };
 

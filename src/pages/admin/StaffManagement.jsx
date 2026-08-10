@@ -174,10 +174,10 @@ const StaffManagement = () => {
     const newRole = member.role === 'admin' ? 'staff' : 'admin';
     const name = getDisplayName(member);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole, updated_at: new Date().toISOString() })
-        .eq('id', member.id);
+      const { error } = await supabase.rpc('update_staff_role', {
+        target_user_id: member.id,
+        new_role: newRole,
+      });
       if (error) throw error;
       await logAction(user, 'Changed staff role', {
         targetType: 'profile',

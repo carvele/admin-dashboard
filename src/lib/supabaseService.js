@@ -175,14 +175,8 @@ export const softDeleteDocument = async (table, id) => {
     .update({ deleted: true, deleted_at: now, updated_at: now })
     .eq('id', id);
   if (error) handleError(error, `softDeleteDocument(${table}, ${id})`);
-
-  if (table === 'products') {
-    const { error: invErr } = await supabase
-      .from('inventory')
-      .update({ deleted: true, deleted_at: now, updated_at: now })
-      .eq('product_doc_id', id);
-    if (invErr) console.warn('[Supabase] Inventory cascade soft-delete failed:', invErr.message);
-  }
+  // Note: inventory cascade for products is handled by the
+  // trg_cascade_soft_delete_inventory Postgres trigger.
 };
 
 /**
