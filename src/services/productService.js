@@ -90,13 +90,12 @@ export const restoreProduct = async (docId) => {
 
 /** Sync product metadata changes to all linked inventory rows. */
 const syncProductUpdateToInventory = async (productDocId, newData) => {
-  const { name, category, price, sku, imageUrl } = newData;
+  const { name, category, price, sku } = newData;
   const updates = {};
   if (name !== undefined) updates.item = name;
   if (category !== undefined) updates.category = category;
   if (price !== undefined) updates.price = price;
   if (sku !== undefined) updates.sku = sku;
-  if (imageUrl !== undefined) updates.image_url = imageUrl;
   if (!Object.keys(updates).length) return;
 
   updates.updated_at = new Date().toISOString();

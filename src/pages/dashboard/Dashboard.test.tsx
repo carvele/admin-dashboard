@@ -8,16 +8,27 @@ import '@testing-library/jest-dom';
 // Mock Services
 jest.mock('../../services/reservationService', () => ({
   subscribeToReservations: jest.fn(() => jest.fn()),
+  getReservations: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../services/customerService', () => ({
   subscribeToCustomers: jest.fn(() => jest.fn()),
+  getCustomers: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../services/productService', () => ({
   subscribeToInventory: jest.fn(() => jest.fn()),
+  getInventory: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../services/wardrobeService', () => ({
   subscribeToSuggestedOutfits: jest.fn(() => jest.fn()),
   subscribeToARSessions: jest.fn(() => jest.fn()),
+  getARSessions: jest.fn(() => Promise.resolve([])),
+  getSuggestedOutfits: jest.fn(() => Promise.resolve([])),
+}));
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { email: 'admin@jezsy.com' },
+    role: 'owner',
+  }),
 }));
 
 // Mock Recharts to avoid ResizeObserver issues

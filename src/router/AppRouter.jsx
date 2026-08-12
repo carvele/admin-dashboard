@@ -12,20 +12,20 @@ const SetPassword = lazy(() => import('../pages/auth/SetPassword'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazy(() => import('../pages/customers/Reservations'));
 const Customers = lazy(() => import('../pages/customers/Customers'));
-const Feedbacks = lazy(() => import('../pages/customers/Feedbacks'));
 const Messages = lazy(() => import('../pages/messaging/Messages'));
 const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
-const OutfitSuggestions = lazy(() => import('../pages/wardrobe/OutfitSuggestions'));
 const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
+const Reviews = lazy(() => import('../pages/catalog/Reviews'));
 const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
 const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
 const Inventory = lazy(() => import('../pages/catalog/Inventory'));
 const Analytics = lazy(() => import('../pages/admin/Analytics'));
-const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
+const Announcements = lazy(() => import('../pages/admin/Announcements'));
 const Settings = lazy(() => import('../pages/admin/Settings'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
 const ActivityLog = lazy(() => import('../pages/admin/ActivityLog'));
+const AccountDeletionRequests = lazy(() => import('../pages/admin/AccountDeletionRequests'));
 
 // Suspense fallback
 const PageLoader = () => (
@@ -184,16 +184,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="feedbacks"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <Feedbacks />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="messages"
             element={
@@ -214,16 +205,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="outfits"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <OutfitSuggestions />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="inventory"
             element={
@@ -240,6 +222,16 @@ const AnimatedRoutes = () => {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <ClothingCatalog />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="reviews"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <Reviews />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -295,6 +287,18 @@ const AnimatedRoutes = () => {
             }
           />
           <Route
+            path="announcements"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <Announcements />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="analytics"
             element={
               <ProtectedRoute>
@@ -306,18 +310,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="devices"
-            element={
-              <ProtectedRoute>
-                <RequireAdmin>
-                  <Suspense fallback={<PageLoader />}>
-                    <DeviceManagement />
-                  </Suspense>
-                </RequireAdmin>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="staff"
             element={
@@ -366,6 +359,20 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
+          {/* Irreversible action (erases data + revokes login) -- owner/admin
+              only, same tier as staff management and system settings. */}
+          <Route
+            path="account-deletion"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <AccountDeletionRequests />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Routes>
   );
@@ -373,7 +380,7 @@ const AnimatedRoutes = () => {
 
 export const AppRouter = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AnimatedRoutes />
     </BrowserRouter>
   );

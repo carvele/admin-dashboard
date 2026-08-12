@@ -33,11 +33,13 @@ import {
   persistDemandScore,
   logStockMovement,
 } from '../../services/productService';
+import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
 import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
 import SkeletonTable from '../../components/SkeletonTable';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
 import './Inventory.css';
 
@@ -60,6 +62,9 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState('inventory');
+  const [waitlistDemand, setWaitlistDemand] = useState([]);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
 
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
@@ -68,6 +73,21 @@ const Inventory = () => {
     });
     return () => unsub();
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'waitlist' && waitlistDemand.length === 0) {
+      setLoadingWaitlist(true);
+      getWaitlistDemand()
+        .then(data => {
+          setWaitlistDemand(data);
+          setLoadingWaitlist(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoadingWaitlist(false);
+        });
+    }
+  }, [activeTab]);
 
   // Product list — needed to map each inventory row to its category/subcategory
   // (category_id lives on products, not on inventory rows) and to feed the
@@ -747,52 +767,113 @@ const Inventory = () => {
       </div>
 
       <div className="card mt-2">
-        {isAdminUnlocked && (
-          <div className="archive-toggle-row" style={{ margin: '1rem 1.5rem 0.5rem 1.5rem' }}>
-            <button
-              className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
-              onClick={() => setViewMode('active')}
-            >
-              Active ({inventory.filter(i => i.deleted !== true).length})
-            </button>
-            <button
-              className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
-              onClick={() => setViewMode('archived')}
-            >
-              <Archive size={14} /> Archived ({inventory.filter(i => i.deleted === true).length})
-            </button>
+        <div className="catalog-toolbar" style={{ borderBottom: '1px solid var(--border-color)', padding: '1rem' }}>
+          <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+            <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
+              <button
+                className={`archive-toggle-btn ${activeTab === 'inventory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('inventory')}
+                style={{ margin: 0 }}
+              >
+                Inventory View
+              </button>
+              <button
+                className={`archive-toggle-btn ${activeTab === 'waitlist' ? 'active' : ''}`}
+                onClick={() => setActiveTab('waitlist')}
+                style={{ margin: 0 }}
+              >
+                Customer Waitlist Demand
+              </button>
+            </div>
+
+            {activeTab === 'inventory' && (
+              <>
+                <div className="search-box">
+                  <Search size={18} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search SKU or Name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="input-field pl-10"
+                  />
+                </div>
+                <select
+                  className="input-field category-filter"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  {dropdownCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat === 'All' ? 'All Categories' : cat}
+                    </option>
+                  ))}
+                </select>
+                {isAdminUnlocked && (
+                  <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
+                      onClick={() => setViewMode('active')}
+                      style={{ margin: 0 }}
+                    >
+                      Active ({inventory.filter(i => i.deleted !== true).length})
+                    </button>
+                    <button
+                      className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
+                      onClick={() => setViewMode('archived')}
+                      style={{ margin: 0 }}
+                    >
+                      <Archive size={14} /> Archived ({inventory.filter(i => i.deleted === true).length})
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        )}
-        <div className="card-toolbar">
-          <div className="search-box">
-            <Search size={18} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search SKU or Product Name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
-            />
-          </div>
-          <select
-            className="input-field"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            style={{ width: 'auto', minWidth: '150px' }}
-          >
-            {dropdownCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === 'All' ? 'All Categories' : cat}
-              </option>
-            ))}
-          </select>
-          {isBrowsingMode && (
-            <p className="inv-mode-hint text-secondary text-xs">
+          {activeTab === 'inventory' && isBrowsingMode && (
+            <p className="inv-mode-hint text-secondary text-xs mt-3">
               Grouped by category — search or filter above to switch to a flat sortable list.
             </p>
           )}
         </div>
 
+        {activeTab === 'waitlist' ? (
+          <div className="table-container p-4">
+            {loadingWaitlist ? (
+              <SkeletonTable columns={3} rows={5} />
+            ) : (
+              <table className="table inv-table">
+                <thead>
+                  <tr>
+                    <th>Product Name</th>
+                    <th>Size</th>
+                    <th className="text-right">Customers Waiting</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waitlistDemand.length === 0 ? (
+                    <tr>
+                      <td colSpan="3">
+                        <div className="empty-state flex-col flex-center gap-3 p-8">
+                          <p className="text-secondary">No active waitlist requests found.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    waitlistDemand.map((req, idx) => (
+                      <tr key={idx}>
+                        <td className="font-medium">{req.productName}</td>
+                        <td><span className="size-badge">{req.size}</span></td>
+                        <td className="text-right font-bold text-danger">{req.count}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : (
+          <>
         {loading ? (
           <div className="p-4"><SkeletonTable columns={TABLE_COLUMNS} rows={6} /></div>
         ) : (
@@ -913,6 +994,8 @@ const Inventory = () => {
             </table>
           </div>
         )}
+        </>
+        )}
       </div>
 
       {/* ===== RESTOCK MODAL ===== */}
@@ -921,7 +1004,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
               <h2>Restock Item</h2>
@@ -979,7 +1062,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 420 }}
+            style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <h2>
@@ -1055,36 +1138,14 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* ===== ARCHIVE CONFIRM ===== */}
-      {archiveConfirm && (
-        <div className="modal-overlay" onClick={() => setArchiveConfirm(null)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 380, textAlign: 'center', padding: '2rem' }}
-          >
-            <div className="archive-icon-wrap" style={{ backgroundColor: 'var(--status-pending-bg)', color: 'var(--warning)', display: 'inline-flex', padding: '1rem', borderRadius: '50%', marginBottom: '1rem' }}>
-              <Archive size={32} />
-            </div>
-            <h2>Archive Item?</h2>
-            <p className="text-secondary mt-2">
-              Move{' '}
-              <strong>
-                {archiveConfirm.item} ({archiveConfirm.size})
-              </strong>{' '}
-              to the archive? History and reservation metrics will be preserved. You can restore it anytime.
-            </p>
-            <div className="modal-footer justify-center mt-4">
-              <button className="btn-outline" onClick={() => setArchiveConfirm(null)}>
-                Cancel
-              </button>
-              <button className="btn-archive" onClick={handleArchive}>
-                Archive
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!archiveConfirm}
+        title="Archive Item?"
+        message={`Move ${archiveConfirm?.item} (${archiveConfirm?.size}) to the archive? History and reservation metrics will be preserved. You can restore it anytime.`}
+        confirmText="Archive"
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveConfirm(null)}
+      />
 
       {/* ===== SELL / POS MODAL ===== */}
       {sellModal && (
@@ -1092,7 +1153,7 @@ const Inventory = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <div className="flex-center gap-2">

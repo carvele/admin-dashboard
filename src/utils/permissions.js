@@ -62,6 +62,9 @@ const PERMISSIONS = {
   // ── Activity log (owner/admin only — not exposed to staff) ──
   view_logs: FULL,
 
+  // ── Account deletion (irreversible: erases data + revokes login) ──
+  process_account_deletion: FULL,
+
   // ── Areas the user did not re-scope: existing behavior kept ─
   view_analytics: FULL,
   export_analytics: [OWNER],
@@ -86,7 +89,7 @@ export const can = (userRole, action) => {
   if (!allowed) {
     // Unknown action key: deny and warn — this is a programming error, not a
     // permission the user lacks.
-    if (import.meta.env.DEV) console.warn(`[permissions] Unknown action: "${action}"`);
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') console.warn(`[permissions] Unknown action: "${action}"`);
     return false;
   }
   return allowed.includes(normalizeRole(userRole));

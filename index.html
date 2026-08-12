@@ -10,16 +10,16 @@
         default-src 'self';
         script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://apis.google.com;
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        img-src 'self' data: blob: https://res.cloudinary.com https://wufcmtndotfvxvvxkamv.supabase.co;
+        img-src * 'self' data: blob: https: http:;
         font-src 'self' https://fonts.gstatic.com;
         connect-src 'self' https://wufcmtndotfvxvvxkamv.supabase.co wss://wufcmtndotfvxvvxkamv.supabase.co https://res.cloudinary.com https://api.cloudinary.com;
       "
     >
     <title>JezSy Collection Admin</title>
-    <!-- Google Fonts: Outfit -->
+    <!-- Google Fonts: Outfit & Playfair Display -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

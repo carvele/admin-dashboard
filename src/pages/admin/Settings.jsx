@@ -336,75 +336,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="form-group max-w-lg mt-6 pt-4 border-t">
-                <h4 className="text-danger mb-2">Developer Tools</h4>
-                <p className="text-secondary text-sm mb-3">
-                  Seed realistic demo data: customers, products, inventory, reservations,
-                  conversations, and messages.
-                </p>
-                {seedProgress && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '0.75rem',
-                        marginBottom: '0.25rem',
-                      }}
-                    >
-                      <span>{seedProgress.message}</span>
-                      <span>
-                        {seedProgress.step}/{seedProgress.totalSteps}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        height: 6,
-                        borderRadius: 3,
-                        background: 'var(--border-color)',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${(seedProgress.step / seedProgress.totalSteps) * 100}%`,
-                          background: 'var(--accent)',
-                          borderRadius: 3,
-                          transition: 'width 0.2s',
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="btn-outline border-danger text-danger"
-                  disabled={!!seedProgress}
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        'This will add demo data to your Supabase database. Continue?',
-                      )
-                    )
-                      return;
-                    try {
-                      const { seedDemoData } = await import('../../dev-utils/seedDemoData');
-                      const result = await seedDemoData((p) => setSeedProgress(p));
-                      toast.success(
-                        `Seeded: ${result.customers} customers, ${result.products} products, ${result.reservations} reservations, ${result.conversations} conversations, ${result.messages} messages`,
-                      );
-                      await logAction(user, 'Seeded demo data', result);
-                    } catch (err) {
-                      toast.error('Seeding failed: ' + err.message);
-                    } finally {
-                      setSeedProgress(null);
-                    }
-                  }}
-                >
-                  {seedProgress ? 'Seeding in progress...' : '🌱 Seed Demo Data'}
-                </button>
-              </div>
+
             </div>
           )}
 
@@ -605,7 +537,7 @@ const Settings = () => {
             </div>
           )}
 
-          <div className="settings-footer mt-5 pt-4 border-t max-w-lg">
+          <div className="settings-footer max-w-lg">
             <button type="submit" className="btn-primary" disabled={isLoading}>
               {isLoading ? (
                 <>

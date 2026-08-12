@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
 import {
   Search,
   Send,
@@ -14,7 +15,12 @@ import {
   Calendar,
   Clock,
   Tag,
+  Zap,
+  Ruler,
+  ShoppingBag,
+  Bell,
 } from 'lucide-react';
+import SendNotificationModal from '../../components/SendNotificationModal';
 import {
   subscribeToConversations,
   subscribeToMessages,
@@ -27,7 +33,7 @@ import {
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
-import { getAvatarColor, getInitials } from '../../utils/helpers';
+import { getAvatarColor, getInitials, formatSmartDateTime } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -42,6 +48,40 @@ const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 // fields the previous code tried to write.
 const RESERVATION_CARD_PREFIX = '__RES_CARD__';
 
+const QUICK_REPLY_TEMPLATES = [
+  'Reservation confirmed! Please complete your payment to secure your slot.',
+  'Reminder: Your pickup is scheduled. Please bring your deposit receipt.',
+  'Hi! We have your outfit ready for fitting. See you soon! 😊',
+  'Thank you for your reservation. Our store is at [location] — store hours are 10am–7pm.',
+];
+
+const formatResDate = (res) => {
+  if (!res) return '';
+  const d = res.reservationDate?.toDate
+    ? res.reservationDate.toDate()
+    : res.reservationDate?.seconds
+    ? new Date(res.reservationDate.seconds * 1000)
+    : res.date?.toDate
+    ? res.date.toDate()
+    : res.date?.seconds
+    ? new Date(res.date.seconds * 1000)
+    : res.date || res.reservationDate
+    ? new Date(res.date || res.reservationDate)
+    : null;
+  if (!d || isNaN(d.getTime())) return 'Date N/A';
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const getResStatusColor = (status) => {
+  const s = (status || '').toLowerCase();
+  if (s === 'confirmed') return '#10b981';
+  if (s === 'pending') return '#f59e0b';
+  if (s === 'fitting') return '#8b5cf6';
+  if (s === 'completed') return '#3b82f6';
+  if (s === 'cancelled') return '#ef4444';
+  return '#6b7280';
+};
+
 const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +90,8 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
@@ -65,6 +107,7 @@ const Messages = () => {
   );
 
   const [showNewConvModal, setShowNewConvModal] = useState(false);
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [allCustomers, setAllCustomers] = useState([]);
 
   const [custSearchInput, setCustSearchInput] = useState('');
@@ -86,11 +129,75 @@ const Messages = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Close reaction popover on outside click
+  const quickReplyRef = useRef(null);
+  const attachMenuRef = useRef(null);
+
+  const [productPreviews, setProductPreviews] = useState({});
+  const productPreviewsRef = useRef({});
+  productPreviewsRef.current = productPreviews;
+
+  // Fetch product details for messages with contextType === 'product'
   useEffect(() => {
-    const handler = () => setReactionPopover(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const missing = [
+      ...new Set(
+        messages
+          .filter((m) => m.contextType === 'product' && m.contextRef)
+          .map((m) => m.contextRef)
+      ),
+    ].filter((id) => productPreviewsRef.current[id] === undefined);
+
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('products')
+          .select('id, name, price, sale_price, on_sale, image_url, category, tags')
+          .in('id', missing);
+
+        if (cancelled) return;
+
+        setProductPreviews((prev) => {
+          const next = { ...prev };
+          for (const id of missing) next[id] = null;
+          for (const item of data || []) {
+            next[item.id] = {
+              id: item.id,
+              name: item.name,
+              price: item.price,
+              salePrice: item.sale_price,
+              onSale: item.on_sale,
+              imageUrl: item.image_url,
+              category: item.category,
+              tags: item.tags,
+            };
+          }
+          return next;
+        });
+      } catch (err) {
+        console.error('Error fetching product previews for chat:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages]);
+
+  // Close reaction popover & popovers on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      setReactionPopover(null);
+      if (quickReplyRef.current && !quickReplyRef.current.contains(e.target)) {
+        setShowQuickReplies(false);
+      }
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
+        setShowAttachMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => {
@@ -151,11 +258,12 @@ const Messages = () => {
 
     const convKey = activeChat.customId || activeChat.id;
     const nowIso = new Date().toISOString();
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
     try {
       await sendMessage({
         conversationId: convKey,
         senderId: user?.id ?? null,
-        senderName: user?.name ?? user?.email ?? 'Staff',
+        senderName: senderDisplayName,
         text: newMessage,
       });
       await updateConversation(activeChat.docId, {
@@ -179,13 +287,14 @@ const Messages = () => {
 
     const convKey = activeChat.customId || activeChat.id;
     const nowIso = new Date().toISOString();
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
 
     try {
       const imageUrl = await uploadChatImage(file, convKey);
       await sendMessage({
         conversationId: convKey,
         senderId: user?.id ?? null,
-        senderName: user?.name ?? user?.email ?? 'Staff',
+        senderName: senderDisplayName,
         text: '',
         imageUrl,
       });
@@ -354,20 +463,24 @@ const Messages = () => {
           lastMessage: 'Conversation started by staff',
           lastMessageTime: new Date().toISOString(),
           unreadCount: 0,
-        }).then(() => {
-          const waitForConv = setInterval(() => {
-            setConversations((prev) => {
-              const found = prev.find(
-                (c) => c.customerId === buyerId || c.customerName === buyerName,
-              );
-              if (found) {
-                clearInterval(waitForConv);
-                proceed(found);
-              }
-              return prev;
-            });
-          }, 300);
-          setTimeout(() => clearInterval(waitForConv), 5000);
+        }).then((newConv) => {
+          if (newConv) {
+            // Use the returned conversation directly
+            proceed(newConv);
+          } else {
+            // Conversation created but not returned inline — the Realtime
+            // subscription on `conversations` will deliver it shortly.
+            // Check once after a short delay as a fallback.
+            setTimeout(() => {
+              setConversations((prev) => {
+                const found = prev.find(
+                  (c) => c.customerId === buyerId || c.customerName === buyerName,
+                );
+                if (found) proceed(found);
+                return prev;
+              });
+            }, 1000);
+          }
         });
       }
     }
@@ -397,7 +510,7 @@ const Messages = () => {
         })()
       : null;
     const msgTime = msg.createdAt
-      ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? formatSmartDateTime(msg.createdAt, { short: true })
       : '';
 
     return (
@@ -461,6 +574,65 @@ const Messages = () => {
                 if (btn) btn.style.opacity = '0';
               }}
             >
+              {/* Product Context Card */}
+              {msg.contextType === 'product' ? (
+                (() => {
+                  const product = msg.contextRef ? productPreviews[msg.contextRef] : null;
+                  return (
+                    <div
+                      className="msg-product-card"
+                      onClick={() => {
+                        const searchParam = product?.name || msg.contextLabel;
+                        if (searchParam) {
+                          navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
+                        }
+                      }}
+                      title="Click to view product in catalog"
+                    >
+                      <div className="msg-product-header">
+                        <ShoppingBag size={13} />
+                        <span>Question about product</span>
+                      </div>
+                      {product ? (
+                        <div className="msg-product-content">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="msg-product-img" />
+                          ) : (
+                            <div className="msg-product-img-placeholder"><ShoppingBag size={18} /></div>
+                          )}
+                          <div className="msg-product-details">
+                            <div className="msg-product-name">{product.name}</div>
+                            <div className="msg-product-price">
+                              {product.onSale && product.salePrice ? (
+                                <>
+                                  <span className="msg-price-sale">₱{Number(product.salePrice).toLocaleString()}</span>
+                                  <span className="msg-price-original">₱{Number(product.price).toLocaleString()}</span>
+                                </>
+                              ) : (
+                                <span>₱{Number(product.price).toLocaleString()}</span>
+                              )}
+                            </div>
+                            {msg.contextLabel && (
+                              <div className="msg-product-tag">{msg.contextLabel}</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : msg.contextLabel ? (
+                        <div className="msg-product-label-only">
+                          <span className="msg-product-name">{msg.contextLabel}</span>
+                        </div>
+                      ) : (
+                        <div className="msg-product-loading">Loading product details...</div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : msg.contextLabel ? (
+                <div className="msg-context-chip">
+                  <span>Re: {msg.contextLabel}</span>
+                </div>
+              ) : null}
+
               {/* Image */}
               {msg.imageUrl && (
                 <button
@@ -607,7 +779,7 @@ const Messages = () => {
                     <h4>{getConvName(conv)}</h4>
                     <span className="time">
                       {conv.lastMessageTime
-                        ? new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        ? formatSmartDateTime(conv.lastMessageTime, { short: true })
                         : ''}
                     </span>
                   </div>
@@ -692,7 +864,23 @@ const Messages = () => {
             </div>
 
             <div className="chat-history">
-              {activeMessages.map((msg, index) => renderBubble(msg, index))}
+              {activeMessages.map((msg, index) => {
+                const msgDate = new Date(msg.createdAt || Date.now());
+                const prevMsg = activeMessages[index - 1];
+                const prevDate = prevMsg ? new Date(prevMsg.createdAt || Date.now()) : null;
+                const showDivider = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+
+                return (
+                  <React.Fragment key={msg.id || msg.docId || `msg-${index}`}>
+                    {showDivider && (
+                      <div className="chat-date-divider">
+                        <span>{formatSmartDateTime(msgDate).split(' ')[0]}</span>
+                      </div>
+                    )}
+                    {renderBubble(msg, index)}
+                  </React.Fragment>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           </>
@@ -727,20 +915,55 @@ const Messages = () => {
             </div>
           )}
           <form onSubmit={handleSend} className="chat-form">
-            <div className="attach-wrapper">
+            <div className="quick-reply-wrapper" ref={quickReplyRef}>
+              <button
+                type="button"
+                className="icon-btn qr-icon-btn"
+                aria-label="Quick reply templates"
+                onClick={() => {
+                  setShowQuickReplies(!showQuickReplies);
+                  setShowAttachMenu(false);
+                }}
+                title="Quick reply templates"
+              >
+                <Zap size={20} />
+              </button>
+
+              {showQuickReplies && (
+                <div className="quick-reply-popover">
+                  {QUICK_REPLY_TEMPLATES.map((template, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="quick-reply-btn"
+                      onClick={() => {
+                        setNewMessage(template);
+                        setShowQuickReplies(false);
+                      }}
+                    >
+                      {template}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="attach-wrapper" ref={attachMenuRef}>
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => setShowAttachMenu(!showAttachMenu)}
+                aria-label="Attach file"
+                onClick={() => {
+                  setShowAttachMenu(!showAttachMenu);
+                  setShowQuickReplies(false);
+                  setShowEmojiPicker(false);
+                }}
               >
                 <Paperclip size={20} />
               </button>
 
               {showAttachMenu && (
                 <div className="attach-menu card">
-                  <button type="button" className="attach-item">
-                    <Shirt size={16} /> Suggest Outfit
-                  </button>
                   <button
                     type="button"
                     className="attach-item"
@@ -755,6 +978,56 @@ const Messages = () => {
               )}
             </div>
 
+            <div className="relative" style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Insert Emoji"
+                onClick={() => {
+                  setShowEmojiPicker(!showEmojiPicker);
+                  setShowAttachMenu(false);
+                  setShowQuickReplies(false);
+                }}
+                title="Insert Emoji"
+                style={{ fontSize: '1.1rem' }}
+              >
+                😊
+              </button>
+
+              {showEmojiPicker && (
+                <div
+                  className="card p-2 flex gap-2"
+                  style={{
+                    position: 'absolute',
+                    bottom: '45px',
+                    left: 0,
+                    zIndex: 100,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    maxWidth: '220px',
+                    background: '#fff',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                  }}
+                >
+                  {['😊', '❤️', '👍', '✨', '👗', '🎉', '🙏', '🔥', '😂', '😮', '😢', '😍'].map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', padding: '4px' }}
+                      onClick={() => {
+                        setNewMessage((prev) => prev + e);
+                        setShowEmojiPicker(false);
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <input
               type="text"
               className="input-field chat-input"
@@ -763,11 +1036,161 @@ const Messages = () => {
               onChange={(e) => setNewMessage(e.target.value)}
             />
 
-            <button type="submit" className="send-btn" disabled={!newMessage.trim()}>
+            <button type="submit" className="send-btn" aria-label="Send message" disabled={!newMessage.trim()}>
               <Send size={18} />
             </button>
           </form>
         </div>
+      </div>
+
+      {/* Customer Context Sidebar */}
+      <div className="context-panel card">
+        <div className="context-panel-header">
+          <h3>Customer Context</h3>
+        </div>
+
+        {activeChat ? (
+          <div className="context-panel-body">
+            {/* Customer Avatar & Name */}
+            <div className="context-customer-info">
+              <div
+                className="avatar large-av"
+                style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
+              >
+                {getInitials(getConvName(activeChat))}
+              </div>
+              <h4 className="context-customer-name">{getConvName(activeChat)}</h4>
+              <button
+                className="btn-outline small full-width flex-center gap-2 mt-2"
+                onClick={() =>
+                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                }
+              >
+                <User size={14} /> View Profile
+              </button>
+              <button
+                className="btn-outline small full-width flex-center gap-2 mt-2 text-gold"
+                onClick={() => setShowNotifyModal(true)}
+              >
+                <Bell size={14} /> Send Push Notification
+              </button>
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Active Reservations */}
+            <div className="context-section">
+              <h4 className="context-section-title">Active Reservations</h4>
+              {(() => {
+                const customerResList = allReservations.filter(
+                  (r) =>
+                    r.customerId === activeChat.customerId ||
+                    (r.customerName || r.customer) === getConvName(activeChat)
+                );
+                if (customerResList.length === 0) {
+                  return (
+                    <p className="text-secondary text-sm" style={{ margin: '0.25rem 0' }}>
+                      No active reservations
+                    </p>
+                  );
+                }
+                return customerResList.map((res, index) => {
+                  const statusColor = getResStatusColor(res.status);
+                  const dep = res.deposit || res.depositAmount;
+                  const bal = res.balance || res.balanceAmount;
+                  const depStr = dep ? (String(dep).startsWith('₱') ? dep : `₱${dep}`) : '₱0';
+                  const balStr = bal ? (String(bal).startsWith('₱') ? bal : `₱${bal}`) : '₱0';
+                  return (
+                    <div key={res.id || res.docId || `res-${index}`} className="context-res-item">
+                      <div className="context-res-name">
+                        {res.productName || res.outfit || 'Outfit Reservation'}
+                      </div>
+                      <div className="context-res-status">
+                        <span
+                          className="context-res-dot"
+                          style={{ backgroundColor: statusColor }}
+                        />
+                        <span style={{ color: statusColor, fontWeight: 600, textTransform: 'capitalize' }}>
+                          {res.status || 'Pending'}
+                        </span>
+                      </div>
+                      <div className="context-res-date">
+                        <Calendar size={12} />
+                        <span>{formatResDate(res)}</span>
+                      </div>
+                      <div className="context-res-finance">
+                        Deposit: {depStr} · Balance: {balStr}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Inquired Products */}
+            <div className="context-section">
+              <h4 className="context-section-title">Inquired Products</h4>
+              {(() => {
+                const productMsgs = messages.filter(
+                  (m) => m.contextType === 'product' && (m.contextRef || m.contextLabel)
+                );
+                const uniqueProductIds = [...new Set(productMsgs.map((m) => m.contextRef).filter(Boolean))];
+                if (uniqueProductIds.length === 0 && productMsgs.length === 0) {
+                  return (
+                    <p className="text-secondary text-sm" style={{ margin: '0.25rem 0' }}>
+                      No product inquiries in chat
+                    </p>
+                  );
+                }
+                return uniqueProductIds.map((pId) => {
+                  const p = productPreviews[pId];
+                  return (
+                    <div
+                      key={pId}
+                      className="context-res-item"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        if (p?.name) {
+                          navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
+                        }
+                      }}
+                      title="Click to view product in catalog"
+                    >
+                      <div className="context-res-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <ShoppingBag size={14} style={{ color: 'var(--accent, #8b5cf6)' }} />
+                        <span>{p?.name || 'Loading Product...'}</span>
+                      </div>
+                      {p && (
+                        <div className="context-res-finance" style={{ marginTop: '0.25rem' }}>
+                          Price: ₱{Number(p.onSale && p.salePrice ? p.salePrice : p.price).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <hr className="context-divider" />
+
+            {/* Fit Profile */}
+            <div className="context-section">
+              <h4 className="context-section-title">Fit Profile</h4>
+              <p className="context-fit-note">
+                Customer body measurements and fit recommendations are accessible via the main profile view.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="context-panel-empty">
+            <User size={36} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+            <p className="text-secondary text-sm text-center">
+              Select a conversation to view customer context
+            </p>
+          </div>
+        )}
       </div>
 
       {/* New Conversation Modal */}
@@ -862,6 +1285,16 @@ const Messages = () => {
             </div>
           </div>
         </div>
+      )}
+      {showNotifyModal && activeChat && (
+        <SendNotificationModal
+          customer={{
+            id: activeChat.customerId,
+            name: getConvName(activeChat),
+            email: activeChat.customerEmail,
+          }}
+          onClose={() => setShowNotifyModal(false)}
+        />
       )}
     </div>
   );

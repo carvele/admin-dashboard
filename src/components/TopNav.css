@@ -378,12 +378,26 @@
   color: var(--text-secondary);
 }
 
-.user-menu {
+.user-menu-wrapper {
+  display: flex;
+  align-items: center;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--border-color);
+}
+.user-menu-btn {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding-left: 1.5rem;
-  border-left: 1px solid var(--border-color);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+.user-menu-btn:hover {
+  background-color: var(--beige);
 }
 .user-info {
   display: flex;
@@ -410,9 +424,55 @@
 .user-role-top {
   line-height: 1.2;
 }
-.logout-btn:hover {
-  background-color: var(--status-cancelled-bg);
-  color: var(--stock-low);
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 240px;
+  z-index: var(--z-dropdown);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  animation: searchDropIn 0.15s ease-out;
+}
+.user-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--cream);
+}
+.user-dropdown-actions {
+  padding: 0.5rem;
+}
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: left;
+  color: var(--charcoal);
+}
+.user-dropdown-item:hover {
+  background-color: var(--beige);
+}
+.user-dropdown-item.destructive {
+  color: #ef4444;
+}
+.user-dropdown-item.destructive:hover {
+  background-color: #fef2f2;
 }
 
 /* Loading spinner for lazy route fallback */

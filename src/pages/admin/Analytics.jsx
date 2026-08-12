@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
+import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -48,6 +49,7 @@ const Analytics = () => {
   const [catalog, setCatalog] = useState([]);
   const [arLogs, setArLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [poseGuides, setPoseGuides] = useState([]);
   
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
@@ -96,6 +98,7 @@ const Analytics = () => {
     const unsubCat = subscribeToCollection('products', setCatalog, {}, true);
     const unsubAR = subscribeToCollection('ar_sessions', setArLogs);
     const unsubFeed = subscribeToCollection('feedback', setFeedback, {}, true);
+    const unsubPoses = subscribeToCollection('pose_guides', setPoseGuides);
 
     return () => {
       unsubR();
@@ -103,6 +106,7 @@ const Analytics = () => {
       unsubCat();
       unsubAR();
       unsubFeed();
+      unsubPoses();
     };
   }, []);
 
@@ -139,24 +143,33 @@ const Analytics = () => {
   };
 
   // Filter Data
-  const filteredReservations = reservations.filter(r => isInRange(parseResDate(r)));
-  const filteredCustomers = customers.filter(c => isInRange(parseResDate(c)));
+  const filteredReservations = useMemo(
+    () => reservations.filter(r => isInRange(parseResDate(r))),
+    [reservations, startDate, endDate]
+  );
+  const filteredCustomers = useMemo(
+    () => customers.filter(c => isInRange(parseResDate(c))),
+    [customers, startDate, endDate]
+  );
   const currentTotalCustomers = customers.length; // Absolute total
 
   // Compute Revenue and Growth
-  let totalRev = 0;
-  const completedOrConfirmed = filteredReservations.filter(
-    (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
-  );
-  completedOrConfirmed.forEach((r) => {
-    const outfitName = r.productName || r.outfit;
-    const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-    if (item) {
-      totalRev += Number(item.price) || 0;
-    } else {
-      totalRev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
-    }
-  });
+  const { totalRev, completedOrConfirmed } = useMemo(() => {
+    let rev = 0;
+    const list = filteredReservations.filter(
+      (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
+    );
+    list.forEach((r) => {
+      const outfitName = r.productName || r.outfit;
+      const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
+      if (item) {
+        rev += Number(item.price) || 0;
+      } else {
+        rev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
+      }
+    });
+    return { totalRev: rev, completedOrConfirmed: list };
+  }, [filteredReservations, catalog]);
 
   const getGrowth = (list, dateField = null) => {
     const start = new Date(startDate);
@@ -178,39 +191,45 @@ const Analytics = () => {
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
   };
 
-  const revDelta = getGrowth(completedOrConfirmed);
-  const custDelta = getGrowth(customers);
-  const resDelta = getGrowth(reservations);
+  const revDelta = useMemo(() => getGrowth(completedOrConfirmed), [completedOrConfirmed, startDate, endDate]);
+  const custDelta = useMemo(() => getGrowth(customers), [customers, startDate, endDate]);
+  const resDelta = useMemo(() => getGrowth(reservations), [reservations, startDate, endDate]);
 
   // New Visualization: Revenue by Category
-  const categoryRev = {};
-  completedOrConfirmed.forEach(r => {
-    const outfitName = r.productName || r.outfit;
-    const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
-    const cat = item?.category || 'Uncategorized';
-    const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
-    categoryRev[cat] = (categoryRev[cat] || 0) + val;
-  });
+  const categoryShareData = useMemo(() => {
+    const categoryRev = {};
+    completedOrConfirmed.forEach(r => {
+      const outfitName = r.productName || r.outfit;
+      const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
+      const cat = item?.category || 'Uncategorized';
+      const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
+      categoryRev[cat] = (categoryRev[cat] || 0) + val;
+    });
 
-  const categoryShareData = Object.entries(categoryRev)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a,b) => b.value - a.value);
+    return Object.entries(categoryRev)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a,b) => b.value - a.value);
+  }, [completedOrConfirmed, catalog]);
 
   const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
 
   // Status Funnel
-  const statusCounts = {};
-  filteredReservations.forEach(r => {
-    statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-  });
-  const funnelData = Object.entries(statusCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a,b) => b.count - a.count);
+  const funnelData = useMemo(() => {
+    const statusCounts = {};
+    filteredReservations.forEach(r => {
+      statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+    });
+    return Object.entries(statusCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a,b) => b.count - a.count);
+  }, [filteredReservations]);
 
   // Avg Rating
-  const avgRating = feedback.length > 0 
-    ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
-    : 0;
+  const avgRating = useMemo(() => {
+    return feedback.length > 0 
+      ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
+      : 0;
+  }, [feedback]);
 
   // Inventory Health - Active items only
   const activeCatalog = catalog.filter(p => p.deleted !== true);
@@ -388,9 +407,16 @@ const Analytics = () => {
             </button>
             {exportRef && (
               <div className="dropdown-menu">
-                <button onClick={() => handleExport('csv')}>Excel (CSV)</button>
-                <button onClick={() => handleExport('xlsx')}>Excel (.xlsx)</button>
-                <button onClick={() => handleExport('pdf')}>PDF Report</button>
+                <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
+                <button onClick={() => handleExport('xlsx')}>Revenue Summary (.xlsx)</button>
+                <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
+                <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
+                <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
+                  👗 Garment Performance (CSV)
+                </button>
+                <button onClick={() => { exportInventoryDepreciationReport(catalog, reservations); setExportRef(false); }}>
+                  📊 Depreciation & ROI (CSV)
+                </button>
               </div>
             )}
           </div>
@@ -586,7 +612,7 @@ const Analytics = () => {
             <div className="card-header border-none">
               <h3>AR Try-On Performance</h3>
             </div>
-            <div className="chart-container" style={{ height: 300 }}>
+            <div className="chart-container" style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dynamicConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -597,6 +623,33 @@ const Analytics = () => {
                   <Bar dataKey="reserved" name="Reservations" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="p-4 border-t mt-2">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 mb-3">Top Style Poses (Engagement)</h4>
+              <div className="space-y-2">
+                {poseGuides.slice(0, 4).map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                    <div className="flex items-center gap-3">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="w-7 h-9 object-cover rounded" />
+                      ) : (
+                        <div className="w-7 h-9 bg-slate-800 rounded flex items-center justify-center text-[10px] text-white">📸</div>
+                      )}
+                      <div>
+                        <p className="font-bold text-gray-900">{p.name}</p>
+                        <p className="text-[10px] text-gray-500">{p.occasion || 'General'} · {p.difficulty || 'Easy'}</p>
+                      </div>
+                    </div>
+                    <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-[11px]">
+                      {p.category || 'Style Hint'}
+                    </span>
+                  </div>
+                ))}
+                {poseGuides.length === 0 && (
+                  <p className="text-xs text-gray-400">No style pose activity recorded yet.</p>
+                )}
+              </div>
             </div>
           </div>
         )}

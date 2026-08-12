@@ -73,12 +73,20 @@ export const productRules = {
     },
     message: 'Price must be a positive number',
   },
+  salePrice: {
+    validate: (val, formData) => {
+      if (!formData?.onSale) return true;
+      const num = Number(val);
+      return !isNaN(num) && num >= 0 && num <= Number(formData?.price || 0);
+    },
+    message: 'Sale price must be a valid non-negative number not exceeding regular price',
+  },
   category: {
     required: true,
     message: 'Please select a category',
   },
   imageUrl: {
-    pattern: PATTERNS.url,
+    validate: (val) => !val || val === '👗' || /^https?:\/\/.+/.test(val),
     message: 'Image URL must start with http:// or https://',
   },
 };
@@ -168,7 +176,7 @@ export function validateForm(formData, rules) {
     }
 
     // Custom validator
-    if (fieldRules.validate && !fieldRules.validate(value)) {
+    if (fieldRules.validate && !fieldRules.validate(value, formData)) {
       errors[field] = fieldRules.message || `${field} is invalid`;
     }
   }

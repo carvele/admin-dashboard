@@ -11,6 +11,12 @@ import {
   Trash2,
   Plus,
   X,
+  Star,
+  Tag,
+  Image as ImageIcon,
+  Sparkles,
+  Edit3,
+  Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -23,9 +29,66 @@ import {
   deletePoseGuide,
   subscribeToARAssets,
   createARAsset,
+  linkProductToPose,
+  unlinkProductFromPose,
+  getPoseGuideProducts,
 } from '../../services/wardrobeService';
 import { routeAndUploadFile } from '../../lib/storage';
+import '@google/model-viewer';
 import './ARAssets.css';
+
+const parsePoint = (str) => {
+  const parts = (str || '').split(',').map(s => parseFloat(s.trim()));
+  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
+};
+const formatPoint = (p) => `${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}`;
+const toSpaceString = (pointStr) => {
+  const p = parsePoint(pointStr);
+  return `${p.x} ${p.y} ${p.z}`;
+};
+const toSpaceStringOffset = (pointStr, xOffset) => {
+  const p = parsePoint(pointStr);
+  return `${p.x + xOffset} ${p.y} ${p.z}`;
+};
+
+const PointSlider = ({ label, pointStr, onChange }) => {
+  const p = parsePoint(pointStr);
+  const handleUpdate = (axis, val) => {
+    onChange(formatPoint({ ...p, [axis]: parseFloat(val) }));
+  };
+  return (
+    <div className="point-slider-group">
+      <label>{label}</label>
+      <div className="slider-row">
+        <span>X:</span>
+        <input 
+          type="range" min="-1" max="1" step="0.01" 
+          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)} 
+          role="slider" aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
+        />
+        <span className="val">{p.x.toFixed(2)}</span>
+      </div>
+      <div className="slider-row">
+        <span>Y:</span>
+        <input 
+          type="range" min="0" max="2" step="0.01" 
+          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)} 
+          role="slider" aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
+        />
+        <span className="val">{p.y.toFixed(2)}</span>
+      </div>
+      <div className="slider-row">
+        <span>Z:</span>
+        <input 
+          type="range" min="-1" max="1" step="0.01" 
+          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)} 
+          role="slider" aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
+        />
+        <span className="val">{p.z.toFixed(2)}</span>
+      </div>
+    </div>
+  );
+};
 
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
@@ -48,6 +111,11 @@ const ARAssets = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  const [allCatalogProducts, setAllCatalogProducts] = useState([]);
+  const [poseFile, setPoseFile] = useState(null);
+  const [editingPoseId, setEditingPoseId] = useState(null);
+  const [poseProductsMap, setPoseProductsMap] = useState({});
+
   // Alignment form state
   const [alignPoints, setAlignPoints] = useState({
     shoulderL: '-0.25, 1.45, 0',
@@ -57,16 +125,43 @@ const ARAssets = () => {
   });
 
   // Pose form state
-  const [poseForm, setPoseForm] = useState({ name: '', category: 'Calibration' });
+  const initialPoseForm = {
+    name: '',
+    category: 'Style Hint',
+    image_url: '',
+    description: '',
+    occasion: 'Casual',
+    difficulty: 'easy',
+    is_featured: true,
+    base_pose_type: 'front',
+    linkedProductIds: [],
+  };
+  const [poseForm, setPoseForm] = useState(initialPoseForm);
 
   useEffect(() => {
     const unsub = subscribeToProducts((data) => {
+      setAllCatalogProducts(data);
       const arTagged = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
       setAssets(arTagged.filter(p => p.model3DURL));
       setPendingProducts(arTagged.filter(p => !p.model3DURL));
       setLoading(false);
     });
-    const unsubPoses = subscribeToPoseGuides(setPoses);
+    const unsubPoses = subscribeToPoseGuides(async (poseData) => {
+      setPoses(poseData);
+      // Fetch linked products for each pose
+      const map = {};
+      for (const pose of poseData) {
+        if (pose.id) {
+          try {
+            const linked = await getPoseGuideProducts(pose.id);
+            map[pose.id] = linked;
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      setPoseProductsMap(map);
+    });
     const unsubLibrary = subscribeToARAssets(setGlobalLibrary);
     return () => {
       unsub();
@@ -153,29 +248,87 @@ const ARAssets = () => {
     }
   };
 
+  const resetPoseForm = () => {
+    setPoseForm(initialPoseForm);
+    setPoseFile(null);
+    setEditingPoseId(null);
+  };
+
+  const handleOpenEditPose = async (pose) => {
+    setEditingPoseId(pose.id);
+    const linked = poseProductsMap[pose.id] || [];
+    setPoseForm({
+      name: pose.name || '',
+      category: pose.category || 'Style Hint',
+      image_url: pose.image_url || '',
+      description: pose.description || '',
+      occasion: pose.occasion || 'Casual',
+      difficulty: pose.difficulty || 'easy',
+      is_featured: pose.is_featured ?? true,
+      base_pose_type: pose.base_pose_type || 'front',
+      linkedProductIds: linked.map(l => l.product_id),
+    });
+    setPoseFile(null);
+    setIsPoseModalOpen(true);
+  };
+
   const handleAddPose = async () => {
     if (!poseForm.name.trim()) {
       toast.error('Enter a pose name');
       return;
     }
+    setIsUploading(true);
     try {
+      let imageUrl = poseForm.image_url;
+      if (poseFile) {
+        imageUrl = await routeAndUploadFile(poseFile, 'pose-images');
+      }
+
+      const poseId = editingPoseId || `P-${String(poses.length + 1).padStart(3, '0')}`;
       await createPoseGuide({
-        id: `P-${String(poses.length + 1).padStart(3, '0')}`,
+        id: poseId,
         name: poseForm.name,
         category: poseForm.category,
+        image_url: imageUrl,
+        description: poseForm.description,
+        occasion: poseForm.occasion,
+        difficulty: poseForm.difficulty,
+        is_featured: poseForm.is_featured,
+        base_pose_type: poseForm.base_pose_type,
       });
-      toast.success('Pose guide added!');
+
+      // Handle product linking
+      const existingLinked = poseProductsMap[poseId] || [];
+      const existingIds = existingLinked.map(l => l.product_id);
+      
+      // Unlink removed products
+      for (const oldId of existingIds) {
+        if (!poseForm.linkedProductIds.includes(oldId)) {
+          await unlinkProductFromPose(poseId, oldId);
+        }
+      }
+      // Link new products
+      for (const newId of poseForm.linkedProductIds) {
+        if (!existingIds.includes(newId)) {
+          await linkProductToPose(poseId, newId);
+        }
+      }
+
+      toast.success(editingPoseId ? 'Style pose updated!' : 'Style pose added!');
       setIsPoseModalOpen(false);
-      setPoseForm({ name: '', category: 'Calibration' });
+      resetPoseForm();
     } catch (e) {
-      toast.error('Failed to add pose guide');
+      console.error(e);
+      toast.error('Failed to save pose guide: ' + e.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleDeletePose = async (pose) => {
     if (!window.confirm(`Delete pose "${pose.name}"?`)) return;
     try {
-      await deletePoseGuide(pose.docId);
+      await deletePoseGuide(pose.docId || pose.id);
       toast.success('Pose deleted');
     } catch (e) {
       toast.error('Failed to delete pose');
@@ -448,6 +601,129 @@ const ARAssets = () => {
         </div>
       )}
 
+      {activeTab === 'poses' && (
+        <div className="space-y-6 mt-4">
+          <div className="card p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-bold">AR Pose Guides & Calibration Specs</h3>
+                <p className="text-secondary text-sm">
+                  Pose reference guides used by the mobile app&apos;s MediaPipe Pose Detection engine for calibration and virtual fitting overlays.
+                </p>
+              </div>
+              <button
+                className="btn-primary flex-center gap-2"
+                onClick={() => {
+                  resetPoseForm();
+                  setIsPoseModalOpen(true);
+                }}
+              >
+                <Plus size={16} /> Add Style Pose Guide
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
+              {displayPoses.map((pose) => {
+                const linkedCount = (poseProductsMap[pose.id] || []).length;
+                return (
+                  <div key={pose.id} className="border rounded-xl p-4 bg-gray-50/50 hover:shadow-md transition-all relative group flex flex-col justify-between">
+                    <div>
+                      <div className="h-44 bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden mb-3">
+                        {pose.image_url ? (
+                          <img src={pose.image_url} alt={pose.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Camera size={36} className="text-indigo-400 opacity-60" />
+                        )}
+                        <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-0.5 rounded flex items-center gap-1">
+                          {pose.id}
+                          {pose.is_featured && <Star size={10} className="text-amber-400 fill-amber-400" />}
+                        </div>
+                        <div className="absolute bottom-2 right-2 bg-indigo-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                          {pose.category || 'Style Hint'}
+                        </div>
+                        {pose.occasion && (
+                          <div className="absolute bottom-2 left-2 bg-black/70 text-amber-300 text-[10px] font-medium px-2 py-0.5 rounded">
+                            {pose.occasion}
+                          </div>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-gray-900">{pose.name}</h4>
+                      {pose.description && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{pose.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        {pose.difficulty && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${
+                            pose.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
+                            pose.difficulty === 'intermediate' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {pose.difficulty}
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+                          <Shirt size={10} /> {linkedCount} linked
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t">
+                      <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                        <Check size={12} /> Mobile Active
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="text-indigo-600 hover:text-indigo-800 p-1 text-xs font-bold"
+                          onClick={() => handleOpenEditPose(pose)}
+                          title="Edit Style Pose"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
+                          onClick={() => handleDeletePose(pose)}
+                          title="Delete Pose"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card p-6 border-2 border-indigo-100 bg-indigo-50/10">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-2 flex items-center gap-2">
+              <View size={16} /> Mobile AR Pose Detection Integration Status
+            </h3>
+            <p className="text-xs text-indigo-700 mb-4">
+              Side-by-side verification between Admin Pose Specifications and Mobile App Runtime (MediaPipe 33 Landmarks).
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-4 rounded-xl border border-indigo-200">
+                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Admin Specification</h4>
+                <ul className="text-xs text-gray-600 space-y-1.5">
+                  <li>• Keypoints: 33 body landmarks (Shoulders, Hips, Elbows, Knees)</li>
+                  <li>• Tracking Model: MediaPipe Full Body Heavy</li>
+                  <li>• Calibration Threshold: 85% confidence score</li>
+                </ul>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-indigo-200">
+                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Mobile App Compatibility</h4>
+                <ul className="text-xs text-gray-600 space-y-1.5">
+                  <li>• Package: react-native-mediapipe-posedetection</li>
+                  <li>• Background Removal: @six33/react-native-bg-removal</li>
+                  <li>• Real-time FPS: 30 FPS camera feed overlay</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Link Assets Modal */}
       {isLinkModalOpen && productToLink && (
         <div className="modal-overlay" onClick={() => setIsLinkModalOpen(false)}>
@@ -565,51 +841,199 @@ const ARAssets = () => {
         </div>
       )}
 
-      {/* Add Pose Reference Modal */}
+      {/* Add / Edit Style Pose Reference Modal */}
       {isPoseModalOpen && (
         <div className="modal-overlay" onClick={() => setIsPoseModalOpen(false)}>
           <div
-            className="modal-content"
+            className="modal-content modal-lg"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
+            style={{ maxWidth: 650, maxHeight: '90vh', overflowY: 'auto' }}
           >
             <div className="modal-header">
-              <h2>Add Pose Reference</h2>
+              <h2>{editingPoseId ? `Edit Style Pose — ${editingPoseId}` : 'Add Style Pose Guide'}</h2>
               <button className="close-btn" onClick={() => setIsPoseModalOpen(false)}>
                 &times;
               </button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="label">Pose Name *</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g., Gala Red Carpet Pose"
+                    value={poseForm.name}
+                    onChange={(e) => setPoseForm({ ...poseForm, name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="label">Category</label>
+                  <select
+                    className="input-field"
+                    value={poseForm.category}
+                    onChange={(e) => setPoseForm({ ...poseForm, category: e.target.value })}
+                  >
+                    <option>Style Hint</option>
+                    <option>Calibration</option>
+                    <option>Preview</option>
+                    <option>Dynamic</option>
+                    <option>Turn</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="form-group">
+                  <label className="label">Occasion</label>
+                  <select
+                    className="input-field"
+                    value={poseForm.occasion}
+                    onChange={(e) => setPoseForm({ ...poseForm, occasion: e.target.value })}
+                  >
+                    <option>Casual</option>
+                    <option>Party</option>
+                    <option>Formal</option>
+                    <option>Wedding</option>
+                    <option>Date Night</option>
+                    <option>Business</option>
+                    <option>Festival</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="label">Difficulty</label>
+                  <select
+                    className="input-field"
+                    value={poseForm.difficulty}
+                    onChange={(e) => setPoseForm({ ...poseForm, difficulty: e.target.value })}
+                  >
+                    <option value="easy">Easy (Standing / Simple)</option>
+                    <option value="intermediate">Intermediate (Side / Angled)</option>
+                    <option value="advanced">Advanced (Dynamic / Turn)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="label">Base AR Matcher</label>
+                  <select
+                    className="input-field"
+                    value={poseForm.base_pose_type}
+                    onChange={(e) => setPoseForm({ ...poseForm, base_pose_type: e.target.value })}
+                  >
+                    <option value="front">Front Facing</option>
+                    <option value="side">Side Profile</option>
+                    <option value="walking">Walking / Stride</option>
+                    <option value="turn">Turn / Over Shoulder</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="form-group">
-                <label className="label">Pose Name</label>
-                <input
-                  type="text"
+                <label className="label">Styled Reference Image</label>
+                <div className="flex items-center gap-4">
+                  {(poseFile || poseForm.image_url) && (
+                    <div className="w-20 h-24 rounded border overflow-hidden bg-slate-900 flex-shrink-0">
+                      <img
+                        src={poseFile ? URL.createObjectURL(poseFile) : poseForm.image_url}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="input-field"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setPoseFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Description / Styling Tip</label>
+                <textarea
                   className="input-field"
-                  placeholder="e.g., Front T-Pose"
-                  value={poseForm.name}
-                  onChange={(e) => setPoseForm({ ...poseForm, name: e.target.value })}
+                  rows={2}
+                  placeholder="e.g., Stand with one leg slightly forward to highlight full dress silhouette..."
+                  value={poseForm.description}
+                  onChange={(e) => setPoseForm({ ...poseForm, description: e.target.value })}
                 />
               </div>
+
               <div className="form-group">
-                <label className="label">Category</label>
-                <select
-                  className="input-field"
-                  value={poseForm.category}
-                  onChange={(e) => setPoseForm({ ...poseForm, category: e.target.value })}
-                >
-                  <option>Calibration</option>
-                  <option>Preview</option>
-                  <option>Dynamic</option>
-                  <option>Turn</option>
-                </select>
+                <label className="label flex items-center justify-between">
+                  <span>Linked Catalog Products ({poseForm.linkedProductIds.length})</span>
+                  <span className="text-xs text-secondary font-normal">Select garments featured in this look</span>
+                </label>
+                <div className="border rounded-lg p-3 max-h-44 overflow-y-auto space-y-2 bg-gray-50">
+                  {allCatalogProducts.map((p) => {
+                    const isChecked = poseForm.linkedProductIds.includes(p.id || p.docId);
+                    return (
+                      <label key={p.id || p.docId} className="flex items-center gap-3 p-1.5 hover:bg-white rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const pid = p.id || p.docId;
+                            if (e.target.checked) {
+                              setPoseForm({ ...poseForm, linkedProductIds: [...poseForm.linkedProductIds, pid] });
+                            } else {
+                              setPoseForm({
+                                ...poseForm,
+                                linkedProductIds: poseForm.linkedProductIds.filter(id => id !== pid),
+                              });
+                            }
+                          }}
+                        />
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="w-8 h-8 object-cover rounded" />
+                        ) : (
+                          <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center text-xs">👔</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate">{p.name}</p>
+                          <p className="text-[10px] text-gray-500">{p.category} · ₱{p.rental_price || p.price}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                  {allCatalogProducts.length === 0 && (
+                    <p className="text-xs text-gray-400 text-center py-2">No catalog products found.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="is_featured_cb"
+                  checked={poseForm.is_featured}
+                  onChange={(e) => setPoseForm({ ...poseForm, is_featured: e.target.checked })}
+                />
+                <label htmlFor="is_featured_cb" className="text-xs font-bold text-gray-700 cursor-pointer">
+                  Feature on Mobile Home Style Inspiration Feed
+                </label>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-outline" onClick={() => setIsPoseModalOpen(false)}>
+              <button
+                className="btn-outline"
+                onClick={() => {
+                  setIsPoseModalOpen(false);
+                  resetPoseForm();
+                }}
+              >
                 Cancel
               </button>
-              <button className="btn-primary" onClick={handleAddPose}>
-                Add Pose
+              <button
+                className="btn-primary"
+                onClick={handleAddPose}
+                disabled={isUploading}
+              >
+                {isUploading ? 'Saving Pose...' : editingPoseId ? 'Update Style Pose' : 'Create Style Pose'}
               </button>
             </div>
           </div>
@@ -629,57 +1053,53 @@ const ARAssets = () => {
             <div className="modal-body align-modal-body">
               <div className="align-workspace">
                 <div className="align-preview-area">
-                  <div className="dummy-3d-model">
-                    <Shirt size={100} className="text-secondary opacity-50" />
-                    <div className="align-point shoulder-l"></div>
-                    <div className="align-point shoulder-r"></div>
-                    <div className="align-point waist-c"></div>
-                    <div className="align-point hips-l"></div>
-                    <div className="align-point hips-r"></div>
-                  </div>
+                  {configAsset && configAsset.model3DURL ? (
+                    <model-viewer
+                      src={configAsset.model3DURL}
+                      alt={configAsset.name}
+                      auto-rotate
+                      camera-controls
+                      ar
+                    >
+                      <button className="Hotspot" slot="hotspot-shoulder-l" data-position={toSpaceString(alignPoints.shoulderL)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-shoulder-r" data-position={toSpaceString(alignPoints.shoulderR)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-waist" data-position={toSpaceString(alignPoints.waist)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-hips-l" data-position={toSpaceStringOffset(alignPoints.hips, -0.15)} data-normal="0 0 1"></button>
+                      <button className="Hotspot" slot="hotspot-hips-r" data-position={toSpaceStringOffset(alignPoints.hips, 0.15)} data-normal="0 0 1"></button>
+                    </model-viewer>
+                  ) : (
+                    <div className="dummy-3d-model">
+                      <Shirt size={100} className="text-secondary opacity-50" />
+                      <div className="align-point shoulder-l"></div>
+                      <div className="align-point shoulder-r"></div>
+                      <div className="align-point waist-c"></div>
+                      <div className="align-point hips-l"></div>
+                      <div className="align-point hips-r"></div>
+                    </div>
+                  )}
                 </div>
                 <div className="align-controls line-height-2">
                   <h4 className="mb-3">Point Coordinates</h4>
-                  <div className="form-group">
-                    <label className="label text-xs">Left Shoulder (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.shoulderL}
-                      onChange={(e) =>
-                        setAlignPoints({ ...alignPoints, shoulderL: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Right Shoulder (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.shoulderR}
-                      onChange={(e) =>
-                        setAlignPoints({ ...alignPoints, shoulderR: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Waist Center (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.waist}
-                      onChange={(e) => setAlignPoints({ ...alignPoints, waist: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label text-xs">Hips (x,y,z)</label>
-                    <input
-                      type="text"
-                      className="input-field small"
-                      value={alignPoints.hips}
-                      onChange={(e) => setAlignPoints({ ...alignPoints, hips: e.target.value })}
-                    />
-                  </div>
+                  <PointSlider
+                    label="Left Shoulder"
+                    pointStr={alignPoints.shoulderL}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderL: val })}
+                  />
+                  <PointSlider
+                    label="Right Shoulder"
+                    pointStr={alignPoints.shoulderR}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderR: val })}
+                  />
+                  <PointSlider
+                    label="Waist Center"
+                    pointStr={alignPoints.waist}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, waist: val })}
+                  />
+                  <PointSlider
+                    label="Hips"
+                    pointStr={alignPoints.hips}
+                    onChange={(val) => setAlignPoints({ ...alignPoints, hips: val })}
+                  />
 
                   <button className="btn-primary full-width mt-4" onClick={saveAlignmentPoints}>
                     Save & Verify Points

@@ -20,6 +20,7 @@ import {
 } from '../../services/wardrobeService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
@@ -41,6 +42,7 @@ const ProductForm = ({ readOnly = false }) => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [productHistory, setProductHistory] = useState([]);
   const [loadingProductHistory, setLoadingProductHistory] = useState(false);
+  const [showArConfirm, setShowArConfirm] = useState(false);
 
   // Uniqlo-like details
   const [formData, setFormData] = useState({
@@ -143,6 +145,24 @@ const ProductForm = ({ readOnly = false }) => {
              setFormData(prev => ({
                 ...prev,
                 ...docParams,
+                name: docParams.name || '',
+                category: docParams.category || prev.category || 'Tops',
+                subCategory: docParams.subCategory || '',
+                price: docParams.price ?? '',
+                description: docParams.description || '',
+                material: docParams.material || '',
+                color: docParams.color || '',
+                baseColor: docParams.baseColor || '',
+                pattern: docParams.pattern || 'Solid',
+                careInstructions: docParams.careInstructions || '',
+                fitAndSizing: docParams.fitAndSizing || '',
+                styleCode: docParams.styleCode || '',
+                season: docParams.season || 'All-Season',
+                occasion: docParams.occasion || '',
+                visibility: docParams.visibility || 'draft',
+                discountPercentage: docParams.discountPercentage ?? 0,
+                salePrice: docParams.salePrice ?? '',
+                isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
                 sizes: docParams.sizes || [],
                 colors: parsedColors,
                 images: docParams.images || [],
@@ -400,10 +420,7 @@ const ProductForm = ({ readOnly = false }) => {
           const url = await routeAndUploadFile(selectedFiles[i]);
           if (url) uploadedImages.push(url);
         }
-      }
-
-      console.log('[DEBUG] All images handled. Preparing payload...');
-      const finalImages = [...formData.images, ...uploadedImages];
+      }      const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
         name: sanitizeText(formData.name),
@@ -423,6 +440,7 @@ const ProductForm = ({ readOnly = false }) => {
         occasion: formData.occasion,
         visibility: formData.visibility,
         isFeatured: formData.isFeatured,
+        isNewArrival: formData.isNewArrival,
         isAlterable: formData.isAlterable,
         updated_by: user?.id || null,
         images: finalImages,
@@ -440,7 +458,6 @@ const ProductForm = ({ readOnly = false }) => {
       };
 
       if (isEditing) {
-        console.log('[DEBUG] Updating product in Firestore...', { id, payload });
         await updateProduct(id, payload);
 
         // Fetch current inventory and check if any new sizes were added
@@ -467,10 +484,25 @@ const ProductForm = ({ readOnly = false }) => {
               }),
             );
             await Promise.all(inventoryPromises);
-            console.log('[DEBUG] Missing inventory items created successfully');
+          }
+
+          // Soft-delete inventory for sizes that were removed from the product
+          const removedInventory = allInv.filter(
+            (inv) =>
+              ((inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode) &&
+              !payload.sizes.includes(inv.size) &&
+              !inv.deleted
+          );
+          if (removedInventory.length > 0) {
+            const now = new Date().toISOString();
+            await supabase
+              .from('inventory')
+              .update({ deleted: true, deleted_at: now, updated_at: now })
+              .in('id', removedInventory.map((inv) => inv.id));
+            Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
           }
         } catch(invErr) {
-          console.error('[DEBUG] Checking/Adding missing sizes failed:', invErr);
+          console.error('Checking/Adding missing sizes failed:', invErr);
         }
 
         await logAction(user, 'Updated product details', {
@@ -479,7 +511,6 @@ const ProductForm = ({ readOnly = false }) => {
           productName: payload.name,
         });
 
-        console.log('[DEBUG] Firestore update SUCCESS');
         toast.success('Product updated successfully!');
       } else {
         payload.created_by = user?.id || null;
@@ -488,9 +519,7 @@ const ProductForm = ({ readOnly = false }) => {
         payload.visibility = 'draft';
         payload.tags = ['New Arrival'];
 
-        console.log('[DEBUG] Creating product in Firestore...', payload);
         const newDocId = await createProduct(payload);
-        console.log('[DEBUG] Firestore create SUCCESS. Doc ID:', newDocId);
 
         // Init inventory per size in parallel
         Logger.info(`Initializing inventory for new product ${newDocId}...`);
@@ -507,7 +536,6 @@ const ProductForm = ({ readOnly = false }) => {
           }),
         );
         await Promise.all(inventoryPromises);
-        console.log('[DEBUG] Inventory items created successfully');
 
         await logAction(user, 'Created new product', {
           targetType: 'product',
@@ -596,7 +624,7 @@ const ProductForm = ({ readOnly = false }) => {
                   </div>
                   <div>
                     <label className="label">Category *</label>
-                    <select name="category" className="input-field" value={formData.category} onChange={handleChange}>
+                    <select name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
                       {categories.map((c) => (
                         <option key={c.name} value={c.name}>{c.name}</option>
                       ))}
@@ -607,7 +635,7 @@ const ProductForm = ({ readOnly = false }) => {
                     <select
                       name="subCategory"
                       className="input-field"
-                      value={formData.subCategory}
+                      value={formData.subCategory || ''}
                       onChange={handleChange}
                       disabled={!categories.find((c) => c.name === formData.category)?.subcategories?.length}
                     >
@@ -640,10 +668,7 @@ const ProductForm = ({ readOnly = false }) => {
                         <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
                         <span className="text-xs font-bold uppercase text-secondary">Featured</span>
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                        <span className="text-xs font-bold uppercase text-secondary">Alterable</span>
-                      </label>
+
                    </div>
                 </div>
              </div>
@@ -665,10 +690,7 @@ const ProductForm = ({ readOnly = false }) => {
                         <input type="checkbox" name="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="w-4 h-4 accent-primary" />
                         <span className="text-sm font-medium group-hover:text-primary transition-colors">Featured Item</span>
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer group">
-                        <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                        <span className="text-sm font-medium group-hover:text-primary transition-colors">Alterable</span>
-                      </label>
+
                       <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
                          <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
                          <div style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -712,7 +734,7 @@ const ProductForm = ({ readOnly = false }) => {
                  <label className="label">Regular Rental Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
-                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" />
+                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
                  </div>
               </div>
 
@@ -728,7 +750,7 @@ const ProductForm = ({ readOnly = false }) => {
                    </label>
                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600">₱</span>
-                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" />
+                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
                    </div>
                 </div>
               )}
@@ -796,71 +818,54 @@ const ProductForm = ({ readOnly = false }) => {
                     <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
                  </div>
               </div>
-              <button type="button" onClick={() => navigate('/ar-assets')} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+              <button type="button" onClick={() => readOnly ? navigate('/ar-assets') : setShowArConfirm(true)} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
                 Configure AR Assets
               </button>
            </div>
         </section>
 
         {/* ══════════════════════════════════════════════
-            ZONE D — Composition & Specs
+            ZONE D — Material & Color
         ══════════════════════════════════════════════ */}
         <section className="card p-6">
            <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Palette size={14} /> Material & Aesthetics
+              <Palette size={14} /> Material & Color
            </h2>
 
-           {/* Available Colors — multi-select, like sizes. Customers pick one
-               of these on the product page; stored comma-joined in `color`. */}
-           <div className="mb-6">
-              <label className="label">Available Colors *</label>
-              {colorList.length === 0 ? (
-                 <p className="text-sm text-secondary mt-2">
-                    No colors defined yet. Add colors in Settings to enable selection.
-                 </p>
-              ) : (
-                 <div className="flex flex-wrap gap-3 mt-3">
-                    {colorList.map((c) => (
-                       <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => toggleColor(c.name)}
-                          className={`color-chip ${(formData.colors || []).includes(c.name) ? 'active' : ''}`}
-                       >
-                          {c.name}
-                       </button>
-                    ))}
-                 </div>
-              )}
-              {(formData.colors || []).length > 0 && (
-                 <p className="text-xs text-secondary mt-2">
-                    {formData.colors.length} selected · primary (for filtering): <strong>{formData.colors[0]}</strong>
-                 </p>
-              )}
-           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                 <label className="label">Product Color *</label>
+                 {colorList.length === 0 ? (
+                    <p className="text-sm text-secondary mt-2">
+                       No colors defined yet. Add colors in Settings to enable selection.
+                    </p>
+                 ) : (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                       {colorList.map((c) => {
+                          const isSelected = (formData.colors || []).includes(c.name);
+                          return (
+                             <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => toggleColor(c.name)}
+                                className={`color-chip ${isSelected ? 'active' : ''}`}
+                             >
+                                {c.name}
+                             </button>
+                          );
+                       })}
+                    </div>
+                 )}
+                  {(formData.colors || []).length > 0 && (
+                     <p className="text-xs text-secondary mt-2">
+                        Selected color(s): <strong>{(formData.colors || []).join(', ')}</strong>
+                     </p>
+                  )}
+              </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                  <label className="label">Material / Fabric</label>
-                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material} onChange={handleChange} />
-              </div>
-              <div>
-                 <label className="label">Pattern</label>
-                 <select name="pattern" className="input-field" value={formData.pattern} onChange={handleChange}>
-                    {patternList.map((p) => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
-                    ))}
-                 </select>
-              </div>
-              <div>
-                 <label className="label">Collection / Season</label>
-                 <select name="season" className="input-field" value={formData.season} onChange={handleChange}>
-                    {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                 </select>
-              </div>
-              <div>
-                 <label className="label">Occasion</label>
-                 <input type="text" name="occasion" className="input-field" placeholder="e.g. Wedding, GALA" value={formData.occasion} onChange={handleChange} />
+                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
               </div>
            </div>
         </section>
@@ -873,7 +878,13 @@ const ProductForm = ({ readOnly = false }) => {
               <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
                  <Ruler size={14} /> Sizing & Measurement Grid
               </h2>
-              <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm font-bold text-primary transition-colors">ALTERABLE</span>
+                </label>
+                <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+              </div>
            </div>
 
            <div className="mb-6">
@@ -899,7 +910,7 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="border-t pt-6">
               <div className="mb-4" style={{ maxWidth: '20rem' }}>
                  <label className="label">Fit Type</label>
-                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing} onChange={handleChange}>
+                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
                     <option value="">Standard Fit</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
@@ -927,26 +938,60 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="space-y-4">
               <div>
                  <label className="label">Full Description</label>
-                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description} onChange={handleChange} />
+                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
               </div>
               <div>
                  <label className="label">Care Instructions</label>
-                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions} onChange={handleChange} />
+                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
               </div>
               <div>
-                 <label className="label flex items-center gap-2"><TagIcon size={14} /> Tags (Comma separated)</label>
-                 <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="AR Try-On, New Arrival, High-End" 
-                    value={formData.tags?.join(', ') || ''} 
-                    onChange={(e) => {
-                       const value = e.target.value;
-                       // Split only on commas to preserve multi-word tags like "New Arrival"
-                       const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
-                       setFormData(prev => ({ ...prev, tags }));
-                    }} 
-                 />
+                 <label className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</label>
+                 <div className="flex flex-wrap gap-3">
+                    {[
+                       { label: 'New Arrival', stateKey: 'isNewArrival' },
+                       { label: 'AR Try-On', tagValue: 'AR Try-On' },
+                       { label: 'Limited Edition', tagValue: 'Limited Edition' },
+                       { label: 'Sale', stateKey: 'onSale' }
+                    ].map((item) => {
+                       const isChecked = item.stateKey 
+                          ? formData[item.stateKey] 
+                          : (formData.tags || []).includes(item.tagValue);
+                       
+                       return (
+                          <button
+                             key={item.label}
+                             type="button"
+                             onClick={() => {
+                                if (item.stateKey) {
+                                   const newChecked = !formData[item.stateKey];
+                                   setFormData(prev => {
+                                      const tags = new Set(prev.tags || []);
+                                      if (newChecked) tags.add(item.label);
+                                      else tags.delete(item.label);
+                                      return { ...prev, [item.stateKey]: newChecked, tags: Array.from(tags) };
+                                   });
+                                } else {
+                                   setFormData(prev => {
+                                      const current = prev.tags || [];
+                                      const updated = current.includes(item.tagValue)
+                                         ? current.filter(t => t !== item.tagValue)
+                                         : [...current, item.tagValue];
+                                      return { ...prev, tags: updated };
+                                   });
+                                }
+                             }}
+                             className={`px-4 py-2 rounded-lg border-2 text-xs font-bold transition-all flex items-center gap-2 ${
+                                isChecked
+                                   ? 'bg-primary text-white border-primary shadow-sm'
+                                   : 'bg-white text-secondary border-gray-200 hover:border-gray-300'
+                             }`}
+                          >
+                             <span>{isChecked ? '✓' : '+'}</span>
+                             <span>{item.label}</span>
+                          </button>
+                       );
+                    })}
+                 </div>
               </div>
            </div>
         </section>
@@ -1025,6 +1070,15 @@ const ProductForm = ({ readOnly = false }) => {
            )}
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={showArConfirm}
+        title="Unsaved Changes"
+        message="You may have unsaved changes on this product. Are you sure you want to leave and configure AR Assets? Any unsaved data will be lost."
+        confirmText="Leave Page"
+        onConfirm={() => navigate('/ar-assets')}
+        onCancel={() => setShowArConfirm(false)}
+      />
     </div>
   );
 };

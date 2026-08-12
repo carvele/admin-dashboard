@@ -11,10 +11,29 @@
   --black: #000000;
 
   --text-primary: #1f1c18;
-  --text-secondary: #6b615a;
+  --text-secondary: #544b45; /* Darkened for WCAG AA */
+
+  --pink-accent: #ec4899;
+  --pink-soft: #fdf2f8;
+  --pink-border: #fbcfe8;
 
   --border-color: #efe9db;
   --focus-ring: rgba(212, 175, 55, 0.4);
+
+  /* Theme Aliases */
+  --surface: #ffffff;
+  --surface-hover: #f5eedc;
+  --background: #fdfbf7;
+  --border: #efe9db;
+  --text-main: #1f1c18;
+  --bg-card: #ffffff;
+  --bg-light: #fdfbf7;
+  --bg-hover: #f5eedc;
+  --bg-main: #fdfbf7;
+  --color-gold: #d4af37;
+  --color-warning: #f59e0b;
+  --color-success: #10b981;
+  --color-danger: #ef4444;
   
   /* Glassmorphism base */
   --glass-bg: rgba(255, 255, 255, 0.7);
@@ -56,10 +75,11 @@
   --z-sticky: 100;
   --z-sidebar: 200;
   --z-overlay: 300;
-  --z-modal: 400;
+  --z-modal: 2000;
   --z-popover: 500;
   --z-toast: 9999;
 
+  --font-serif: 'Playfair Display', Georgia, serif;
   font-family:
     'Outfit',
     system-ui,
@@ -141,6 +161,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4, h5, h6, .brand-logo, .font-serif {
+  font-family: var(--font-serif);
+}
+
 /* Basic Layout resets */
 a {
   text-decoration: none;
@@ -167,6 +191,16 @@ button {
 }
 
 /* Utility Classes */
+.badge-pink {
+  background-color: var(--pink-soft);
+  color: var(--pink-accent);
+  border: 1px solid var(--pink-border);
+}
+
+.accent-pink-text {
+  color: var(--pink-accent);
+}
+
 .card {
   background-color: var(--white);
   border-radius: 12px;
@@ -890,14 +924,18 @@ input:checked + .toggle-slider:before {
 /* Modal */
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 500;
+  z-index: 2000;
   backdrop-filter: blur(4px);
   animation: overlayFadeIn 0.2s ease;
+  padding: 1rem;
 }
 @keyframes overlayFadeIn {
   from {
@@ -908,14 +946,33 @@ input:checked + .toggle-slider:before {
   }
 }
 .modal-content {
-  background-color: var(--white);
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 540px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 580px;
   max-height: 90vh;
   overflow-y: auto;
   animation: modalSlideUp 0.25s ease-out;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+}
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 @keyframes modalSlideUp {
   from {
@@ -929,27 +986,37 @@ input:checked + .toggle-slider:before {
 }
 .modal-header {
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 1.5rem 0;
-  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.75rem;
+  border-bottom: 1px solid var(--border-color);
 }
 .modal-header h2 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 600;
+  color: var(--charcoal);
+  margin: 0;
 }
 .modal-body {
-  padding: 0 1.5rem 1.5rem;
+  padding: 1.5rem 1.75rem;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
+  overflow-y: auto;
 }
 .modal-footer {
-  padding: 1.25rem 1.5rem;
+  flex-shrink: 0;
+  padding: 1rem 1.75rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--cream, #fdfbf7);
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 .close-btn {
   font-size: 1.5rem;
@@ -984,17 +1051,17 @@ input:checked + .toggle-slider:before {
 
   /* Shrink modal sizes so they fit on screen */
   .modal-content {
-    width: 95%;
+    width: 96%;
+    max-height: 92vh;
   }
   .modal-header {
-    padding: 1rem 1rem 0;
-    margin-bottom: 1rem;
+    padding: 1rem 1.25rem;
   }
   .modal-body {
-    padding: 0 1rem 1rem;
+    padding: 1.25rem;
   }
   .modal-footer {
-    padding: 1rem;
+    padding: 0.875rem 1.25rem;
   }
 
   /* Make tables horizontally scrollable without breaking the page width */
