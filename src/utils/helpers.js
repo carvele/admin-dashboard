@@ -93,6 +93,25 @@ export const isOnline = (timestamp) => {
   return Date.now() - ts < 15 * 60 * 1000; // within 15 mins
 };
 
+// ── Appointment time formatter ──────────────────────────────
+// reservations.appointmentTime is already a "HH:MM" 24-hour string resolved
+// to Asia/Manila by reservationService's extractTime() -- this only handles
+// the 24h -> 12h AM/PM display conversion. Prefer this over reformatting a
+// reservation's displayDate: displayDate comes from the `date` column, which
+// is midnight-anchored with no time-of-day, so any component that formats a
+// *time* from it is showing midnight reinterpreted in whatever timezone the
+// browser happens to be in, not the real scheduled appointment time.
+export const formatTimeLabel = (timeStr) => {
+  if (!timeStr) return '';
+  const match = String(timeStr).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return timeStr;
+  const hours24 = Number(match[1]);
+  const minutes = match[2];
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes} ${period}`;
+};
+
 // ── Currency formatter ──────────────────────────────────────
 export const formatCurrency = (amount) => {
   if (!amount || amount === 0) return '₱0';

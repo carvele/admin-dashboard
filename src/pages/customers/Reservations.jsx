@@ -767,9 +767,18 @@ const Reservations = () => {
                     const isExpanded = !!expandedRows[res.id];
                     const hasMultipleLines = res.lines.length > 1;
                     const resYear = res.createdAt ? new Date(res.createdAt).getFullYear() : new Date().getFullYear();
-                    const formattedId = res.id?.startsWith('ORD-') || res.id?.startsWith('RES-') 
-                      ? res.id 
-                      : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`;
+                    // res.displayId is already the real display_id column
+                    // (RES-...), populated by reservationService's
+                    // normaliseReservation and used correctly elsewhere in
+                    // this file (see the reschedule toast messages above).
+                    // This row alone ignored it and fabricated a fake
+                    // ORD-<year>-<uuid prefix> id from the raw primary key,
+                    // which showed a different identifier for the same
+                    // reservation than the card view and the details modal.
+                    const formattedId = res.displayId
+                      || (res.id?.startsWith('ORD-') || res.id?.startsWith('RES-')
+                        ? res.id
+                        : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`);
 
                     return (
                       <tr key={res.id}>

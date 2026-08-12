@@ -13,7 +13,7 @@ import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
-import { formatCurrency } from '../../utils/helpers';
+import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
 
 const initialsOf = (name) =>
   (name || '?')
@@ -65,9 +65,17 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
 
       <div className="res-card-meta">
         <span>
-          {res.displayDate?.toLocaleDateString?.([], { month: 'short', day: 'numeric' })}
+          {res.displayDate?.toLocaleDateString?.('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}
           {', '}
-          {res.displayDate?.toLocaleTimeString?.([], { hour: '2-digit', minute: '2-digit' })}
+          {/* res.appointmentTime (the real scheduled time, already resolved to
+              Asia/Manila) over reformatting displayDate: displayDate comes
+              from the midnight-anchored `date` column, so a time derived from
+              it is midnight reinterpreted in the browser's local timezone,
+              not the actual appointment -- this showed 08:00 AM for a 1:00 PM
+              booking on a Manila-zoned machine. */}
+          {res.appointmentTime
+            ? formatTimeLabel(res.appointmentTime)
+            : res.displayDate?.toLocaleTimeString?.('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
         </span>
         {/* "Paid" alone was a half-truth on a deposit reservation: the webhook
             marks it paid once the 50% clears, so this read Paid while the rest
@@ -86,7 +94,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
       {res.confirmedByName && (
         <div className="res-card-staff-attribution" style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
           Accepted by <strong>{res.confirmedByName}</strong>
-          {res.confirmedAt && ` on ${new Date(res.confirmedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+          {res.confirmedAt && ` on ${new Date(res.confirmedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}`}
         </div>
       )}
 
