@@ -34,6 +34,13 @@ function corsHeadersFor(req: Request): Record<string, string> {
   };
 }
 
+function json(req: Request, body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
+  });
+}
+
 const ALLOWED_ROLES = ['staff', 'admin'];
 
 Deno.serve(async (req) => {
@@ -48,7 +55,7 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return json({ error: 'Missing authorization header' }, 401);
+      return json(req, { error: 'Missing authorization header' }, 401);
     }
 
     // Identify the caller from their own invite session.
@@ -57,13 +64,13 @@ Deno.serve(async (req) => {
     });
     const { data: { user }, error: userError } = await callerClient.auth.getUser();
     if (userError || !user) {
-      return json({ error: 'Invalid or expired invite session' }, 401);
+      return json(req, { error: 'Invalid or expired invite session' }, 401);
     }
 
     // Trusted role — service-role-only claim, cannot be forged by the client.
     const staffRole = user.app_metadata?.staff_role;
     if (!ALLOWED_ROLES.includes(staffRole)) {
-      return json({ error: 'This account is not a pending staff invite.' }, 403);
+      return json(req, { error: 'This account is not a pending staff invite.' }, 403);
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -76,7 +83,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing && ALLOWED_ROLES.concat('owner').includes(existing.role)) {
-      return json({ alreadyActive: true }, 200);
+      return json(req, { alreadyActive: true }, 200);
     }
 
     const profileRow = {
@@ -97,19 +104,12 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       console.error('[activate-staff-account] Profile upsert failed:', upsertError);
-      return json({ error: 'Failed to activate account.' }, 500);
+      return json(req, { error: 'Failed to activate account.' }, 500);
     }
 
-    return json({ activated: true, role: staffRole }, 200);
+    return json(req, { activated: true, role: staffRole }, 200);
   } catch (err) {
     console.error('[activate-staff-account] Unexpected error:', err);
-    return json({ error: 'Unexpected server error' }, 500);
+    return json(req, { error: 'Unexpected server error' }, 500);
   }
 });
-
-function json(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
-  });
-}
