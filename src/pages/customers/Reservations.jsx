@@ -369,6 +369,7 @@ const Reservations = () => {
       } else if (action === 'ready_pickup') {
         await updateReservation(res.docId, {
           status: 'To Pickup',
+          payment_status: 'Paid',
           staff: user?.name || 'Staff',
           assigned_staff_id: user?.uid || '',
           countdown: false,
