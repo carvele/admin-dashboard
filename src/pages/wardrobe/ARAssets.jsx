@@ -142,8 +142,13 @@ const ARAssets = () => {
     const unsub = subscribeToProducts((data) => {
       setAllCatalogProducts(data);
       const arTagged = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
-      setAssets(arTagged.filter(p => p.model3DURL));
-      setPendingProducts(arTagged.filter(p => !p.model3DURL));
+      // toCamel()'s regex only converts "_" + lowercase letter, so
+      // model_3d_url becomes model_3dUrl (the "_3" doesn't match), not
+      // model3DURL -- reading the latter left both tabs permanently wrong
+      // (Linked always empty, Pending always showing every AR-tagged
+      // product regardless of actual configuration).
+      setAssets(arTagged.filter(p => p.model_3dUrl));
+      setPendingProducts(arTagged.filter(p => !p.model_3dUrl));
       setLoading(false);
     });
     const unsubPoses = subscribeToPoseGuides(async (poseData) => {
@@ -552,7 +557,7 @@ const ARAssets = () => {
             </thead>
             <tbody>
               {globalLibrary.map((item, idx) => {
-                const usage = assets.filter(p => p.model3DURL === item.url || p.maskURL === item.url).length;
+                const usage = assets.filter(p => p.model_3dUrl === item.url || p.maskUrl === item.url).length;
                 return (
                   <tr key={idx}>
                     <td className="font-medium">{item.name}</td>
@@ -1053,9 +1058,9 @@ const ARAssets = () => {
             <div className="modal-body align-modal-body">
               <div className="align-workspace">
                 <div className="align-preview-area">
-                  {configAsset && configAsset.model3DURL ? (
+                  {configAsset && configAsset.model_3dUrl ? (
                     <model-viewer
-                      src={configAsset.model3DURL}
+                      src={configAsset.model_3dUrl}
                       alt={configAsset.name}
                       auto-rotate
                       camera-controls

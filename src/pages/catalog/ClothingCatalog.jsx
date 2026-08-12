@@ -351,8 +351,8 @@ const ClothingCatalog = () => {
                 
                 {/* Conditional AR Badge */}
                 {(item.tags || []).includes('AR Try-On') && (
-                  <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
-                    {item.model3DURL ? (
+                  <div className={`ar-badge ${item.model_3dUrl ? 'ready' : 'missing'}`}>
+                    {item.model_3dUrl ? (
                       <span className="flex align-center gap-1"><Sparkles size={10} /> AR Ready</span>
                     ) : 'AR Missing'}
                   </div>
