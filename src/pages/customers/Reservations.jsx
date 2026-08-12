@@ -819,10 +819,17 @@ const Reservations = () => {
                           </div>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <div className="font-medium">{res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                          <div className="text-secondary text-sm">
-                            {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div className="font-medium">
+                            {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
                           </div>
+                          <div className="text-secondary text-sm">
+                            {res.appointmentTime || res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                          </div>
+                          {(res.createdAt || res.created_at) && (
+                            <div className="text-[11px] text-secondary mt-1">
+                              Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} {parseDate(res.createdAt || res.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                            </div>
+                          )}
                           {res.countdown && (res.displayStatus === 'Pending') && (
                             <CountdownTimer targetDate={res.reservationDate || res.date} />
                           )}
@@ -1219,9 +1226,38 @@ const Reservations = () => {
                   ))}
                 </ul>
               </div>
+              {(viewModal.createdAt || viewModal.created_at) && (
+                <div className="detail-row">
+                  <span className="detail-label">Created At</span>
+                  <strong>
+                    {parseDate(viewModal.createdAt || viewModal.created_at).toLocaleString('en-PH', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              )}
               <div className="detail-row">
-                <span className="detail-label">Date</span>
-                {parseDate(viewModal.reservationDate || viewModal.date).toLocaleString()}
+                <span className="detail-label">Pickup Date & Time</span>
+                <strong>
+                  {parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString('en-PH', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    timeZone: 'Asia/Manila',
+                  })}{' '}
+                  at{' '}
+                  {viewModal.appointmentTime || parseDate(viewModal.reservationDate || viewModal.date).toLocaleTimeString('en-PH', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Asia/Manila',
+                  })}
+                </strong>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
@@ -1255,13 +1291,17 @@ const Reservations = () => {
                         <span className="text-secondary text-sm"> · Ref: <code className="text-xs">{viewModal.providerRef}</code></span>
                       )}
                     </div>
+                    <div className="text-xs text-secondary mt-1">
+                      💡 <strong>Note on Payment Actions:</strong> "Mark Paid" (on the main table) moves reservation lifecycle from <em>To Pay → To Pickup</em>. "Toggle Payment Record" (below) updates financial payment status without changing lifecycle stage.
+                    </div>
                   </div>
                   <div className="payment-action-buttons">
                     <button
                       className={`btn-pay-toggle ${(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'is-paid' : 'is-unpaid'}`}
                       onClick={() => handleTogglePaid(viewModal)}
+                      title="Toggle financial payment status"
                     >
-                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Mark as Paid'}
+                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Toggle Paid Status'}
                     </button>
                   </div>
                 </div>
