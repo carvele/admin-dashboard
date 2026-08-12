@@ -35,10 +35,10 @@ Priority key: **P0** = wrong/fake data users see now · **P1** = security/data-i
 ### 5. Finish the security hardening plan
 See `docs/SECURITY_HARDENING_PLAN.md`. Done this session: gitignore (item 1), `.env.example` rewrite (item 2), env-driven edge-function CORS (item 5, deployed). **Remaining, needs you:** constrain the Cloudinary unsigned upload preset in the Cloudinary console (item 3); lock down or decommission the old `jeszybotiquear` Firebase project (item 4); set the `ALLOWED_ORIGINS` secret once the dashboard is deployed to a real origin (item 5 activation).
 
-### 6. Reservation display IDs are generated on the client and collide
-**What:** `Reservations.jsx` (~line 320) builds an ID as `RES-${reservations.length + 1}`. This is derived from the currently-loaded page length, so it repeats across sessions/paging, races between concurrent staff, and ignores the DB's `display_id` (which has a uniqueness migration).
-**Why:** Two reservations can get the same human ID; the number resets as data is archived/filtered.
-**How:** Generate `display_id` server-side — a Postgres sequence or a trigger on `reservations` — and have the client read it back, never invent it.
+### 6. Reservation display IDs are generated on the client and collide — ✅ RESOLVED (2026-08-13), was not actually live
+**What:** `Reservations.jsx` built a client-side ID (`mockId`, by then at ~line 601, format had also drifted to `ORD-${year}-${...}`) from the currently-loaded page length.
+**Traced further before fixing:** not actually reachable. `createReservation()` passed the payload through `addDocument()`, which unconditionally does `delete payload.id` before the INSERT (`supabaseService.js`) — the mock ID never reached the database. The real `id`/`display_id` are DB-generated, and the mock value was never read again after the call (the success toast is generic). So there was no live collision bug, just dead code computing a value that looked consequential but was silently discarded.
+**Fixed:** removed the dead computation rather than "generate it server-side" — nothing needed replacing, `display_id` generation was already entirely server-side.
 
 ---
 
