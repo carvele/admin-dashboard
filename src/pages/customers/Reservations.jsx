@@ -44,6 +44,7 @@ import {
   repairReservationData,
   settleReservationBalance,
   resolveRescheduleRequest,
+  getPaymentsForReservation,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -206,6 +207,26 @@ const Reservations = () => {
     });
     return () => { cancelled = true; };
   }, [viewModal?.receiptUrl]);
+
+  // PayMongo transaction history for the reservation currently open in the
+  // details modal. See getPaymentsForReservation: this table was never read
+  // anywhere in the app before, so staff had no way to see the actual
+  // transaction (amount charged, provider status, checkout session id)
+  // behind a reservation's payment_status.
+  const [paymentRecords, setPaymentRecords] = useState([]);
+  const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(false);
+
+  useEffect(() => {
+    setPaymentRecords([]);
+    if (!viewModal?.id) return;
+    let cancelled = false;
+    setPaymentRecordsLoading(true);
+    getPaymentsForReservation(viewModal.id)
+      .then((rows) => { if (!cancelled) setPaymentRecords(rows); })
+      .catch(() => { if (!cancelled) setPaymentRecords([]); })
+      .finally(() => { if (!cancelled) setPaymentRecordsLoading(false); });
+    return () => { cancelled = true; };
+  }, [viewModal?.id]);
 
   const [newRes, setNewRes] = useState({
     customer: '',
@@ -1351,6 +1372,59 @@ const Reservations = () => {
                   );
                 })()}
               </div>
+              {/* Actual PayMongo transaction records for this reservation --
+                  distinct from the payment_status pill above, which only
+                  reflects the current aggregate state. A reservation can have
+                  more than one row if an earlier checkout session was
+                  abandoned before a later one succeeded. */}
+              {paymentRecordsLoading ? (
+                <div className="detail-row">
+                  <span className="detail-label">Payment Transactions</span>
+                  <span className="text-secondary text-sm">Loading…</span>
+                </div>
+              ) : paymentRecords.length > 0 && (
+                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="detail-label" style={{ marginBottom: '8px' }}>
+                    Payment Transactions ({paymentRecords.length})
+                  </span>
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {paymentRecords.map((p) => (
+                      <div
+                        key={p.id}
+                        style={{
+                          width: '100%',
+                          fontSize: '13px',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          background: 'var(--bg-secondary, #f8f8f8)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <div>
+                          <strong>{formatCurrency((p.amountCentavos || 0) / 100)}</strong>
+                          <span className="text-secondary"> · {p.provider}{p.method ? ` (${p.method})` : ''}</span>
+                          {p.providerRef && (
+                            <div className="text-secondary text-xs">
+                              <code>{p.providerRef}</code>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className={`payment-status-pill ${p.status === 'paid' ? 'paid' : ['awaiting_payment', 'processing'].includes(p.status) ? 'submitted' : 'unpaid'}`}>
+                            {p.status}
+                          </span>
+                          <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                            {parseDate(p.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {viewModal.receiptUrl && (
                 <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: '8px' }}>
