@@ -187,7 +187,7 @@ const Dashboard = () => {
       return {
         ...r,
         actionType: isReturn ? 'Return' : 'Pickup',
-        timeStr: pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timeStr: r.appointmentTime || pickupDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
       };
     })
     .sort((a, _b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
