@@ -5,6 +5,7 @@ import {
   getPendingDeletionRequests,
   getBlockingObligations,
   processAccountDeletion,
+  rejectAccountDeletion,
 } from '../../services/accountDeletionService';
 import { logAction } from '../../lib/supabaseService';
 import { useAuth } from '../../context/AuthContext';
@@ -92,6 +93,30 @@ const AccountDeletionRequests = () => {
       setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
     } catch (e) {
       toast.error('Failed to process this request: ' + (e?.message || 'unknown error'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reviewing) return;
+    if (!window.confirm(`Decline this deletion request from ${reviewing.customerName}? Nothing is erased -- the customer keeps their account and can request again later.`)) {
+      return;
+    }
+    setProcessing(true);
+    try {
+      await rejectAccountDeletion(reviewing.docId);
+      toast.success(`Deletion request declined for ${reviewing.customerName}.`);
+      await logAction(user, 'Rejected account deletion request', {
+        targetType: 'profile',
+        targetId: reviewing.userId,
+        customerName: reviewing.customerName,
+      });
+      setReviewing(null);
+      setObligations(null);
+      setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
+    } catch (e) {
+      toast.error('Failed to decline this request: ' + (e?.message || 'unknown error'));
     } finally {
       setProcessing(false);
     }
@@ -258,7 +283,10 @@ const AccountDeletionRequests = () => {
                   <Mail size={14} /> Send Email Notice
                 </button>
                 <button className="btn-outline" onClick={closeReview} disabled={processing}>
-                  Cancel
+                  Close
+                </button>
+                <button className="btn-outline" onClick={handleReject} disabled={processing}>
+                  Decline Request
                 </button>
                 <button
                   className="btn-danger"

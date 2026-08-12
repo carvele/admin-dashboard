@@ -111,3 +111,17 @@ export const processAccountDeletion = async (requestId) => {
 
   return body;
 };
+
+/**
+ * Declines a pending request without erasing anything -- moves it to
+ * 'cancelled' via the reject_account_deletion_request RPC. Unlike
+ * processAccountDeletion this never needs the service-role Edge Function:
+ * it's a plain status write, so it's staff-authenticated and RPC-enforced
+ * directly (SECURITY DEFINER, re-checks is_staff_or_admin()).
+ */
+export const rejectAccountDeletion = async (requestId) => {
+  const { error } = await supabase.rpc('reject_account_deletion_request', {
+    _request_id: requestId,
+  });
+  if (error) throw error;
+};
