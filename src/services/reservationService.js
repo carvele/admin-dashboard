@@ -195,6 +195,34 @@ export const getReservationsByProduct = async (productId, productName) => {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
+/**
+ * PayMongo transaction history for a reservation.
+ *
+ * The `payments` table -- provider, provider_ref (PayMongo checkout session
+ * id), amount, status, method -- was never read anywhere in this app: staff
+ * only ever saw the reservation's own payment_status ("Paid"/"Pending"),
+ * which the webhook sets once the deposit clears. There was no way to see
+ * *which* PayMongo transaction that corresponded to, whether an earlier
+ * attempt failed first, or the amount actually charged. RLS already permits
+ * staff to read this table ("Staff read all payments"); this was purely a
+ * missing UI.
+ *
+ * Newest first: a reservation can have more than one row here if an earlier
+ * checkout session was abandoned or failed before a later one succeeded
+ * (payments-create reuses an open session rather than stacking them, but a
+ * failed/expired one still leaves its own row behind).
+ */
+export const getPaymentsForReservation = async (reservationId) => {
+  if (!reservationId) return [];
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('reservation_id', reservationId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return toCamel(data ?? []);
+};
+
 // ── Writes ────────────────────────────────────────────────────
 
 const ALLOWED_RESERVATION_FIELDS = new Set([
