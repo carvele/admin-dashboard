@@ -20,6 +20,7 @@ export const getProductReviews = async (productId) => {
       rating,
       comment,
       images,
+      verified_purchase,
       created_at,
       profiles (
         first_name,
@@ -77,6 +78,7 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
       rating,
       comment,
       images,
+      verified_purchase,
       created_at,
       profiles (first_name, last_name, email),
       products (name)
@@ -130,7 +132,6 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
       comment: row.comment,
       images: row.images,
       createdAt: row.created_at,
-      // Since verified_purchase might not exist, default false
       verifiedPurchase: row.verified_purchase || false,
       userName: [firstName, lastName].filter(Boolean).join(' ') || 'Guest Explorer',
     };

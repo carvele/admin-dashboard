@@ -44,8 +44,8 @@ export interface Product {
   tags?: string[];
   isAlterable?: boolean;
   timestamp?: number;
-  model3DURL?: string;
-  maskURL?: string;
+  model_3dUrl?: string;
+  maskUrl?: string;
   rating?: number;
   reviewCount?: number;
   onSale?: boolean;
