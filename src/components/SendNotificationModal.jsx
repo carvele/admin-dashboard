@@ -18,27 +18,20 @@ export default function SendNotificationModal({ customer, onClose }) {
 
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-push', {
-        body: {
-          user_id: customer.id || customer.userId,
-          title: title.trim(),
-          body: body.trim(),
-        },
+      // Writes the notification row directly via a staff-only RPC. There is
+      // no push-time edge function -- dispatch_pending_push() (a cron job)
+      // picks up any row with pushed_at IS NULL and an expo_push_token and
+      // sends it via Expo, so this is delivered as an actual push, not just
+      // recorded.
+      const { error } = await supabase.rpc('send_customer_notification', {
+        _user_id: customer.id || customer.userId,
+        _title: title.trim(),
+        _body: body.trim(),
       });
 
-      if (error) {
-        // Fallback: log notification record in database table if edge function is not deployed locally
-        console.warn('Edge function invoke error, writing to notification table fallback:', error);
-        await supabase.from('notifications').insert([{
-          user_id: customer.id || customer.userId,
-          title: title.trim(),
-          body: body.trim(),
-          read: false,
-          created_at: new Date().toISOString(),
-        }]);
-      }
+      if (error) throw error;
 
-      toast.success(`Push notification sent to ${customer.name || 'customer'}!`);
+      toast.success(`Notification queued for ${customer.name || 'customer'} -- delivered on next push cycle.`);
       onClose();
     } catch (err) {
       toast.error(err.message || 'Failed to send push notification');
