@@ -264,6 +264,7 @@ const sanitizeReservationPayload = (obj) => {
     imageUrl: 'image_url',
     rentalPrice: 'total_price',
     depositAmount: 'deposit_amount',
+    paymentStatus: 'payment_status',
   };
 
   for (const [key, val] of Object.entries(obj)) {
