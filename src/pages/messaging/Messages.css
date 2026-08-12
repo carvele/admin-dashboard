@@ -217,6 +217,32 @@
   border: 1px solid var(--border-color);
   border-bottom-left-radius: 2px;
 }
+.bubbles-auto-reply {
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+  color: #831843;
+  border: 1px solid #fbcfe8;
+  border-bottom-right-radius: 2px;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.08);
+}
+.bubbles-auto-reply .msg-time {
+  color: #9d174d;
+  opacity: 0.85;
+}
+
+.auto-response-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #be185d;
+  background-color: #fbcfe8;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
 
 .outfit-suggestion-card {
   display: flex;
