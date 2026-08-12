@@ -235,7 +235,7 @@ const Messages = () => {
       setMessages([]);
       return;
     }
-    const convKey = activeChat.customId || activeChat.id;
+    const convKey = activeChat.id || activeChat.customId;
     const unsub = subscribeToMessages((data) => {
       const filtered = data.filter((m) => m.conversationId === convKey);
       const sorted = [...filtered].sort((a, b) => {
@@ -256,9 +256,9 @@ const Messages = () => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
-    const convKey = activeChat.customId || activeChat.id;
+    const convKey = activeChat.id || activeChat.customId;
     const nowIso = new Date().toISOString();
-    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
     try {
       await sendMessage({
         conversationId: convKey,
@@ -285,9 +285,9 @@ const Messages = () => {
     setShowAttachMenu(false);
     setIsUploadingImage(true);
 
-    const convKey = activeChat.customId || activeChat.id;
+    const convKey = activeChat.id || activeChat.customId;
     const nowIso = new Date().toISOString();
-    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
 
     try {
       const imageUrl = await uploadChatImage(file, convKey);
@@ -410,11 +410,11 @@ const Messages = () => {
     async (conv, resContext) => {
       if (!conv || !resContext) return;
       try {
-        const convKey = conv.customId || conv.id;
+        const convKey = conv.id || conv.customId;
         await sendMessage({
           conversationId: convKey,
           senderId: user?.id ?? null,
-          senderName: user?.name ?? user?.email ?? 'Staff',
+          senderName: user?.name ?? user?.email ?? 'Boutique Support',
           text: RESERVATION_CARD_PREFIX + JSON.stringify(resContext),
         });
         await updateConversation(conv.docId, {
@@ -478,7 +478,7 @@ const Messages = () => {
                 );
                 if (found) proceed(found);
                 return prev;
-              });
+                });
             }, 1000);
           }
         });
@@ -486,7 +486,7 @@ const Messages = () => {
     }
   }, [location.state, conversations, sendReservationCard]);
 
-  const convKey = activeChat?.customId || activeChat?.id;
+  const convKey = activeChat?.id || activeChat?.customId;
   const activeMessages = messages
     .filter((m) => activeChat && m.conversationId === convKey)
     .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
