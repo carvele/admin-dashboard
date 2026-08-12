@@ -103,16 +103,27 @@ const Settings = () => {
   const handleSaveWeeklyHours = async () => {
     setIsLoading(true);
     try {
+      const failedDays = [];
       for (const item of weeklyHours) {
-        await supabase.from('store_hours').upsert({
+        const { error } = await supabase.from('store_hours').upsert({
           day_of_week: item.day_of_week,
           open_time: item.open_time || '09:00:00',
           close_time: item.close_time || '18:00:00',
           is_closed: !!item.is_closed,
           slot_capacity: item.slot_capacity || 3,
         }, { onConflict: 'day_of_week' });
+        // Not thrown -- a single bad day (e.g. close time before open time,
+        // rejected by the DB's own CHECK constraint) shouldn't block the
+        // other six days from saving, but it must not be silently dropped
+        // either: this used to show "saved" even when a day's write failed
+        // and quietly reverted to its previous stored value.
+        if (error) failedDays.push(item.day_of_week);
       }
-      toast.success('Weekly store hours saved and synced to Mobile!');
+      if (failedDays.length > 0) {
+        toast.error(`Could not save hours for: ${failedDays.join(', ')}. Check that close time is after open time.`);
+      } else {
+        toast.success('Weekly store hours saved and synced to Mobile!');
+      }
       await logAction(user, 'Updated store operating hours');
     } catch (err) {
       toast.error('Failed to save store hours: ' + err.message);
