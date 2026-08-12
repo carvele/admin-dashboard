@@ -239,9 +239,10 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'status',
   'size',
   'deposit',
-  'deposit_amount',
-  'total_price',
-  'balance_due',
+  'rental_price',
+  'receipt_url',
+  'countdown',
+  'assigned_staff_id',
   'payment_status',
   'payment_due_at',
   'confirmed_by_id',
@@ -250,7 +251,6 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'deleted',
   'created_at',
   'updated_at',
-  'reschedule_status',
   'reschedule_requested_at',
 ]);
 
@@ -262,8 +262,8 @@ const sanitizeReservationPayload = (obj) => {
     productId: 'product_id',
     productName: 'product_name',
     imageUrl: 'image_url',
-    rentalPrice: 'total_price',
-    depositAmount: 'deposit_amount',
+    rentalPrice: 'rental_price',
+    receiptUrl: 'receipt_url',
     paymentStatus: 'payment_status',
   };
 
@@ -377,7 +377,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
 
     if (!invRow) {
       console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size})`);
-      return;
+      return false;
     }
 
     const updates = {};
@@ -392,10 +392,15 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     updates.updated_at = new Date().toISOString();
 
     const { error } = await supabase.from('inventory').update(updates).eq('id', invRow.id);
-    if (error) console.warn('[Inventory] Adjust failed:', error.message);
-    else console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
+    if (error) {
+      console.warn('[Inventory] Adjust failed:', error.message);
+      return false;
+    }
+    console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
+    return true;
   } catch (err) {
     console.warn('Stock adjustment failed:', err);
+    return false;
   }
 };
 

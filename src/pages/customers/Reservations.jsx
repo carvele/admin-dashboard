@@ -290,13 +290,15 @@ const Reservations = () => {
 
   // --- Stock adjustment helper ---
   const adjustStock = async (outfit, size, delta, isConsume = false) => {
-    await adjustInventoryForReservation(outfit, size, delta, isConsume);
+    return adjustInventoryForReservation(outfit, size, delta, isConsume);
   };
 
   // A reservation can hold several products, so stock has to move for every
   // line. Adjusting only the reservation's own product columns would leave
   // every item after the first uncounted -- reserved stock silently wrong.
   // Quantity is honoured too: 2 of something moves 2.
+  // Returns false if any line failed, so callers can warn staff instead of
+  // claiming a stock move that didn't actually happen.
   const adjustStockForReservation = async (res, deltaPerUnit, isConsume = false) => {
     const lines = itemsByReservation[res.id]?.length
       ? itemsByReservation[res.id]
@@ -307,15 +309,18 @@ const Reservations = () => {
           quantity: res.quantity ?? 1,
         }];
 
+    let allOk = true;
     for (const line of lines) {
       const qty = Math.max(1, line.quantity ?? 1);
-      await adjustStock(
+      const ok = await adjustStock(
         line.productId || line.productName,
         line.size,
         deltaPerUnit * qty,
         isConsume,
       );
+      if (!ok) allOk = false;
     }
+    return allOk;
   };
 
   // --- LIFECYCLE ACTIONS ---
@@ -364,13 +369,13 @@ const Reservations = () => {
         // item is promised to this customer and must stop being sellable even
         // though payment has not landed. Deducting only at ready_pickup meant
         // two customers could both be approved for the same last unit.
-        await adjustStockForReservation(res, -1);
+        const stockOk = await adjustStockForReservation(res, -1);
         toast.success(`Reservation ${id} approved for payment — stock held`);
+        if (!stockOk) toast.error(`Stock adjustment for ${id} may have failed — check inventory`);
       } else if (action === 'ready_pickup') {
         await updateReservation(res.docId, {
           status: 'To Pickup',
           payment_status: 'Paid',
-          staff: user?.name || 'Staff',
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
@@ -399,22 +404,25 @@ const Reservations = () => {
 
         await updateReservation(res.docId, { status: 'Completed' });
         // Consume reserved stock (item purchased/picked up forever)
-        await adjustStockForReservation(res, 1, true);
+        const stockOk = await adjustStockForReservation(res, 1, true);
         toast.success(
           outstanding > 0
             ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
             : `Reservation ${id} completed — stock consumed permanently`,
         );
+        if (!stockOk) toast.error(`Stock consumption for ${id} may have failed — check inventory`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Restore exactly when the previous status was holding stock. Using the
         // shared predicate rather than a hand-listed set is the point: the old
         // inline list included statuses that had never deducted, so cancelling
         // handed back units that were never taken.
+        let stockOk = true;
         if (holdsStock(res.status)) {
-          await adjustStockForReservation(res, 1);
+          stockOk = await adjustStockForReservation(res, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
+        if (!stockOk) toast.error(`Stock restore for ${id} may have failed — check inventory`);
       }
       const actionLabels = {
         approve_pay: 'Approved for Payment',
@@ -610,12 +618,14 @@ const Reservations = () => {
         reservationDate: new Date(newRes.date),
         date: new Date(newRes.date), // Fallback for Android which parses 'date'
         status: 'Pending',
-        staff: 'Unassigned',
         assigned_staff_id: '', // Will be set on Confirm
         countdown: true,
         size: newRes.size,
-        deposit: newRes.deposit,
-        timestamp: Date.now(),
+        // deposit is the numeric amount owed (50%, matching the standard
+        // convention elsewhere in this codebase), not a paid/unpaid flag --
+        // that belongs on payment_status, which the checkbox actually means.
+        deposit: Math.round((matchedProduct?.price || 0) * 0.5 * 100) / 100,
+        payment_status: newRes.deposit ? 'Paid' : 'Pending',
         rentalPrice: matchedProduct?.price || 0,
       });
       await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
