@@ -597,13 +597,10 @@ const Reservations = () => {
     );
     const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
 
-    const year = new Date().getFullYear();
-    const mockId = `ORD-${year}-${String(reservations.length + 1).padStart(5, '0')}`;
     // Find productId and imageUrl if possible
     const matchedProduct = products.find((p) => p.name === newRes.outfit);
     try {
       await createReservation({
-        id: mockId,
         customerName: newRes.customer,
         customerId: customerId, // FK to users collection (matches Android field name)
         productName: newRes.outfit,
