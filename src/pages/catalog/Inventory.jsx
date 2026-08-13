@@ -22,6 +22,7 @@ import {
   subscribeToInventory,
   subscribeToProducts,
   updateInventoryItem,
+  adjustInventoryStockDelta,
   archiveInventoryItem,
   restoreInventoryItem,
   getInventory,
@@ -322,15 +323,20 @@ const Inventory = () => {
     }
 
     try {
-      await updateInventoryItem(restockModal.docId, {
-        total: restockModal.total + qty,
-        available: restockModal.available + qty,
+      // Delta applied atomically server-side, not restockModal.total + qty --
+      // restockModal is a snapshot from whenever this modal opened, so two
+      // restocks landing close together (a double-click, two staff acting
+      // near-simultaneously) used to both add qty to the same stale starting
+      // number, silently losing one restock's units.
+      const result = await adjustInventoryStockDelta(restockModal.docId, {
+        totalDelta: qty,
+        availableDelta: qty,
       });
       await syncProductStock(restockModal.productDocId, restockModal.sku);
       await logStockMovement(
         restockModal.productDocId,
-        restockModal.total,
-        restockModal.total + qty,
+        result?.prevTotal ?? restockModal.total,
+        result?.newTotal ?? restockModal.total + qty,
         'restock',
         `Restock: +${qty} units of ${restockModal.item} (size ${restockModal.size})`,
       );

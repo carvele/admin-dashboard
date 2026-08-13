@@ -347,7 +347,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     // 1. Try by product_doc_id (uuid)
     const { data: byId } = await supabase
       .from('inventory')
-      .select('id, total, reserved, available')
+      .select('id')
       .eq('product_doc_id', productIdOrName)
       .eq('size', size)
       .maybeSingle();
@@ -357,7 +357,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     if (!invRow) {
       const { data: bySku } = await supabase
         .from('inventory')
-        .select('id, total, reserved, available')
+        .select('id')
         .eq('sku', productIdOrName)
         .eq('size', size)
         .maybeSingle();
@@ -368,7 +368,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     if (!invRow) {
       const { data: byName } = await supabase
         .from('inventory')
-        .select('id, total, reserved, available')
+        .select('id')
         .eq('item', productIdOrName)
         .eq('size', size)
         .maybeSingle();
@@ -380,18 +380,20 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
       return false;
     }
 
-    const updates = {};
-    if (isConsume) {
-      const amount = Math.abs(delta);
-      updates.total = Math.max(0, (invRow.total || 0) - amount);
-      updates.reserved = Math.max(0, (invRow.reserved || 0) - amount);
-    } else {
-      updates.available = Math.max(0, (invRow.available || 0) + delta);
-      updates.reserved = Math.max(0, (invRow.reserved || 0) - delta);
-    }
-    updates.updated_at = new Date().toISOString();
+    // Deltas applied atomically server-side (adjust_inventory_stock), not a
+    // JS-side read-compute-write -- two near-simultaneous calls against the
+    // same row (a double-click, two staff acting close together, a realtime
+    // refresh racing a manual action) used to both read the same starting
+    // total/reserved/available and whichever UPDATE landed second silently
+    // overwrote the first's result, losing one of the two deltas.
+    const params = isConsume
+      ? { p_total_delta: -Math.abs(delta), p_reserved_delta: -Math.abs(delta) }
+      : { p_available_delta: delta, p_reserved_delta: -delta };
 
-    const { error } = await supabase.from('inventory').update(updates).eq('id', invRow.id);
+    const { error } = await supabase.rpc('adjust_inventory_stock', {
+      p_inventory_id: invRow.id,
+      ...params,
+    });
     if (error) {
       console.warn('[Inventory] Adjust failed:', error.message);
       return false;
