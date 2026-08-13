@@ -20,6 +20,8 @@ import {
   ShoppingBag,
   Bell,
   Pencil,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import SendNotificationModal from '../../components/SendNotificationModal';
 import {
@@ -32,6 +34,7 @@ import {
   uploadChatImage,
   addReaction,
   markMessagesRead,
+  markMessagesDelivered,
 } from '../../services/communicationService';
 import { usePresence } from '../../hooks/usePresence';
 import { subscribeToReservations } from '../../services/reservationService';
@@ -90,6 +93,11 @@ const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
+  // Kept in sync below so the messages-subscription callback (which only
+  // re-subscribes when activeChat changes) always sees the current
+  // conversation list rather than a stale one captured at mount.
+  const conversationsRef = useRef([]);
+  conversationsRef.current = conversations;
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -99,6 +107,9 @@ const Messages = () => {
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
+  // Clicking a sent bubble reveals its exact Sent/Delivered/Seen time, same
+  // as the mobile app's tap-to-reveal -- id of the currently expanded one.
+  const [expandedMsgId, setExpandedMsgId] = useState(null);
 
   // Reaction popover: { msgId, anchorRect }
   const [reactionPopover, setReactionPopover] = useState(null);
@@ -266,6 +277,20 @@ const Messages = () => {
       // lands, not only on the next open/close.
       if (activeChat.customerId) {
         markMessagesRead(convKey, activeChat.customerId);
+      }
+
+      // Delivered, across every conversation, not just the active one --
+      // subscribeToMessages already delivers the full table on every change
+      // (it's what `data` is), so this is the one place that sees a customer
+      // message the instant any staff browser tab receives it, regardless
+      // of which conversation they have open. Mirrors the mobile app's
+      // global markDelivered handler on its own presence/messages channel.
+      const customerIds = new Set(conversationsRef.current.map((c) => c.customerId).filter(Boolean));
+      const undeliveredCustomerMsgIds = data
+        .filter((m) => !m.deliveredAt && m.senderId && customerIds.has(m.senderId))
+        .map((m) => m.id);
+      if (undeliveredCustomerMsgIds.length > 0) {
+        markMessagesDelivered(undeliveredCustomerMsgIds);
       }
     });
     return () => unsub();
@@ -601,6 +626,16 @@ const Messages = () => {
     .filter((m) => activeChat && m.conversationId === convKey)
     .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
+  // Only staff's newest sent message carries a status by default -- repeating
+  // Sent/Delivered/Seen down the whole thread is noise, matching the mobile
+  // app. Any individual message's status is still one click away.
+  const lastSentIndex = (() => {
+    for (let i = activeMessages.length - 1; i >= 0; i--) {
+      if (activeMessages[i].senderId !== activeChat?.customerId) return i;
+    }
+    return -1;
+  })();
+
   // ── Message bubble renderer ────────────────────────────────────────────
   const renderBubble = (msg, index) => {
     // messages has no `sender` column — the reliable signal is sender_id.
@@ -685,6 +720,21 @@ const Messages = () => {
                   btn.style.opacity = '0';
                 });
               }}
+              onClick={() => {
+                if (!isSent) return;
+                const id = msg.id || msg.docId;
+                setExpandedMsgId((prev) => (prev === id ? null : id));
+              }}
+              onKeyDown={(e) => {
+                if (!isSent || (e.key !== 'Enter' && e.key !== ' ')) return;
+                e.preventDefault();
+                const id = msg.id || msg.docId;
+                setExpandedMsgId((prev) => (prev === id ? null : id));
+              }}
+              role={isSent ? 'button' : undefined}
+              tabIndex={isSent ? 0 : undefined}
+              aria-label={isSent ? 'Toggle delivery status' : undefined}
+              style={isSent ? { cursor: 'pointer' } : undefined}
             >
               {/* Product Context Card */}
               {msg.contextType === 'product' ? (
@@ -693,7 +743,8 @@ const Messages = () => {
                   return (
                     <div
                       className="msg-product-card"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const searchParam = product?.name || msg.contextLabel;
                         if (searchParam) {
                           navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
@@ -749,7 +800,10 @@ const Messages = () => {
               {msg.imageUrl && (
                 <button
                   type="button"
-                  onClick={() => setImageModalUrl(msg.imageUrl)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImageModalUrl(msg.imageUrl);
+                  }}
                   style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'block' }}
                   aria-label="View full-size image"
                 >
@@ -766,6 +820,26 @@ const Messages = () => {
                 <p style={{ whiteSpace: 'pre-line', margin: msg.imageUrl ? '6px 0 0' : 0 }}>
                   {msg.text}
                 </p>
+              )}
+
+              {isSent && (index === lastSentIndex || expandedMsgId === (msg.id || msg.docId)) && (
+                <span className="msg-status">
+                  {msg.readAt ? (
+                    <>
+                      Seen{expandedMsgId === (msg.id || msg.docId) ? ` ${formatSmartDateTime(msg.readAt)}` : ''}{' '}
+                      <CheckCheck size={12} className="msg-status-icon msg-status-seen" />
+                    </>
+                  ) : msg.deliveredAt ? (
+                    <>
+                      Delivered{expandedMsgId === (msg.id || msg.docId) ? ` ${formatSmartDateTime(msg.deliveredAt)}` : ''}{' '}
+                      <CheckCheck size={12} className="msg-status-icon" />
+                    </>
+                  ) : (
+                    <>
+                      Sent <Check size={12} className="msg-status-icon" />
+                    </>
+                  )}
+                </span>
               )}
 
               <span className="msg-time">

@@ -34,6 +34,24 @@ export const subscribeToMessages = (callback) =>
 export const sendMessage = (data) => addDocument('messages', data);
 
 /**
+ * Mark a batch of messages delivered. Mirrors the mobile app's markDelivered
+ * -- called with the ids of customer-authored messages the admin dashboard
+ * has just received (live or on initial load), so a customer's checkmark
+ * moves from Sent to Delivered as soon as any staff browser tab has it,
+ * regardless of which conversation they have open.
+ * @param {string[]} messageIds
+ */
+export const markMessagesDelivered = async (messageIds) => {
+  if (!messageIds || messageIds.length === 0) return;
+  const { error } = await supabase
+    .from('messages')
+    .update({ delivered_at: new Date().toISOString() })
+    .in('id', messageIds)
+    .is('delivered_at', null);
+  if (error) console.error('[Supabase] markMessagesDelivered failed:', error.message);
+};
+
+/**
  * Mark every unread customer message in a conversation as read. Mirrors the
  * mobile app's markAsRead (which marks staff messages read when the customer
  * opens the chat) -- without this half, a customer's "Sent" checkmark never
@@ -43,9 +61,24 @@ export const sendMessage = (data) => addDocument('messages', data);
  * @param {string} customerId - only the customer's own messages get marked
  */
 export const markMessagesRead = async (conversationId, customerId) => {
+  const nowIso = new Date().toISOString();
+
+  // Reading implies delivery -- catches a message read_at is about to be set
+  // on without delivered_at ever having been stamped (e.g. a customer sent
+  // it while no staff browser tab was open, so no realtime INSERT could
+  // mark it delivered). is('delivered_at', null) never overwrites an
+  // earlier, real delivery time.
+  const { error: deliveredError } = await supabase
+    .from('messages')
+    .update({ delivered_at: nowIso })
+    .eq('conversation_id', conversationId)
+    .eq('sender_id', customerId)
+    .is('delivered_at', null);
+  if (deliveredError) console.error('[Supabase] markMessagesRead (delivered_at) failed:', deliveredError.message);
+
   const { error } = await supabase
     .from('messages')
-    .update({ read_at: new Date().toISOString() })
+    .update({ read_at: nowIso })
     .eq('conversation_id', conversationId)
     .eq('sender_id', customerId)
     .is('read_at', null);
