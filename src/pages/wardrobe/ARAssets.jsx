@@ -175,10 +175,20 @@ const ARAssets = () => {
     };
   }, []);
 
+  // products.ar_data is a single jsonb blob (status/alignPoints/alignments),
+  // not real columns -- a plain UPDATE replaces the whole column value, so
+  // every write here merges onto the asset's current ar_data rather than
+  // clobbering fields it isn't touching.
+  const updateArData = async (docId, currentArData, patch) => {
+    const merged = { ...(currentArData || {}), ...patch };
+    await updateProduct(docId, { arData: merged });
+    return merged;
+  };
+
   const toggleStatus = async (asset) => {
-    const newStatus = asset.arStatus === 'Disabled' ? 'Active' : 'Disabled';
+    const newStatus = asset.arData?.status === 'Disabled' ? 'Active' : 'Disabled';
     try {
-      await updateProduct(asset.docId, { arStatus: newStatus });
+      await updateArData(asset.docId, asset.arData, { status: newStatus });
       toast.success(`AR status updated to ${newStatus} for ${asset.name}`);
     } catch (e) {
       toast.error('Failed to update AR status');
@@ -188,10 +198,10 @@ const ARAssets = () => {
   const openConfig = (asset) => {
     setConfigAsset(asset);
     setAlignPoints({
-      shoulderL: asset.arAlignPoints?.shoulderL || '-0.25, 1.45, 0',
-      shoulderR: asset.arAlignPoints?.shoulderR || '0.25, 1.45, 0',
-      waist: asset.arAlignPoints?.waist || '0, 1.05, 0',
-      hips: asset.arAlignPoints?.hips || '0, 0.90, 0',
+      shoulderL: asset.arData?.alignPoints?.shoulderL || '-0.25, 1.45, 0',
+      shoulderR: asset.arData?.alignPoints?.shoulderR || '0.25, 1.45, 0',
+      waist: asset.arData?.alignPoints?.waist || '0, 1.05, 0',
+      hips: asset.arData?.alignPoints?.hips || '0, 0.90, 0',
     });
     setIsConfigModalOpen(true);
   };
@@ -199,9 +209,9 @@ const ARAssets = () => {
   const saveAlignmentPoints = async () => {
     if (!configAsset) return;
     try {
-      await updateProduct(configAsset.docId, {
-        arAlignPoints: alignPoints,
-        arAlignments: 'Verified',
+      await updateArData(configAsset.docId, configAsset.arData, {
+        alignPoints,
+        alignments: 'Verified',
       });
       toast.success('Alignment points saved & verified!');
       setIsConfigModalOpen(false);
@@ -231,12 +241,18 @@ const ARAssets = () => {
         timestamp: Date.now()
       });
 
-      // 2. If we were uploading for a specific product, link it now
+      // 2. If we were uploading for a specific product, link it now.
+      // model_3dUrl/maskUrl (not model3DURL/maskURL) -- toSnake() turns
+      // every capital letter into its own "_x", so model3DURL became the
+      // nonexistent column model3_d_u_r_l and this always threw. The real
+      // columns are model_3d_url/mask_url; model_3dUrl is what actually
+      // round-trips to them (matches how this file already reads
+      // p.model_3dUrl elsewhere, per the toCamel-quirk comment above).
       if (window._targetProduct) {
-        const updateData = assetType === '3D Model' 
-          ? { model3DURL: downloadURL, arStatus: 'Active' } 
-          : { maskURL: downloadURL };
-        
+        const updateData = assetType === '3D Model'
+          ? { model_3dUrl: downloadURL, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+          : { maskUrl: downloadURL };
+
         await updateProduct(window._targetProduct.docId, updateData);
         toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
         window._targetProduct = null;
@@ -467,8 +483,8 @@ const ARAssets = () => {
             </thead>
             <tbody>
               {assets.map((asset) => {
-                const status = asset.arStatus || 'Active';
-                const alignments = asset.arAlignments || 'Pending';
+                const status = asset.arData?.status || 'Active';
+                const alignments = asset.arData?.alignments || 'Pending';
 
                 return (
                   <tr key={asset.docId}>
@@ -574,9 +590,9 @@ const ARAssets = () => {
                           <button 
                             className="btn-primary small"
                             onClick={async () => {
-                              const updateData = item.type === '3D Model' 
-                                ? { model3DURL: item.url, arStatus: 'Active' } 
-                                : { maskURL: item.url };
+                              const updateData = item.type === '3D Model'
+                                ? { model_3dUrl: item.url, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+                                : { maskUrl: item.url };
                               await updateProduct(window._targetProduct.docId, updateData);
                               toast.success(`Linked ${item.name} to ${window._targetProduct.name}`);
                               window._targetProduct = null;
