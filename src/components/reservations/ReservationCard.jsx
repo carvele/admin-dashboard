@@ -129,7 +129,13 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         {canManage && primary && (
           <button
             className="btn-primary res-card-primary"
-            onClick={() => onAction(res.id, primary.action)}
+            // A submitted-receipt reservation used to fire mark_paid the
+            // instant this button was clicked -- same as the normal action,
+            // just relabeled "Verify receipt" -- so staff could mark a
+            // payment verified without the receipt image ever having been
+            // opened. Now opens the detail modal instead, where the receipt
+            // renders next to its own dedicated Verify Payment button.
+            onClick={() => (awaitingReceipt ? onView() : onAction(res.id, primary.action))}
           >
             {awaitingReceipt ? 'Verify receipt' : primary.label}
           </button>

@@ -557,13 +557,23 @@ const Reservations = () => {
 
   const handleVerifyPayment = async (res) => {
     try {
-      await updateReservation(res.docId, { paymentStatus: 'Paid' });
-      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Paid' } : prev);
+      // Matches the mark_paid lifecycle action (handleAction) exactly --
+      // this only ever set paymentStatus, so a reservation verified from
+      // here stayed stuck on "To Pay" forever even though payment_status
+      // said Paid, instead of moving to Preparing like every other path
+      // that marks a reservation paid.
+      await updateReservation(res.docId, {
+        status: 'Preparing',
+        paymentStatus: 'Paid',
+        assignedStaffId: user?.uid || '',
+        countdown: false,
+      });
+      setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
       await logAction(user, 'Verified GCash Payment', {
         reservationId: res.id,
         customer: res.customerName || res.customer,
       });
-      toast.success('Payment verified successfully');
+      toast.success('Payment verified — preparing item');
     } catch (e) {
       toast.error('Failed to verify payment');
     }
@@ -920,7 +930,13 @@ const Reservations = () => {
                             {canManage && primaryAction && (
                               <button
                                 className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
-                                onClick={() => handleAction(res.id, primaryAction.action)}
+                                // Same fix as the board card: this used to fire
+                                // mark_paid immediately, relabeled "Verify
+                                // Receipt" -- staff could mark payment verified
+                                // without ever opening the receipt image. Opens
+                                // the detail modal instead, where the receipt
+                                // renders next to its own Verify Payment button.
+                                onClick={() => (isAwaitingReceipt(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
                               >
                                 {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                               </button>
