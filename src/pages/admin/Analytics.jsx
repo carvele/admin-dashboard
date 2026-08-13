@@ -22,6 +22,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
 import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
+import { countsAsRevenue } from '../../utils/reservationStatus';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -154,11 +155,17 @@ const Analytics = () => {
   const currentTotalCustomers = customers.length; // Absolute total
 
   // Compute Revenue and Growth
-  const { totalRev, completedOrConfirmed } = useMemo(() => {
+  //
+  // Revenue is recognised at handover, matching reservationStatus.js's
+  // countsAsRevenue (Completed only) -- this used to hand-roll its own list
+  // that counted every in-progress status as revenue, including reservations
+  // still awaiting payment. That inflated "Total Revenue" with money that had
+  // neither been earned nor received, and drifted further out of date with
+  // every status-vocabulary change since it never imported the shared
+  // definition other pages already use.
+  const { totalRev, earnedReservations } = useMemo(() => {
     let rev = 0;
-    const list = filteredReservations.filter(
-      (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
-    );
+    const list = filteredReservations.filter((r) => countsAsRevenue(r));
     list.forEach((r) => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
@@ -168,7 +175,7 @@ const Analytics = () => {
         rev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
       }
     });
-    return { totalRev: rev, completedOrConfirmed: list };
+    return { totalRev: rev, earnedReservations: list };
   }, [filteredReservations, catalog]);
 
   const getGrowth = (list, dateField = null) => {
@@ -191,14 +198,14 @@ const Analytics = () => {
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
   };
 
-  const revDelta = useMemo(() => getGrowth(completedOrConfirmed), [completedOrConfirmed, startDate, endDate]);
+  const revDelta = useMemo(() => getGrowth(earnedReservations), [earnedReservations, startDate, endDate]);
   const custDelta = useMemo(() => getGrowth(customers), [customers, startDate, endDate]);
   const resDelta = useMemo(() => getGrowth(reservations), [reservations, startDate, endDate]);
 
   // New Visualization: Revenue by Category
   const categoryShareData = useMemo(() => {
     const categoryRev = {};
-    completedOrConfirmed.forEach(r => {
+    earnedReservations.forEach(r => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
       const cat = item?.category || 'Uncategorized';
@@ -209,7 +216,7 @@ const Analytics = () => {
     return Object.entries(categoryRev)
       .map(([name, value]) => ({ name, value }))
       .sort((a,b) => b.value - a.value);
-  }, [completedOrConfirmed, catalog]);
+  }, [earnedReservations, catalog]);
 
   const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
 
@@ -431,7 +438,7 @@ const Analytics = () => {
             change={revDelta.text}
             trend={revDelta.trend}
             icon={TrendingUp}
-            tooltip={`Revenue from ${completedOrConfirmed.length} records in this period.`}
+            tooltip={`Earned revenue from ${earnedReservations.length} completed reservation(s) in this period.`}
           />
           <StatCard
             title="Total Customers"
@@ -684,7 +691,7 @@ const Analytics = () => {
               <div className="metric-row mt-6">
                  <div className="flex-between mb-1">
                    <span className="text-sm">Avg Reservation Value</span>
-                   <span className="font-bold">₱{ (totalRev / (completedOrConfirmed.length || 1)).toLocaleString() }</span>
+                   <span className="font-bold">₱{ (totalRev / (earnedReservations.length || 1)).toLocaleString() }</span>
                  </div>
                  <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: '#1F2937' }}></div></div>
               </div>
