@@ -171,25 +171,22 @@ const Dashboard = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 1. Daily Logistics (Pickups/Returns for Today)
+  // 1. Daily Logistics (Pickups for Today) -- JezSy is reserve-and-collect
+  // only, there is no rental return leg, so this tracks pickups alone.
   const todayLogistics = reservations
     .filter(r => {
       const pickupDate = parseDate(r.reservationDate || r.date);
-      const returnDate = parseDate(r.returnDate || r.endDate);
       pickupDate.setHours(0,0,0,0);
-      returnDate.setHours(0,0,0,0);
-      return pickupDate.getTime() === today.getTime() || returnDate.getTime() === today.getTime();
+      return pickupDate.getTime() === today.getTime();
     })
     .map(r => {
       const pickupDate = parseDate(r.reservationDate || r.date);
-      const isReturn = parseDate(r.returnDate || r.endDate).setHours(0,0,0,0) === today.getTime();
       return {
         ...r,
-        actionType: isReturn ? 'Return' : 'Pickup',
+        actionType: 'Pickup',
         timeStr: r.appointmentTime || pickupDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
       };
-    })
-    .sort((a, _b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
+    });
 
   // 2. Unified Activity Feed (Last 10 events)
   const activityFeed = [
@@ -636,7 +633,7 @@ const Dashboard = () => {
           <div className="card-header">
             <div className="flex align-center gap-2">
               <MapPin size={20} className="text-accent" />
-              <h3>Today&apos;s Logistics Monitor</h3>
+              <h3>Today&apos;s Pickups</h3>
             </div>
             <span className="badge secondary">{todayLogistics.length} Events</span>
           </div>
@@ -644,7 +641,7 @@ const Dashboard = () => {
           <div className="logistics-timeline mt-4">
             {todayLogistics.length === 0 ? (
               <div className="p-8 text-center text-secondary bg-cream rounded-xl">
-                No pickups or returns scheduled for today.
+                No pickups scheduled for today.
               </div>
             ) : (
               todayLogistics.map((item, idx) => (
