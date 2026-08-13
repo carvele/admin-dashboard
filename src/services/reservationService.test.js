@@ -10,6 +10,7 @@ describe('Reservation Service & Status Logic', () => {
   test('includes all expected statuses in lifecycle order', () => {
     expect(RESERVATION_STATUSES).toContain('Pending');
     expect(RESERVATION_STATUSES).toContain('Confirmed');
+    expect(RESERVATION_STATUSES).toContain('Preparing');
     expect(RESERVATION_STATUSES).toContain('To Pickup');
     expect(RESERVATION_STATUSES).toContain('Completed');
     expect(RESERVATION_STATUSES).toContain('Cancelled');

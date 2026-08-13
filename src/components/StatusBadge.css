@@ -44,6 +44,11 @@
   color: var(--status-confirmed-text);
 }
 
+.status-preparing {
+  background-color: var(--status-approved-bg);
+  color: var(--status-approved-text);
+}
+
 .status-fitting, .status-to-pickup {
   background-color: var(--status-fitting-bg);
   color: var(--status-fitting-text);

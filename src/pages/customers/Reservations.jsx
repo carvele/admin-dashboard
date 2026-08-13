@@ -14,6 +14,7 @@ import {
   CalendarCheck,
   UserCheck,
   Shirt,
+  Package,
   MessageSquare,
   X,
   QrCode,
@@ -99,6 +100,12 @@ const BOARD_COLUMNS = [
     label: 'Awaiting payment',
     icon: CheckCircle,
     empty: 'No one owes anything right now.',
+  },
+  {
+    status: 'Preparing',
+    label: 'Preparing',
+    icon: Package,
+    empty: 'Nothing being prepared right now.',
   },
   {
     status: 'To Pickup',
@@ -249,6 +256,7 @@ const Reservations = () => {
     if (displayStatus === 'Request Approval') displayStatus = 'Pending';
     if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
     if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+    if (displayStatus === 'Ready') displayStatus = 'To Pickup';
     if (displayStatus === 'Active') displayStatus = 'Completed';
 
     // Falls back to the reservation's own product columns when the lines
@@ -324,8 +332,8 @@ const Reservations = () => {
   };
 
   // --- LIFECYCLE ACTIONS ---
-  // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
-  // Also backwards compatible with Confirmed and Fitting
+  // Lifecycle: Pending → To Pay → Preparing → To Pickup → Completed | Cancelled
+  // Also backwards compatible with Confirmed, Fitting and Active
   // Answering a customer's request to move their appointment. Approving
   // re-checks the slot inside the RPC: it was free when they asked, but the
   // request may have sat in the queue while another reservation took it, so a
@@ -372,16 +380,21 @@ const Reservations = () => {
         const stockOk = await adjustStockForReservation(res, -1);
         toast.success(`Reservation ${id} approved for payment — stock held`);
         if (!stockOk) toast.error(`Stock adjustment for ${id} may have failed — check inventory`);
-      } else if (action === 'ready_pickup') {
+      } else if (action === 'mark_paid') {
         await updateReservation(res.docId, {
-          status: 'To Pickup',
+          status: 'Preparing',
           payment_status: 'Paid',
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
         // No stock movement here: approval already held it, and both statuses
         // are in STOCK_HOLDING_STATUSES.
-        toast.success(`Reservation ${id} payment received — ready for pickup`);
+        toast.success(`Reservation ${id} payment received — preparing item`);
+      } else if (action === 'ready_pickup') {
+        // Payment already landed at mark_paid; this just signals the item is
+        // pulled and physically ready at the counter.
+        await updateReservation(res.docId, { status: 'To Pickup' });
+        toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
         // Handing over is the moment the rest of the money is taken, in cash,
         // with no electronic trail. Completing without recording it was how a
@@ -426,7 +439,8 @@ const Reservations = () => {
       }
       const actionLabels = {
         approve_pay: 'Approved for Payment',
-        ready_pickup: 'Confirmed & To Pickup',
+        mark_paid: 'Payment Received & Preparing',
+        ready_pickup: 'Marked Ready for Pickup',
         complete: 'Completed',
         cancel: 'Cancelled',
       };
@@ -704,6 +718,7 @@ const Reservations = () => {
               <option value="All">All Statuses</option>
               <option value="Pending">Pending / Requests</option>
               <option value="To Pay">To Pay</option>
+              <option value="Preparing">Preparing</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>
               <option value="Completed">Completed / Returned</option>
               <option value="Cancelled">Cancelled</option>
@@ -1197,8 +1212,8 @@ const Reservations = () => {
                       p.id === viewModal.productId ||
                       p.name === (viewModal.productName || viewModal.outfit),
                   )?.isAlterable;
-                  const steps = ['Pending', 'To Pay', 'To Pickup', 'Completed'];
-                  const statusOrder = { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
+                  const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
+                  const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
                   return steps.map((step, i) => {
                     const current = statusOrder[viewModal.displayStatus] ?? -1;
                     const stepIdx = statusOrder[step];
@@ -1330,7 +1345,7 @@ const Reservations = () => {
                       )}
                     </div>
                     <div className="text-xs text-secondary mt-1">
-                      💡 <strong>Note on Payment Actions:</strong> "Mark Paid" (on the main table) moves reservation lifecycle from <em>To Pay → To Pickup</em>. "Toggle Payment Record" (below) updates financial payment status without changing lifecycle stage.
+                      💡 <strong>Note on Payment Actions:</strong> &ldquo;Mark Paid&rdquo; (on the main table) moves reservation lifecycle from <em>To Pay → Preparing</em>; &ldquo;Mark Ready&rdquo; then moves it to <em>To Pickup</em> once the item is pulled. &ldquo;Toggle Payment Record&rdquo; (below) updates financial payment status without changing lifecycle stage.
                     </div>
                   </div>
                   <div className="payment-action-buttons">
