@@ -5,7 +5,6 @@ import {
   createProduct,
   updateProduct,
   getProductById,
-  getCategories,
   createInventoryItem,
   getInventory,
   getStockMovements,
@@ -13,19 +12,17 @@ import {
 import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
 import HistoryTimeline from '../../components/HistoryTimeline';
-import { routeAndUploadFile, deleteFile } from '../../lib/storage';
+import { routeAndUploadFile } from '../../lib/storage';
 import { getReservationsByProduct } from '../../services/reservationService';
-import {
-  subscribeToSuggestedOutfits,
-} from '../../services/wardrobeService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
-import { AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
+import { AVAILABLE_SIZES } from '../../utils/constants';
 import { getColorList, getPatternList } from '../../services/inventoryService';
 import { Logger } from '../../utils/Logger';
+import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import './ProductForm.css';
 
@@ -37,7 +34,7 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
-  const [oldData, setOldData] = useState(null); // To track changes for sync
+  const [, setOldData] = useState(null); // To track changes for sync
   const [orderHistory, setOrderHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [productHistory, setProductHistory] = useState([]);
@@ -76,11 +73,11 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [categories, setCategories] = useState([]);
   const [colorList, setColorList] = useState([]);
-  const [patternList, setPatternList] = useState([]);
+  const [, setPatternList] = useState([]);
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [, setUploadProgress] = useState({ current: 0, total: 0 });
   const previewUrlsRef = React.useRef([]);
 
   // Cleanup local image preview object URLs on component unmount to prevent memory leaks
@@ -89,7 +86,9 @@ const ProductForm = ({ readOnly = false }) => {
       previewUrlsRef.current.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
-        } catch (e) {}
+        } catch {
+          // URL may already be revoked; safe to ignore
+        }
       });
     };
   }, []);
@@ -222,7 +221,7 @@ const ProductForm = ({ readOnly = false }) => {
              toast.error('Product not found.');
              navigate('/catalog');
           }
-        } catch (e) {
+        } catch {
           toast.error('Failed to load product details.');
         } finally {
           setLoading(false);
@@ -284,7 +283,9 @@ const ProductForm = ({ readOnly = false }) => {
     if (previews[index]) {
       try {
         URL.revokeObjectURL(previews[index]);
-      } catch (e) {}
+      } catch {
+        // URL may already be revoked; safe to ignore
+      }
     }
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviews((prev) => prev.filter((_, i) => i !== index));
@@ -304,19 +305,6 @@ const ProductForm = ({ readOnly = false }) => {
     
     [newImages[index], newImages[newPos]] = [newImages[newPos], newImages[index]];
     setFormData(prev => ({ ...prev, images: newImages }));
-  };
-
-  const moveSelectedFile = (index, direction) => {
-    const newFiles = [...selectedFiles];
-    const newPrev = [...previews];
-    const newPos = index + direction;
-    if (newPos < 0 || newPos >= newFiles.length) return;
-
-    [newFiles[index], newFiles[newPos]] = [newFiles[newPos], newFiles[index]];
-    [newPrev[index], newPrev[newPos]] = [newPrev[newPos], newPrev[index]];
-
-    setSelectedFiles(newFiles);
-    setPreviews(newPrev);
   };
 
   const toggleSize = (size) => {
@@ -815,7 +803,7 @@ const ProductForm = ({ readOnly = false }) => {
                  </div>
                  <div>
                     <h3 className="text-sm font-bold text-indigo-900">Virtual Try-On (AR)</h3>
-                    <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
+                    <p className="text-xs text-indigo-700">Add &quot;AR Try-On&quot; tag below to enable for this item.</p>
                  </div>
               </div>
               <button type="button" onClick={() => readOnly ? navigate('/ar-assets') : setShowArConfirm(true)} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">

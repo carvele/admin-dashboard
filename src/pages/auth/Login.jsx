@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, LogIn, UserPlus, Shield, X } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
-import { sanitizeText } from '../../utils/validation';
-import { toast } from 'sonner';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import './Login.css';
 
 const Login = () => {
@@ -58,7 +55,7 @@ const Login = () => {
           <p className="font-serif accent-pink-text" style={{ fontStyle: 'italic', textTransform: 'none' }}>by Ms. Jholy</p>
         </div>
         <div className="login-testimonial">
-          <blockquote>"Style is a way to say who you are without having to speak."</blockquote>
+          <blockquote>&quot;Style is a way to say who you are without having to speak.&quot;</blockquote>
           <cite>— Rachel Zoe</cite>
         </div>
         <div className="login-left-shapes">

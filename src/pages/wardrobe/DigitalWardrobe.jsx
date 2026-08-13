@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
-import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
+import { Search, Grid, List as ListIcon, Shirt } from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';

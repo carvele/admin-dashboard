@@ -55,7 +55,7 @@ const ForgotPassword = () => {
           <p>Fashion Management System</p>
         </div>
         <div className="forgot-password-testimonial">
-          <blockquote>"Security and style perfectly balanced."</blockquote>
+          <blockquote>&quot;Security and style perfectly balanced.&quot;</blockquote>
           <cite>— Admin Portal</cite>
         </div>
         <div className="forgot-password-left-shapes">

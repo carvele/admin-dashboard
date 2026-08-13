@@ -8,7 +8,6 @@ import {
   ChevronUp,
   ShieldAlert,
   Send,
-  X,
 } from 'lucide-react';
 import { addIncidentLog, subscribeToIncidentLogs } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';

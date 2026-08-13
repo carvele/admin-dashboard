@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Box, Flame } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame } from 'lucide-react';
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -73,7 +73,7 @@ const ClothingCatalog = () => {
         setInventoryMap(map);
 
         setCatalog(catalogWithReservations);
-      } catch (err) {
+      } catch {
         toast.error('Failed to load products');
       } finally {
         setLoading(false);
@@ -201,7 +201,7 @@ const ClothingCatalog = () => {
     try {
       await updateProduct(item.docId, { tags: newTags });
       setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, tags: newTags } : c));
-    } catch (e) {
+    } catch {
       toast.error('Failed to update tags');
     }
   };
@@ -212,7 +212,7 @@ const ClothingCatalog = () => {
       await updateProduct(item.docId, { isFeatured: !item.isFeatured });
       setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, isFeatured: !c.isFeatured } : c));
       toast.success(`Product ${!item.isFeatured ? 'featured' : 'unfeatured'}`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update featured status');
     }
   };

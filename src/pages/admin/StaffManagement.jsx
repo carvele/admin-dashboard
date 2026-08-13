@@ -192,7 +192,7 @@ const StaffManagement = () => {
       // not dependent on this client call succeeding) -- see
       // jezsy-mobile-app's audit_log_hardening migration.
       toast.success(`${name} is now ${newRole}`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to update role');
     } finally {
       setRoleToggleConfirm(null);
@@ -215,7 +215,7 @@ const StaffManagement = () => {
         staffName: name,
       });
       toast.success(`${name} has been archived`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to archive staff member');
     } finally {
       setRemoveConfirm(null);
@@ -610,8 +610,8 @@ const StaffManagement = () => {
                 </select>
               </div>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
-                We'll email a verification link to this address. Once they click it and set a
-                password, their account activates and they'll appear in Team Management.
+                We&apos;ll email a verification link to this address. Once they click it and set a
+                password, their account activates and they&apos;ll appear in Team Management.
               </p>
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setIsCreateModalOpen(false)}>

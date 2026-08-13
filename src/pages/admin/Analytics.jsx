@@ -7,8 +7,6 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
   AreaChart,
   Area,
   Legend,
@@ -16,7 +14,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X, ChevronDown, Filter, PieChart as PieIcon, Activity } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';

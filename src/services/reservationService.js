@@ -12,13 +12,11 @@
 
 import { supabase } from '../lib/supabaseClient';
 import {
-  getCollection,
   subscribeToCollection,
   addDocument,
   updateDocument,
   deleteDocument,
   getPaginatedCollection,
-  normaliseRow,
   toCamel,
 } from '../lib/supabaseService';
 

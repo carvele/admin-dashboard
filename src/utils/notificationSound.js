@@ -49,7 +49,9 @@ export const playReservationAlert = () => {
     osc2.onended = () => {
       try {
         gainNode.disconnect();
-      } catch (e) {}
+      } catch {
+        // Node may already be disconnected/GC'd; safe to ignore.
+      }
     };
   } catch (err) {
     console.warn('Audio playback failed:', err);
@@ -86,7 +88,9 @@ export const playMessageAlert = () => {
     osc.onended = () => {
       try {
         gainNode.disconnect();
-      } catch (e) {}
+      } catch {
+        // Node may already be disconnected/GC'd; safe to ignore.
+      }
     };
   } catch (err) {
     console.warn('Audio playback failed:', err);

@@ -5,14 +5,11 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Calendar,
   Search,
-  Filter,
   Plus,
   CheckCircle,
   XCircle,
   Clock,
   Eye,
-  CalendarCheck,
-  UserCheck,
   Shirt,
   Package,
   MessageSquare,
@@ -35,7 +32,7 @@ import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservat
 import { holdsStock } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
-import { formatCurrency, formatSmartDateTime } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -123,9 +120,6 @@ const Reservations = () => {
   const [reservations, setReservations] = useState([]);
   const [itemsByReservation, setItemsByReservation] = useState({});
   const [loading, setLoading] = useState(true);
-  const [lastDoc, setLastDoc] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
 
@@ -440,7 +434,7 @@ const Reservations = () => {
         cancel: 'Cancelled',
       };
       await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
-    } catch (e) {
+    } catch {
       toast.error('Failed to update reservation');
     }
   };
@@ -490,7 +484,7 @@ const Reservations = () => {
       toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
       setRescheduleModal(null);
       setNewDate('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to reschedule');
     }
   };
@@ -550,7 +544,7 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.success(nextPaid ? 'Payment marked as received' : 'Payment marked as unpaid');
-    } catch (e) {
+    } catch {
       toast.error('Failed to update payment status');
     }
   };
@@ -574,7 +568,7 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.success('Payment verified — preparing item');
-    } catch (e) {
+    } catch {
       toast.error('Failed to verify payment');
     }
   };
@@ -651,7 +645,7 @@ const Reservations = () => {
       setIsModalOpen(false);
       toast.success('Reservation created successfully');
       setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
-    } catch (e) {
+    } catch {
       toast.error('Failed to create reservation');
     }
   };
@@ -984,7 +978,7 @@ const Reservations = () => {
               <button className="close-btn" onClick={() => setShowQRModal(false)}>&times;</button>
             </div>
             <div className="modal-body">
-              <p className="text-secondary text-sm mb-3">Enter the customer's pickup token (displayed in their app) to verify and complete handover.</p>
+              <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
               <div className="form-group">
                 <label className="label">Pickup Token / Reservation ID</label>
                 <input
@@ -1218,11 +1212,6 @@ const Reservations = () => {
               {/* Lifecycle Progress Indicator */}
               <div className="lifecycle-progress">
                 {(() => {
-                  const isAlterable = products.find(
-                    (p) =>
-                      p.id === viewModal.productId ||
-                      p.name === (viewModal.productName || viewModal.outfit),
-                  )?.isAlterable;
                   const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
                   const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
                   return steps.map((step, i) => {
