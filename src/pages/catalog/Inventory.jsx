@@ -38,6 +38,7 @@ import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
+import { downloadCSV } from '../../utils/reportExporter';
 import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -520,20 +521,18 @@ const Inventory = () => {
     setEditModal(inv);
   };
 
+  const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
   const handleExportCSV = () => {
-    const header = 'SKU,Product,Category,Size,Total,Reserved,Available\n';
-    const rows = inventory
-      .map(
-        (i) => `${i.id},${i.item},${i.category},${i.size},${i.total},${i.reserved},${i.available}`,
-      )
-      .join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'inventory_export.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    // Exports filteredInv, not the raw inventory list, so the file matches
+    // whatever search/category/active-archived view the staff member is
+    // currently looking at rather than silently dumping everything.
+    const header = ['SKU', 'Product', 'Category', 'Size', 'Total', 'Reserved', 'Available'].join(',');
+    const rows = filteredInv.map((i) =>
+      [csvField(i.sku || i.id), csvField(i.item), csvField(i.category), csvField(i.size), i.total, i.reserved || 0, i.available].join(','),
+    );
+    const timestamp = new Date().toISOString().split('T')[0];
+    downloadCSV(`JezSy_Inventory_${viewMode}_${timestamp}.csv`, [header, ...rows].join('\n'));
     toast.success('Inventory exported as CSV');
   };
 
