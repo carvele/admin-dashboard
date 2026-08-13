@@ -324,7 +324,7 @@ const Customers = () => {
       toast.success(`Removed customer ${getUserDisplayName(deleteConfirm)}`);
       setDeleteConfirm(null);
       setSelectedCustomer(null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete customer');
     }
   };
@@ -347,7 +347,7 @@ const Customers = () => {
       toast.success('Message sent successfully');
       setMsgModal(null);
       setMsgText('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to send message');
     } finally {
       setSendingMsg(false);
@@ -1049,7 +1049,7 @@ const Customers = () => {
             </div>
             <div className="p-4">
               <p className="text-secondary text-sm mb-4">
-                This message will appear in the customer's mobile app inbox.
+                This message will appear in the customer&apos;s mobile app inbox.
               </p>
               <textarea
                 className="input-field w-full"

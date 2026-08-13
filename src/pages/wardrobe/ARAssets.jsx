@@ -10,13 +10,8 @@ import {
   Shirt,
   Trash2,
   Plus,
-  X,
   Star,
-  Tag,
-  Image as ImageIcon,
-  Sparkles,
   Edit3,
-  Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -63,8 +58,8 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>X:</span>
         <input 
           type="range" min="-1" max="1" step="0.01" 
-          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)} 
-          role="slider" aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
+          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)}
+          aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
         />
         <span className="val">{p.x.toFixed(2)}</span>
       </div>
@@ -72,8 +67,8 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>Y:</span>
         <input 
           type="range" min="0" max="2" step="0.01" 
-          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)} 
-          role="slider" aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
+          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)}
+          aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
         />
         <span className="val">{p.y.toFixed(2)}</span>
       </div>
@@ -81,18 +76,14 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>Z:</span>
         <input 
           type="range" min="-1" max="1" step="0.01" 
-          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)} 
-          role="slider" aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
+          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)}
+          aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
         />
         <span className="val">{p.z.toFixed(2)}</span>
       </div>
     </div>
   );
 };
-
-const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 const ARAssets = () => {
   const navigate = useNavigate();
@@ -190,7 +181,7 @@ const ARAssets = () => {
     try {
       await updateArData(asset.docId, asset.arData, { status: newStatus });
       toast.success(`AR status updated to ${newStatus} for ${asset.name}`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update AR status');
     }
   };
@@ -215,7 +206,7 @@ const ARAssets = () => {
       });
       toast.success('Alignment points saved & verified!');
       setIsConfigModalOpen(false);
-    } catch (e) {
+    } catch {
       toast.error('Failed to save alignment points');
     }
   };
@@ -351,7 +342,7 @@ const ARAssets = () => {
     try {
       await deletePoseGuide(pose.docId || pose.id);
       toast.success('Pose deleted');
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete pose');
     }
   };
@@ -409,7 +400,7 @@ const ARAssets = () => {
         <div className="card">
           <div className="card-header">
             <h3>Production Line: Items Needing AR Setup</h3>
-            <p className="text-secondary text-sm">Products tagged "AR Try-On" in the Catalog waiting for 3D Assets.</p>
+            <p className="text-secondary text-sm">Products tagged &quot;AR Try-On&quot; in the Catalog waiting for 3D Assets.</p>
           </div>
           <table className="table mt-4">
             <thead>
@@ -557,7 +548,7 @@ const ARAssets = () => {
             Usage reflects how many clothing items currently use this specific model.
             {window._targetProduct && (
               <span className="text-accent font-semibold block mt-1">
-                👉 Click "Link to Product" to assign to {window._targetProduct.name}
+                👉 Click &quot;Link to Product&quot; to assign to {window._targetProduct.name}
               </span>
             )}
           </p>
@@ -812,7 +803,7 @@ const ARAssets = () => {
             <div className="modal-body">
               <p className="text-secondary text-sm mb-3">
                 Upload a 3D model file (.glb, .gltf) for AR Try-On. After uploading, tag a product
-                with "AR Try-On" in the Catalog to associate this asset.
+                with &quot;AR Try-On&quot; in the Catalog to associate this asset.
               </p>
               <div className="upload-dropzone">
                 <input

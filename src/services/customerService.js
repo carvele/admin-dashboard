@@ -11,14 +11,10 @@
 import { supabase } from '../lib/supabaseClient';
 import { countsAsRevenue } from '../utils/reservationStatus';
 import {
-  getCollection,
-  getDocument,
   addDocument,
   updateDocument,
   softDeleteDocument,
   subscribeToCollection,
-  getPaginatedCollection,
-  normaliseRow,
   toCamel,
 } from '../lib/supabaseService';
 

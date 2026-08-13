@@ -26,7 +26,7 @@ const Reviews = () => {
       const { reviews: data, count: total } = await getAllReviews(page, limit, rating, searchQuery);
       setReviews(data);
       setCount(total);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load reviews');
     } finally {
       setIsLoading(false);
@@ -47,7 +47,7 @@ const Reviews = () => {
       await deleteReview(reviewToDelete);
       toast.success('Review deleted');
       fetchReviews(); // Refresh current page
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete review');
     } finally {
       setReviewToDelete(null);

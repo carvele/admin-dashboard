@@ -43,7 +43,7 @@ const HistoryTimeline = ({ entries, loading, emptyText = 'No history recorded ye
                 <span className="ht-new">{entry.newValue ?? '—'}</span>
               </div>
             )}
-            {entry.note && <p className="ht-note">"{entry.note}"</p>}
+            {entry.note && <p className="ht-note">&quot;{entry.note}&quot;</p>}
             <span className="ht-actor">by {entry.actorName || 'System'}</span>
           </div>
         </li>

@@ -147,7 +147,7 @@ const SetPassword = () => {
           <p>Fashion Management System</p>
         </div>
         <div className="set-password-testimonial">
-          <blockquote>"One last step before you're in."</blockquote>
+          <blockquote>&quot;One last step before you&apos;re in.&quot;</blockquote>
           <cite>— Admin Portal</cite>
         </div>
         <div className="set-password-left-shapes">

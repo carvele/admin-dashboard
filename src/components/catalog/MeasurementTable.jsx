@@ -277,7 +277,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
         </table>
       </div>
       <p className="mt-2 text-xs text-secondary">
-        Tip: Enter dimensions as they apply to the garment (e.g., "70 cm"). These will be visible to customers in the app's size guide.
+        Tip: Enter dimensions as they apply to the garment (e.g., &quot;70 cm&quot;). These will be visible to customers in the app&apos;s size guide.
       </p>
     </div>
   );

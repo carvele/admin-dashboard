@@ -27,7 +27,7 @@ const Announcements = () => {
       setIsLoading(true);
       const data = await getAnnouncements();
       setAnnouncements(data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load announcements');
     } finally {
       setIsLoading(false);
@@ -67,7 +67,7 @@ const Announcements = () => {
       setIsModalOpen(false);
       setFormData({ title: '', body: '', type: 'promo', expires_at: '' });
       fetchAnnouncements();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create announcement');
     }
   };
@@ -79,7 +79,7 @@ const Announcements = () => {
       await deleteAnnouncement(id);
       toast.success('Announcement deleted');
       fetchAnnouncements();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete announcement');
     }
   };

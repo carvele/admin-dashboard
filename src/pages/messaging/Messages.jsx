@@ -7,7 +7,6 @@ import {
   Send,
   Paperclip,
   Image as ImageIcon,
-  Shirt,
   Plus,
   X,
   MessageSquare,
@@ -16,7 +15,6 @@ import {
   Clock,
   Tag,
   Zap,
-  Ruler,
   ShoppingBag,
   Bell,
   Pencil,
@@ -42,7 +40,6 @@ import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
 import { getAvatarColor, getInitials, formatSmartDateTime } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
-import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import './Messages.css';
 
@@ -809,7 +806,7 @@ const Messages = () => {
                 >
                   <img
                     src={msg.imageUrl}
-                    alt="Chat image"
+                    alt="Chat attachment"
                     className="chat-image-thumb"
                   />
                 </button>

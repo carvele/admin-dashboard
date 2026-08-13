@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
-import { getDocument, addDocument, updateDocument, upsertDocument, logAction } from '../../lib/supabaseService';
+import { logAction } from '../../lib/supabaseService';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import './Settings.css';
@@ -21,8 +21,6 @@ const Settings = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('boutique');
   const [isLoading, setIsLoading] = useState(false);
-  const [seedProgress, setSeedProgress] = useState(null);
-
   // Store Hours & Closures state
   const [weeklyHours, setWeeklyHours] = useState([
     { day_of_week: 0, day_name: 'Sunday', open_time: '10:00:00', close_time: '17:00:00', is_closed: true, slot_capacity: 3 },
@@ -442,7 +440,7 @@ const Settings = () => {
                         />
                       </label>
                       <p className="text-secondary text-sm mt-2">
-                        Upload the QR Code that the Android app will display to users. Make sure to click "Save Settings" to apply changes!
+                        Upload the QR Code that the Android app will display to users. Make sure to click &quot;Save Settings&quot; to apply changes!
                       </p>
                     </div>
                   </div>

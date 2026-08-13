@@ -15,11 +15,8 @@ import {
   getDocument,
   addDocument,
   updateDocument,
-  deleteDocument,
   softDeleteDocument,
   subscribeToCollection,
-  normaliseRow,
-  toSnake,
   toCamel,
 } from '../lib/supabaseService';
 import { logAction } from './staffService';

@@ -53,14 +53,14 @@ export const useRealtimeSync = (onUpdate) => {
       // Listen to new reservations or updates to pending reservations
       reservationsChannel = supabase
         .channel('global-reservations-alert')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservations' }, (payload) => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservations' }, (_payload) => {
           playReservationAlert();
           showDesktopNotification('New Reservation', {
             body: `A new reservation was just placed by a customer.`
           });
           listeners.forEach(cb => cb());
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservations' }, (payload) => {
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservations' }, (_payload) => {
           listeners.forEach(cb => cb());
         })
         .subscribe(onChannelStatus);

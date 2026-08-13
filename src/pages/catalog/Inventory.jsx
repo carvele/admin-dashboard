@@ -351,7 +351,7 @@ const Inventory = () => {
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
       setRestockQty('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to restock items');
     }
   };
@@ -420,7 +420,7 @@ const Inventory = () => {
       });
       toast.success(`Updated ${editModal.item} (${editModal.size})`);
       setEditModal(null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update inventory');
     }
   };
@@ -444,7 +444,7 @@ const Inventory = () => {
         size: item.size,
       });
       toast.success(`Archived ${item.item} (${item.size}) from inventory`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to archive item');
     } finally {
       setArchiveConfirm(null);
@@ -469,7 +469,7 @@ const Inventory = () => {
         size: item.size,
       });
       toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to restore item');
     }
   };
@@ -511,7 +511,7 @@ const Inventory = () => {
         sku: inv.sku
       });
       toast.success(`Product ${inv.item} has been added/published`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to add product to app');
     }
   };
@@ -981,7 +981,7 @@ const Inventory = () => {
                         </div>
                         <h3 className="text-lg font-medium">No inventory items found</h3>
                         <p className="text-secondary text-center max-w-sm">
-                          We couldn't find any inventory records matching your current search. Try
+                          We couldn&apos;t find any inventory records matching your current search. Try
                           adjusting your filters.
                         </p>
                         {searchTerm && (
@@ -1079,7 +1079,7 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleEdit}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem' }}>
-                Directly overwrites the stock counts for this size — use Restock instead if you're
+                Directly overwrites the stock counts for this size — use Restock instead if you&apos;re
                 just adding newly-arrived units.
               </p>
               <div className="form-row">

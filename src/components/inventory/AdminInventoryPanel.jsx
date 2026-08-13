@@ -112,7 +112,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
       setPatterns(p);
       setCategoryTree(cats);
       setError('');
-    } catch (err) {
+    } catch {
       setError('Unable to load lookup lists.');
     }
   };
