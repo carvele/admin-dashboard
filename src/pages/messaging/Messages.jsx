@@ -31,6 +31,7 @@ import {
   editMessage,
   uploadChatImage,
   addReaction,
+  markMessagesRead,
 } from '../../services/communicationService';
 import { usePresence } from '../../hooks/usePresence';
 import { subscribeToReservations } from '../../services/reservationService';
@@ -256,9 +257,19 @@ const Messages = () => {
         return tA - tB;
       });
       setMessages(sorted);
+      // Marks the customer's messages as read, the other half of the mobile
+      // app's markAsRead. Without this a customer's "Sent" checkmark never
+      // became "Seen" -- staff opening or replying never touched read_at,
+      // only the unrelated conversations.unread_count. Runs on every update
+      // (not just on open) so a message the customer sends while staff
+      // already has the conversation open still gets marked read once it
+      // lands, not only on the next open/close.
+      if (activeChat.customerId) {
+        markMessagesRead(convKey, activeChat.customerId);
+      }
     });
     return () => unsub();
-  }, [activeChat?.id, activeChat?.customId]);
+  }, [activeChat?.id, activeChat?.customId, activeChat?.customerId]);
 
   // Typing indicator: ephemeral broadcast on a per-conversation channel, not
   // a DB write. The mobile app joins the exact same channel name/shape
