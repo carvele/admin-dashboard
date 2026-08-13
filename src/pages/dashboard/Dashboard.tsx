@@ -61,6 +61,7 @@ import { getCustomers } from '../../services/customerService';
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
+import { isPending } from '../../utils/reservationStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 // @ts-ignore
@@ -152,9 +153,7 @@ const Dashboard = () => {
   const totalReservations = reservations.length;
   // profiles has no `status` column — "active" = not blocked
   const activeCustomers = customers.filter((c) => !c.isBlocked).length;
-  const pendingRequests = reservations.filter(
-    (r) => r.status === 'Pending' || r.status === 'Request Approval' || r.status === 'To Pay'
-  ).length;
+  const pendingRequests = reservations.filter((r) => isPending(r.status)).length;
   // 5-tier: alert = very-low + critical + no-stock items (Active items only)
   const lowStockItems = activeInventory
     .filter((i: any) => isStockAlert(i.available, i.total, i.reserved || 0))

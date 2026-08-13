@@ -40,6 +40,7 @@ const buildMonthGrid = (monthDate) => {
 const STATUS_DOT_CLASS = {
   Pending: 'cal-dot-pending',
   'To Pay': 'cal-dot-topay',
+  Preparing: 'cal-dot-preparing',
   'To Pickup': 'cal-dot-topickup',
   Completed: 'cal-dot-completed',
   Cancelled: 'cal-dot-cancelled',

@@ -193,7 +193,7 @@ const PRODUCTS = [
   },
 ];
 
-const STATUSES = ['Pending', 'To Pay', 'To Pickup', 'Completed', 'Cancelled'];
+const STATUSES = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed', 'Cancelled'];
 
 export const seedDemoData = async (onProgress) => {
   if (import.meta.env.PROD) {
