@@ -20,8 +20,6 @@
     "@google/model-viewer": "^4.3.1",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/pose": "^0.5.1675469404",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "@sentry/react": "^10.46.0",
     "@supabase/supabase-js": "^2.110.1",
     "dompurify": "^3.3.3",
@@ -37,7 +35,6 @@
     "react-webcam": "^7.2.0",
     "recharts": "^2.12.0",
     "sonner": "^1.4.3",
-    "three": "^0.183.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
