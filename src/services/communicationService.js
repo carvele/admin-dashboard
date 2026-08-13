@@ -34,6 +34,21 @@ export const subscribeToMessages = (callback) =>
 export const sendMessage = (data) => addDocument('messages', data);
 
 /**
+ * Edit a previously sent text message. Mirrors the mobile app's editMessage:
+ * text + edited_at only, no ownership check here -- the caller (Messages.jsx)
+ * only ever offers this on the staff's own messages.
+ * @param {string} messageDocId
+ * @param {string} text
+ */
+export const editMessage = async (messageDocId, text) => {
+  const { error } = await supabase
+    .from('messages')
+    .update({ text, edited_at: new Date().toISOString() })
+    .eq('id', messageDocId);
+  if (error) throw error;
+};
+
+/**
  * Upload a chat image to Supabase Storage and return the public URL.
  * @param {File} file - The image file to upload
  * @param {string} conversationId - Namespace for the storage path
