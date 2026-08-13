@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint-typecheck-build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Non-blocking for now: this repo has a pre-existing lint backlog
+      # (~270 errors, mostly no-unused-vars/no-empty) that predates this
+      # workflow -- see the tracking issue. Once that's cleared, drop
+      # continue-on-error so this becomes a real gate like the other steps.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Typecheck
+        run: npm run type-check
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Build
+        run: npm run build
