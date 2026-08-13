@@ -34,6 +34,25 @@ export const subscribeToMessages = (callback) =>
 export const sendMessage = (data) => addDocument('messages', data);
 
 /**
+ * Mark every unread customer message in a conversation as read. Mirrors the
+ * mobile app's markAsRead (which marks staff messages read when the customer
+ * opens the chat) -- without this half, a customer's "Sent" checkmark never
+ * became "Seen" no matter how many times staff opened or replied to the
+ * conversation, because nothing on the admin side ever touched read_at.
+ * @param {string} conversationId
+ * @param {string} customerId - only the customer's own messages get marked
+ */
+export const markMessagesRead = async (conversationId, customerId) => {
+  const { error } = await supabase
+    .from('messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId)
+    .eq('sender_id', customerId)
+    .is('read_at', null);
+  if (error) console.error('[Supabase] markMessagesRead failed:', error.message);
+};
+
+/**
  * Edit a previously sent text message. Mirrors the mobile app's editMessage:
  * text + edited_at only, no ownership check here -- the caller (Messages.jsx)
  * only ever offers this on the staff's own messages.
