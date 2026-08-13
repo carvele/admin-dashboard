@@ -30,6 +30,16 @@ jest.mock('../../context/AuthContext', () => ({
     role: 'owner',
   }),
 }));
+// Every other realtime subscription above is mocked at the service-layer
+// call site, but useRealtimeSync opens its own supabase.channel(...)
+// directly rather than going through a mockable service function. Left
+// unmocked, it tries to open a real websocket connection in the Node test
+// environment, which never resolves and spirals into a RangeError: Maximum
+// call stack size exceeded deep inside @supabase/realtime-js, crashing the
+// whole Jest worker rather than just this test.
+jest.mock('../../hooks/useRealtimeSync', () => ({
+  useRealtimeSync: jest.fn(),
+}));
 
 // Mock Recharts to avoid ResizeObserver issues
 jest.mock('recharts', () => {
