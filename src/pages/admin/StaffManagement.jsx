@@ -188,12 +188,9 @@ const StaffManagement = () => {
         new_role: newRole,
       });
       if (error) throw error;
-      await logAction(user, 'Changed staff role', {
-        targetType: 'profile',
-        targetId: member.id,
-        staffName: name,
-        newRole,
-      });
+      // update_staff_role now logs this itself server-side (guaranteed,
+      // not dependent on this client call succeeding) -- see
+      // jezsy-mobile-app's audit_log_hardening migration.
       toast.success(`${name} is now ${newRole}`);
     } catch (err) {
       toast.error('Failed to update role');
