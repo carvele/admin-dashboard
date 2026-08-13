@@ -19,6 +19,7 @@ import {
   Ruler,
   ShoppingBag,
   Bell,
+  Pencil,
 } from 'lucide-react';
 import SendNotificationModal from '../../components/SendNotificationModal';
 import {
@@ -27,9 +28,11 @@ import {
   createConversation,
   updateConversation,
   sendMessage,
+  editMessage,
   uploadChatImage,
   addReaction,
 } from '../../services/communicationService';
+import { usePresence } from '../../hooks/usePresence';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
@@ -98,6 +101,15 @@ const Messages = () => {
 
   // Reaction popover: { msgId, anchorRect }
   const [reactionPopover, setReactionPopover] = useState(null);
+
+  // Editing: { docId, text } for the message currently being edited, or null.
+  const [editingMsg, setEditingMsg] = useState(null);
+
+  const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingChannelRef = useRef(null);
+  const otherTypingTimeoutRef = useRef(null);
+  const lastTypingSentRef = useRef(0);
 
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
@@ -248,6 +260,51 @@ const Messages = () => {
     return () => unsub();
   }, [activeChat?.id, activeChat?.customId]);
 
+  // Typing indicator: ephemeral broadcast on a per-conversation channel, not
+  // a DB write. The mobile app joins the exact same channel name/shape
+  // ('typing:<conversationId>', event 'typing', payload { sender_id }) when
+  // it has this conversation open, so typing is visible across both apps.
+  useEffect(() => {
+    setOtherTyping(false);
+    if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+    if (!activeChat) {
+      typingChannelRef.current = null;
+      return;
+    }
+    const convKey = activeChat.id || activeChat.customId;
+    const channel = supabase.channel(`typing:${convKey}`);
+    channel
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload?.sender_id === user?.uid) return;
+        setOtherTyping(true);
+        if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+        otherTypingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 4000);
+      })
+      .subscribe();
+    typingChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
+      if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+    };
+  }, [activeChat?.id, activeChat?.customId, user?.uid]);
+
+  // Throttled so every keystroke doesn't open a broadcast -- one every 2s is
+  // plenty to keep the other side's "typing..." indicator alive.
+  const handleMessageInputChange = (val) => {
+    setNewMessage(val);
+    if (editingMsg) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2000) return;
+    lastTypingSentRef.current = now;
+    typingChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { sender_id: user?.uid },
+    });
+  };
+
   // ── Send text ──────────────────────────────────────────────────────────
   // public.messages only has: conversation_id, sender_id, sender_name, text,
   // image_url, created_at, read_at, reactions — no sender/message_type/time
@@ -256,13 +313,15 @@ const Messages = () => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
+    if (editingMsg) return handleSaveEdit();
+
     const convKey = activeChat.id || activeChat.customId;
     const nowIso = new Date().toISOString();
     const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
     try {
       await sendMessage({
         conversationId: convKey,
-        senderId: user?.id ?? null,
+        senderId: user?.uid ?? null,
         senderName: senderDisplayName,
         text: newMessage,
       });
@@ -293,7 +352,7 @@ const Messages = () => {
       const imageUrl = await uploadChatImage(file, convKey);
       await sendMessage({
         conversationId: convKey,
-        senderId: user?.id ?? null,
+        senderId: user?.uid ?? null,
         senderName: senderDisplayName,
         text: '',
         imageUrl,
@@ -308,6 +367,46 @@ const Messages = () => {
     } finally {
       setIsUploadingImage(false);
       e.target.value = '';
+    }
+  };
+
+  // ── Edit message ───────────────────────────────────────────────────────
+  // Sender-only, text-only, and never a reservation summary card -- mirrors
+  // the mobile app's canEdit so both sides agree on what "editable" means.
+  const canEditMsg = (msg) =>
+    msg.senderId === user?.uid &&
+    !!msg.text &&
+    !msg.text.startsWith(RESERVATION_CARD_PREFIX) &&
+    !msg.imageUrl;
+
+  const beginEdit = (msg) => {
+    if (!canEditMsg(msg)) return;
+    setReactionPopover(null);
+    setEditingMsg({ docId: msg.docId || msg.id, text: msg.text });
+    setNewMessage(msg.text);
+  };
+
+  const cancelEdit = () => {
+    setEditingMsg(null);
+    setNewMessage('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingMsg) return;
+    const nextText = newMessage.trim();
+    if (!nextText) return;
+    if (nextText === editingMsg.text) {
+      cancelEdit();
+      return;
+    }
+    try {
+      await editMessage(editingMsg.docId, nextText);
+      await logAction(user, 'Edited message to customer', { customerName: getConvName(activeChat) });
+    } catch (err) {
+      console.error('Edit failed:', err);
+    } finally {
+      setEditingMsg(null);
+      setNewMessage('');
     }
   };
 
@@ -413,7 +512,7 @@ const Messages = () => {
         const convKey = conv.id || conv.customId;
         await sendMessage({
           conversationId: convKey,
-          senderId: user?.id ?? null,
+          senderId: user?.uid ?? null,
           senderName: user?.name ?? user?.email ?? 'Boutique Support',
           text: RESERVATION_CARD_PREFIX + JSON.stringify(resContext),
         });
@@ -566,12 +665,14 @@ const Messages = () => {
             <div
               className={`message-bubble ${isSent ? 'bubbles-sent' : 'bubbles-received'} bubble-hoverable`}
               onMouseEnter={(e) => {
-                const btn = e.currentTarget.querySelector('.reaction-trigger');
-                if (btn) btn.style.opacity = '1';
+                e.currentTarget.querySelectorAll('.reaction-trigger').forEach((btn) => {
+                  btn.style.opacity = '1';
+                });
               }}
               onMouseLeave={(e) => {
-                const btn = e.currentTarget.querySelector('.reaction-trigger');
-                if (btn) btn.style.opacity = '0';
+                e.currentTarget.querySelectorAll('.reaction-trigger').forEach((btn) => {
+                  btn.style.opacity = '0';
+                });
               }}
             >
               {/* Product Context Card */}
@@ -656,7 +757,26 @@ const Messages = () => {
                 </p>
               )}
 
-              <span className="msg-time">{msgTime}</span>
+              <span className="msg-time">
+                {msgTime}
+                {msg.editedAt ? ' · edited' : ''}
+              </span>
+
+              {/* Edit trigger (own text messages only, visible on hover) */}
+              {isSent && canEditMsg(msg) && (
+                <button
+                  className="reaction-trigger edit-trigger"
+                  style={{ opacity: 0 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    beginEdit(msg);
+                  }}
+                  title="Edit message"
+                  aria-label="Edit message"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
 
               {/* Reaction trigger button (visible on hover) */}
               <button
@@ -768,11 +888,14 @@ const Messages = () => {
                   }
                 }}
               >
-                <div
-                  className="avatar"
-                  style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
-                >
-                  {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+                <div className="avatar-wrap">
+                  <div
+                    className="avatar"
+                    style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
+                  >
+                    {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  {onlineUsers[conv.customerId] && <span className="presence-dot" />}
                 </div>
                 <div className="conv-details">
                   <div className="conv-header">
@@ -850,7 +973,13 @@ const Messages = () => {
                 </div>
                 <div>
                   <h3>{getConvName(activeChat)}</h3>
-                  <p className="status-text online">● Active</p>
+                  {otherTyping ? (
+                    <p className="status-text typing">typing...</p>
+                  ) : onlineUsers[activeChat.customerId] ? (
+                    <p className="status-text online">● Online</p>
+                  ) : (
+                    <p className="status-text offline">Offline</p>
+                  )}
                 </div>
               </div>
               <button
@@ -881,6 +1010,23 @@ const Messages = () => {
                   </React.Fragment>
                 );
               })}
+              {otherTyping && (
+                <div className="message-bubble-wrapper received">
+                  <div
+                    className="avatar small-av"
+                    style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
+                  >
+                    {getInitials(getConvName(activeChat))[0]}
+                  </div>
+                  <div className="bubble-col">
+                    <div className="message-bubble bubbles-received typing-bubble">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
           </>
@@ -912,6 +1058,15 @@ const Messages = () => {
           {isUploadingImage && (
             <div className="upload-progress">
               <span>📤 Uploading image...</span>
+            </div>
+          )}
+          {editingMsg && (
+            <div className="editing-banner">
+              <Pencil size={13} />
+              <span>Editing message</span>
+              <button type="button" className="icon-btn" onClick={cancelEdit} aria-label="Cancel editing">
+                <X size={14} />
+              </button>
             </div>
           )}
           <form onSubmit={handleSend} className="chat-form">
@@ -948,35 +1103,37 @@ const Messages = () => {
               )}
             </div>
 
-            <div className="attach-wrapper" ref={attachMenuRef}>
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Attach file"
-                onClick={() => {
-                  setShowAttachMenu(!showAttachMenu);
-                  setShowQuickReplies(false);
-                  setShowEmojiPicker(false);
-                }}
-              >
-                <Paperclip size={20} />
-              </button>
+            {!editingMsg && (
+              <div className="attach-wrapper" ref={attachMenuRef}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Attach file"
+                  onClick={() => {
+                    setShowAttachMenu(!showAttachMenu);
+                    setShowQuickReplies(false);
+                    setShowEmojiPicker(false);
+                  }}
+                >
+                  <Paperclip size={20} />
+                </button>
 
-              {showAttachMenu && (
-                <div className="attach-menu card">
-                  <button
-                    type="button"
-                    className="attach-item"
-                    onClick={() => {
-                      setShowAttachMenu(false);
-                      imageInputRef.current?.click();
-                    }}
-                  >
-                    <ImageIcon size={16} /> Send Image
-                  </button>
-                </div>
-              )}
-            </div>
+                {showAttachMenu && (
+                  <div className="attach-menu card">
+                    <button
+                      type="button"
+                      className="attach-item"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        imageInputRef.current?.click();
+                      }}
+                    >
+                      <ImageIcon size={16} /> Send Image
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="relative" style={{ position: 'relative' }}>
               <button
@@ -1031,13 +1188,18 @@ const Messages = () => {
             <input
               type="text"
               className="input-field chat-input"
-              placeholder="Type your message..."
+              placeholder={editingMsg ? 'Edit your message...' : 'Type your message...'}
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => handleMessageInputChange(e.target.value)}
             />
 
-            <button type="submit" className="send-btn" aria-label="Send message" disabled={!newMessage.trim()}>
-              <Send size={18} />
+            <button
+              type="submit"
+              className="send-btn"
+              aria-label={editingMsg ? 'Save changes' : 'Send message'}
+              disabled={!newMessage.trim()}
+            >
+              {editingMsg ? <Pencil size={16} /> : <Send size={18} />}
             </button>
           </form>
         </div>

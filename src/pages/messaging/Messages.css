@@ -55,6 +55,21 @@
   background-color: #f8fafc;
 }
 
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.presence-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: var(--stock-high, #10b981);
+  border: 2px solid var(--white);
+}
+
 .conv-details {
   flex: 1;
   min-width: 0;
@@ -157,6 +172,13 @@
 }
 .status-text.online {
   color: var(--stock-high);
+}
+.status-text.offline {
+  color: var(--text-secondary);
+}
+.status-text.typing {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .chat-history {
@@ -480,6 +502,51 @@
 }
 .reaction-trigger:hover {
   transform: scale(1.15);
+}
+.edit-trigger {
+  right: 26px;
+}
+
+/* ── Typing bubble (three-dot wave, mirrors the mobile app's) ── */
+.typing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.75rem 0.9rem;
+}
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-secondary);
+  animation: typingWave 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typingWave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Editing banner ── */
+.editing-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--cream);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--charcoal);
+}
+.editing-banner span {
+  flex: 1;
+  font-weight: 500;
+}
+.editing-banner .icon-btn {
+  width: 24px;
+  height: 24px;
 }
 
 /* ── Emoji popover ── */
