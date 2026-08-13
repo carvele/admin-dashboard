@@ -75,9 +75,18 @@ const StaffManagement = () => {
 
     const fetchNotes = async () => {
       try {
+        // log_staff_status_change() (DB trigger) writes a separate row per
+        // changed field -- employment_status and block_status can each get
+        // their own row from the same update_staff_status() call, sharing
+        // the same note text and near-identical timestamp. Scoping to
+        // employment_status here matters when they *don't* share a note: an
+        // archived member whose block status was toggled afterward, in a
+        // separate action with its own note, would otherwise show that
+        // later, unrelated block-status note as their "Archive Reason".
         const { data, error } = await supabase
           .from('staff_status_history')
           .select('staff_id, note, created_at')
+          .eq('change_type', 'employment_status')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
