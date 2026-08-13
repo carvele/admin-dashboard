@@ -144,6 +144,41 @@ export const updateInventoryItem = async (docId, updates) => {
 };
 
 /**
+ * Apply total/available/reserved as atomic deltas rather than absolute
+ * values -- use this instead of updateInventoryItem whenever the new value
+ * is "current + N", not a value the user typed directly (like handleEdit's
+ * exact-count form). adjust_inventory_stock applies the delta server-side in
+ * a single UPDATE against the row's live value, so two calls close together
+ * (a double-click, two staff acting near-simultaneously) can't silently
+ * overwrite each other the way reading a JS-side snapshot then writing an
+ * absolute number back can.
+ * @returns {{prevTotal, prevAvailable, prevReserved, newTotal, newAvailable, newReserved, productDocId}}
+ */
+export const adjustInventoryStockDelta = async (docId, { totalDelta = 0, availableDelta = 0, reservedDelta = 0 } = {}) => {
+  const { data, error } = await supabase.rpc('adjust_inventory_stock', {
+    p_inventory_id: docId,
+    p_total_delta: totalDelta,
+    p_available_delta: availableDelta,
+    p_reserved_delta: reservedDelta,
+  });
+  if (error) throw error;
+  queryCache.invalidateByPrefix('inventory');
+  const row = data?.[0];
+  if (!row) return null;
+  const result = {
+    prevTotal: row.prev_total,
+    prevAvailable: row.prev_available,
+    prevReserved: row.prev_reserved,
+    newTotal: row.new_total,
+    newAvailable: row.new_available,
+    newReserved: row.new_reserved,
+    productDocId: row.out_product_doc_id,
+  };
+  if (result.productDocId) await syncProductStock(result.productDocId);
+  return result;
+};
+
+/**
  * Recalculates and writes aggregated available/reserved/stock back to the
  * parent product row after any inventory mutation.
  * This is the Supabase-side replacement for the Firebase Cloud Function
@@ -265,17 +300,23 @@ export const getStockMovements = async (productId, limit = 50) => {
 export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
   if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
 
-  // 1. Update Inventory Stock
-  await updateInventoryItem(inventoryItem.docId, {
-    total: inventoryItem.total - quantity,
-    available: inventoryItem.available - quantity,
+  // 1. Update Inventory Stock -- delta applied atomically server-side, not
+  // against inventoryItem.total/available, which are just a snapshot from
+  // whenever this modal opened. Two sales recorded close together used to
+  // both subtract from the same stale starting number, silently losing one
+  // sale's deduction.
+  const result = await adjustInventoryStockDelta(inventoryItem.docId, {
+    totalDelta: -quantity,
+    availableDelta: -quantity,
   });
 
-  // 1b. Ledger entry (product-level; size noted)
+  // 1b. Ledger entry (product-level; size noted). Uses the RPC's own
+  // before/after rather than the stale snapshot, so the ledger reflects
+  // what actually happened even if another mutation landed in between.
   await logStockMovement(
     inventoryItem.productDocId,
-    inventoryItem.total,
-    inventoryItem.total - quantity,
+    result?.prevTotal ?? inventoryItem.total,
+    result?.newTotal ?? inventoryItem.total - quantity,
     'sale',
     `Walk-in sale: ${quantity}× ${inventoryItem.item} (size ${inventoryItem.size})`,
   );
