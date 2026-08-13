@@ -362,13 +362,8 @@ const Reservations = () => {
 
     try {
       if (action === 'approve_pay') {
-        // 'Confirmed' is the stored value; the display mapping above turns it
-        // back into "To Pay" for staff. Writing the label instead meant the DB
-        // never saw an accepted reservation: no payment deadline was stamped,
-        // the customer was never told to pay, the app showed no Pay button,
-        // and the unpaid sweep never picked it up.
-        await updateReservation(res.docId, { 
-          status: 'Confirmed',
+        await updateReservation(res.docId, {
+          status: 'To Pay',
           confirmed_by_id: user?.uid || user?.id || null,
           confirmed_by_name: user?.name || user?.email || 'Staff',
           confirmed_at: new Date().toISOString()
@@ -393,7 +388,7 @@ const Reservations = () => {
       } else if (action === 'ready_pickup') {
         // Payment already landed at mark_paid; this just signals the item is
         // pulled and physically ready at the counter.
-        await updateReservation(res.docId, { status: 'To Pickup' });
+        await updateReservation(res.docId, { status: 'Ready' });
         toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
         // Handing over is the moment the rest of the money is taken, in cash,
