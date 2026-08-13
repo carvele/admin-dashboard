@@ -44,6 +44,7 @@ The central management interface for the JezSy Collection boutique application, 
 ### Build & Deploy
 - `npm run build` - Create production build
 - `npm run preview` - Preview production build locally
+- Production hosting target: **Cloudflare Pages** (free tier) -- see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full setup guide, including why Vercel/Netlify/GitHub Pages/Render/Firebase were rejected. `public/_redirects` (SPA routing) is already in place; connecting the repo to a Cloudflare account is the one remaining manual step (only the repo owner can authorize the GitHub App install).
 
 ### Docker (reproducible local/staging builds)
 - `docker compose up --build` - Build and serve via nginx at http://localhost:8080 (requires `.env` -- `cp .env.example .env` and fill in real values first; Vite bakes `VITE_*` vars into the bundle at build time, so they must be present before `docker compose build`, not just at container runtime)
