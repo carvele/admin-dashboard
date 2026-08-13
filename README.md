@@ -45,6 +45,11 @@ The central management interface for the JezSy Collection boutique application, 
 - `npm run build` - Create production build
 - `npm run preview` - Preview production build locally
 
+### Docker (reproducible local/staging builds)
+- `docker compose up --build` - Build and serve via nginx at http://localhost:8080 (requires `.env` -- `cp .env.example .env` and fill in real values first; Vite bakes `VITE_*` vars into the bundle at build time, so they must be present before `docker compose build`, not just at container runtime)
+- `docker build -t admin-dashboard --build-arg VITE_SUPABASE_URL=... --build-arg VITE_SUPABASE_ANON_KEY=... .` - Equivalent without compose, passing build args directly
+- The Supabase backend stays remote/hosted per this project's shared-DB workflow -- this does not containerize Postgres locally, only the built static app + nginx
+
 ### Testing
 - `npm test` - Run test suite
 - `npm run test:watch` - Run tests in watch mode
