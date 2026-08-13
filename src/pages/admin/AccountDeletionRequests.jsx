@@ -7,12 +7,9 @@ import {
   processAccountDeletion,
   rejectAccountDeletion,
 } from '../../services/accountDeletionService';
-import { logAction } from '../../lib/supabaseService';
-import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatDate } from '../../utils/helpers';
 
 const AccountDeletionRequests = () => {
-  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,11 +79,9 @@ const AccountDeletionRequests = () => {
         toast.success(`Account deleted for ${reviewing.customerName}.`);
       }
 
-      await logAction(user, 'Processed account deletion request', {
-        targetType: 'profile',
-        targetId: reviewing.userId,
-        customerName: reviewing.customerName,
-      });
+      // process_account_deletion now logs this itself server-side
+      // (guaranteed, not dependent on this client call succeeding) --
+      // see jezsy-mobile-app's audit_log_hardening migration.
 
       setReviewing(null);
       setObligations(null);
@@ -107,11 +102,9 @@ const AccountDeletionRequests = () => {
     try {
       await rejectAccountDeletion(reviewing.docId);
       toast.success(`Deletion request declined for ${reviewing.customerName}.`);
-      await logAction(user, 'Rejected account deletion request', {
-        targetType: 'profile',
-        targetId: reviewing.userId,
-        customerName: reviewing.customerName,
-      });
+      // reject_account_deletion_request now logs this itself server-side
+      // (guaranteed, not dependent on this client call succeeding) --
+      // see jezsy-mobile-app's audit_log_hardening migration.
       setReviewing(null);
       setObligations(null);
       setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
