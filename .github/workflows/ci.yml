@@ -19,13 +19,8 @@ jobs:
 
       - run: npm ci
 
-      # Non-blocking for now: this repo has a pre-existing lint backlog
-      # (~270 errors, mostly no-unused-vars/no-empty) that predates this
-      # workflow -- see the tracking issue. Once that's cleared, drop
-      # continue-on-error so this becomes a real gate like the other steps.
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Typecheck
         run: npm run type-check

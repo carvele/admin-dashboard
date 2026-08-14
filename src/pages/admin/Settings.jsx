@@ -96,6 +96,10 @@ const Settings = () => {
       }
     };
     fetchSettings();
+    // Intentionally mount-only: user?.name seeds the initial displayName field.
+    // Re-running on every user change would refetch all settings and clobber
+    // any in-progress unsaved edits in this form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSaveWeeklyHours = async () => {

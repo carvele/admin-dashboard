@@ -22,7 +22,7 @@ jest.mock('../lib/supabaseClient', () => ({
     rpc: (...args) => mockRpc(...args),
     from: (table) => ({
       select: () => ({
-        eq: (col1, val1) => ({
+        eq: (col1, _val1) => ({
           eq: (_col2, _val2) => ({
             maybeSingle: () =>
               Promise.resolve({ data: table === 'inventory' ? mockLookup[col1] : null, error: null }),

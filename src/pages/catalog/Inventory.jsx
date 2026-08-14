@@ -89,7 +89,7 @@ const Inventory = () => {
           setLoadingWaitlist(false);
         });
     }
-  }, [activeTab]);
+  }, [activeTab, waitlistDemand.length]);
 
   // Product list — needed to map each inventory row to its category/subcategory
   // (category_id lives on products, not on inventory rows) and to feed the

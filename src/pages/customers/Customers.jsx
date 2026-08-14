@@ -118,10 +118,19 @@ const Customers = () => {
     return () => {
       controller.abort();
     };
+    // Intentionally mount-only: fetchCustomers closes over lastDoc, which it
+    // sets after every fetch. Tracking it here would re-run this effect (and
+    // re-fetch page 1) every time lastDoc changes -- the "Load More" button
+    // at line ~600 is the only place pagination should advance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 300),
     []

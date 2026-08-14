@@ -80,9 +80,13 @@ const ProductForm = ({ readOnly = false }) => {
   const [, setUploadProgress] = useState({ current: 0, total: 0 });
   const previewUrlsRef = React.useRef([]);
 
-  // Cleanup local image preview object URLs on component unmount to prevent memory leaks
+  // Cleanup local image preview object URLs on component unmount to prevent memory leaks.
+  // Intentionally reads previewUrlsRef.current at cleanup time (not a mount-time
+  // snapshot) so it revokes every URL accumulated over the form's lifetime, not
+  // just what existed when this effect first ran.
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       previewUrlsRef.current.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
@@ -264,7 +268,7 @@ const ProductForm = ({ readOnly = false }) => {
     } else {
       setFormData((prev) => ({ ...prev, subCategory: '' }));
     }
-  }, [formData.category, categories]);
+  }, [formData.category, formData.subCategory, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);

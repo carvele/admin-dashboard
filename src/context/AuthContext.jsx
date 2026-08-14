@@ -137,14 +137,14 @@ export const AuthProvider = ({ children }) => {
   const deviceChannelRef = useRef(null);
 
   // Unsubscribe from old device channel before starting a new one
-  const clearDeviceChannel = () => {
+  const clearDeviceChannel = React.useCallback(() => {
     if (deviceChannelRef.current) {
       supabase.removeChannel(deviceChannelRef.current);
       deviceChannelRef.current = null;
     }
-  };
+  }, []);
 
-  const handleDeviceCheck = async (supabaseUser) => {
+  const handleDeviceCheck = React.useCallback(async (supabaseUser) => {
     if (!supabaseUser) {
       clearDeviceChannel();
       setUser(null);
@@ -318,7 +318,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [clearDeviceChannel]);
 
   // Listen for Supabase auth state changes (initial load + logout)
   useEffect(() => {
@@ -335,7 +335,19 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
       clearDeviceChannel();
     };
-  }, []);
+  }, [handleDeviceCheck, clearDeviceChannel]);
+
+  const logout = React.useCallback(async () => {
+    const savedFPHash = localStorage.getItem('_jz_fp_hash');
+    clearDeviceChannel();
+    await supabase.auth.signOut();
+    setUser(null);
+    setDeviceStatus('checking');
+    localStorage.clear();
+    sessionStorage.clear();
+    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
+    toast.info('Logged out successfully');
+  }, [clearDeviceChannel]);
 
   // Auto-logout idle timer (30 minutes)
   useEffect(() => {
@@ -369,7 +381,7 @@ export const AuthProvider = ({ children }) => {
       window.removeEventListener('scroll', resetTimer);
       window.removeEventListener('click', resetTimer);
     };
-  }, [user, deviceStatus]);
+  }, [user, deviceStatus, logout]);
 
   const login = async (email, password) => {
     try {
@@ -386,18 +398,6 @@ export const AuthProvider = ({ children }) => {
       toast.error(message);
       throw error;
     }
-  };
-
-  const logout = async () => {
-    const savedFPHash = localStorage.getItem('_jz_fp_hash');
-    clearDeviceChannel();
-    await supabase.auth.signOut();
-    setUser(null);
-    setDeviceStatus('checking');
-    localStorage.clear();
-    sessionStorage.clear();
-    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
-    toast.info('Logged out successfully');
   };
 
   /**
