@@ -20,6 +20,7 @@ let isSubscribed = false;
 let reservationsChannel = null;
 let messagesChannel = null;
 const listeners = new Set();
+let teardownTimeoutId = null;
 
 // Resets the module state so the next mount reopens both channels. Called on
 // last-listener teardown and on a channel error/close so a dropped socket
@@ -38,6 +39,21 @@ function teardown() {
 
 export const useRealtimeSync = (onUpdate) => {
   useEffect(() => {
+    // React StrictMode (enabled in main.jsx) synchronously mounts, unmounts,
+    // and remounts every effect once in dev. Without this, that cycle would
+    // tear down these channels and immediately recreate new ones under the
+    // exact same topic names ('global-reservations-alert' /
+    // 'global-messages-alert') before the old ones finish closing --
+    // supabase-js's RealtimeClient recurses trying to reconcile the
+    // duplicate/racing channel refs, producing "Maximum call stack size
+    // exceeded". Cancelling a pending teardown here means a StrictMode
+    // remount (or any other rapid unmount+remount) reuses the still-live
+    // channels instead of racing to replace them.
+    if (teardownTimeoutId) {
+      clearTimeout(teardownTimeoutId);
+      teardownTimeoutId = null;
+    }
+
     if (onUpdate) listeners.add(onUpdate);
 
     if (!isSubscribed) {
@@ -85,9 +101,16 @@ export const useRealtimeSync = (onUpdate) => {
 
     return () => {
       if (onUpdate) listeners.delete(onUpdate);
-      // Only tear down once the last mounted consumer leaves -- other
-      // components may still be relying on the shared channels.
-      if (listeners.size === 0) teardown();
+      // Deferred (see setup above): only tear down once the last mounted
+      // consumer leaves AND stays gone for a tick, so a same-tick
+      // unmount+remount (StrictMode, or an unrelated re-render) reuses the
+      // channels instead of racing to tear down and recreate them.
+      if (listeners.size === 0) {
+        teardownTimeoutId = setTimeout(() => {
+          teardownTimeoutId = null;
+          if (listeners.size === 0) teardown();
+        }, 0);
+      }
     };
   }, [onUpdate]);
 };
