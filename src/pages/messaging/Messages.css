@@ -341,13 +341,64 @@
   }
 }
 
+/* Mobile-only nav controls (back/info buttons) for switching between the
+   three message panels -- hidden on desktop where all three show at once. */
+.chat-back-btn,
+.context-back-btn,
+.chat-info-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--charcoal);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-back-btn:hover,
+.context-back-btn:hover,
+.chat-info-btn:hover {
+  background-color: var(--cream);
+}
+.chat-info-btn.btn-outline {
+  width: 40px;
+  padding: 0;
+}
+
 @media (max-width: 1024px) {
   .messages-layout {
     grid-template-columns: 1fr;
   }
-  .messages-sidebar,
-  .context-panel {
+  /* Only one panel shows at a time on mobile, switched via mobileView state
+     (see Messages.jsx) since there's no room for all three side by side --
+     the panels are full features (conversation list, chat, customer
+     context), not something to just squeeze or scroll past.
+     Scoped to .messages-layout (not bare .messages-sidebar etc.) so these
+     rules outrank the unconditional display:flex each panel sets elsewhere
+     in this file regardless of where in the file that rule appears --
+     equal-specificity selectors fall back to source order, which a plain
+     class selector here would lose to whichever rule happens to come later. */
+  .messages-layout .messages-sidebar,
+  .messages-layout .chat-area,
+  .messages-layout .context-panel {
     display: none;
+  }
+  .messages-layout[data-mobile-view='list'] .messages-sidebar {
+    display: flex;
+  }
+  .messages-layout[data-mobile-view='chat'] .chat-area {
+    display: flex;
+  }
+  .messages-layout[data-mobile-view='context'] .context-panel {
+    display: flex;
+  }
+  .chat-back-btn,
+  .context-back-btn,
+  .chat-info-btn {
+    display: inline-flex;
   }
 }
 
