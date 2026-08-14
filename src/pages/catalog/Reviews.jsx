@@ -137,13 +137,18 @@ const Reviews = () => {
                 {review.images && review.images.length > 0 && (
                   <div className="review-images">
                     {review.images.map((img, idx) => (
-                      <img 
-                        key={idx} 
-                        src={img} 
-                        alt="Review attachment" 
-                        className="review-thumb"
+                      <button
+                        key={idx}
+                        type="button"
+                        className="review-thumb-btn"
                         onClick={() => setSelectedImage(img)}
-                      />
+                      >
+                        <img
+                          src={img}
+                          alt="Review attachment"
+                          className="review-thumb"
+                        />
+                      </button>
                     ))}
                   </div>
                 )}
@@ -187,8 +192,20 @@ const Reviews = () => {
       )}
 
       {selectedImage && (
-        <div className="image-modal-overlay" onClick={() => setSelectedImage(null)}>
-          <div className="image-modal-content" onClick={e => e.stopPropagation()}>
+        <div
+          className="image-modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) setSelectedImage(null); }}
+          onKeyDown={e => {
+            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              setSelectedImage(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close image preview"
+        >
+          <div className="image-modal-content">
             <button className="image-modal-close" onClick={() => setSelectedImage(null)}>
               <X size={24} />
             </button>

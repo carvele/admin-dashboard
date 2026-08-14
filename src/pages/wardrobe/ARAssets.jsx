@@ -491,7 +491,7 @@ const ARAssets = () => {
                       </span>
                     </td>
                     <td>
-                      <label className="toggle-switch">
+                      <label className="toggle-switch" aria-label="Toggle AR asset status">
                         <input
                           type="checkbox"
                           checked={status === 'Active'}
@@ -738,8 +738,8 @@ const ARAssets = () => {
 
       {/* Link Assets Modal */}
       {isLinkModalOpen && productToLink && (
-        <div className="modal-overlay" onClick={() => setIsLinkModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsLinkModalOpen(false)}>
+          <div className="modal-content" role="presentation" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2>Setup AR: {productToLink.name}</h2>
               <button type="button" className="close-btn" onClick={() => setIsLinkModalOpen(false)}>&times;</button>
@@ -788,9 +788,10 @@ const ARAssets = () => {
 
       {/* Upload AR Asset Modal */}
       {isUploadModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsUploadModalOpen(false)}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsUploadModalOpen(false)}>
           <div
             className="modal-content"
+            role="presentation"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 420 }}
           >
@@ -855,9 +856,10 @@ const ARAssets = () => {
 
       {/* Add / Edit Style Pose Reference Modal */}
       {isPoseModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsPoseModalOpen(false)}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsPoseModalOpen(false)}>
           <div
             className="modal-content modal-lg"
+            role="presentation"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 650, maxHeight: '90vh', overflowY: 'auto' }}
           >
@@ -870,8 +872,9 @@ const ARAssets = () => {
             <div className="modal-body space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Pose Name *</label>
+                  <label className="label" htmlFor="pose-name">Pose Name *</label>
                   <input
+                    id="pose-name"
                     type="text"
                     className="input-field"
                     placeholder="e.g., Gala Red Carpet Pose"
@@ -880,8 +883,9 @@ const ARAssets = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Category</label>
+                  <label className="label" htmlFor="pose-category">Category</label>
                   <select
+                    id="pose-category"
                     className="input-field"
                     value={poseForm.category}
                     onChange={(e) => setPoseForm({ ...poseForm, category: e.target.value })}
@@ -897,8 +901,9 @@ const ARAssets = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="form-group">
-                  <label className="label">Occasion</label>
+                  <label className="label" htmlFor="pose-occasion">Occasion</label>
                   <select
+                    id="pose-occasion"
                     className="input-field"
                     value={poseForm.occasion}
                     onChange={(e) => setPoseForm({ ...poseForm, occasion: e.target.value })}
@@ -913,8 +918,9 @@ const ARAssets = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Difficulty</label>
+                  <label className="label" htmlFor="pose-difficulty">Difficulty</label>
                   <select
+                    id="pose-difficulty"
                     className="input-field"
                     value={poseForm.difficulty}
                     onChange={(e) => setPoseForm({ ...poseForm, difficulty: e.target.value })}
@@ -925,8 +931,9 @@ const ARAssets = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Base AR Matcher</label>
+                  <label className="label" htmlFor="pose-base-matcher">Base AR Matcher</label>
                   <select
+                    id="pose-base-matcher"
                     className="input-field"
                     value={poseForm.base_pose_type}
                     onChange={(e) => setPoseForm({ ...poseForm, base_pose_type: e.target.value })}
@@ -940,7 +947,7 @@ const ARAssets = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Styled Reference Image</label>
+                <label className="label" htmlFor="pose-image">Styled Reference Image</label>
                 <div className="flex items-center gap-4">
                   {(poseFile || poseForm.image_url) && (
                     <div className="w-20 h-24 rounded border overflow-hidden bg-slate-900 flex-shrink-0">
@@ -952,6 +959,7 @@ const ARAssets = () => {
                     </div>
                   )}
                   <input
+                    id="pose-image"
                     type="file"
                     accept="image/*"
                     className="input-field"
@@ -965,8 +973,9 @@ const ARAssets = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Description / Styling Tip</label>
+                <label className="label" htmlFor="pose-description">Description / Styling Tip</label>
                 <textarea
+                  id="pose-description"
                   className="input-field"
                   rows={2}
                   placeholder="e.g., Stand with one leg slightly forward to highlight full dress silhouette..."

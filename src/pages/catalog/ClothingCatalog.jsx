@@ -320,6 +320,14 @@ const ClothingCatalog = () => {
               key={item.id}
               className={`product-card card ${item.deleted ? 'archived-card' : ''}`}
               onClick={() => navigate('/catalog/view/' + item.docId)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/catalog/view/' + item.docId);
+                }
+              }}
               style={{ cursor: 'pointer' }}
               title="View product details"
             >

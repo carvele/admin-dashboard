@@ -192,8 +192,15 @@ const AccountDeletionRequests = () => {
       </div>
 
       {reviewing && (
-        <div className="modal-overlay" onClick={closeReview}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div
+          className="modal-overlay"
+          onClick={closeReview}
+          onKeyDown={(e) => e.key === 'Escape' && closeReview()}
+          role="button"
+          tabIndex={0}
+          aria-label="Close dialog"
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} role="presentation" style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h2>Delete {reviewing.customerName}?</h2>
               <button className="close-btn" onClick={closeReview}>&times;</button>

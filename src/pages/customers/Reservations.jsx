@@ -971,8 +971,19 @@ const Reservations = () => {
 
       {/* ===== QR / TOKEN VERIFICATION MODAL ===== */}
       {showQRModal && (
-        <div className="modal-overlay" onClick={() => setShowQRModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowQRModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowQRModal(false);
+            }
+          }}
+        >
+          <div className="modal-content" style={{ maxWidth: 420 }}>
             <div className="modal-header">
               <h2><QrCode size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />Verify Pickup</h2>
               <button className="close-btn" onClick={() => setShowQRModal(false)}>&times;</button>
@@ -980,13 +991,15 @@ const Reservations = () => {
             <div className="modal-body">
               <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
               <div className="form-group">
-                <label className="label">Pickup Token / Reservation ID</label>
+                <label className="label" htmlFor="qr-token">Pickup Token / Reservation ID</label>
                 <input
+                  id="qr-token"
                   type="text"
                   className="input-field font-mono"
                   placeholder="e.g. ORD-2026-00042"
                   value={qrToken}
                   onChange={(e) => { setQrToken(e.target.value.toUpperCase()); setQrResult(null); }}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of a just-opened modal
                   autoFocus
                 />
               </div>
@@ -1041,8 +1054,19 @@ const Reservations = () => {
 
       {/* ===== NEW RESERVATION MODAL ===== */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsModalOpen(false);
+            }
+          }}
+        >
+          <div className="modal-content">
             <div className="modal-header">
               <h2>Create New Reservation</h2>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>
@@ -1051,8 +1075,9 @@ const Reservations = () => {
             </div>
             <form className="modal-body" onSubmit={handleCreateReservation}>
               <div className="form-group">
-                <label className="label">Customer</label>
+                <label className="label" htmlFor="reservation-customer">Customer</label>
                 <input
+                  id="reservation-customer"
                   type="text"
                   className="input-field"
                   list="customers-list"
@@ -1079,8 +1104,9 @@ const Reservations = () => {
               </div>
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label className="label">Selected Outfit</label>
+                  <label className="label" htmlFor="reservation-outfit">Selected Outfit</label>
                   <select
+                    id="reservation-outfit"
                     className="input-field"
                     value={newRes.outfit}
                     onChange={(e) => setNewRes({ ...newRes, outfit: e.target.value })}
@@ -1096,8 +1122,9 @@ const Reservations = () => {
                   </select>
                 </div>
                 <div className="form-group flex-1">
-                  <label className="label">Size</label>
+                  <label className="label" htmlFor="reservation-size">Size</label>
                   <select
+                    id="reservation-size"
                     className="input-field"
                     value={newRes.size}
                     onChange={(e) => setNewRes({ ...newRes, size: e.target.value })}
@@ -1115,8 +1142,9 @@ const Reservations = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label className="label">Reservation Date & Time</label>
+                <label className="label" htmlFor="reservation-date">Reservation Date & Time</label>
                 <input
+                  id="reservation-date"
                   type="datetime-local"
                   className="input-field"
                   value={newRes.date}
@@ -1148,10 +1176,20 @@ const Reservations = () => {
 
       {/* ===== RESCHEDULE MODAL ===== */}
       {rescheduleModal && (
-        <div className="modal-overlay" onClick={() => setRescheduleModal(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setRescheduleModal(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setRescheduleModal(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1168,8 +1206,9 @@ const Reservations = () => {
                 ).toLocaleString()}
               </p>
               <div className="form-group">
-                <label className="label">New Date & Time</label>
+                <label className="label" htmlFor="reschedule-date">New Date & Time</label>
                 <input
+                  id="reschedule-date"
                   type="datetime-local"
                   className="input-field"
                   value={newDate}
@@ -1196,10 +1235,20 @@ const Reservations = () => {
 
       {/* ===== VIEW DETAILS MODAL ===== */}
       {viewModal && (
-        <div className="modal-overlay" onClick={() => setViewModal(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setViewModal(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setViewModal(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 640 }}
           >
             <div className="modal-header">
@@ -1516,10 +1565,20 @@ const Reservations = () => {
       )}
 
       {receiptModalUrl && (
-        <div className="modal-overlay" onClick={() => setReceiptModalUrl(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setReceiptModalUrl(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setReceiptModalUrl(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
           >
             <div className="modal-header">

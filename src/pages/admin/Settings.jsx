@@ -325,9 +325,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group max-w-lg mt-4">
-                <label className="label">Store Name</label>
+                <label className="label" htmlFor="storeName">Store Name</label>
                 <input
                   type="text"
+                  id="storeName"
                   name="storeName"
                   className="input-field"
                   value={formData.storeName}
@@ -337,9 +338,10 @@ const Settings = () => {
 
               <div className="form-row max-w-lg mt-3">
                 <div className="form-group flex-1">
-                  <label className="label">Email Address</label>
+                  <label className="label" htmlFor="email">Email Address</label>
                   <input
                     type="email"
+                    id="email"
                     name="email"
                     className="input-field"
                     value={formData.email}
@@ -347,9 +349,10 @@ const Settings = () => {
                   />
                 </div>
                 <div className="form-group flex-1">
-                  <label className="label">Phone Number</label>
+                  <label className="label" htmlFor="phone">Phone Number</label>
                   <input
                     type="text"
+                    id="phone"
                     name="phone"
                     className="input-field"
                     value={formData.phone}
@@ -359,9 +362,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group max-w-lg mt-3">
-                <label className="label">Store Address</label>
+                <label className="label" htmlFor="address">Store Address</label>
                 <input
                   type="text"
+                  id="address"
                   name="address"
                   className="input-field"
                   value={formData.address}
@@ -376,9 +380,10 @@ const Settings = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group flex-1">
-                    <label className="label">GCash Name</label>
+                    <label className="label" htmlFor="gcashName">GCash Name</label>
                     <input
                       type="text"
+                      id="gcashName"
                       name="gcashName"
                       className="input-field"
                       placeholder="e.g. Carl Vener Wee"
@@ -387,9 +392,10 @@ const Settings = () => {
                     />
                   </div>
                   <div className="form-group flex-1">
-                    <label className="label">GCash Number</label>
+                    <label className="label" htmlFor="gcashNumber">GCash Number</label>
                     <input
                       type="text"
+                      id="gcashNumber"
                       name="gcashNumber"
                       className="input-field"
                       placeholder="e.g. 0912 365 9917"
@@ -400,7 +406,7 @@ const Settings = () => {
                 </div>
 
                 <div className="form-group mt-3 mb-6">
-                  <label className="label">GCash QR Code</label>
+                  <span className="label">GCash QR Code</span>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
                     <div 
                       style={{ 
@@ -477,7 +483,7 @@ const Settings = () => {
                       <tr key={item.day_of_week}>
                         <td className="font-semibold">{item.day_name}</td>
                         <td>
-                          <label className="toggle-switch">
+                          <label className="toggle-switch" aria-label={`Toggle ${item.day_name} open status`}>
                             <input
                               type="checkbox"
                               checked={!item.is_closed}
@@ -626,7 +632,7 @@ const Settings = () => {
                   <h4>New Reservations</h4>
                   <p>Receive alerts when a customer books a new reservation</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle new reservation alerts">
                   <input type="checkbox" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
@@ -637,7 +643,7 @@ const Settings = () => {
                   <h4>Low Stock Alerts</h4>
                   <p>Receive Daily digests of items running low in stock</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle low stock alerts">
                   <input type="checkbox" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
@@ -648,7 +654,7 @@ const Settings = () => {
                   <h4>Direct Messages</h4>
                   <p>Sound alerts for incoming customer messages</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle direct message alerts">
                   <input type="checkbox" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
@@ -667,9 +673,10 @@ const Settings = () => {
               </p>
 
               <div className="form-group mt-4">
-                <label className="label">Max Booking Days in Advance</label>
+                <label className="label" htmlFor="maxBookingDays">Max Booking Days in Advance</label>
                 <input
                   type="number"
+                  id="maxBookingDays"
                   name="maxBookingDays"
                   className="input-field"
                   value={formData.maxBookingDays}
@@ -678,9 +685,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-4">
-                <label className="label">Deposit Required (%)</label>
+                <label className="label" htmlFor="depositRequired">Deposit Required (%)</label>
                 <input
                   type="number"
+                  id="depositRequired"
                   name="depositRequired"
                   className="input-field"
                   value={formData.depositRequired}
@@ -691,9 +699,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-4">
-                <label className="label">Free Cancellation Window (Hours)</label>
+                <label className="label" htmlFor="cancellationWindow">Free Cancellation Window (Hours)</label>
                 <input
                   type="number"
+                  id="cancellationWindow"
                   name="cancellationWindow"
                   className="input-field"
                   value={formData.cancellationWindow}
@@ -715,7 +724,7 @@ const Settings = () => {
                   <h4>Enable Global AR Try-On</h4>
                   <p>Turn the AR Try-On feature on or off across the entire customer app.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle global AR try-on">
                   <input
                     type="checkbox"
                     name="enableGlobalAR"
@@ -733,7 +742,7 @@ const Settings = () => {
                     Skip manual verification step for newly uploaded 3D bodies if mesh validates.
                   </p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle auto-approve alignments">
                   <input
                     type="checkbox"
                     name="autoApproveAR"
@@ -745,9 +754,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-5">
-                <label className="label">Max Assets File Size (MB)</label>
+                <label className="label" htmlFor="maxFileSize">Max Assets File Size (MB)</label>
                 <input
                   type="number"
+                  id="maxFileSize"
                   name="maxFileSize"
                   className="input-field"
                   value={formData.maxFileSize}
@@ -765,9 +775,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-4">
-                <label className="label">Display Name</label>
+                <label className="label" htmlFor="displayName">Display Name</label>
                 <input
                   type="text"
+                  id="displayName"
                   name="displayName"
                   className="input-field"
                   value={formData.displayName}
@@ -780,9 +791,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-4">
-                <label className="label">Staff Email Address</label>
+                <label className="label" htmlFor="staffEmail">Staff Email Address</label>
                 <input
                   type="email"
+                  id="staffEmail"
                   className="input-field"
                   value={user?.email || ''}
                   readOnly
@@ -791,9 +803,10 @@ const Settings = () => {
               </div>
 
               <div className="form-group mt-4">
-                <label className="label">Role Level</label>
+                <label className="label" htmlFor="roleLevel">Role Level</label>
                 <input
                   type="text"
+                  id="roleLevel"
                   className="input-field"
                   value={user?.role || 'Staff'}
                   readOnly

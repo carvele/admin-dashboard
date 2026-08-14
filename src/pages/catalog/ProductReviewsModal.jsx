@@ -55,10 +55,11 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div 
-        className="modal-content" 
-        onClick={e => e.stopPropagation()} 
+    <div className="modal-overlay" role="presentation" onClick={onClose} style={{ zIndex: 1000 }}>
+      <div
+        className="modal-content"
+        role="presentation"
+        onClick={e => e.stopPropagation()}
         style={{ width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}
       >
         <div className="flex-between mb-4">
