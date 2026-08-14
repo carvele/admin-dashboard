@@ -162,6 +162,10 @@ const Reservations = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // debounce(...) only closes over the stable setSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 400),
     []

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { getAllReviews, deleteReview } from '../../services/reviewService';
 import { Star, CheckCircle, Trash2, X, Filter } from 'lucide-react';
@@ -19,7 +19,7 @@ const Reviews = () => {
   
   const limit = 20;
 
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     try {
       setIsLoading(true);
       const rating = ratingFilter ? parseInt(ratingFilter) : null;
@@ -31,7 +31,7 @@ const Reviews = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, ratingFilter, searchQuery]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -39,7 +39,7 @@ const Reviews = () => {
     }, 500); // Debounce search
 
     return () => clearTimeout(delayDebounceFn);
-  }, [page, ratingFilter, searchQuery]);
+  }, [fetchReviews]);
 
   const handleDeleteConfirm = async () => {
     if (!reviewToDelete) return;

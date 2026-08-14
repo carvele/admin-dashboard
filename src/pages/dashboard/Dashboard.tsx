@@ -141,7 +141,7 @@ const Dashboard = () => {
       clearInterval(intervalId);
       unsubInventory();
     };
-  }, []);
+  }, [loadDashboard]);
 
   // 5-tier stock alert analysis (demand-aware, real-time) - Active items only
   const activeInventory = inventory.filter((i: any) => i.deleted !== true);

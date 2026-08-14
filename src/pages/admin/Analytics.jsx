@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -123,32 +123,32 @@ const Analytics = () => {
     setEndDate(now.toISOString().split('T')[0]);
   };
 
-  const parseResDate = (item, overrideField = null) => {
+  const parseResDate = useCallback((item, overrideField = null) => {
     const raw = overrideField ? item[overrideField] : (item.reservationDate || item.date || item.timestamp || item.createdAt || item.joinedAt);
     if (!raw) return null;
     // Supabase returns ISO strings; legacy Firestore may have .toDate() or .seconds
     if (raw?.toDate) return raw.toDate();
     if (raw?.seconds) return new Date(raw.seconds * 1000);
     return new Date(raw);
-  };
+  }, []);
 
-  const isInRange = (date) => {
+  const isInRange = useCallback((date) => {
     if (!date) return false;
     const d = new Date(date);
     const s = new Date(startDate);
     const e = new Date(endDate);
     e.setHours(23, 59, 59, 999);
     return d >= s && d <= e;
-  };
+  }, [startDate, endDate]);
 
   // Filter Data
   const filteredReservations = useMemo(
     () => reservations.filter(r => isInRange(parseResDate(r))),
-    [reservations, startDate, endDate]
+    [reservations, isInRange, parseResDate]
   );
   const filteredCustomers = useMemo(
     () => customers.filter(c => isInRange(parseResDate(c))),
-    [customers, startDate, endDate]
+    [customers, isInRange, parseResDate]
   );
   const currentTotalCustomers = customers.length; // Absolute total
 
@@ -176,7 +176,7 @@ const Analytics = () => {
     return { totalRev: rev, earnedReservations: list };
   }, [filteredReservations, catalog]);
 
-  const getGrowth = (list, dateField = null) => {
+  const getGrowth = useCallback((list, dateField = null) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const duration = end - start;
@@ -194,11 +194,11 @@ const Analytics = () => {
     if (prevCount === 0) return { text: `+${currentCount} this period`, trend: 'up' };
     const pct = Math.round(((currentCount - prevCount) / prevCount) * 100);
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
-  };
+  }, [startDate, endDate, isInRange, parseResDate]);
 
-  const revDelta = useMemo(() => getGrowth(earnedReservations), [earnedReservations, startDate, endDate]);
-  const custDelta = useMemo(() => getGrowth(customers), [customers, startDate, endDate]);
-  const resDelta = useMemo(() => getGrowth(reservations), [reservations, startDate, endDate]);
+  const revDelta = useMemo(() => getGrowth(earnedReservations), [earnedReservations, getGrowth]);
+  const custDelta = useMemo(() => getGrowth(customers), [customers, getGrowth]);
+  const resDelta = useMemo(() => getGrowth(reservations), [reservations, getGrowth]);
 
   // New Visualization: Revenue by Category
   const categoryShareData = useMemo(() => {

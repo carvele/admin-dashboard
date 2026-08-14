@@ -122,6 +122,10 @@ const Messages = () => {
 
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setConvSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedConvSearch = useCallback(
     debounce((val) => setConvSearchTerm(val), 300),
     []
@@ -133,6 +137,10 @@ const Messages = () => {
 
   const [custSearchInput, setCustSearchInput] = useState('');
   const [custSearchTerm, setCustSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setCustSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedCustSearch = useCallback(
     debounce((val) => setCustSearchTerm(val), 300),
     []
@@ -291,6 +299,12 @@ const Messages = () => {
       }
     });
     return () => unsub();
+    // Deliberately depends on the specific fields used, not the whole
+    // activeChat object -- a parent re-render can hand this a new object
+    // reference for the same conversation, and resubscribing on every such
+    // reference change (vs. an actual field change) would tear down and
+    // recreate the message subscription far more often than needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChat?.id, activeChat?.customId, activeChat?.customerId]);
 
   // Typing indicator: ephemeral broadcast on a per-conversation channel, not
@@ -321,6 +335,9 @@ const Messages = () => {
       typingChannelRef.current = null;
       if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
     };
+    // Same reasoning as the message-subscription effect above: depends on
+    // the specific fields used, not activeChat's object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChat?.id, activeChat?.customId, user?.uid]);
 
   // Throttled so every keystroke doesn't open a broadcast -- one every 2s is
