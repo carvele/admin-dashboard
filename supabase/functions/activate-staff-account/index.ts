@@ -22,11 +22,19 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '*')
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Supports a leading wildcard segment, e.g. "https://*.admin-dashboard-byq.pages.dev"
+// to match Cloudflare Pages preview-deployment subdomains.
+function originMatches(origin: string, pattern: string): boolean {
+  if (!pattern.includes('*')) return origin === pattern;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*');
+  return new RegExp(`^${escaped}$`).test(origin);
+}
+
 function corsHeadersFor(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? '';
   const allowOrigin = ALLOWED_ORIGINS.includes('*')
     ? '*'
-    : (ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? ''));
+    : (ALLOWED_ORIGINS.find((p) => originMatches(origin, p)) ?? ALLOWED_ORIGINS[0] ?? '');
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
