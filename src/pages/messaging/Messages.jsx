@@ -747,6 +747,17 @@ const Messages = () => {
                           navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const searchParam = product?.name || msg.contextLabel;
+                        if (searchParam) {
+                          navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       title="Click to view product in catalog"
                     >
                       <div className="msg-product-header">
@@ -880,6 +891,7 @@ const Messages = () => {
                 <div
                   className={`emoji-popover ${isSent ? 'popover-left' : 'popover-right'}`}
                   onClick={(e) => e.stopPropagation()}
+                  role="presentation"
                 >
                   {EMOJI_LIST.map((emoji) => (
                     <button
@@ -899,14 +911,15 @@ const Messages = () => {
           {groupedReactions.length > 0 && (
             <div className={`reaction-chips ${isSent ? 'chips-sent' : 'chips-received'}`}>
               {groupedReactions.map(([emoji, count]) => (
-                <span
+                <button
                   key={emoji}
+                  type="button"
                   className="reaction-chip"
                   onClick={() => handleReaction(msg, emoji)}
                   title="Click to react"
                 >
                   {emoji} {count > 1 ? count : ''}
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -969,6 +982,16 @@ const Messages = () => {
                     updateConversation(conv.docId, { unreadCount: 0 });
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  setActiveChat(conv);
+                  if (conv.unreadCount > 0) {
+                    updateConversation(conv.docId, { unreadCount: 0 });
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <div className="avatar-wrap">
                   <div
@@ -1400,6 +1423,15 @@ const Messages = () => {
                           navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        if (p?.name) {
+                          navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       title="Click to view product in catalog"
                     >
                       <div className="context-res-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1439,10 +1471,20 @@ const Messages = () => {
 
       {/* New Conversation Modal */}
       {showNewConvModal && (
-        <div className="modal-overlay" onClick={() => setShowNewConvModal(false)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowNewConvModal(false)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            setShowNewConvModal(false);
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 420 }}
           >
             <div className="modal-header">
@@ -1481,6 +1523,13 @@ const Messages = () => {
                       className="conversation-item"
                       style={{ cursor: 'pointer' }}
                       onClick={() => startNewConversation(c)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        startNewConversation(c);
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div
                         className="avatar"
@@ -1508,10 +1557,20 @@ const Messages = () => {
       )}
 
       {imageModalUrl && (
-        <div className="modal-overlay" onClick={() => setImageModalUrl(null)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setImageModalUrl(null)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            setImageModalUrl(null);
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
           >
             <div className="modal-header">

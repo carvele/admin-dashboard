@@ -700,8 +700,8 @@ const Analytics = () => {
 
       {/* Analytics Preferences Modal */}
       {showPreferences && (
-        <div className="modal-overlay" onClick={() => setShowPreferences(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={() => setShowPreferences(false)}>
+          <div className="modal-content" role="presentation" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Customize Analytics Dashboard</h2>
               <button className="close-btn" onClick={() => setShowPreferences(false)}>
@@ -719,7 +719,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Top Statistics</h4>
                   <p className="text-sm text-secondary">Summary cards for Revenue, Customers, etc.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Top Statistics">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showTopStats}
@@ -734,7 +734,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Trends Chart</h4>
                   <p className="text-sm text-secondary">Reservation & Revenue area trends.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Trends Chart">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showRevenueTrends}
@@ -749,7 +749,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Conversion Chart</h4>
                   <p className="text-sm text-secondary">AR Try-On vs Reservation comparisons.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Conversion Chart">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showARConversions}
@@ -764,7 +764,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Category Breakdown</h4>
                   <p className="text-sm text-secondary">Pie chart showing category profit distribution.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Category Breakdown">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showCategoryShare}
@@ -779,7 +779,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Top Performing Items</h4>
                   <p className="text-sm text-secondary">Table showing the most generated revenue list.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Top Performing Items">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showTopItems}
@@ -794,7 +794,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Customer Metrics</h4>
                   <p className="text-sm text-secondary">Breakdowns for Returning rates, Active growth, etc.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Customer Metrics">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showMetrics}

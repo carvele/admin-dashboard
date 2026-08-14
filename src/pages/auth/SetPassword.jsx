@@ -183,8 +183,11 @@ const SetPassword = () => {
               {/* Read-only email gives the browser/password-manager a username
                   to associate with the new password, so it offers to save it. */}
               <div className="form-group">
-                <label className="label">Email</label>
+                <label className="label" htmlFor="set-password-email">
+                  Email
+                </label>
                 <input
+                  id="set-password-email"
                   type="email"
                   className="input-field"
                   name="username"
@@ -194,8 +197,11 @@ const SetPassword = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="label">New Password</label>
+                <label className="label" htmlFor="set-password-new">
+                  New Password
+                </label>
                 <input
+                  id="set-password-new"
                   type="password"
                   className="input-field"
                   name="new-password"
@@ -204,12 +210,18 @@ const SetPassword = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={status === 'saving'}
+                  // Autofocus is appropriate here: this is the primary input of a
+                  // just-opened account-activation form (email above is read-only).
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus
                 />
               </div>
               <div className="form-group">
-                <label className="label">Confirm Password</label>
+                <label className="label" htmlFor="set-password-confirm">
+                  Confirm Password
+                </label>
                 <input
+                  id="set-password-confirm"
                   type="password"
                   className="input-field"
                   name="confirm-password"

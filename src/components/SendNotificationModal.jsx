@@ -41,8 +41,8 @@ export default function SendNotificationModal({ customer, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content notification-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" role="presentation" onClick={onClose}>
+      <div className="modal-content notification-modal" role="presentation" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="flex-center gap-2">
             <Bell size={20} className="text-gold" />
@@ -55,8 +55,9 @@ export default function SendNotificationModal({ customer, onClose }) {
 
         <form onSubmit={handleSend} className="modal-body">
           <div className="form-group">
-            <label className="form-label">Recipient</label>
+            <label className="form-label" htmlFor="notification-recipient">Recipient</label>
             <input
+              id="notification-recipient"
               type="text"
               className="form-input"
               value={`${customer.name || 'Customer'} (${customer.email || customer.id || 'N/A'})`}
@@ -65,8 +66,9 @@ export default function SendNotificationModal({ customer, onClose }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Notification Title</label>
+            <label className="form-label" htmlFor="notification-title">Notification Title</label>
             <input
+              id="notification-title"
               type="text"
               className="form-input"
               placeholder="e.g. Fitting Reminder / Exclusive Offer"
@@ -77,8 +79,9 @@ export default function SendNotificationModal({ customer, onClose }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Message Body</label>
+            <label className="form-label" htmlFor="notification-body">Message Body</label>
             <textarea
+              id="notification-body"
               className="form-input textarea"
               rows={4}
               placeholder="Enter push notification message..."

@@ -1005,10 +1005,11 @@ const Inventory = () => {
 
       {/* ===== RESTOCK MODAL ===== */}
       {restockModal && (
-        <div className="modal-overlay" onClick={() => setRestockModal(null)}>
+        <div className="modal-overlay" onClick={() => setRestockModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
@@ -1029,15 +1030,15 @@ const Inventory = () => {
                 Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}
               </p>
               <div className="form-group">
-                <label className="label">Quantity to Add</label>
+                <label className="label" htmlFor="restock-qty">Quantity to Add</label>
                 <input
+                  id="restock-qty"
                   type="number"
                   className="input-field"
                   min="1"
                   placeholder="Enter quantity"
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
-                  autoFocus
                   required
                 />
               </div>
@@ -1063,10 +1064,11 @@ const Inventory = () => {
 
       {/* ===== EDIT STOCK MODAL ===== */}
       {editModal && (
-        <div className="modal-overlay" onClick={() => setEditModal(null)}>
+        <div className="modal-overlay" onClick={() => setEditModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1084,8 +1086,9 @@ const Inventory = () => {
               </p>
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label className="label">Total Units</label>
+                  <label className="label" htmlFor="edit-stock-total">Total Units</label>
                   <input
+                    id="edit-stock-total"
                     type="number"
                     className="input-field"
                     min="0"
@@ -1104,8 +1107,9 @@ const Inventory = () => {
                   />
                 </div>
                 <div className="form-group flex-1">
-                  <label className="label">Reserved</label>
+                  <label className="label" htmlFor="edit-stock-reserved">Reserved</label>
                   <input
+                    id="edit-stock-reserved"
                     type="number"
                     className="input-field"
                     min="0"
@@ -1154,10 +1158,11 @@ const Inventory = () => {
 
       {/* ===== SELL / POS MODAL ===== */}
       {sellModal && (
-        <div className="modal-overlay" onClick={() => setSellModal(null)}>
+        <div className="modal-overlay" onClick={() => setSellModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1191,8 +1196,9 @@ const Inventory = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Actual Unit Price (₱)</label>
+                  <label className="label" htmlFor="sell-unit-price">Actual Unit Price (₱)</label>
                   <input
+                    id="sell-unit-price"
                     type="number"
                     className="input-field"
                     placeholder="UnitPrice"
@@ -1202,8 +1208,9 @@ const Inventory = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Quantity Sold</label>
+                  <label className="label" htmlFor="sell-qty">Quantity Sold</label>
                   <input
+                    id="sell-qty"
                     type="number"
                     className="input-field"
                     min="1"

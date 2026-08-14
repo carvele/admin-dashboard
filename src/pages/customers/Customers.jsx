@@ -617,8 +617,17 @@ const Customers = () => {
             setSelectedCustomer(null);
             setIsEditing(false);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setSelectedCustomer(null);
+              setIsEditing(false);
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
-          <div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()} role="presentation">
             <div className="modal-header">
               <h2>Customer Profile</h2>
               <div className="flex-center gap-2">
@@ -1041,8 +1050,19 @@ const Customers = () => {
 
       {/* ===== SEND MESSAGE MODAL ===== */}
       {msgModal && (
-        <div className="modal-overlay" onClick={() => setMsgModal(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div
+          className="modal-overlay"
+          onClick={() => setMsgModal(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setMsgModal(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }} role="presentation">
             <div className="modal-header">
               <h2>Message {getUserDisplayName(msgModal)}</h2>
               <button className="close-btn" onClick={() => setMsgModal(null)}>&times;</button>
@@ -1057,7 +1077,6 @@ const Customers = () => {
                 placeholder="Type your message here..."
                 value={msgText}
                 onChange={(e) => setMsgText(e.target.value)}
-                autoFocus
               ></textarea>
               <div className="modal-footer justify-end mt-4 px-0">
                 <button className="btn-outline" onClick={() => setMsgModal(null)} disabled={sendingMsg}>

@@ -63,8 +63,21 @@ const actorName = (entry) => {
 const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading }) => {
   const [note, setNote] = useState('');
   return (
-    <div className="sp-modal-overlay" onClick={onCancel}>
-      <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="sp-modal-overlay"
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    >
+      <div className="sp-modal">
         <div className="sp-modal-header">
           <AlertTriangle size={20} className="sp-modal-icon" />
           <h3>{title}</h3>
@@ -72,16 +85,16 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
         </div>
         <div className="sp-modal-body">
           <p className="sp-modal-desc">{description}</p>
-          <label className="sp-label">
+          <label className="sp-label" htmlFor="sp-change-note">
             Change Note <span className="sp-required">*</span>
           </label>
           <textarea
+            id="sp-change-note"
             className="sp-textarea"
             rows={3}
             placeholder="Briefly explain the reason for this change…"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            autoFocus
           />
         </div>
         <div className="sp-modal-footer">
@@ -296,8 +309,9 @@ const StaffProfile = () => {
           <form onSubmit={handleSavePersonalInfo} className="sp-form">
             <div className="sp-form-grid">
               <div className="sp-field">
-                <label className="sp-label">First Name</label>
+                <label className="sp-label" htmlFor="sp-first-name">First Name</label>
                 <input
+                  id="sp-first-name"
                   className="input-field"
                   value={form.first_name}
                   onChange={(e) => setForm({ ...form, first_name: e.target.value })}
@@ -305,8 +319,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">Last Name</label>
+                <label className="sp-label" htmlFor="sp-last-name">Last Name</label>
                 <input
+                  id="sp-last-name"
                   className="input-field"
                   value={form.last_name}
                   onChange={(e) => setForm({ ...form, last_name: e.target.value })}
@@ -314,12 +329,13 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label"><Mail size={14} /> Email</label>
-                <input className="input-field" value={profile.email ?? ''} disabled readOnly />
+                <label className="sp-label" htmlFor="sp-email"><Mail size={14} /> Email</label>
+                <input id="sp-email" className="input-field" value={profile.email ?? ''} disabled readOnly />
               </div>
               <div className="sp-field">
-                <label className="sp-label"><Phone size={14} /> Phone</label>
+                <label className="sp-label" htmlFor="sp-phone"><Phone size={14} /> Phone</label>
                 <input
+                  id="sp-phone"
                   className="input-field"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -328,8 +344,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">Gender</label>
+                <label className="sp-label" htmlFor="sp-gender">Gender</label>
                 <select
+                  id="sp-gender"
                   className="input-field"
                   value={form.gender}
                   onChange={(e) => setForm({ ...form, gender: e.target.value })}
@@ -343,9 +360,10 @@ const StaffProfile = () => {
                 </select>
               </div>
               <div className="sp-field">
-                <label className="sp-label"><Calendar size={14} /> Date of Birth</label>
+                <label className="sp-label" htmlFor="sp-dob"><Calendar size={14} /> Date of Birth</label>
                 <div className="sp-dob-row">
                   <input
+                    id="sp-dob"
                     type="date"
                     className="input-field"
                     value={form.date_of_birth}
@@ -365,8 +383,9 @@ const StaffProfile = () => {
             </div>
             <div className="sp-form-grid">
               <div className="sp-field sp-field-full">
-                <label className="sp-label">Address Line</label>
+                <label className="sp-label" htmlFor="sp-address-line">Address Line</label>
                 <input
+                  id="sp-address-line"
                   className="input-field"
                   value={form.address_line}
                   onChange={(e) => setForm({ ...form, address_line: e.target.value })}
@@ -375,8 +394,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">Barangay</label>
+                <label className="sp-label" htmlFor="sp-barangay">Barangay</label>
                 <input
+                  id="sp-barangay"
                   className="input-field"
                   value={form.barangay}
                   onChange={(e) => setForm({ ...form, barangay: e.target.value })}
@@ -384,8 +404,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">City / Municipality</label>
+                <label className="sp-label" htmlFor="sp-city">City / Municipality</label>
                 <input
+                  id="sp-city"
                   className="input-field"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
@@ -393,8 +414,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">Province</label>
+                <label className="sp-label" htmlFor="sp-province">Province</label>
                 <input
+                  id="sp-province"
                   className="input-field"
                   value={form.province}
                   onChange={(e) => setForm({ ...form, province: e.target.value })}
@@ -402,8 +424,9 @@ const StaffProfile = () => {
                 />
               </div>
               <div className="sp-field">
-                <label className="sp-label">ZIP Code</label>
+                <label className="sp-label" htmlFor="sp-zip">ZIP Code</label>
                 <input
+                  id="sp-zip"
                   className="input-field"
                   value={form.zip_code}
                   onChange={(e) => setForm({ ...form, zip_code: e.target.value })}

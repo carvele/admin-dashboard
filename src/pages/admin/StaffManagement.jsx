@@ -335,6 +335,14 @@ const StaffManagement = () => {
           <div
             className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}
             onClick={() => toggleRole(member)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleRole(member);
+              }
+            }}
+            role="button"
+            tabIndex={0}
             style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
             title={member.role === 'owner' ? 'Role locked' : 'Click to toggle role'}
           >
@@ -589,8 +597,9 @@ const StaffManagement = () => {
             </div>
             <form onSubmit={handleCreateAccount} className="modal-body">
               <div className="form-group">
-                <label className="label">Email Address</label>
+                <label className="label" htmlFor="create-staff-email">Email Address</label>
                 <input
+                  id="create-staff-email"
                   type="email"
                   className="input-field"
                   value={createForm.email}
@@ -599,8 +608,9 @@ const StaffManagement = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="label">Access Role</label>
+                <label className="label" htmlFor="create-staff-role">Access Role</label>
                 <select
+                  id="create-staff-role"
                   className="input-field"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
@@ -646,10 +656,11 @@ const StaffManagement = () => {
                 become visible on the Active tab again.
               </p>
               <div className="form-group">
-                <label className="label">
+                <label className="label" htmlFor="reactivate-note">
                   Reactivation Note <span style={{ color: 'var(--color-danger)' }}>*</span>
                 </label>
                 <textarea
+                  id="reactivate-note"
                   className="input-field"
                   rows={3}
                   placeholder="e.g. Rehired for seasonal position, starting 2026-08-01"
