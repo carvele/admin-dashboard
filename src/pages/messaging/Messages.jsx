@@ -20,6 +20,8 @@ import {
   Pencil,
   Check,
   CheckCheck,
+  ChevronLeft,
+  Info,
 } from 'lucide-react';
 import SendNotificationModal from '../../components/SendNotificationModal';
 import {
@@ -96,6 +98,11 @@ const Messages = () => {
   const conversationsRef = useRef([]);
   conversationsRef.current = conversations;
   const [activeChat, setActiveChat] = useState(null);
+  // Below the 1024px breakpoint only one of the three panels (conversation
+  // list / chat / customer context) shows at a time -- there's no room for
+  // all three side by side. Ignored above that width, where CSS shows all
+  // three regardless of this value.
+  const [mobileView, setMobileView] = useState('list');
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -533,6 +540,7 @@ const Messages = () => {
     const existing = conversations.find((c) => c.customerId === customerId);
     if (existing) {
       setActiveChat(existing);
+      setMobileView('chat');
       setShowNewConvModal(false);
       return;
     }
@@ -594,6 +602,7 @@ const Messages = () => {
 
       const proceed = async (conv) => {
         setActiveChat(conv);
+        setMobileView('chat');
         autoSendFiredRef.current = true;
         if (autoSendReservation && reservationContext) {
           await sendReservationCard(conv, reservationContext);
@@ -946,7 +955,7 @@ const Messages = () => {
   };
 
   return (
-    <div className="messages-layout">
+    <div className="messages-layout" data-mobile-view={mobileView}>
       {/* Hidden file input for image upload */}
       <input
         type="file"
@@ -995,6 +1004,7 @@ const Messages = () => {
                 className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unreadCount > 0 ? 'unread' : ''}`}
                 onClick={() => {
                   setActiveChat(conv);
+                  setMobileView('chat');
                   if (conv.unreadCount > 0) {
                     updateConversation(conv.docId, { unreadCount: 0 });
                   }
@@ -1003,6 +1013,7 @@ const Messages = () => {
                   if (e.key !== 'Enter' && e.key !== ' ') return;
                   e.preventDefault();
                   setActiveChat(conv);
+                  setMobileView('chat');
                   if (conv.unreadCount > 0) {
                     updateConversation(conv.docId, { unreadCount: 0 });
                   }
@@ -1087,6 +1098,14 @@ const Messages = () => {
 
             <div className="chat-header">
               <div className="flex-center gap-3">
+                <button
+                  type="button"
+                  className="chat-back-btn"
+                  aria-label="Back to conversations"
+                  onClick={() => setMobileView('list')}
+                >
+                  <ChevronLeft size={20} />
+                </button>
                 <div
                   className="avatar"
                   style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
@@ -1104,14 +1123,24 @@ const Messages = () => {
                   )}
                 </div>
               </div>
-              <button
-                className="btn-outline small flex-center gap-2"
-                onClick={() =>
-                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
-                }
-              >
-                <User size={14} /> View Profile
-              </button>
+              <div className="flex-center gap-2">
+                <button
+                  type="button"
+                  className="chat-info-btn btn-outline small flex-center gap-2"
+                  aria-label="View customer context"
+                  onClick={() => setMobileView('context')}
+                >
+                  <Info size={14} />
+                </button>
+                <button
+                  className="btn-outline small flex-center gap-2"
+                  onClick={() =>
+                    navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                  }
+                >
+                  <User size={14} /> View Profile
+                </button>
+              </div>
             </div>
 
             <div className="chat-history">
@@ -1330,6 +1359,14 @@ const Messages = () => {
       {/* Customer Context Sidebar */}
       <div className="context-panel card">
         <div className="context-panel-header">
+          <button
+            type="button"
+            className="context-back-btn"
+            aria-label="Back to chat"
+            onClick={() => setMobileView('chat')}
+          >
+            <ChevronLeft size={20} />
+          </button>
           <h3>Customer Context</h3>
         </div>
 

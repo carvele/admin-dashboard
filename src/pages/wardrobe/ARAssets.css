@@ -6,6 +6,7 @@
 
 .tab-switcher {
   display: flex;
+  flex-wrap: wrap;
   background-color: var(--cream);
   padding: 0.25rem;
   border-radius: 8px;
