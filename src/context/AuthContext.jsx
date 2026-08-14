@@ -327,8 +327,16 @@ export const AuthProvider = ({ children }) => {
       handleDeviceCheck(session?.user ?? null);
     });
 
+    // Supabase's auth callback holds an internal lock while it runs. handleDeviceCheck
+    // calls supabase.auth.signOut() in several branches, and calling an auth method
+    // from inside the callback re-enters that lock, which manifests as
+    // "RangeError: Maximum call stack size exceeded" and can corrupt the session,
+    // producing later 401s and a forced logout. Deferring with setTimeout(0) runs
+    // handleDeviceCheck after the callback returns, outside the lock.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleDeviceCheck(session?.user ?? null);
+      setTimeout(() => {
+        handleDeviceCheck(session?.user ?? null);
+      }, 0);
     });
 
     return () => {
