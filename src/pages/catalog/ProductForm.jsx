@@ -26,6 +26,7 @@ import {
   createVariant,
   variantColumnsAvailable,
   variantKey,
+  syncProductAttributesFromVariants,
 } from '../../services/variantService';
 import { Logger } from '../../utils/Logger';
 import { supabase } from '../../lib/supabaseClient';
@@ -542,7 +543,10 @@ const ProductForm = ({ readOnly = false }) => {
         try {
           const allInv = await getInventory();
           const productInv = allInv.filter(
-            (inv) => (inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode,
+            (inv) =>
+              (inv.productDocId || inv.product_doc_id) === id ||
+              inv.sku === id ||
+              (formData.styleCode && inv.sku === formData.styleCode),
           );
 
           if (variantColumnsReady && selectedVariants.size > 0) {
@@ -582,6 +586,7 @@ const ProductForm = ({ readOnly = false }) => {
                 .in('id', toSoftDelete.map((inv) => inv.id));
               Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
             }
+            await syncProductAttributesFromVariants(id);
           } else {
             // Legacy path: diff by size only
             const existingSizes = productInv.filter((inv) => !inv.deleted).map((inv) => inv.size);
@@ -654,6 +659,7 @@ const ProductForm = ({ readOnly = false }) => {
               price: payload.price,
             });
           }
+          await syncProductAttributesFromVariants(newDocId);
         } else {
           // Legacy fallback: one row per size, no colour/pattern
           const inventoryPromises = payload.sizes.map((size) =>
