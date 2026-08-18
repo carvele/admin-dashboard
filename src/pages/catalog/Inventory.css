@@ -57,6 +57,31 @@
   width: 25%;
 }
 
+.color-chip-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-color, #e5e7eb);
+  background: var(--cream, #f9fafb);
+  color: var(--text-secondary, #4b5563);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.color-chip-btn:hover {
+  border-color: var(--color-primary, #4f46e5);
+  color: var(--color-primary, #4f46e5);
+}
+
+.color-chip-btn.active {
+  background: var(--color-primary, #4f46e5);
+  color: #ffffff;
+  border-color: var(--color-primary, #4f46e5);
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+}
+
 .inv-table th,
 .inv-table td {
   padding: 1rem;

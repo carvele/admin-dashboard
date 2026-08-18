@@ -56,6 +56,205 @@ const sizeRank = (s) => {
 
 const TABLE_COLUMNS = 10;
 
+// Helper to group flat inventory rows by (productDocId || item, size)
+const groupInventoryRows = (rows) => {
+  const map = new Map();
+  rows.forEach((r) => {
+    const key = `${r.productDocId || r.item}|||${r.size}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        productDocId: r.productDocId,
+        sku: r.sku,
+        variantSku: r.variantSku || r.sku,
+        item: r.item,
+        category: r.category,
+        size: r.size,
+        deleted: r.deleted,
+        variants: [],
+      });
+    }
+    map.get(key).variants.push(r);
+  });
+  return Array.from(map.values()).sort(
+    (a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size)
+  );
+};
+
+const GroupedInvRow = ({
+  group,
+  isAdminUnlocked,
+  handleRestore,
+  handlePublishProduct,
+  setRestockModal,
+  setRestockQty,
+  setSellModal,
+  setSalePriceInput,
+  openEditModal,
+  setArchiveConfirm,
+}) => {
+  const [selectedColor, setSelectedColor] = useState('ALL');
+
+  const activeVariant = useMemo(() => {
+    if (selectedColor === 'ALL') return null;
+    return group.variants.find((v) => (v.color || 'Standard') === selectedColor) || null;
+  }, [group.variants, selectedColor]);
+
+  const displayedTotal = useMemo(() => {
+    if (activeVariant) return activeVariant.total;
+    return group.variants.reduce((sum, v) => sum + (v.total || 0), 0);
+  }, [group.variants, activeVariant]);
+
+  const displayedReserved = useMemo(() => {
+    if (activeVariant) return activeVariant.reserved || 0;
+    return group.variants.reduce((sum, v) => sum + (v.reserved || 0), 0);
+  }, [group.variants, activeVariant]);
+
+  const displayedAvailable = useMemo(() => {
+    if (activeVariant) return activeVariant.available || 0;
+    return group.variants.reduce((sum, v) => sum + (v.available || 0), 0);
+  }, [group.variants, activeVariant]);
+
+  const health = getStockHealth(displayedAvailable, displayedTotal, displayedReserved);
+  const targetInv = activeVariant || group.variants[0] || group;
+  const skuDisplay =
+    activeVariant?.variantSku ||
+    activeVariant?.variant_sku ||
+    targetInv.variantSku ||
+    targetInv.variant_sku ||
+    targetInv.sku ||
+    targetInv.id;
+
+  return (
+    <tr key={group.key}>
+      <td className="font-mono text-xs text-secondary">{skuDisplay}</td>
+      <td className="font-medium">{group.item}</td>
+      <td>{group.category}</td>
+      <td>
+        <span className="size-badge">{group.size}</span>
+      </td>
+      <td>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+          {group.variants.length > 1 && (
+            <button
+              type="button"
+              className={`color-chip-btn ${selectedColor === 'ALL' ? 'active' : ''}`}
+              onClick={() => setSelectedColor('ALL')}
+            >
+              All ({group.variants.reduce((s, v) => s + (v.available || 0), 0)})
+            </button>
+          )}
+          {group.variants.map((v) => {
+            const cName = v.color || 'Standard';
+            const isSel = selectedColor === cName;
+            return (
+              <button
+                key={v.id || cName}
+                type="button"
+                className={`color-chip-btn ${isSel ? 'active' : ''}`}
+                onClick={() => setSelectedColor(cName)}
+              >
+                {cName} ({v.available || 0})
+              </button>
+            );
+          })}
+        </div>
+      </td>
+      <td className="text-right">{displayedTotal}</td>
+      <td className="text-right text-secondary">{displayedReserved}</td>
+      <td className="text-right font-medium">{displayedAvailable}</td>
+      <td className="stock-cell">
+        <div className="urgency-tooltip-wrap">
+          <div className="stock-progress-container" style={{ flex: 1 }}>
+            <div className="stock-progress-bar">
+              <div
+                className="stock-progress-fill"
+                style={{ width: `${health.percent}%`, backgroundColor: health.color }}
+              />
+            </div>
+            <span className={`stock-tier-badge ${health.tier}`}>
+              {health.tier === 'critical' && <Flame size={10} />}
+              {health.label}
+            </span>
+            {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
+              <span className={`demand-badge ${health.demandLevel}`}>
+                🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
+              </span>
+            )}
+          </div>
+          <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
+          <span className="urgency-tip">{health.urgencyTooltip}</span>
+        </div>
+      </td>
+      <td className="text-right">
+        <div className="action-buttons justify-end">
+          {targetInv.deleted ? (
+            <button
+              className="icon-btn-small text-success"
+              title="Restore"
+              onClick={() => handleRestore(targetInv)}
+            >
+              <ArchiveRestore size={15} />
+            </button>
+          ) : (
+            <>
+              <button
+                className="icon-btn-small"
+                title="Add / Publish"
+                onClick={() => handlePublishProduct(targetInv)}
+                style={{ opacity: displayedAvailable > 0 ? 1 : 0.4 }}
+              >
+                <Plus size={15} />
+              </button>
+              <button
+                className="icon-btn-small restock-btn"
+                title="Restock"
+                onClick={() => {
+                  setRestockModal(targetInv);
+                  setRestockQty('');
+                }}
+              >
+                <Package size={15} />
+              </button>
+              <button
+                className="icon-btn-small"
+                title="Record Boutique Sale"
+                onClick={() => {
+                  setSellModal(targetInv);
+                  setRestockQty('1');
+                  setSalePriceInput(targetInv.price || '');
+                }}
+                style={{ color: 'var(--stock-high)', opacity: displayedAvailable > 0 ? 1 : 0.4 }}
+                disabled={displayedAvailable <= 0}
+              >
+                <ShoppingCart size={15} />
+              </button>
+              {isAdminUnlocked && (
+                <>
+                  <button
+                    className="icon-btn-small"
+                    title="Edit"
+                    onClick={() => openEditModal(targetInv)}
+                  >
+                    <Edit size={15} />
+                  </button>
+                  <button
+                    className="icon-btn-small text-warning"
+                    title="Archive"
+                    onClick={() => setArchiveConfirm(targetInv)}
+                  >
+                    <Archive size={15} />
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 const Inventory = () => {
   const { user, isAdminUnlocked } = useAuth();
   const canManageLookups = can(user?.role, 'manage_inventory');
@@ -576,7 +775,7 @@ const Inventory = () => {
     const skuDisplay = inv.variantSku || inv.variant_sku || inv.sku || inv.id;
 
     return (
-      <tr key={`${inv.id}-${inv.size}-${inv.color || ''}-${inv.pattern || ''}`}>
+      <tr key={`${inv.id}-${inv.size}-${inv.color || ''}`}>
         <td className="font-mono text-xs text-secondary">{skuDisplay}</td>
         <td className="font-medium">{inv.item}</td>
         <td>{inv.category}</td>
@@ -595,7 +794,6 @@ const Inventory = () => {
         <td className="text-right font-medium">{inv.available}</td>
         <td className="stock-cell">
           <div className="urgency-tooltip-wrap">
-            {/* Progress bar */}
             <div className="stock-progress-container" style={{ flex: 1 }}>
               <div className="stock-progress-bar">
                 <div
@@ -607,14 +805,12 @@ const Inventory = () => {
                 {health.tier === 'critical' && <Flame size={10} />}
                 {health.label}
               </span>
-              {/* Demand pressure badge — only shown when demand is notable */}
               {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
                 <span className={`demand-badge ${health.demandLevel}`}>
                   🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
                 </span>
               )}
             </div>
-            {/* Urgency tooltip */}
             <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
             <span className="urgency-tip">{health.urgencyTooltip}</span>
           </div>
@@ -685,6 +881,24 @@ const Inventory = () => {
           </div>
         </td>
       </tr>
+    );
+  };
+
+  const renderGroupedInvRow = (group) => {
+    return (
+      <GroupedInvRow
+        key={group.key}
+        group={group}
+        isAdminUnlocked={isAdminUnlocked}
+        handleRestore={handleRestore}
+        handlePublishProduct={handlePublishProduct}
+        setRestockModal={setRestockModal}
+        setRestockQty={setRestockQty}
+        setSellModal={setSellModal}
+        setSalePriceInput={setSalePriceInput}
+        openEditModal={openEditModal}
+        setArchiveConfirm={setArchiveConfirm}
+      />
     );
   };
 
@@ -996,20 +1210,23 @@ const Inventory = () => {
                               () => toggleCategory(cat.id),
                               0,
                             )}
-                            {catExpanded && cat.subcats.map((sub) => (
-                              <React.Fragment key={sub.id}>
-                                {renderGroupHeaderRow(
-                                  sub.id,
-                                  sub.name,
-                                  sub.rows.length,
-                                  sub.alertCount,
-                                  expandedCategories.has(sub.id),
-                                  () => toggleCategory(sub.id),
-                                  1,
-                                )}
-                                {expandedCategories.has(sub.id) && sub.rows.map(renderInvRow)}
-                              </React.Fragment>
-                            ))}
+                            {catExpanded && cat.subcats.map((sub) => {
+                              const groupedRows = groupInventoryRows(sub.rows);
+                              return (
+                                <React.Fragment key={sub.id}>
+                                  {renderGroupHeaderRow(
+                                    sub.id,
+                                    sub.name,
+                                    groupedRows.length,
+                                    sub.alertCount,
+                                    expandedCategories.has(sub.id),
+                                    () => toggleCategory(sub.id),
+                                    1,
+                                  )}
+                                  {expandedCategories.has(sub.id) && groupedRows.map(renderGroupedInvRow)}
+                                </React.Fragment>
+                              );
+                            })}
                           </React.Fragment>
                         );
                       })}
@@ -1018,13 +1235,13 @@ const Inventory = () => {
                           {renderGroupHeaderRow(
                             'uncategorized',
                             'Uncategorized',
-                            uncategorizedRows.length,
+                            groupInventoryRows(uncategorizedRows).length,
                             uncategorizedRows.filter((r) => isStockAlert(r.available, r.total, r.reserved || 0)).length,
                             expandedCategories.has('uncategorized'),
                             () => toggleCategory('uncategorized'),
                             0,
                           )}
-                          {expandedCategories.has('uncategorized') && uncategorizedRows.map(renderInvRow)}
+                          {expandedCategories.has('uncategorized') && groupInventoryRows(uncategorizedRows).map(renderGroupedInvRow)}
                         </React.Fragment>
                       )}
                     </>
@@ -1050,7 +1267,7 @@ const Inventory = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredInv.map(renderInvRow)
+                  groupInventoryRows(filteredInv).map(renderGroupedInvRow)
                 )}
               </tbody>
             </table>
