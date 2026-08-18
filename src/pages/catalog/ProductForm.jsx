@@ -268,11 +268,11 @@ const ProductForm = ({ readOnly = false }) => {
       // Always pass patterns=[''] so every cell has pattern=''
       const matrix = buildVariantMatrix({ sizes, colors, patterns: [''] }, existingVariants);
       setVariantMatrix(matrix);
-      // Auto-select all existing variants; new combos start unselected
+      // Auto-select all size x color combinations by default
       setSelectedVariants((prev) => {
-        const next = new Set(prev);
+        const next = new Set();
         matrix.forEach((cell) => {
-          if (cell.exists) next.add(cell.key);
+          next.add(cell.key);
         });
         return next;
       });

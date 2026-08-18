@@ -39,22 +39,16 @@ function teardown() {
 
 export const useRealtimeSync = (onUpdate) => {
   useEffect(() => {
-    // React StrictMode (enabled in main.jsx) synchronously mounts, unmounts,
-    // and remounts every effect once in dev. Without this, that cycle would
-    // tear down these channels and immediately recreate new ones under the
-    // exact same topic names ('global-reservations-alert' /
-    // 'global-messages-alert') before the old ones finish closing --
-    // supabase-js's RealtimeClient recurses trying to reconcile the
-    // duplicate/racing channel refs, producing "Maximum call stack size
-    // exceeded". Cancelling a pending teardown here means a StrictMode
-    // remount (or any other rapid unmount+remount) reuses the still-live
-    // channels instead of racing to replace them.
+    // Unique token per hook instance so listeners.size always accurately
+    // counts mounted consumers regardless of whether onUpdate is provided.
+    const token = onUpdate || (() => {});
+    
     if (teardownTimeoutId) {
       clearTimeout(teardownTimeoutId);
       teardownTimeoutId = null;
     }
 
-    if (onUpdate) listeners.add(onUpdate);
+    listeners.add(token);
 
     if (!isSubscribed) {
       isSubscribed = true;
@@ -66,9 +60,12 @@ export const useRealtimeSync = (onUpdate) => {
         }
       };
 
+      const resTopic = `global-reservations-alert-${Date.now()}`;
+      const msgTopic = `global-messages-alert-${Date.now()}`;
+
       // Listen to new reservations or updates to pending reservations
       reservationsChannel = supabase
-        .channel('global-reservations-alert')
+        .channel(resTopic)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservations' }, (_payload) => {
           playReservationAlert();
           showDesktopNotification('New Reservation', {
@@ -83,12 +80,9 @@ export const useRealtimeSync = (onUpdate) => {
 
       // Listen to incoming customer messages
       messagesChannel = supabase
-        .channel('global-messages-alert')
+        .channel(msgTopic)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-          // Only alert if the message is from a customer. sender_role is set
-          // server-side by a trigger (never client-supplied), so this can't
-          // be spoofed by the sender.
-          if (payload.new.sender_role !== 'staff') {
+          if (payload.new && payload.new.sender_role !== 'staff') {
             playMessageAlert();
             showDesktopNotification('New Message', {
               body: `You received a new message from a customer.`
@@ -100,16 +94,12 @@ export const useRealtimeSync = (onUpdate) => {
     }
 
     return () => {
-      if (onUpdate) listeners.delete(onUpdate);
-      // Deferred (see setup above): only tear down once the last mounted
-      // consumer leaves AND stays gone for a tick, so a same-tick
-      // unmount+remount (StrictMode, or an unrelated re-render) reuses the
-      // channels instead of racing to tear down and recreate them.
+      listeners.delete(token);
       if (listeners.size === 0) {
         teardownTimeoutId = setTimeout(() => {
           teardownTimeoutId = null;
           if (listeners.size === 0) teardown();
-        }, 0);
+        }, 100);
       }
     };
   }, [onUpdate]);
