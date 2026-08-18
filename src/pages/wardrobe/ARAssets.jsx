@@ -222,14 +222,16 @@ const ARAssets = () => {
       const downloadURL = await routeAndUploadFile(selectedFile, selectedFile.name.endsWith('.glb') ? 'catalog-assets/models' : 'catalog-assets/masks');
       
       const assetType = selectedFile.name.endsWith('.glb') ? '3D Model' : 'Segmentation Mask';
-      
-      // 1. Register in Global Library
+
+      // 1. Register in Global Library. public.ar_assets only has
+      // id/product_id/model_url/created_at/updated_at -- no name/type/
+      // source/timestamp columns, so those are derived from modelUrl at
+      // render time instead of stored (see the globalLibrary table below).
+      // productId is null for a library-only upload (no target product
+      // picked yet); linking happens later via "Link to Product".
       await createARAsset({
-        name: selectedFile.name,
-        url: downloadURL,
-        type: assetType,
-        source: 'ar_hub_upload',
-        timestamp: Date.now()
+        productId: window._targetProduct?.docId ?? null,
+        modelUrl: downloadURL,
       });
 
       // 2. If we were uploading for a specific product, link it now.
@@ -563,13 +565,18 @@ const ARAssets = () => {
               </tr>
             </thead>
             <tbody>
-              {globalLibrary.map((item, idx) => {
-                const usage = assets.filter(p => p.model_3dUrl === item.url || p.maskUrl === item.url).length;
+              {globalLibrary.map((item) => {
+                // ar_assets has no name/type/timestamp columns -- derived
+                // from model_url (via toCamel: item.modelUrl) instead.
+                const fileName = item.modelUrl?.split('/').pop() || 'Untitled asset';
+                const isModel = item.modelUrl?.toLowerCase().endsWith('.glb');
+                const assetLabel = isModel ? '3D Model' : 'Segmentation Mask';
+                const usage = assets.filter(p => p.model_3dUrl === item.modelUrl || p.maskUrl === item.modelUrl).length;
                 return (
-                  <tr key={idx}>
-                    <td className="font-medium">{item.name}</td>
-                    <td>{item.type}</td>
-                    <td className="text-secondary">{new Date(item.timestamp).toLocaleDateString()}</td>
+                  <tr key={item.id}>
+                    <td className="font-medium">{fileName}</td>
+                    <td>{assetLabel}</td>
+                    <td className="text-secondary">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</td>
                     <td>
                       <span className={`tag-badge ${usage > 0 ? 'success' : 'warning'}`}>
                         {usage} products
@@ -578,14 +585,14 @@ const ARAssets = () => {
                     <td>
                       <div className="action-buttons">
                         {window._targetProduct ? (
-                          <button 
+                          <button
                             className="btn-primary small"
                             onClick={async () => {
-                              const updateData = item.type === '3D Model'
-                                ? { model_3dUrl: item.url, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
-                                : { maskUrl: item.url };
+                              const updateData = isModel
+                                ? { model_3dUrl: item.modelUrl, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+                                : { maskUrl: item.modelUrl };
                               await updateProduct(window._targetProduct.docId, updateData);
-                              toast.success(`Linked ${item.name} to ${window._targetProduct.name}`);
+                              toast.success(`Linked ${fileName} to ${window._targetProduct.name}`);
                               window._targetProduct = null;
                               setActiveTab('assets');
                             }}
