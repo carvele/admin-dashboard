@@ -421,3 +421,360 @@
   border-radius: 20px;
   margin-left: auto;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Admin Inventory Panel (.aip-*)
+
+   Previously styled entirely with inline styles, which is why the panel read
+   as cramped: three flex-wrap columns fought for width and list rows sat at
+   0.3rem padding while holding a thumbnail, an input and a button. Grid gives
+   predictable columns; the spacing scale below is the deliberate fix.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.aip-panel {
+  margin-bottom: 1.5rem;
+  background-color: var(--cream);
+}
+
+.aip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.aip-header h3 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.aip-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
+  border: 1px solid rgba(153, 27, 27, 0.1);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.aip-error-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+/* ── Section cards ── */
+
+.aip-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.aip-section {
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.aip-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.aip-section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background-color: var(--beige);
+  color: var(--highlight);
+  flex-shrink: 0;
+}
+
+.aip-section-title {
+  margin: 0;
+  font-size: 0.975rem;
+  font-weight: 700;
+  color: var(--charcoal);
+  line-height: 1.3;
+}
+
+.aip-section-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ── Grids ── */
+
+.aip-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+/* Product select / baseline qty / save button on one desktop row.
+   align-items:end keeps the button's baseline level with the inputs. */
+.aip-baseline-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+@media (max-width: 900px) {
+  .aip-grid-2,
+  .aip-baseline-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Fields ── */
+
+.aip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.aip-field > .label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  margin: 0;
+}
+
+.aip-field .input-field {
+  font-size: 0.875rem;
+  width: 100%;
+}
+
+.aip-col-title {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--charcoal);
+  margin-bottom: 0.6rem;
+}
+
+.aip-save-btn {
+  padding: 0.6rem 1.5rem;
+  white-space: nowrap;
+}
+
+/* ── Add forms ── */
+
+.aip-add-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.aip-add-form .input-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.aip-add-form .btn-primary {
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.aip-add-form-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.aip-add-form-stacked .input-field {
+  font-size: 0.875rem;
+}
+
+.aip-add-form-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.aip-add-form-row .input-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.aip-add-form-row .btn-primary {
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Scrollable lists ── */
+
+.aip-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.5rem;
+  background-color: var(--cream);
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.aip-empty {
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 0.8125rem;
+  padding: 1rem 0.5rem;
+}
+
+.aip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.aip-item-indent {
+  margin-left: 0.75rem;
+}
+
+/* flex:1 + min-width:0 so long names truncate instead of overflowing the row */
+.aip-item-name {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--charcoal);
+  text-overflow: ellipsis;
+}
+
+.aip-item-name-bold {
+  font-weight: 600;
+}
+
+.aip-item-name:focus {
+  background-color: var(--cream);
+  border-radius: 4px;
+}
+
+.aip-delete {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  border-color: var(--status-cancelled-text);
+  color: var(--status-cancelled-text);
+  background-color: transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Category group header inside the subcategory list ── */
+
+.aip-group-label {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--beige);
+  border-radius: 4px;
+}
+
+/* ── Category thumbnail + upload control ── */
+
+.aip-thumb-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.aip-thumb,
+.aip-thumb-empty {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.aip-thumb {
+  object-fit: cover;
+}
+
+.aip-thumb-empty {
+  background-color: var(--cream);
+  border: 1px dashed var(--border-color);
+}
+
+.aip-upload {
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.35rem;
+  display: flex;
+  border-radius: 4px;
+}
+
+.aip-upload:hover {
+  color: var(--highlight);
+  background-color: var(--beige);
+}
+
+.aip-upload-busy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 5px;
+}
+
+/* Visually hidden but announced by screen readers. Scoped rather than a global
+   .sr-only so it can't collide with a utility added elsewhere. */
+.aip-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
