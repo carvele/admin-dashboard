@@ -347,6 +347,11 @@ const Inventory = () => {
         itemName: restockModal.item,
         size: restockModal.size,
         qtyAdded: qty,
+        // Before/after come from the atomic RPC's own return values, so the
+        // activity log shows the true stock movement rather than a number
+        // derived from a possibly-stale modal snapshot.
+        qtyBefore: result?.prevTotal ?? restockModal.total,
+        qtyAfter: result?.newTotal ?? restockModal.total + qty,
       });
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
