@@ -140,7 +140,7 @@ BEGIN
     AND rel.relname = 'inventory'
     AND con.contype = 'u'
     AND (
-      SELECT array_agg(attname ORDER BY attname)
+      SELECT array_agg(a.attname::text ORDER BY a.attname::text)
       FROM unnest(con.conkey) AS k(attnum)
       JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
     ) = ARRAY['product_doc_id', 'size']::text[];
@@ -173,7 +173,7 @@ BEGIN
       SELECT 1 FROM pg_constraint c WHERE c.conindid = idx.indexrelid
     )
     AND (
-      SELECT array_agg(attname ORDER BY attname)
+      SELECT array_agg(a.attname::text ORDER BY a.attname::text)
       FROM unnest(idx.indkey) AS k(attnum)
       JOIN pg_attribute a ON a.attrelid = idx.indrelid AND a.attnum = k.attnum
     ) = ARRAY['product_doc_id', 'size']::text[];
