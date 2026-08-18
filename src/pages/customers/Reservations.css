@@ -346,8 +346,8 @@
   font-weight: 700;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
 }
 .balance-paid-pill {
   display: inline-flex;
@@ -357,8 +357,8 @@
   font-weight: 700;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--status-completed-bg);
+  color: var(--status-completed-text);
 }
 
 /* Receipt badge */
@@ -367,8 +367,8 @@
   font-weight: 600;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
-  background: #fef9c3;
-  color: #a16207;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
   border: 1px solid #fde68a;
 }
 
@@ -418,8 +418,8 @@
 }
 .res-action-primary.approve:hover { filter: brightness(0.93); }
 .res-action-primary.verify {
-  background: #fef9c3;
-  color: #a16207;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
   border: 1px solid #fde68a;
 }
 .res-action-primary.verify:hover { filter: brightness(0.94); }
@@ -432,14 +432,14 @@
   font-size: 0.875rem;
 }
 .qr-result-found {
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  color: #14532d;
+  background: var(--status-completed-bg);
+  border: 1px solid var(--stock-healthy);
+  color: var(--status-completed-text);
 }
 .qr-result-notfound {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #9a3412;
+  background: var(--stock-very-low-bg);
+  border: 1px solid var(--stock-very-low);
+  color: var(--stock-very-low);
 }
 /* Payment Action Card inside Detail Modal */
 .payment-action-card {
@@ -478,9 +478,9 @@
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
 }
-.payment-status-pill.paid { background: #d1fae5; color: #065f46; }
-.payment-status-pill.submitted { background: #fef9c3; color: #a16207; }
-.payment-status-pill.unpaid { background: #fee2e2; color: #991b1b; }
+.payment-status-pill.paid { background: var(--status-completed-bg); color: var(--status-completed-text); }
+.payment-status-pill.submitted { background: var(--status-pending-bg); color: var(--status-pending-text); }
+.payment-status-pill.unpaid { background: var(--status-cancelled-bg); color: var(--status-cancelled-text); }
 
 .btn-pay-toggle {
   font-size: 0.8125rem;
@@ -519,8 +519,8 @@
   font-weight: 600;
   padding: 0.3rem 0.75rem;
   border-radius: 6px;
-  background: #fef9c3;
-  color: #a16207;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
   border: 1px solid #fde68a;
   cursor: pointer;
 }
@@ -529,15 +529,15 @@
 .payment-deadline-banner {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #a16207;
-  background: #fffbeb;
+  color: var(--status-pending-text);
+  background: var(--status-pending-bg);
   padding: 0.4rem 0.75rem;
   border-radius: 6px;
   border: 1px solid #fde68a;
 }
 .payment-deadline-banner.urgent {
-  color: #991b1b;
-  background: #fef2f2;
+  color: var(--status-cancelled-text);
+  background: var(--status-cancelled-bg);
   border-color: #fca5a5;
 }
 

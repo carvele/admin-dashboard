@@ -11,8 +11,8 @@
   padding: 1.5rem;
 }
 .border-danger {
-  border: 1px solid #fca5a5;
-  background-color: #fef2f2;
+  border: 1px solid var(--color-danger);
+  background-color: var(--status-cancelled-bg);
 }
 
 .icon-bg-soft {
@@ -24,16 +24,16 @@
   justify-content: center;
 }
 .icon-bg-soft.blue {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--status-approved-bg);
+  color: var(--status-approved-text);
 }
 .icon-bg-soft.green {
   background-color: var(--status-completed-bg);
-  color: #065f46;
+  color: var(--status-completed-text);
 }
 .icon-bg-soft.orange {
   background-color: var(--status-pending-bg);
-  color: #92400e;
+  color: var(--status-pending-text);
 }
 .icon-bg-soft.red {
   background-color: var(--status-cancelled-bg);
@@ -167,7 +167,7 @@
 
 .btn-danger {
   background-color: var(--stock-low);
-  color: white;
+  color: var(--on-accent);
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   font-weight: 500;
@@ -176,7 +176,7 @@
     transform 0.15s;
 }
 .btn-danger:hover {
-  background-color: #b91c1c;
+  background-color: var(--color-danger);
   transform: translateY(-1px);
 }
 
@@ -395,8 +395,8 @@
 
 /* Archive confirm button */
 .btn-archive {
-  background-color: #d97706;
-  color: white;
+  background-color: var(--color-warning);
+  color: var(--on-accent);
   border: none;
   padding: 0.5rem 1.5rem;
   border-radius: 6px;
@@ -809,7 +809,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: var(--glass-bg);
   border-radius: 5px;
 }
 

@@ -52,7 +52,7 @@
   border-left: 3px solid var(--accent);
 }
 .conversation-item.unread {
-  background-color: #f8fafc;
+  background-color: var(--beige);
 }
 
 .avatar-wrap {
@@ -91,7 +91,7 @@
 }
 .conversation-item.unread h4 {
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--charcoal);
 }
 .time {
   font-size: 0.75rem;
@@ -107,8 +107,8 @@
   margin: 1.25rem 0 0.75rem 0;
 }
 .chat-date-divider span {
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--beige);
+  color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.75rem;
@@ -257,9 +257,9 @@
   border-bottom-left-radius: 2px;
 }
 .bubbles-auto-reply {
-  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+  background: linear-gradient(135deg, var(--pink-soft) 0%, #fce7f3 100%);
   color: #831843;
-  border: 1px solid #fbcfe8;
+  border: 1px solid var(--pink-border);
   border-bottom-right-radius: 2px;
   box-shadow: 0 2px 8px rgba(236, 72, 153, 0.08);
 }
@@ -276,7 +276,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #be185d;
-  background-color: #fbcfe8;
+  background-color: var(--pink-border);
   padding: 2px 8px;
   border-radius: 10px;
   margin-bottom: 6px;
@@ -337,7 +337,7 @@
   flex: 1;
   border-radius: 24px;
   padding: 0.75rem 1.25rem;
-  background-color: #f8fafc;
+  background-color: var(--beige);
 }
 
 .send-btn {
@@ -352,7 +352,7 @@
   transition: all 0.2s;
 }
 .send-btn:hover:not(:disabled) {
-  background-color: #7a5f4f;
+  background-color: var(--highlight);
   transform: scale(1.05);
 }
 .send-btn:disabled {
@@ -469,7 +469,7 @@
 
 /* Reservation Card */
 .reservation-card {
-  background-color: #ffffff;
+  background-color: var(--white);
   border-radius: 12px;
   overflow: hidden;
   min-width: 260px;
@@ -523,7 +523,7 @@
   font-size: 0.8125rem;
   font-weight: 600;
   padding: 0.5rem;
-  background-color: #f8fafc;
+  background-color: var(--beige);
   border-radius: 8px;
   margin-top: 0.5rem;
 }
@@ -881,7 +881,7 @@
   bottom: 100%;
   left: 0;
   margin-bottom: 0.5rem;
-  background: white;
+  background: var(--white);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0.5rem;

@@ -1472,7 +1472,7 @@ const Reservations = () => {
                           fontSize: '13px',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          background: 'var(--bg-secondary, #f8f8f8)',
+                          background: 'var(--beige)',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',

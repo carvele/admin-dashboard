@@ -373,8 +373,8 @@ const ClothingCatalog = () => {
                     position: 'absolute',
                     top: '10px',
                     right: '10px',
-                    backgroundColor: '#ef4444',
-                    color: 'white',
+                    backgroundColor: 'var(--color-danger)',
+                    color: 'var(--on-accent)',
                     padding: '2px 8px',
                     borderRadius: '4px',
                     fontSize: '0.75rem',
@@ -408,16 +408,16 @@ const ClothingCatalog = () => {
                   <div className="product-price-container" style={{ textAlign: 'right' }}>
                     {item.onSale ? (
                       <div className="sale-price-group">
-                        <div className="original-price" style={{ 
-                          fontSize: '0.85rem', 
-                          textDecoration: 'line-through', 
-                          color: '#94a3b8',
+                        <div className="original-price" style={{
+                          fontSize: '0.85rem',
+                          textDecoration: 'line-through',
+                          color: 'var(--text-secondary)',
                           lineHeight: '1'
                         }}>
                           ₱{(item.price || 0).toLocaleString()}
                         </div>
-                        <div className="sale-price" style={{ 
-                          color: '#e11d48', 
+                        <div className="sale-price" style={{
+                          color: 'var(--color-danger)',
                           fontWeight: '800',
                           fontSize: '1.25rem',
                           lineHeight: '1.2'
@@ -481,11 +481,11 @@ const ClothingCatalog = () => {
                   <button
                     className={`catalog-tag-toggle ${item.isFeatured ? 'active' : ''}`}
                     onClick={(e) => { e.stopPropagation(); toggleFeature(item); }}
-                    style={{ 
-                      borderColor: item.isFeatured ? '#ffd700' : 'transparent', 
-                      color: item.isFeatured ? '#b8860b' : 'var(--text-secondary)',
-                      backgroundColor: item.isFeatured ? '#fffcf0' : 'var(--bg-color)',
-                      boxShadow: item.isFeatured ? '0 0 5px rgba(255, 215, 0, 0.3)' : 'none'
+                    style={{
+                      borderColor: item.isFeatured ? 'var(--accent)' : 'transparent',
+                      color: item.isFeatured ? 'var(--highlight)' : 'var(--text-secondary)',
+                      backgroundColor: item.isFeatured ? 'var(--status-pending-bg)' : 'var(--white)',
+                      boxShadow: item.isFeatured ? '0 0 5px rgba(212, 175, 55, 0.3)' : 'none'
                     }}
                   >
                     <Sparkles size={12} /> Featured

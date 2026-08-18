@@ -3,8 +3,12 @@
   width: 260px;
   min-width: 260px;
   height: 100vh;
-  background: linear-gradient(180deg, var(--text-primary) 0%, #151310 100%);
-  color: var(--cream);
+  /* Fixed dark gradient -- the sidebar is a permanently-dark brand nav column
+     by design, not a themed surface. var(--text-primary) used to anchor this,
+     but that flips to a light gray in dark mode, turning the sidebar's top
+     half light while its own text color (--on-accent) stays fixed white. */
+  background: linear-gradient(180deg, #1f1c18 0%, #151310 100%);
+  color: var(--on-accent);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -53,7 +57,7 @@
 .sidebar-brand h2 {
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--white);
+  color: var(--on-accent);
   letter-spacing: 0.5px;
   text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
 }
@@ -118,7 +122,7 @@
 }
 .nav-link:hover {
   background-color: rgba(255, 255, 255, 0.06);
-  color: var(--white);
+  color: var(--on-accent);
   transform: translateX(4px);
 }
 .nav-link.active {
@@ -152,7 +156,7 @@
   height: 36px;
   border-radius: 10px;
   background: linear-gradient(135deg, var(--accent), var(--highlight));
-  color: var(--charcoal);
+  color: var(--on-accent-dark);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,7 +174,7 @@
 .profile-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--cream);
+  color: var(--on-accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -197,7 +201,7 @@
 }
 .unlock-icon {
   margin-left: auto;
-  color: #86efac;
+  color: var(--color-success);
   flex-shrink: 0;
 }
 

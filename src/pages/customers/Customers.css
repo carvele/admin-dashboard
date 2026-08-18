@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--on-accent);
   flex-shrink: 0;
 }
 .cstat-value {
@@ -65,7 +65,7 @@
   animation: pulse-dot 2s infinite;
 }
 .online-dot.offline {
-  background-color: #9ca3af;
+  background-color: var(--stock-none);
 }
 @keyframes pulse-dot {
   0%,
@@ -140,21 +140,21 @@
   letter-spacing: 0.3px;
 }
 .status-chip-active {
-  background: linear-gradient(135deg, var(--status-completed-bg), #a7f3d0);
-  color: #065f46;
+  background: var(--status-completed-bg);
+  color: var(--status-completed-text);
 }
 .status-chip-vip {
-  background: linear-gradient(135deg, var(--status-pending-bg), #fde68a);
-  color: #92400e;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
   box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
 }
 .status-chip-inactive {
-  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
-  color: #6b7280;
+  background: var(--stock-none-bg);
+  color: var(--stock-none);
 }
 .status-chip-new {
-  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-  color: #1e40af;
+  background: var(--status-approved-bg);
+  color: var(--status-approved-text);
 }
 
 /* ===== Profile Modal ===== */
@@ -168,7 +168,7 @@
 }
 .profile-sidebar {
   width: 280px;
-  background: linear-gradient(180deg, #fafaf9, #f5f0e8);
+  background: linear-gradient(180deg, var(--cream), var(--beige));
   padding: 2rem;
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -190,7 +190,7 @@
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  color: white;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;

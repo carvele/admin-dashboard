@@ -10,7 +10,7 @@ const SkeletonTable = ({ columns = 5, rows = 10, includeHeader = true }) => {
           <thead>
             <tr>
               {Array(columns).fill(0).map((_, i) => (
-                <th key={`th-${i}`} style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>
+                <th key={`th-${i}`} style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)' }}>
                   <Skeleton height={20} width={`${Math.random() * 40 + 40}%`} />
                 </th>
               ))}
@@ -21,7 +21,7 @@ const SkeletonTable = ({ columns = 5, rows = 10, includeHeader = true }) => {
           {Array(rows).fill(0).map((_, rowIndex) => (
             <tr key={`tr-${rowIndex}`}>
               {Array(columns).fill(0).map((_, colIndex) => (
-                <td key={`td-${rowIndex}-${colIndex}`} style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>
+                <td key={`td-${rowIndex}-${colIndex}`} style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)' }}>
                   <Skeleton height={20} width={`${Math.random() * 60 + 20}%`} />
                 </td>
               ))}

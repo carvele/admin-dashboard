@@ -92,7 +92,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
       </div>
 
       {res.confirmedByName && (
-        <div className="res-card-staff-attribution" style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+        <div className="res-card-staff-attribution" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
           Accepted by <strong>{res.confirmedByName}</strong>
           {res.confirmedAt && ` on ${new Date(res.confirmedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}`}
         </div>

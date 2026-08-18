@@ -55,13 +55,13 @@ class ErrorBoundary extends React.Component {
               style={{
                 width: '64px',
                 height: '64px',
-                backgroundColor: '#FEF2F2',
+                backgroundColor: 'var(--status-cancelled-bg)',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 1.5rem',
-                color: '#EF4444',
+                color: 'var(--color-danger)',
               }}
             >
               <AlertOctagon size={32} />

@@ -42,7 +42,7 @@
 .settings-content-area {
   min-height: calc(100vh - 220px);
   padding: 2rem;
-  background-color: white;
+  background-color: var(--white);
 }
 
 .section-header-icon {
@@ -159,7 +159,7 @@
 .settings-footer {
   position: sticky;
   bottom: 0;
-  background: white;
+  background: var(--white);
   padding: 1rem 0;
   z-index: 10;
   margin-top: 2rem;
@@ -172,8 +172,8 @@
 }
 
 .auto-reply-preview-container {
-  background: #fdf2f8;
-  border: 1px solid #fbcfe8;
+  background: var(--pink-soft);
+  border: 1px solid var(--pink-border);
   border-radius: 12px;
   padding: 1.25rem;
 }
@@ -209,7 +209,7 @@
   align-self: flex-end;
   background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
   color: #831843;
-  border: 1px solid #fbcfe8;
+  border: 1px solid var(--pink-border);
   border-bottom-right-radius: 2px;
 }
 
@@ -220,7 +220,7 @@
   font-size: 0.7rem;
   font-weight: 600;
   color: #be185d;
-  background-color: #fbcfe8;
+  background-color: var(--pink-border);
   padding: 2px 8px;
   border-radius: 10px;
   margin-bottom: 6px;
@@ -241,9 +241,9 @@
 .mock-chat-disabled-notice {
   text-align: center;
   padding: 1rem;
-  background-color: #fffbebf8;
-  border: 1px dashed #f59e0b;
-  color: #b45309;
+  background-color: var(--status-pending-bg);
+  border: 1px dashed var(--color-warning);
+  color: var(--status-pending-text);
   font-size: 0.85rem;
   border-radius: 8px;
 }

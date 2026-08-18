@@ -233,14 +233,49 @@
   border-radius: 12px;
   padding: 0.15rem 0.6rem;
   text-transform: capitalize;
-  background: #eee;
-  color: #555;
+  background: var(--beige);
+  color: var(--text-secondary);
 }
-.al-target-product     { background: #e8f0fe; color: #1a56b0; }
-.al-target-inventory   { background: #e6f7ec; color: #1a7d3a; }
-.al-target-profile     { background: #fdf0e6; color: #b05e1a; }
-.al-target-reservation { background: #f3e8fd; color: #7a1ab0; }
-.al-target-device      { background: #fde8e8; color: #c0392b; }
+.al-target-product     { background: var(--status-approved-bg); color: var(--status-approved-text); }
+.al-target-inventory   { background: var(--status-completed-bg); color: var(--status-completed-text); }
+.al-target-profile     { background: var(--status-pending-bg); color: var(--status-pending-text); }
+.al-target-reservation { background: var(--status-fitting-bg); color: var(--status-fitting-text); }
+.al-target-device      { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+
+.al-expand { width: 36px; color: var(--text-secondary); }
+.al-expand svg { transition: transform 0.15s; }
+.al-chevron-open { transform: rotate(180deg); }
+
+.al-details-row td {
+  padding: 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.al-details {
+  padding: 0.85rem 1.25rem 1rem;
+  background: var(--bg-light);
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.al-details code {
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.78rem;
+}
+.al-details pre {
+  margin: 0;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.76rem;
+  overflow-x: auto;
+  max-height: 260px;
+}
 
 /* ── Pagination ── */
 

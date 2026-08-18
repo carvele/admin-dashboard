@@ -571,7 +571,7 @@ const Analytics = () => {
               </div>
               <div className="demo-bar-group">
                  <div className="demo-bar">
-                   <div className="demo-fill" style={{ width: `${(inStock / (activeCatalog.length || 1)) * 100}%`, backgroundColor: '#059669' }}></div>
+                   <div className="demo-fill" style={{ width: `${(inStock / (activeCatalog.length || 1)) * 100}%`, backgroundColor: 'var(--color-success)' }}></div>
                  </div>
               </div>
               <p className="text-xs text-secondary text-center">

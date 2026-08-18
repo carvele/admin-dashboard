@@ -21,17 +21,17 @@
 
 .role-chip:hover {
   border-color: var(--color-gold);
-  background: #fff;
+  background: var(--white);
 }
 
 .owner-chip {
-  background: #faf5ed;
+  background: var(--beige);
   border-color: var(--color-gold);
   color: var(--color-gold);
 }
 
 .owner-chip:hover {
-  background: #faf5ed;
+  background: var(--beige);
   cursor: default;
 }
 
@@ -62,7 +62,7 @@
 }
 
 .icon-btn-small:hover {
-  background: #fff;
+  background: var(--white);
   border-color: var(--border-color);
   box-shadow: var(--shadow-sm);
 }
@@ -78,12 +78,12 @@
   padding: 0.2rem 0.65rem;
   white-space: nowrap;
 }
-.emp-active     { background: #d4f4dd; color: #1a7d3a; }
-.emp-leave      { background: #fff8d6; color: #8a6d00; }
-.emp-resigned   { background: #f0f0f0; color: #666;    }
-.emp-terminated { background: #fde8e8; color: #c0392b; }
-.emp-blocked    { background: #fde8e8; color: #c0392b; }
-.emp-clear      { background: #d4f4dd; color: #1a7d3a; }
+.emp-active     { background: var(--status-completed-bg); color: var(--status-completed-text); }
+.emp-leave      { background: var(--status-pending-bg); color: var(--status-pending-text); }
+.emp-resigned   { background: var(--beige); color: var(--text-secondary); }
+.emp-terminated { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+.emp-blocked    { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+.emp-clear      { background: var(--status-completed-bg); color: var(--status-completed-text); }
 
 /* ── Archive / Active tab toggle (mirrors Inventory.css) ── */
 .archive-toggle-row {

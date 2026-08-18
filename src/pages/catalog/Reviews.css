@@ -84,7 +84,7 @@
 }
 
 .verified-badge {
-  color: #10b981; /* Emerald 500 */
+  color: var(--color-success);
 }
 
 .review-product {

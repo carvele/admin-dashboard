@@ -13,7 +13,7 @@
 }
 
 .confirm-dialog-content {
-  background: white;
+  background: var(--white);
   border-radius: 12px;
   width: 90%;
   max-width: 400px;
@@ -68,8 +68,8 @@
 }
 
 .dialog-icon.destructive {
-  background-color: #fef2f2;
-  color: #ef4444;
+  background-color: var(--status-cancelled-bg);
+  color: var(--color-danger);
 }
 
 .dialog-header h2 {
@@ -114,13 +114,13 @@
 }
 
 .dialog-btn-cancel:hover:not(:disabled) {
-  background-color: #e2e8f0;
+  background-color: var(--warm-gray);
   color: var(--text-primary, #0f172a);
 }
 
 .dialog-btn-confirm.primary {
-  background-color: var(--primary-color, #3b82f6);
-  color: white;
+  background-color: var(--accent);
+  color: var(--on-accent);
 }
 
 .dialog-btn-confirm.primary:hover:not(:disabled) {
@@ -128,12 +128,12 @@
 }
 
 .dialog-btn-confirm.destructive {
-  background-color: #ef4444;
-  color: white;
+  background-color: var(--color-danger);
+  color: var(--on-accent);
 }
 
 .dialog-btn-confirm.destructive:hover:not(:disabled) {
-  background-color: #dc2626;
+  background-color: var(--status-cancelled-text);
 }
 
 .dialog-btn-cancel:disabled,

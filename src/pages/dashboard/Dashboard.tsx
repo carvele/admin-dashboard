@@ -269,7 +269,7 @@ const Dashboard = () => {
         <div className="system-health flex-center gap-3">
           <div
             className="health-indicator flex-center gap-1 text-success text-sm font-medium px-3 py-1 rounded-full"
-            style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}
+            style={{ backgroundColor: 'var(--status-completed-bg)' }}
           >
             <CheckCircle2 size={16} /> Pipeline Healthy
           </div>
@@ -292,7 +292,7 @@ const Dashboard = () => {
         className="quick-actions-bar card flex-between align-center px-6 py-4"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ borderRadius: '16px', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(139, 111, 92, 0.1)' }}
+        style={{ borderRadius: '16px', background: 'var(--glass-bg)', backdropFilter: 'blur(10px)', border: '1px solid var(--glass-border)' }}
       >
         <div className="flex align-center gap-3">
           <Zap size={20} className="text-accent" />

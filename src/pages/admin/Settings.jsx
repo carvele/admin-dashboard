@@ -457,7 +457,7 @@ const Settings = () => {
                         <Image size={24} style={{ opacity: 0.5 }} />
                       )}
                       {isLoading && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--glass-bg)' }}>
                           <Loader2 size={20} className="animate-spin" />
                         </div>
                       )}
@@ -833,7 +833,7 @@ const Settings = () => {
                       }))
                     }
                     title="Reset message to default text"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#ec4899', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--pink-accent)', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <RotateCcw size={12} /> Reset to Default
                   </button>
@@ -854,7 +854,7 @@ const Settings = () => {
 
               {/* Live Preview Card */}
               <div className="auto-reply-preview-container mt-5">
-                <div className="preview-label flex-center gap-1" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#ec4899', marginBottom: '8px' }}>
+                <div className="preview-label flex-center gap-1" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--pink-accent)', marginBottom: '8px' }}>
                   <Sparkles size={14} />
                   <span>Live Preview (How it appears in Customer Chat)</span>
                 </div>
