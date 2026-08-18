@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
-import { Search, Filter, Grid, List as ListIcon, Shirt } from 'lucide-react';
+import { Search, Grid, List as ListIcon, Shirt } from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -14,6 +14,10 @@ const DigitalWardrobe = () => {
   
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 300),
     []

@@ -124,6 +124,7 @@
 
 .cal-dot-pending { background: var(--status-pending-text); }
 .cal-dot-topay { background: var(--status-confirmed-text); }
+.cal-dot-preparing { background: var(--status-approved-text); }
 .cal-dot-topickup { background: var(--status-fitting-text); }
 .cal-dot-completed { background: var(--status-completed-text); }
 .cal-dot-cancelled { background: var(--status-cancelled-text); }

@@ -5,15 +5,13 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Calendar,
   Search,
-  Filter,
   Plus,
   CheckCircle,
   XCircle,
   Clock,
   Eye,
-  CalendarCheck,
-  UserCheck,
   Shirt,
+  Package,
   MessageSquare,
   X,
   QrCode,
@@ -34,7 +32,7 @@ import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservat
 import { holdsStock } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
-import { formatCurrency, formatSmartDateTime } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
@@ -44,6 +42,7 @@ import {
   repairReservationData,
   settleReservationBalance,
   resolveRescheduleRequest,
+  getPaymentsForReservation,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -100,6 +99,12 @@ const BOARD_COLUMNS = [
     empty: 'No one owes anything right now.',
   },
   {
+    status: 'Preparing',
+    label: 'Preparing',
+    icon: Package,
+    empty: 'Nothing being prepared right now.',
+  },
+  {
     status: 'To Pickup',
     label: 'Ready for pickup',
     icon: Shirt,
@@ -115,9 +120,6 @@ const Reservations = () => {
   const [reservations, setReservations] = useState([]);
   const [itemsByReservation, setItemsByReservation] = useState({});
   const [loading, setLoading] = useState(true);
-  const [lastDoc, setLastDoc] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
 
@@ -160,6 +162,10 @@ const Reservations = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // debounce(...) only closes over the stable setSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 400),
     []
@@ -207,6 +213,26 @@ const Reservations = () => {
     return () => { cancelled = true; };
   }, [viewModal?.receiptUrl]);
 
+  // PayMongo transaction history for the reservation currently open in the
+  // details modal. See getPaymentsForReservation: this table was never read
+  // anywhere in the app before, so staff had no way to see the actual
+  // transaction (amount charged, provider status, checkout session id)
+  // behind a reservation's payment_status.
+  const [paymentRecords, setPaymentRecords] = useState([]);
+  const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(false);
+
+  useEffect(() => {
+    setPaymentRecords([]);
+    if (!viewModal?.id) return;
+    let cancelled = false;
+    setPaymentRecordsLoading(true);
+    getPaymentsForReservation(viewModal.id)
+      .then((rows) => { if (!cancelled) setPaymentRecords(rows); })
+      .catch(() => { if (!cancelled) setPaymentRecords([]); })
+      .finally(() => { if (!cancelled) setPaymentRecordsLoading(false); });
+    return () => { cancelled = true; };
+  }, [viewModal?.id]);
+
   const [newRes, setNewRes] = useState({
     customer: '',
     customerId: '',
@@ -228,6 +254,7 @@ const Reservations = () => {
     if (displayStatus === 'Request Approval') displayStatus = 'Pending';
     if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
     if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+    if (displayStatus === 'Ready') displayStatus = 'To Pickup';
     if (displayStatus === 'Active') displayStatus = 'Completed';
 
     // Falls back to the reservation's own product columns when the lines
@@ -269,13 +296,15 @@ const Reservations = () => {
 
   // --- Stock adjustment helper ---
   const adjustStock = async (outfit, size, delta, isConsume = false) => {
-    await adjustInventoryForReservation(outfit, size, delta, isConsume);
+    return adjustInventoryForReservation(outfit, size, delta, isConsume);
   };
 
   // A reservation can hold several products, so stock has to move for every
   // line. Adjusting only the reservation's own product columns would leave
   // every item after the first uncounted -- reserved stock silently wrong.
   // Quantity is honoured too: 2 of something moves 2.
+  // Returns false if any line failed, so callers can warn staff instead of
+  // claiming a stock move that didn't actually happen.
   const adjustStockForReservation = async (res, deltaPerUnit, isConsume = false) => {
     const lines = itemsByReservation[res.id]?.length
       ? itemsByReservation[res.id]
@@ -286,20 +315,23 @@ const Reservations = () => {
           quantity: res.quantity ?? 1,
         }];
 
+    let allOk = true;
     for (const line of lines) {
       const qty = Math.max(1, line.quantity ?? 1);
-      await adjustStock(
+      const ok = await adjustStock(
         line.productId || line.productName,
         line.size,
         deltaPerUnit * qty,
         isConsume,
       );
+      if (!ok) allOk = false;
     }
+    return allOk;
   };
 
   // --- LIFECYCLE ACTIONS ---
-  // Lifecycle: Pending → To Pay → To Pickup → Active → Completed | Cancelled
-  // Also backwards compatible with Confirmed and Fitting
+  // Lifecycle: Pending → To Pay → Preparing → To Pickup → Completed | Cancelled
+  // Also backwards compatible with Confirmed, Fitting and Active
   // Answering a customer's request to move their appointment. Approving
   // re-checks the slot inside the RPC: it was free when they asked, but the
   // request may have sat in the queue while another reservation took it, so a
@@ -328,13 +360,8 @@ const Reservations = () => {
 
     try {
       if (action === 'approve_pay') {
-        // 'Confirmed' is the stored value; the display mapping above turns it
-        // back into "To Pay" for staff. Writing the label instead meant the DB
-        // never saw an accepted reservation: no payment deadline was stamped,
-        // the customer was never told to pay, the app showed no Pay button,
-        // and the unpaid sweep never picked it up.
-        await updateReservation(res.docId, { 
-          status: 'Confirmed',
+        await updateReservation(res.docId, {
+          status: 'To Pay',
           confirmed_by_id: user?.uid || user?.id || null,
           confirmed_by_name: user?.name || user?.email || 'Staff',
           confirmed_at: new Date().toISOString()
@@ -343,18 +370,24 @@ const Reservations = () => {
         // item is promised to this customer and must stop being sellable even
         // though payment has not landed. Deducting only at ready_pickup meant
         // two customers could both be approved for the same last unit.
-        await adjustStockForReservation(res, -1);
+        const stockOk = await adjustStockForReservation(res, -1);
         toast.success(`Reservation ${id} approved for payment — stock held`);
-      } else if (action === 'ready_pickup') {
+        if (!stockOk) toast.error(`Stock adjustment for ${id} may have failed — check inventory`);
+      } else if (action === 'mark_paid') {
         await updateReservation(res.docId, {
-          status: 'To Pickup',
-          staff: user?.name || 'Staff',
+          status: 'Preparing',
+          payment_status: 'Paid',
           assigned_staff_id: user?.uid || '',
           countdown: false,
         });
         // No stock movement here: approval already held it, and both statuses
         // are in STOCK_HOLDING_STATUSES.
-        toast.success(`Reservation ${id} payment received — ready for pickup`);
+        toast.success(`Reservation ${id} payment received — preparing item`);
+      } else if (action === 'ready_pickup') {
+        // Payment already landed at mark_paid; this just signals the item is
+        // pulled and physically ready at the counter.
+        await updateReservation(res.docId, { status: 'Ready' });
+        toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
         // Handing over is the moment the rest of the money is taken, in cash,
         // with no electronic trail. Completing without recording it was how a
@@ -377,31 +410,35 @@ const Reservations = () => {
 
         await updateReservation(res.docId, { status: 'Completed' });
         // Consume reserved stock (item purchased/picked up forever)
-        await adjustStockForReservation(res, 1, true);
+        const stockOk = await adjustStockForReservation(res, 1, true);
         toast.success(
           outstanding > 0
             ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
             : `Reservation ${id} completed — stock consumed permanently`,
         );
+        if (!stockOk) toast.error(`Stock consumption for ${id} may have failed — check inventory`);
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Restore exactly when the previous status was holding stock. Using the
         // shared predicate rather than a hand-listed set is the point: the old
         // inline list included statuses that had never deducted, so cancelling
         // handed back units that were never taken.
+        let stockOk = true;
         if (holdsStock(res.status)) {
-          await adjustStockForReservation(res, 1);
+          stockOk = await adjustStockForReservation(res, 1);
         }
         toast.error(`Reservation ${id} cancelled`);
+        if (!stockOk) toast.error(`Stock restore for ${id} may have failed — check inventory`);
       }
       const actionLabels = {
         approve_pay: 'Approved for Payment',
-        ready_pickup: 'Confirmed & To Pickup',
+        mark_paid: 'Payment Received & Preparing',
+        ready_pickup: 'Marked Ready for Pickup',
         complete: 'Completed',
         cancel: 'Cancelled',
       };
       await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
-    } catch (e) {
+    } catch {
       toast.error('Failed to update reservation');
     }
   };
@@ -451,7 +488,7 @@ const Reservations = () => {
       toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
       setRescheduleModal(null);
       setNewDate('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to reschedule');
     }
   };
@@ -511,21 +548,31 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.success(nextPaid ? 'Payment marked as received' : 'Payment marked as unpaid');
-    } catch (e) {
+    } catch {
       toast.error('Failed to update payment status');
     }
   };
 
   const handleVerifyPayment = async (res) => {
     try {
-      await updateReservation(res.docId, { paymentStatus: 'Paid' });
-      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Paid' } : prev);
+      // Matches the mark_paid lifecycle action (handleAction) exactly --
+      // this only ever set paymentStatus, so a reservation verified from
+      // here stayed stuck on "To Pay" forever even though payment_status
+      // said Paid, instead of moving to Preparing like every other path
+      // that marks a reservation paid.
+      await updateReservation(res.docId, {
+        status: 'Preparing',
+        paymentStatus: 'Paid',
+        assignedStaffId: user?.uid || '',
+        countdown: false,
+      });
+      setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
       await logAction(user, 'Verified GCash Payment', {
         reservationId: res.id,
         customer: res.customerName || res.customer,
       });
-      toast.success('Payment verified successfully');
-    } catch (e) {
+      toast.success('Payment verified — preparing item');
+    } catch {
       toast.error('Failed to verify payment');
     }
   };
@@ -576,13 +623,10 @@ const Reservations = () => {
     );
     const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
 
-    const year = new Date().getFullYear();
-    const mockId = `ORD-${year}-${String(reservations.length + 1).padStart(5, '0')}`;
     // Find productId and imageUrl if possible
     const matchedProduct = products.find((p) => p.name === newRes.outfit);
     try {
       await createReservation({
-        id: mockId,
         customerName: newRes.customer,
         customerId: customerId, // FK to users collection (matches Android field name)
         productName: newRes.outfit,
@@ -591,19 +635,21 @@ const Reservations = () => {
         reservationDate: new Date(newRes.date),
         date: new Date(newRes.date), // Fallback for Android which parses 'date'
         status: 'Pending',
-        staff: 'Unassigned',
         assigned_staff_id: '', // Will be set on Confirm
         countdown: true,
         size: newRes.size,
-        deposit: newRes.deposit,
-        timestamp: Date.now(),
+        // deposit is the numeric amount owed (50%, matching the standard
+        // convention elsewhere in this codebase), not a paid/unpaid flag --
+        // that belongs on payment_status, which the checkbox actually means.
+        deposit: Math.round((matchedProduct?.price || 0) * 0.5 * 100) / 100,
+        payment_status: newRes.deposit ? 'Paid' : 'Pending',
         rentalPrice: matchedProduct?.price || 0,
       });
       await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
       setIsModalOpen(false);
       toast.success('Reservation created successfully');
       setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
-    } catch (e) {
+    } catch {
       toast.error('Failed to create reservation');
     }
   };
@@ -675,6 +721,7 @@ const Reservations = () => {
               <option value="All">All Statuses</option>
               <option value="Pending">Pending / Requests</option>
               <option value="To Pay">To Pay</option>
+              <option value="Preparing">Preparing</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>
               <option value="Completed">Completed / Returned</option>
               <option value="Cancelled">Cancelled</option>
@@ -767,9 +814,18 @@ const Reservations = () => {
                     const isExpanded = !!expandedRows[res.id];
                     const hasMultipleLines = res.lines.length > 1;
                     const resYear = res.createdAt ? new Date(res.createdAt).getFullYear() : new Date().getFullYear();
-                    const formattedId = res.id?.startsWith('ORD-') || res.id?.startsWith('RES-') 
-                      ? res.id 
-                      : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`;
+                    // res.displayId is already the real display_id column
+                    // (RES-...), populated by reservationService's
+                    // normaliseReservation and used correctly elsewhere in
+                    // this file (see the reschedule toast messages above).
+                    // This row alone ignored it and fabricated a fake
+                    // ORD-<year>-<uuid prefix> id from the raw primary key,
+                    // which showed a different identifier for the same
+                    // reservation than the card view and the details modal.
+                    const formattedId = res.displayId
+                      || (res.id?.startsWith('ORD-') || res.id?.startsWith('RES-')
+                        ? res.id
+                        : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`);
 
                     return (
                       <tr key={res.id}>
@@ -819,10 +875,17 @@ const Reservations = () => {
                           </div>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <div className="font-medium">{res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                          <div className="text-secondary text-sm">
-                            {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div className="font-medium">
+                            {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
                           </div>
+                          <div className="text-secondary text-sm">
+                            {res.appointmentTime || res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                          </div>
+                          {(res.createdAt || res.created_at) && (
+                            <div className="text-[11px] text-secondary mt-1">
+                              Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} {parseDate(res.createdAt || res.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                            </div>
+                          )}
                           {res.countdown && (res.displayStatus === 'Pending') && (
                             <CountdownTimer targetDate={res.reservationDate || res.date} />
                           )}
@@ -865,7 +928,13 @@ const Reservations = () => {
                             {canManage && primaryAction && (
                               <button
                                 className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
-                                onClick={() => handleAction(res.id, primaryAction.action)}
+                                // Same fix as the board card: this used to fire
+                                // mark_paid immediately, relabeled "Verify
+                                // Receipt" -- staff could mark payment verified
+                                // without ever opening the receipt image. Opens
+                                // the detail modal instead, where the receipt
+                                // renders next to its own Verify Payment button.
+                                onClick={() => (isAwaitingReceipt(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
                               >
                                 {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                               </button>
@@ -906,22 +975,35 @@ const Reservations = () => {
 
       {/* ===== QR / TOKEN VERIFICATION MODAL ===== */}
       {showQRModal && (
-        <div className="modal-overlay" onClick={() => setShowQRModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowQRModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowQRModal(false);
+            }
+          }}
+        >
+          <div className="modal-content" style={{ maxWidth: 420 }}>
             <div className="modal-header">
               <h2><QrCode size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />Verify Pickup</h2>
               <button className="close-btn" onClick={() => setShowQRModal(false)}>&times;</button>
             </div>
             <div className="modal-body">
-              <p className="text-secondary text-sm mb-3">Enter the customer's pickup token (displayed in their app) to verify and complete handover.</p>
+              <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
               <div className="form-group">
-                <label className="label">Pickup Token / Reservation ID</label>
+                <label className="label" htmlFor="qr-token">Pickup Token / Reservation ID</label>
                 <input
+                  id="qr-token"
                   type="text"
                   className="input-field font-mono"
                   placeholder="e.g. ORD-2026-00042"
                   value={qrToken}
                   onChange={(e) => { setQrToken(e.target.value.toUpperCase()); setQrResult(null); }}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of a just-opened modal
                   autoFocus
                 />
               </div>
@@ -976,8 +1058,19 @@ const Reservations = () => {
 
       {/* ===== NEW RESERVATION MODAL ===== */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsModalOpen(false);
+            }
+          }}
+        >
+          <div className="modal-content">
             <div className="modal-header">
               <h2>Create New Reservation</h2>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>
@@ -986,8 +1079,9 @@ const Reservations = () => {
             </div>
             <form className="modal-body" onSubmit={handleCreateReservation}>
               <div className="form-group">
-                <label className="label">Customer</label>
+                <label className="label" htmlFor="reservation-customer">Customer</label>
                 <input
+                  id="reservation-customer"
                   type="text"
                   className="input-field"
                   list="customers-list"
@@ -1014,8 +1108,9 @@ const Reservations = () => {
               </div>
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label className="label">Selected Outfit</label>
+                  <label className="label" htmlFor="reservation-outfit">Selected Outfit</label>
                   <select
+                    id="reservation-outfit"
                     className="input-field"
                     value={newRes.outfit}
                     onChange={(e) => setNewRes({ ...newRes, outfit: e.target.value })}
@@ -1031,8 +1126,9 @@ const Reservations = () => {
                   </select>
                 </div>
                 <div className="form-group flex-1">
-                  <label className="label">Size</label>
+                  <label className="label" htmlFor="reservation-size">Size</label>
                   <select
+                    id="reservation-size"
                     className="input-field"
                     value={newRes.size}
                     onChange={(e) => setNewRes({ ...newRes, size: e.target.value })}
@@ -1050,8 +1146,9 @@ const Reservations = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label className="label">Reservation Date & Time</label>
+                <label className="label" htmlFor="reservation-date">Reservation Date & Time</label>
                 <input
+                  id="reservation-date"
                   type="datetime-local"
                   className="input-field"
                   value={newRes.date}
@@ -1083,10 +1180,20 @@ const Reservations = () => {
 
       {/* ===== RESCHEDULE MODAL ===== */}
       {rescheduleModal && (
-        <div className="modal-overlay" onClick={() => setRescheduleModal(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setRescheduleModal(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setRescheduleModal(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1103,8 +1210,9 @@ const Reservations = () => {
                 ).toLocaleString()}
               </p>
               <div className="form-group">
-                <label className="label">New Date & Time</label>
+                <label className="label" htmlFor="reschedule-date">New Date & Time</label>
                 <input
+                  id="reschedule-date"
                   type="datetime-local"
                   className="input-field"
                   value={newDate}
@@ -1131,10 +1239,20 @@ const Reservations = () => {
 
       {/* ===== VIEW DETAILS MODAL ===== */}
       {viewModal && (
-        <div className="modal-overlay" onClick={() => setViewModal(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setViewModal(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setViewModal(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 640 }}
           >
             <div className="modal-header">
@@ -1147,13 +1265,8 @@ const Reservations = () => {
               {/* Lifecycle Progress Indicator */}
               <div className="lifecycle-progress">
                 {(() => {
-                  const isAlterable = products.find(
-                    (p) =>
-                      p.id === viewModal.productId ||
-                      p.name === (viewModal.productName || viewModal.outfit),
-                  )?.isAlterable;
-                  const steps = ['Pending', 'To Pay', 'To Pickup', 'Completed'];
-                  const statusOrder = { Pending: 0, 'To Pay': 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
+                  const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
+                  const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
                   return steps.map((step, i) => {
                     const current = statusOrder[viewModal.displayStatus] ?? -1;
                     const stepIdx = statusOrder[step];
@@ -1219,9 +1332,38 @@ const Reservations = () => {
                   ))}
                 </ul>
               </div>
+              {(viewModal.createdAt || viewModal.created_at) && (
+                <div className="detail-row">
+                  <span className="detail-label">Created At</span>
+                  <strong>
+                    {parseDate(viewModal.createdAt || viewModal.created_at).toLocaleString('en-PH', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              )}
               <div className="detail-row">
-                <span className="detail-label">Date</span>
-                {parseDate(viewModal.reservationDate || viewModal.date).toLocaleString()}
+                <span className="detail-label">Pickup Date & Time</span>
+                <strong>
+                  {parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString('en-PH', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    timeZone: 'Asia/Manila',
+                  })}{' '}
+                  at{' '}
+                  {viewModal.appointmentTime || parseDate(viewModal.reservationDate || viewModal.date).toLocaleTimeString('en-PH', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Asia/Manila',
+                  })}
+                </strong>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
@@ -1255,13 +1397,17 @@ const Reservations = () => {
                         <span className="text-secondary text-sm"> · Ref: <code className="text-xs">{viewModal.providerRef}</code></span>
                       )}
                     </div>
+                    <div className="text-xs text-secondary mt-1">
+                      💡 <strong>Note on Payment Actions:</strong> &ldquo;Mark Paid&rdquo; (on the main table) moves reservation lifecycle from <em>To Pay → Preparing</em>; &ldquo;Mark Ready&rdquo; then moves it to <em>To Pickup</em> once the item is pulled. &ldquo;Toggle Payment Record&rdquo; (below) updates financial payment status without changing lifecycle stage.
+                    </div>
                   </div>
                   <div className="payment-action-buttons">
                     <button
                       className={`btn-pay-toggle ${(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'is-paid' : 'is-unpaid'}`}
                       onClick={() => handleTogglePaid(viewModal)}
+                      title="Toggle financial payment status"
                     >
-                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Mark as Paid'}
+                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Toggle Paid Status'}
                     </button>
                   </div>
                 </div>
@@ -1302,6 +1448,59 @@ const Reservations = () => {
                   );
                 })()}
               </div>
+              {/* Actual PayMongo transaction records for this reservation --
+                  distinct from the payment_status pill above, which only
+                  reflects the current aggregate state. A reservation can have
+                  more than one row if an earlier checkout session was
+                  abandoned before a later one succeeded. */}
+              {paymentRecordsLoading ? (
+                <div className="detail-row">
+                  <span className="detail-label">Payment Transactions</span>
+                  <span className="text-secondary text-sm">Loading…</span>
+                </div>
+              ) : paymentRecords.length > 0 && (
+                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="detail-label" style={{ marginBottom: '8px' }}>
+                    Payment Transactions ({paymentRecords.length})
+                  </span>
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {paymentRecords.map((p) => (
+                      <div
+                        key={p.id}
+                        style={{
+                          width: '100%',
+                          fontSize: '13px',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          background: 'var(--bg-secondary, #f8f8f8)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <div>
+                          <strong>{formatCurrency((p.amountCentavos || 0) / 100)}</strong>
+                          <span className="text-secondary"> · {p.provider}{p.method ? ` (${p.method})` : ''}</span>
+                          {p.providerRef && (
+                            <div className="text-secondary text-xs">
+                              <code>{p.providerRef}</code>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className={`payment-status-pill ${p.status === 'paid' ? 'paid' : ['awaiting_payment', 'processing'].includes(p.status) ? 'submitted' : 'unpaid'}`}>
+                            {p.status}
+                          </span>
+                          <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                            {parseDate(p.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {viewModal.receiptUrl && (
                 <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: '8px' }}>
@@ -1370,10 +1569,20 @@ const Reservations = () => {
       )}
 
       {receiptModalUrl && (
-        <div className="modal-overlay" onClick={() => setReceiptModalUrl(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { if (e.target === e.currentTarget) setReceiptModalUrl(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setReceiptModalUrl(null);
+            }
+          }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
           >
             <div className="modal-header">

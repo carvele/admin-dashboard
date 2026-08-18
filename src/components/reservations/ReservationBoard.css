@@ -1,12 +1,22 @@
 .res-board {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* One column per BOARD_COLUMNS entry (Reservations.jsx) -- stale here at
+     3 after the Preparing stage made it 4, so the 4th column (To Pickup)
+     silently wrapped onto its own row under column 1 instead of sitting
+     alongside the others. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   padding: 16px;
   align-items: start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
+  .res-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
   .res-board {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -12,6 +12,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Eye, MessageSquare } from 'lucide-react';
 import StatusBadge from '../ReservationStatusBadge';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { formatTimeLabel } from '../../utils/helpers';
 import './ReservationCalendar.css';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -39,6 +40,7 @@ const buildMonthGrid = (monthDate) => {
 const STATUS_DOT_CLASS = {
   Pending: 'cal-dot-pending',
   'To Pay': 'cal-dot-topay',
+  Preparing: 'cal-dot-preparing',
   'To Pickup': 'cal-dot-topickup',
   Completed: 'cal-dot-completed',
   Cancelled: 'cal-dot-cancelled',
@@ -155,7 +157,15 @@ const ReservationCalendar = ({ reservations, onView, onMessage }) => {
               return (
                 <li key={res.id} className={`res-calendar-agenda-item${deadline?.urgent ? ' res-calendar-agenda-item-urgent' : ''}`}>
                   <div className="res-calendar-agenda-time">
-                    {res.displayDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {/* Same bug as ReservationCard: displayDate comes from
+                        the midnight-anchored `date` column, so a time
+                        derived from it is midnight reinterpreted in the
+                        browser's local timezone, not the real appointment.
+                        res.appointmentTime is the actual scheduled time,
+                        already resolved to Asia/Manila. */}
+                    {res.appointmentTime
+                      ? formatTimeLabel(res.appointmentTime)
+                      : res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
                   </div>
                   <div className="res-calendar-agenda-main">
                     <p className="res-calendar-agenda-name">{res.displayName}</p>

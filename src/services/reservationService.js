@@ -12,13 +12,11 @@
 
 import { supabase } from '../lib/supabaseClient';
 import {
-  getCollection,
   subscribeToCollection,
   addDocument,
   updateDocument,
   deleteDocument,
   getPaginatedCollection,
-  normaliseRow,
   toCamel,
 } from '../lib/supabaseService';
 
@@ -195,6 +193,34 @@ export const getReservationsByProduct = async (productId, productName) => {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
+/**
+ * PayMongo transaction history for a reservation.
+ *
+ * The `payments` table -- provider, provider_ref (PayMongo checkout session
+ * id), amount, status, method -- was never read anywhere in this app: staff
+ * only ever saw the reservation's own payment_status ("Paid"/"Pending"),
+ * which the webhook sets once the deposit clears. There was no way to see
+ * *which* PayMongo transaction that corresponded to, whether an earlier
+ * attempt failed first, or the amount actually charged. RLS already permits
+ * staff to read this table ("Staff read all payments"); this was purely a
+ * missing UI.
+ *
+ * Newest first: a reservation can have more than one row here if an earlier
+ * checkout session was abandoned or failed before a later one succeeded
+ * (payments-create reuses an open session rather than stacking them, but a
+ * failed/expired one still leaves its own row behind).
+ */
+export const getPaymentsForReservation = async (reservationId) => {
+  if (!reservationId) return [];
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('reservation_id', reservationId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return toCamel(data ?? []);
+};
+
 // ── Writes ────────────────────────────────────────────────────
 
 const ALLOWED_RESERVATION_FIELDS = new Set([
@@ -211,9 +237,10 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'status',
   'size',
   'deposit',
-  'deposit_amount',
-  'total_price',
-  'balance_due',
+  'rental_price',
+  'receipt_url',
+  'countdown',
+  'assigned_staff_id',
   'payment_status',
   'payment_due_at',
   'confirmed_by_id',
@@ -222,7 +249,6 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'deleted',
   'created_at',
   'updated_at',
-  'reschedule_status',
   'reschedule_requested_at',
 ]);
 
@@ -234,8 +260,9 @@ const sanitizeReservationPayload = (obj) => {
     productId: 'product_id',
     productName: 'product_name',
     imageUrl: 'image_url',
-    rentalPrice: 'total_price',
-    depositAmount: 'deposit_amount',
+    rentalPrice: 'rental_price',
+    receiptUrl: 'receipt_url',
+    paymentStatus: 'payment_status',
   };
 
   for (const [key, val] of Object.entries(obj)) {
@@ -318,7 +345,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     // 1. Try by product_doc_id (uuid)
     const { data: byId } = await supabase
       .from('inventory')
-      .select('id, total, reserved, available')
+      .select('id')
       .eq('product_doc_id', productIdOrName)
       .eq('size', size)
       .maybeSingle();
@@ -328,7 +355,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     if (!invRow) {
       const { data: bySku } = await supabase
         .from('inventory')
-        .select('id, total, reserved, available')
+        .select('id')
         .eq('sku', productIdOrName)
         .eq('size', size)
         .maybeSingle();
@@ -339,7 +366,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
     if (!invRow) {
       const { data: byName } = await supabase
         .from('inventory')
-        .select('id, total, reserved, available')
+        .select('id')
         .eq('item', productIdOrName)
         .eq('size', size)
         .maybeSingle();
@@ -348,25 +375,32 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
 
     if (!invRow) {
       console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size})`);
-      return;
+      return false;
     }
 
-    const updates = {};
-    if (isConsume) {
-      const amount = Math.abs(delta);
-      updates.total = Math.max(0, (invRow.total || 0) - amount);
-      updates.reserved = Math.max(0, (invRow.reserved || 0) - amount);
-    } else {
-      updates.available = Math.max(0, (invRow.available || 0) + delta);
-      updates.reserved = Math.max(0, (invRow.reserved || 0) - delta);
-    }
-    updates.updated_at = new Date().toISOString();
+    // Deltas applied atomically server-side (adjust_inventory_stock), not a
+    // JS-side read-compute-write -- two near-simultaneous calls against the
+    // same row (a double-click, two staff acting close together, a realtime
+    // refresh racing a manual action) used to both read the same starting
+    // total/reserved/available and whichever UPDATE landed second silently
+    // overwrote the first's result, losing one of the two deltas.
+    const params = isConsume
+      ? { p_total_delta: -Math.abs(delta), p_reserved_delta: -Math.abs(delta) }
+      : { p_available_delta: delta, p_reserved_delta: -delta };
 
-    const { error } = await supabase.from('inventory').update(updates).eq('id', invRow.id);
-    if (error) console.warn('[Inventory] Adjust failed:', error.message);
-    else console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
+    const { error } = await supabase.rpc('adjust_inventory_stock', {
+      p_inventory_id: invRow.id,
+      ...params,
+    });
+    if (error) {
+      console.warn('[Inventory] Adjust failed:', error.message);
+      return false;
+    }
+    console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
+    return true;
   } catch (err) {
     console.warn('Stock adjustment failed:', err);
+    return false;
   }
 };
 

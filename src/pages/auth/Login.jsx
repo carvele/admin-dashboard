@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, LogIn, UserPlus, Shield, X } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
-import { sanitizeText } from '../../utils/validation';
-import { toast } from 'sonner';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import './Login.css';
 
 const Login = () => {
@@ -58,7 +55,7 @@ const Login = () => {
           <p className="font-serif accent-pink-text" style={{ fontStyle: 'italic', textTransform: 'none' }}>by Ms. Jholy</p>
         </div>
         <div className="login-testimonial">
-          <blockquote>"Style is a way to say who you are without having to speak."</blockquote>
+          <blockquote>&quot;Style is a way to say who you are without having to speak.&quot;</blockquote>
           <cite>— Rachel Zoe</cite>
         </div>
         <div className="login-left-shapes">
@@ -77,22 +74,24 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
-              <label className="label">Email Address</label>
+              <label className="label" htmlFor="login-email">Email Address</label>
               <input
+                id="login-email"
                 type="email"
                 className="input-field"
                 name="email"
                 autoComplete="username"
-                placeholder="admin@jezsy.com"
+                placeholder="you@example.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of the sign-in page
                 autoFocus
               />
             </div>
 
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <label className="label" style={{ marginBottom: 0 }}>Password</label>
+                <label className="label" style={{ marginBottom: 0 }} htmlFor="login-password">Password</label>
                 <Link
                   to="/forgot-password"
                   style={{
@@ -107,6 +106,7 @@ const Login = () => {
               </div>
               <div className="password-wrapper">
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   className="input-field"
                   name="password"

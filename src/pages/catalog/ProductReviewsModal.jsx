@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Star, Trash2 } from 'lucide-react';
 import { getProductReviews, deleteReview } from '../../services/reviewService';
 import { updateProduct } from '../../services/productService';
@@ -8,11 +8,7 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [product]);
-
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     setLoading(true);
     try {
       const fetchedReviews = await getProductReviews(product.docId || product.id);
@@ -23,7 +19,11 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [product]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const handleDelete = async (reviewDocId) => {
     if (!window.confirm("Are you sure you want to delete this review?")) return;
@@ -55,10 +55,11 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div 
-        className="modal-content" 
-        onClick={e => e.stopPropagation()} 
+    <div className="modal-overlay" role="presentation" onClick={onClose} style={{ zIndex: 1000 }}>
+      <div
+        className="modal-content"
+        role="presentation"
+        onClick={e => e.stopPropagation()}
         style={{ width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}
       >
         <div className="flex-between mb-4">

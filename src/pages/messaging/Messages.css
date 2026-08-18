@@ -55,6 +55,21 @@
   background-color: #f8fafc;
 }
 
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.presence-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: var(--stock-high, #10b981);
+  border: 2px solid var(--white);
+}
+
 .conv-details {
   flex: 1;
   min-width: 0;
@@ -158,6 +173,13 @@
 .status-text.online {
   color: var(--stock-high);
 }
+.status-text.offline {
+  color: var(--text-secondary);
+}
+.status-text.typing {
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .chat-history {
   flex: 1;
@@ -204,6 +226,23 @@
   margin-top: 0.5rem;
   text-align: right;
   opacity: 0.7;
+}
+
+.msg-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  font-size: 0.65rem;
+  margin-top: 0.35rem;
+  opacity: 0.85;
+}
+.msg-status-icon {
+  flex-shrink: 0;
+}
+.msg-status-seen {
+  color: var(--status-confirmed-text, #0891b2);
+  opacity: 1;
 }
 
 .bubbles-sent {
@@ -328,13 +367,64 @@
   }
 }
 
+/* Mobile-only nav controls (back/info buttons) for switching between the
+   three message panels -- hidden on desktop where all three show at once. */
+.chat-back-btn,
+.context-back-btn,
+.chat-info-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--charcoal);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-back-btn:hover,
+.context-back-btn:hover,
+.chat-info-btn:hover {
+  background-color: var(--cream);
+}
+.chat-info-btn.btn-outline {
+  width: 40px;
+  padding: 0;
+}
+
 @media (max-width: 1024px) {
   .messages-layout {
     grid-template-columns: 1fr;
   }
-  .messages-sidebar,
-  .context-panel {
+  /* Only one panel shows at a time on mobile, switched via mobileView state
+     (see Messages.jsx) since there's no room for all three side by side --
+     the panels are full features (conversation list, chat, customer
+     context), not something to just squeeze or scroll past.
+     Scoped to .messages-layout (not bare .messages-sidebar etc.) so these
+     rules outrank the unconditional display:flex each panel sets elsewhere
+     in this file regardless of where in the file that rule appears --
+     equal-specificity selectors fall back to source order, which a plain
+     class selector here would lose to whichever rule happens to come later. */
+  .messages-layout .messages-sidebar,
+  .messages-layout .chat-area,
+  .messages-layout .context-panel {
     display: none;
+  }
+  .messages-layout[data-mobile-view='list'] .messages-sidebar {
+    display: flex;
+  }
+  .messages-layout[data-mobile-view='chat'] .chat-area {
+    display: flex;
+  }
+  .messages-layout[data-mobile-view='context'] .context-panel {
+    display: flex;
+  }
+  .chat-back-btn,
+  .context-back-btn,
+  .chat-info-btn {
+    display: inline-flex;
   }
 }
 
@@ -506,6 +596,51 @@
 }
 .reaction-trigger:hover {
   transform: scale(1.15);
+}
+.edit-trigger {
+  right: 26px;
+}
+
+/* ── Typing bubble (three-dot wave, mirrors the mobile app's) ── */
+.typing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.75rem 0.9rem;
+}
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-secondary);
+  animation: typingWave 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typingWave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Editing banner ── */
+.editing-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--cream);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--charcoal);
+}
+.editing-banner span {
+  flex: 1;
+  font-weight: 500;
+}
+.editing-banner .icon-btn {
+  width: 24px;
+  height: 24px;
 }
 
 /* ── Emoji popover ── */

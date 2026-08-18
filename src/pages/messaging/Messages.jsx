@@ -7,7 +7,6 @@ import {
   Send,
   Paperclip,
   Image as ImageIcon,
-  Shirt,
   Plus,
   X,
   MessageSquare,
@@ -16,9 +15,13 @@ import {
   Clock,
   Tag,
   Zap,
-  Ruler,
   ShoppingBag,
   Bell,
+  Pencil,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  Info,
 } from 'lucide-react';
 import SendNotificationModal from '../../components/SendNotificationModal';
 import {
@@ -27,15 +30,18 @@ import {
   createConversation,
   updateConversation,
   sendMessage,
+  editMessage,
   uploadChatImage,
   addReaction,
+  markMessagesRead,
+  markMessagesDelivered,
 } from '../../services/communicationService';
+import { usePresence } from '../../hooks/usePresence';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
 import { getAvatarColor, getInitials, formatSmartDateTime } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
-import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import './Messages.css';
 
@@ -86,7 +92,17 @@ const Messages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
+  // Kept in sync below so the messages-subscription callback (which only
+  // re-subscribes when activeChat changes) always sees the current
+  // conversation list rather than a stale one captured at mount.
+  const conversationsRef = useRef([]);
+  conversationsRef.current = conversations;
   const [activeChat, setActiveChat] = useState(null);
+  // Below the 1024px breakpoint only one of the three panels (conversation
+  // list / chat / customer context) shows at a time -- there's no room for
+  // all three side by side. Ignored above that width, where CSS shows all
+  // three regardless of this value.
+  const [mobileView, setMobileView] = useState('list');
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -95,12 +111,28 @@ const Messages = () => {
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
+  // Clicking a sent bubble reveals its exact Sent/Delivered/Seen time, same
+  // as the mobile app's tap-to-reveal -- id of the currently expanded one.
+  const [expandedMsgId, setExpandedMsgId] = useState(null);
 
   // Reaction popover: { msgId, anchorRect }
   const [reactionPopover, setReactionPopover] = useState(null);
 
+  // Editing: { docId, text } for the message currently being edited, or null.
+  const [editingMsg, setEditingMsg] = useState(null);
+
+  const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingChannelRef = useRef(null);
+  const otherTypingTimeoutRef = useRef(null);
+  const lastTypingSentRef = useRef(0);
+
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setConvSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedConvSearch = useCallback(
     debounce((val) => setConvSearchTerm(val), 300),
     []
@@ -112,6 +144,10 @@ const Messages = () => {
 
   const [custSearchInput, setCustSearchInput] = useState('');
   const [custSearchTerm, setCustSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setCustSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedCustSearch = useCallback(
     debounce((val) => setCustSearchTerm(val), 300),
     []
@@ -235,7 +271,7 @@ const Messages = () => {
       setMessages([]);
       return;
     }
-    const convKey = activeChat.customId || activeChat.id;
+    const convKey = activeChat.id || activeChat.customId;
     const unsub = subscribeToMessages((data) => {
       const filtered = data.filter((m) => m.conversationId === convKey);
       const sorted = [...filtered].sort((a, b) => {
@@ -244,9 +280,87 @@ const Messages = () => {
         return tA - tB;
       });
       setMessages(sorted);
+      // Marks the customer's messages as read, the other half of the mobile
+      // app's markAsRead. Without this a customer's "Sent" checkmark never
+      // became "Seen" -- staff opening or replying never touched read_at,
+      // only the unrelated conversations.unread_count. Runs on every update
+      // (not just on open) so a message the customer sends while staff
+      // already has the conversation open still gets marked read once it
+      // lands, not only on the next open/close.
+      if (activeChat.customerId) {
+        markMessagesRead(convKey, activeChat.customerId);
+      }
+
+      // Delivered, across every conversation, not just the active one --
+      // subscribeToMessages already delivers the full table on every change
+      // (it's what `data` is), so this is the one place that sees a customer
+      // message the instant any staff browser tab receives it, regardless
+      // of which conversation they have open. Mirrors the mobile app's
+      // global markDelivered handler on its own presence/messages channel.
+      const customerIds = new Set(conversationsRef.current.map((c) => c.customerId).filter(Boolean));
+      const undeliveredCustomerMsgIds = data
+        .filter((m) => !m.deliveredAt && m.senderId && customerIds.has(m.senderId))
+        .map((m) => m.id);
+      if (undeliveredCustomerMsgIds.length > 0) {
+        markMessagesDelivered(undeliveredCustomerMsgIds);
+      }
     });
     return () => unsub();
-  }, [activeChat?.id, activeChat?.customId]);
+    // Deliberately depends on the specific fields used, not the whole
+    // activeChat object -- a parent re-render can hand this a new object
+    // reference for the same conversation, and resubscribing on every such
+    // reference change (vs. an actual field change) would tear down and
+    // recreate the message subscription far more often than needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChat?.id, activeChat?.customId, activeChat?.customerId]);
+
+  // Typing indicator: ephemeral broadcast on a per-conversation channel, not
+  // a DB write. The mobile app joins the exact same channel name/shape
+  // ('typing:<conversationId>', event 'typing', payload { sender_id }) when
+  // it has this conversation open, so typing is visible across both apps.
+  useEffect(() => {
+    setOtherTyping(false);
+    if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+    if (!activeChat) {
+      typingChannelRef.current = null;
+      return;
+    }
+    const convKey = activeChat.id || activeChat.customId;
+    const channel = supabase.channel(`typing:${convKey}`);
+    channel
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload?.sender_id === user?.uid) return;
+        setOtherTyping(true);
+        if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+        otherTypingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 4000);
+      })
+      .subscribe();
+    typingChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
+      if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
+    };
+    // Same reasoning as the message-subscription effect above: depends on
+    // the specific fields used, not activeChat's object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChat?.id, activeChat?.customId, user?.uid]);
+
+  // Throttled so every keystroke doesn't open a broadcast -- one every 2s is
+  // plenty to keep the other side's "typing..." indicator alive.
+  const handleMessageInputChange = (val) => {
+    setNewMessage(val);
+    if (editingMsg) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2000) return;
+    lastTypingSentRef.current = now;
+    typingChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { sender_id: user?.uid },
+    });
+  };
 
   // ── Send text ──────────────────────────────────────────────────────────
   // public.messages only has: conversation_id, sender_id, sender_name, text,
@@ -256,13 +370,15 @@ const Messages = () => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
-    const convKey = activeChat.customId || activeChat.id;
+    if (editingMsg) return handleSaveEdit();
+
+    const convKey = activeChat.id || activeChat.customId;
     const nowIso = new Date().toISOString();
-    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
     try {
       await sendMessage({
         conversationId: convKey,
-        senderId: user?.id ?? null,
+        senderId: user?.uid ?? null,
         senderName: senderDisplayName,
         text: newMessage,
       });
@@ -285,15 +401,15 @@ const Messages = () => {
     setShowAttachMenu(false);
     setIsUploadingImage(true);
 
-    const convKey = activeChat.customId || activeChat.id;
+    const convKey = activeChat.id || activeChat.customId;
     const nowIso = new Date().toISOString();
-    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'JezSy Owner';
+    const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
 
     try {
       const imageUrl = await uploadChatImage(file, convKey);
       await sendMessage({
         conversationId: convKey,
-        senderId: user?.id ?? null,
+        senderId: user?.uid ?? null,
         senderName: senderDisplayName,
         text: '',
         imageUrl,
@@ -308,6 +424,46 @@ const Messages = () => {
     } finally {
       setIsUploadingImage(false);
       e.target.value = '';
+    }
+  };
+
+  // ── Edit message ───────────────────────────────────────────────────────
+  // Sender-only, text-only, and never a reservation summary card -- mirrors
+  // the mobile app's canEdit so both sides agree on what "editable" means.
+  const canEditMsg = (msg) =>
+    msg.senderId === user?.uid &&
+    !!msg.text &&
+    !msg.text.startsWith(RESERVATION_CARD_PREFIX) &&
+    !msg.imageUrl;
+
+  const beginEdit = (msg) => {
+    if (!canEditMsg(msg)) return;
+    setReactionPopover(null);
+    setEditingMsg({ docId: msg.docId || msg.id, text: msg.text });
+    setNewMessage(msg.text);
+  };
+
+  const cancelEdit = () => {
+    setEditingMsg(null);
+    setNewMessage('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingMsg) return;
+    const nextText = newMessage.trim();
+    if (!nextText) return;
+    if (nextText === editingMsg.text) {
+      cancelEdit();
+      return;
+    }
+    try {
+      await editMessage(editingMsg.docId, nextText);
+      await logAction(user, 'Edited message to customer', { customerName: getConvName(activeChat) });
+    } catch (err) {
+      console.error('Edit failed:', err);
+    } finally {
+      setEditingMsg(null);
+      setNewMessage('');
     }
   };
 
@@ -384,6 +540,7 @@ const Messages = () => {
     const existing = conversations.find((c) => c.customerId === customerId);
     if (existing) {
       setActiveChat(existing);
+      setMobileView('chat');
       setShowNewConvModal(false);
       return;
     }
@@ -410,11 +567,11 @@ const Messages = () => {
     async (conv, resContext) => {
       if (!conv || !resContext) return;
       try {
-        const convKey = conv.customId || conv.id;
+        const convKey = conv.id || conv.customId;
         await sendMessage({
           conversationId: convKey,
-          senderId: user?.id ?? null,
-          senderName: user?.name ?? user?.email ?? 'Staff',
+          senderId: user?.uid ?? null,
+          senderName: user?.name ?? user?.email ?? 'Boutique Support',
           text: RESERVATION_CARD_PREFIX + JSON.stringify(resContext),
         });
         await updateConversation(conv.docId, {
@@ -445,6 +602,7 @@ const Messages = () => {
 
       const proceed = async (conv) => {
         setActiveChat(conv);
+        setMobileView('chat');
         autoSendFiredRef.current = true;
         if (autoSendReservation && reservationContext) {
           await sendReservationCard(conv, reservationContext);
@@ -478,7 +636,7 @@ const Messages = () => {
                 );
                 if (found) proceed(found);
                 return prev;
-              });
+                });
             }, 1000);
           }
         });
@@ -486,10 +644,20 @@ const Messages = () => {
     }
   }, [location.state, conversations, sendReservationCard]);
 
-  const convKey = activeChat?.customId || activeChat?.id;
+  const convKey = activeChat?.id || activeChat?.customId;
   const activeMessages = messages
     .filter((m) => activeChat && m.conversationId === convKey)
     .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+
+  // Only staff's newest sent message carries a status by default -- repeating
+  // Sent/Delivered/Seen down the whole thread is noise, matching the mobile
+  // app. Any individual message's status is still one click away.
+  const lastSentIndex = (() => {
+    for (let i = activeMessages.length - 1; i >= 0; i--) {
+      if (activeMessages[i].senderId !== activeChat?.customerId) return i;
+    }
+    return -1;
+  })();
 
   // ── Message bubble renderer ────────────────────────────────────────────
   const renderBubble = (msg, index) => {
@@ -578,13 +746,30 @@ const Messages = () => {
                   : 'bubbles-received'
               } bubble-hoverable`}
               onMouseEnter={(e) => {
-                const btn = e.currentTarget.querySelector('.reaction-trigger');
-                if (btn) btn.style.opacity = '1';
+                e.currentTarget.querySelectorAll('.reaction-trigger').forEach((btn) => {
+                  btn.style.opacity = '1';
+                });
               }}
               onMouseLeave={(e) => {
-                const btn = e.currentTarget.querySelector('.reaction-trigger');
-                if (btn) btn.style.opacity = '0';
+                e.currentTarget.querySelectorAll('.reaction-trigger').forEach((btn) => {
+                  btn.style.opacity = '0';
+                });
               }}
+              onClick={() => {
+                if (!isSent) return;
+                const id = msg.id || msg.docId;
+                setExpandedMsgId((prev) => (prev === id ? null : id));
+              }}
+              onKeyDown={(e) => {
+                if (!isSent || (e.key !== 'Enter' && e.key !== ' ')) return;
+                e.preventDefault();
+                const id = msg.id || msg.docId;
+                setExpandedMsgId((prev) => (prev === id ? null : id));
+              }}
+              role={isSent ? 'button' : undefined}
+              tabIndex={isSent ? 0 : undefined}
+              aria-label={isSent ? 'Toggle delivery status' : undefined}
+              style={isSent ? { cursor: 'pointer' } : undefined}
             >
               {isAutoResponse && (
                 <div className="auto-response-badge">
@@ -599,12 +784,24 @@ const Messages = () => {
                   return (
                     <div
                       className="msg-product-card"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const searchParam = product?.name || msg.contextLabel;
                         if (searchParam) {
                           navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const searchParam = product?.name || msg.contextLabel;
+                        if (searchParam) {
+                          navigate(`/catalog?search=${encodeURIComponent(searchParam)}`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       title="Click to view product in catalog"
                     >
                       <div className="msg-product-header">
@@ -655,13 +852,16 @@ const Messages = () => {
               {msg.imageUrl && (
                 <button
                   type="button"
-                  onClick={() => setImageModalUrl(msg.imageUrl)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImageModalUrl(msg.imageUrl);
+                  }}
                   style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'block' }}
                   aria-label="View full-size image"
                 >
                   <img
                     src={msg.imageUrl}
-                    alt="Chat image"
+                    alt="Chat attachment"
                     className="chat-image-thumb"
                   />
                 </button>
@@ -674,7 +874,46 @@ const Messages = () => {
                 </p>
               )}
 
-              <span className="msg-time">{msgTime}</span>
+              {isSent && (index === lastSentIndex || expandedMsgId === (msg.id || msg.docId)) && (
+                <span className="msg-status">
+                  {msg.readAt ? (
+                    <>
+                      Seen{expandedMsgId === (msg.id || msg.docId) ? ` ${formatSmartDateTime(msg.readAt)}` : ''}{' '}
+                      <CheckCheck size={12} className="msg-status-icon msg-status-seen" />
+                    </>
+                  ) : msg.deliveredAt ? (
+                    <>
+                      Delivered{expandedMsgId === (msg.id || msg.docId) ? ` ${formatSmartDateTime(msg.deliveredAt)}` : ''}{' '}
+                      <CheckCheck size={12} className="msg-status-icon" />
+                    </>
+                  ) : (
+                    <>
+                      Sent <Check size={12} className="msg-status-icon" />
+                    </>
+                  )}
+                </span>
+              )}
+
+              <span className="msg-time">
+                {msgTime}
+                {msg.editedAt ? ' · edited' : ''}
+              </span>
+
+              {/* Edit trigger (own text messages only, visible on hover) */}
+              {isSent && canEditMsg(msg) && (
+                <button
+                  className="reaction-trigger edit-trigger"
+                  style={{ opacity: 0 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    beginEdit(msg);
+                  }}
+                  title="Edit message"
+                  aria-label="Edit message"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
 
               {/* Reaction trigger button (visible on hover) */}
               <button
@@ -696,6 +935,7 @@ const Messages = () => {
                 <div
                   className={`emoji-popover ${isSent ? 'popover-left' : 'popover-right'}`}
                   onClick={(e) => e.stopPropagation()}
+                  role="presentation"
                 >
                   {EMOJI_LIST.map((emoji) => (
                     <button
@@ -715,14 +955,15 @@ const Messages = () => {
           {groupedReactions.length > 0 && (
             <div className={`reaction-chips ${isSent ? 'chips-sent' : 'chips-received'}`}>
               {groupedReactions.map(([emoji, count]) => (
-                <span
+                <button
                   key={emoji}
+                  type="button"
                   className="reaction-chip"
                   onClick={() => handleReaction(msg, emoji)}
                   title="Click to react"
                 >
                   {emoji} {count > 1 ? count : ''}
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -732,7 +973,7 @@ const Messages = () => {
   };
 
   return (
-    <div className="messages-layout">
+    <div className="messages-layout" data-mobile-view={mobileView}>
       {/* Hidden file input for image upload */}
       <input
         type="file"
@@ -781,16 +1022,31 @@ const Messages = () => {
                 className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unreadCount > 0 ? 'unread' : ''}`}
                 onClick={() => {
                   setActiveChat(conv);
+                  setMobileView('chat');
                   if (conv.unreadCount > 0) {
                     updateConversation(conv.docId, { unreadCount: 0 });
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  setActiveChat(conv);
+                  setMobileView('chat');
+                  if (conv.unreadCount > 0) {
+                    updateConversation(conv.docId, { unreadCount: 0 });
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
-                <div
-                  className="avatar"
-                  style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
-                >
-                  {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+                <div className="avatar-wrap">
+                  <div
+                    className="avatar"
+                    style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
+                  >
+                    {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  {onlineUsers[conv.customerId] && <span className="presence-dot" />}
                 </div>
                 <div className="conv-details">
                   <div className="conv-header">
@@ -860,6 +1116,14 @@ const Messages = () => {
 
             <div className="chat-header">
               <div className="flex-center gap-3">
+                <button
+                  type="button"
+                  className="chat-back-btn"
+                  aria-label="Back to conversations"
+                  onClick={() => setMobileView('list')}
+                >
+                  <ChevronLeft size={20} />
+                </button>
                 <div
                   className="avatar"
                   style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
@@ -868,17 +1132,33 @@ const Messages = () => {
                 </div>
                 <div>
                   <h3>{getConvName(activeChat)}</h3>
-                  <p className="status-text online">● Active</p>
+                  {otherTyping ? (
+                    <p className="status-text typing">typing...</p>
+                  ) : onlineUsers[activeChat.customerId] ? (
+                    <p className="status-text online">● Online</p>
+                  ) : (
+                    <p className="status-text offline">Offline</p>
+                  )}
                 </div>
               </div>
-              <button
-                className="btn-outline small flex-center gap-2"
-                onClick={() =>
-                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
-                }
-              >
-                <User size={14} /> View Profile
-              </button>
+              <div className="flex-center gap-2">
+                <button
+                  type="button"
+                  className="chat-info-btn btn-outline small flex-center gap-2"
+                  aria-label="View customer context"
+                  onClick={() => setMobileView('context')}
+                >
+                  <Info size={14} />
+                </button>
+                <button
+                  className="btn-outline small flex-center gap-2"
+                  onClick={() =>
+                    navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                  }
+                >
+                  <User size={14} /> View Profile
+                </button>
+              </div>
             </div>
 
             <div className="chat-history">
@@ -899,6 +1179,23 @@ const Messages = () => {
                   </React.Fragment>
                 );
               })}
+              {otherTyping && (
+                <div className="message-bubble-wrapper received">
+                  <div
+                    className="avatar small-av"
+                    style={{ backgroundColor: getAvatarColor(getConvName(activeChat)) }}
+                  >
+                    {getInitials(getConvName(activeChat))[0]}
+                  </div>
+                  <div className="bubble-col">
+                    <div className="message-bubble bubbles-received typing-bubble">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
           </>
@@ -930,6 +1227,15 @@ const Messages = () => {
           {isUploadingImage && (
             <div className="upload-progress">
               <span>📤 Uploading image...</span>
+            </div>
+          )}
+          {editingMsg && (
+            <div className="editing-banner">
+              <Pencil size={13} />
+              <span>Editing message</span>
+              <button type="button" className="icon-btn" onClick={cancelEdit} aria-label="Cancel editing">
+                <X size={14} />
+              </button>
             </div>
           )}
           <form onSubmit={handleSend} className="chat-form">
@@ -966,35 +1272,37 @@ const Messages = () => {
               )}
             </div>
 
-            <div className="attach-wrapper" ref={attachMenuRef}>
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Attach file"
-                onClick={() => {
-                  setShowAttachMenu(!showAttachMenu);
-                  setShowQuickReplies(false);
-                  setShowEmojiPicker(false);
-                }}
-              >
-                <Paperclip size={20} />
-              </button>
+            {!editingMsg && (
+              <div className="attach-wrapper" ref={attachMenuRef}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Attach file"
+                  onClick={() => {
+                    setShowAttachMenu(!showAttachMenu);
+                    setShowQuickReplies(false);
+                    setShowEmojiPicker(false);
+                  }}
+                >
+                  <Paperclip size={20} />
+                </button>
 
-              {showAttachMenu && (
-                <div className="attach-menu card">
-                  <button
-                    type="button"
-                    className="attach-item"
-                    onClick={() => {
-                      setShowAttachMenu(false);
-                      imageInputRef.current?.click();
-                    }}
-                  >
-                    <ImageIcon size={16} /> Send Image
-                  </button>
-                </div>
-              )}
-            </div>
+                {showAttachMenu && (
+                  <div className="attach-menu card">
+                    <button
+                      type="button"
+                      className="attach-item"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        imageInputRef.current?.click();
+                      }}
+                    >
+                      <ImageIcon size={16} /> Send Image
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="relative" style={{ position: 'relative' }}>
               <button
@@ -1049,13 +1357,18 @@ const Messages = () => {
             <input
               type="text"
               className="input-field chat-input"
-              placeholder="Type your message..."
+              placeholder={editingMsg ? 'Edit your message...' : 'Type your message...'}
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => handleMessageInputChange(e.target.value)}
             />
 
-            <button type="submit" className="send-btn" aria-label="Send message" disabled={!newMessage.trim()}>
-              <Send size={18} />
+            <button
+              type="submit"
+              className="send-btn"
+              aria-label={editingMsg ? 'Save changes' : 'Send message'}
+              disabled={!newMessage.trim()}
+            >
+              {editingMsg ? <Pencil size={16} /> : <Send size={18} />}
             </button>
           </form>
         </div>
@@ -1064,6 +1377,14 @@ const Messages = () => {
       {/* Customer Context Sidebar */}
       <div className="context-panel card">
         <div className="context-panel-header">
+          <button
+            type="button"
+            className="context-back-btn"
+            aria-label="Back to chat"
+            onClick={() => setMobileView('chat')}
+          >
+            <ChevronLeft size={20} />
+          </button>
           <h3>Customer Context</h3>
         </div>
 
@@ -1174,6 +1495,15 @@ const Messages = () => {
                           navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        if (p?.name) {
+                          navigate(`/catalog?search=${encodeURIComponent(p.name)}`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       title="Click to view product in catalog"
                     >
                       <div className="context-res-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1213,10 +1543,20 @@ const Messages = () => {
 
       {/* New Conversation Modal */}
       {showNewConvModal && (
-        <div className="modal-overlay" onClick={() => setShowNewConvModal(false)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowNewConvModal(false)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            setShowNewConvModal(false);
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 420 }}
           >
             <div className="modal-header">
@@ -1255,6 +1595,13 @@ const Messages = () => {
                       className="conversation-item"
                       style={{ cursor: 'pointer' }}
                       onClick={() => startNewConversation(c)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        startNewConversation(c);
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div
                         className="avatar"
@@ -1282,10 +1629,20 @@ const Messages = () => {
       )}
 
       {imageModalUrl && (
-        <div className="modal-overlay" onClick={() => setImageModalUrl(null)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setImageModalUrl(null)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            setImageModalUrl(null);
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
           >
             <div className="modal-header">

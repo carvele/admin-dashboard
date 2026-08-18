@@ -8,7 +8,6 @@ import {
   ChevronUp,
   ShieldAlert,
   Send,
-  X,
 } from 'lucide-react';
 import { addIncidentLog, subscribeToIncidentLogs } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -140,7 +139,15 @@ const IncidentLog = ({ entityId, entityType, entityName }) => {
     <div className="incident-log-section">
       <div
         className="incident-log-header"
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
       >
         <div className="flex-center gap-2">
           <ShieldAlert size={18} className="incident-header-icon" />
@@ -176,8 +183,9 @@ const IncidentLog = ({ entityId, entityType, entityName }) => {
             <form className="incident-form" onSubmit={handleSubmit}>
               <div className="incident-form-row">
                 <div className="form-group flex-1">
-                  <label className="label">Incident Type <span className="req">*</span></label>
+                  <label className="label" htmlFor="incident-type">Incident Type <span className="req">*</span></label>
                   <select
+                    id="incident-type"
                     className={`input-field ${!form.incidentType ? 'text-secondary' : ''}`}
                     value={form.incidentType}
                     onChange={(e) => setForm({ ...form, incidentType: e.target.value })}
@@ -189,8 +197,9 @@ const IncidentLog = ({ entityId, entityType, entityName }) => {
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: '0 0 180px' }}>
-                  <label className="label">Action Taken <span className="req">*</span></label>
+                  <label className="label" htmlFor="action-taken">Action Taken <span className="req">*</span></label>
                   <select
+                    id="action-taken"
                     className={`input-field ${!form.actionTaken ? 'text-secondary' : ''}`}
                     value={form.actionTaken}
                     onChange={(e) => setForm({ ...form, actionTaken: e.target.value })}
@@ -204,8 +213,9 @@ const IncidentLog = ({ entityId, entityType, entityName }) => {
               </div>
 
               <div className="form-group">
-                <label className="label">Description <span className="req">*</span></label>
+                <label className="label" htmlFor="incident-description">Description <span className="req">*</span></label>
                 <textarea
+                  id="incident-description"
                   className="input-field"
                   style={{ minHeight: 80, resize: 'vertical' }}
                   placeholder="Describe the incident in detail..."

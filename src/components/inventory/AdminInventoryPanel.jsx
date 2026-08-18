@@ -76,6 +76,7 @@ const ErrorDialog = ({ message, onClose }) => (
         className="btn-primary"
         style={{ width: '100%' }}
         onClick={onClose}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- primary action of a just-opened alertdialog
         autoFocus
       >
         OK, Got It
@@ -112,7 +113,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
       setPatterns(p);
       setCategoryTree(cats);
       setError('');
-    } catch (err) {
+    } catch {
       setError('Unable to load lookup lists.');
     }
   };
@@ -404,10 +405,11 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
         <div className="d-flex flex-wrap gap-6" style={{ marginBottom: '1.5rem' }}>
           {/* Baseline */}
           <form onSubmit={save} className="form-group flex-1" style={{ minWidth: '250px' }}>
-            <label className="label font-bold" style={{ fontSize: '0.95rem' }}>Stock Baseline Settings</label>
+            <span className="label font-bold" style={{ fontSize: '0.95rem' }}>Stock Baseline Settings</span>
             <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="label" style={{ fontSize: '0.75rem' }}>Select Product</label>
+              <label className="label" style={{ fontSize: '0.75rem' }} htmlFor="baseline-product-select">Select Product</label>
               <select
+                id="baseline-product-select"
                 className="input-field"
                 value={productId}
                 onChange={(e) => {
@@ -423,8 +425,9 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="label" style={{ fontSize: '0.75rem' }}>Baseline Quantity</label>
+              <label className="label" style={{ fontSize: '0.75rem' }} htmlFor="baseline-qty-input">Baseline Quantity</label>
               <input
+                id="baseline-qty-input"
                 type="number"
                 min="0"
                 step="1"
@@ -446,14 +449,14 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
 
         {/* ── Row 2: Categories (full width) ── */}
         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-          <label className="label font-bold" style={{ fontSize: '0.95rem', display: 'block', marginBottom: '1rem' }}>
+          <span className="label font-bold" style={{ fontSize: '0.95rem', display: 'block', marginBottom: '1rem' }}>
             Categories &amp; Sub-Categories
-          </label>
+          </span>
 
           <div className="d-flex flex-wrap gap-6">
             {/* Left: Add top-level category */}
             <div className="form-group flex-1" style={{ minWidth: '220px' }}>
-              <label className="label" style={{ fontSize: '0.8rem' }}>Add Top-Level Category</label>
+              <span className="label" style={{ fontSize: '0.8rem' }}>Add Top-Level Category</span>
               <form onSubmit={handleAddTopCategory} className="d-flex gap-2" style={{ marginBottom: '0.75rem' }}>
                 <input
                   name="catName"
@@ -497,7 +500,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
 
             {/* Right: Add subcategory (pick parent first) */}
             <div className="form-group flex-1" style={{ minWidth: '220px' }}>
-              <label className="label" style={{ fontSize: '0.8rem' }}>Add Sub-Category</label>
+              <span className="label" style={{ fontSize: '0.8rem' }}>Add Sub-Category</span>
               <form onSubmit={handleAddSubCategory} style={{ marginBottom: '0.75rem' }}>
                 <div className="d-flex gap-2" style={{ marginBottom: '0.5rem' }}>
                   <select

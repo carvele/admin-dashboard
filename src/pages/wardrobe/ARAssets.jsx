@@ -10,13 +10,8 @@ import {
   Shirt,
   Trash2,
   Plus,
-  X,
   Star,
-  Tag,
-  Image as ImageIcon,
-  Sparkles,
   Edit3,
-  Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -63,8 +58,8 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>X:</span>
         <input 
           type="range" min="-1" max="1" step="0.01" 
-          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)} 
-          role="slider" aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
+          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)}
+          aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
         />
         <span className="val">{p.x.toFixed(2)}</span>
       </div>
@@ -72,8 +67,8 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>Y:</span>
         <input 
           type="range" min="0" max="2" step="0.01" 
-          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)} 
-          role="slider" aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
+          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)}
+          aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
         />
         <span className="val">{p.y.toFixed(2)}</span>
       </div>
@@ -81,18 +76,14 @@ const PointSlider = ({ label, pointStr, onChange }) => {
         <span>Z:</span>
         <input 
           type="range" min="-1" max="1" step="0.01" 
-          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)} 
-          role="slider" aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
+          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)}
+          aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
         />
         <span className="val">{p.z.toFixed(2)}</span>
       </div>
     </div>
   );
 };
-
-const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 const ARAssets = () => {
   const navigate = useNavigate();
@@ -142,8 +133,13 @@ const ARAssets = () => {
     const unsub = subscribeToProducts((data) => {
       setAllCatalogProducts(data);
       const arTagged = data.filter((p) => p.tags && p.tags.includes('AR Try-On'));
-      setAssets(arTagged.filter(p => p.model3DURL));
-      setPendingProducts(arTagged.filter(p => !p.model3DURL));
+      // toCamel()'s regex only converts "_" + lowercase letter, so
+      // model_3d_url becomes model_3dUrl (the "_3" doesn't match), not
+      // model3DURL -- reading the latter left both tabs permanently wrong
+      // (Linked always empty, Pending always showing every AR-tagged
+      // product regardless of actual configuration).
+      setAssets(arTagged.filter(p => p.model_3dUrl));
+      setPendingProducts(arTagged.filter(p => !p.model_3dUrl));
       setLoading(false);
     });
     const unsubPoses = subscribeToPoseGuides(async (poseData) => {
@@ -170,12 +166,22 @@ const ARAssets = () => {
     };
   }, []);
 
+  // products.ar_data is a single jsonb blob (status/alignPoints/alignments),
+  // not real columns -- a plain UPDATE replaces the whole column value, so
+  // every write here merges onto the asset's current ar_data rather than
+  // clobbering fields it isn't touching.
+  const updateArData = async (docId, currentArData, patch) => {
+    const merged = { ...(currentArData || {}), ...patch };
+    await updateProduct(docId, { arData: merged });
+    return merged;
+  };
+
   const toggleStatus = async (asset) => {
-    const newStatus = asset.arStatus === 'Disabled' ? 'Active' : 'Disabled';
+    const newStatus = asset.arData?.status === 'Disabled' ? 'Active' : 'Disabled';
     try {
-      await updateProduct(asset.docId, { arStatus: newStatus });
+      await updateArData(asset.docId, asset.arData, { status: newStatus });
       toast.success(`AR status updated to ${newStatus} for ${asset.name}`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update AR status');
     }
   };
@@ -183,10 +189,10 @@ const ARAssets = () => {
   const openConfig = (asset) => {
     setConfigAsset(asset);
     setAlignPoints({
-      shoulderL: asset.arAlignPoints?.shoulderL || '-0.25, 1.45, 0',
-      shoulderR: asset.arAlignPoints?.shoulderR || '0.25, 1.45, 0',
-      waist: asset.arAlignPoints?.waist || '0, 1.05, 0',
-      hips: asset.arAlignPoints?.hips || '0, 0.90, 0',
+      shoulderL: asset.arData?.alignPoints?.shoulderL || '-0.25, 1.45, 0',
+      shoulderR: asset.arData?.alignPoints?.shoulderR || '0.25, 1.45, 0',
+      waist: asset.arData?.alignPoints?.waist || '0, 1.05, 0',
+      hips: asset.arData?.alignPoints?.hips || '0, 0.90, 0',
     });
     setIsConfigModalOpen(true);
   };
@@ -194,13 +200,13 @@ const ARAssets = () => {
   const saveAlignmentPoints = async () => {
     if (!configAsset) return;
     try {
-      await updateProduct(configAsset.docId, {
-        arAlignPoints: alignPoints,
-        arAlignments: 'Verified',
+      await updateArData(configAsset.docId, configAsset.arData, {
+        alignPoints,
+        alignments: 'Verified',
       });
       toast.success('Alignment points saved & verified!');
       setIsConfigModalOpen(false);
-    } catch (e) {
+    } catch {
       toast.error('Failed to save alignment points');
     }
   };
@@ -226,12 +232,18 @@ const ARAssets = () => {
         timestamp: Date.now()
       });
 
-      // 2. If we were uploading for a specific product, link it now
+      // 2. If we were uploading for a specific product, link it now.
+      // model_3dUrl/maskUrl (not model3DURL/maskURL) -- toSnake() turns
+      // every capital letter into its own "_x", so model3DURL became the
+      // nonexistent column model3_d_u_r_l and this always threw. The real
+      // columns are model_3d_url/mask_url; model_3dUrl is what actually
+      // round-trips to them (matches how this file already reads
+      // p.model_3dUrl elsewhere, per the toCamel-quirk comment above).
       if (window._targetProduct) {
-        const updateData = assetType === '3D Model' 
-          ? { model3DURL: downloadURL, arStatus: 'Active' } 
-          : { maskURL: downloadURL };
-        
+        const updateData = assetType === '3D Model'
+          ? { model_3dUrl: downloadURL, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+          : { maskUrl: downloadURL };
+
         await updateProduct(window._targetProduct.docId, updateData);
         toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
         window._targetProduct = null;
@@ -330,7 +342,7 @@ const ARAssets = () => {
     try {
       await deletePoseGuide(pose.docId || pose.id);
       toast.success('Pose deleted');
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete pose');
     }
   };
@@ -388,7 +400,7 @@ const ARAssets = () => {
         <div className="card">
           <div className="card-header">
             <h3>Production Line: Items Needing AR Setup</h3>
-            <p className="text-secondary text-sm">Products tagged "AR Try-On" in the Catalog waiting for 3D Assets.</p>
+            <p className="text-secondary text-sm">Products tagged &quot;AR Try-On&quot; in the Catalog waiting for 3D Assets.</p>
           </div>
           <table className="table mt-4">
             <thead>
@@ -462,8 +474,8 @@ const ARAssets = () => {
             </thead>
             <tbody>
               {assets.map((asset) => {
-                const status = asset.arStatus || 'Active';
-                const alignments = asset.arAlignments || 'Pending';
+                const status = asset.arData?.status || 'Active';
+                const alignments = asset.arData?.alignments || 'Pending';
 
                 return (
                   <tr key={asset.docId}>
@@ -479,7 +491,7 @@ const ARAssets = () => {
                       </span>
                     </td>
                     <td>
-                      <label className="toggle-switch">
+                      <label className="toggle-switch" aria-label="Toggle AR asset status">
                         <input
                           type="checkbox"
                           checked={status === 'Active'}
@@ -536,7 +548,7 @@ const ARAssets = () => {
             Usage reflects how many clothing items currently use this specific model.
             {window._targetProduct && (
               <span className="text-accent font-semibold block mt-1">
-                👉 Click "Link to Product" to assign to {window._targetProduct.name}
+                👉 Click &quot;Link to Product&quot; to assign to {window._targetProduct.name}
               </span>
             )}
           </p>
@@ -552,7 +564,7 @@ const ARAssets = () => {
             </thead>
             <tbody>
               {globalLibrary.map((item, idx) => {
-                const usage = assets.filter(p => p.model3DURL === item.url || p.maskURL === item.url).length;
+                const usage = assets.filter(p => p.model_3dUrl === item.url || p.maskUrl === item.url).length;
                 return (
                   <tr key={idx}>
                     <td className="font-medium">{item.name}</td>
@@ -569,9 +581,9 @@ const ARAssets = () => {
                           <button 
                             className="btn-primary small"
                             onClick={async () => {
-                              const updateData = item.type === '3D Model' 
-                                ? { model3DURL: item.url, arStatus: 'Active' } 
-                                : { maskURL: item.url };
+                              const updateData = item.type === '3D Model'
+                                ? { model_3dUrl: item.url, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+                                : { maskUrl: item.url };
                               await updateProduct(window._targetProduct.docId, updateData);
                               toast.success(`Linked ${item.name} to ${window._targetProduct.name}`);
                               window._targetProduct = null;
@@ -726,8 +738,8 @@ const ARAssets = () => {
 
       {/* Link Assets Modal */}
       {isLinkModalOpen && productToLink && (
-        <div className="modal-overlay" onClick={() => setIsLinkModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsLinkModalOpen(false)}>
+          <div className="modal-content" role="presentation" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2>Setup AR: {productToLink.name}</h2>
               <button type="button" className="close-btn" onClick={() => setIsLinkModalOpen(false)}>&times;</button>
@@ -776,9 +788,10 @@ const ARAssets = () => {
 
       {/* Upload AR Asset Modal */}
       {isUploadModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsUploadModalOpen(false)}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsUploadModalOpen(false)}>
           <div
             className="modal-content"
+            role="presentation"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 420 }}
           >
@@ -791,7 +804,7 @@ const ARAssets = () => {
             <div className="modal-body">
               <p className="text-secondary text-sm mb-3">
                 Upload a 3D model file (.glb, .gltf) for AR Try-On. After uploading, tag a product
-                with "AR Try-On" in the Catalog to associate this asset.
+                with &quot;AR Try-On&quot; in the Catalog to associate this asset.
               </p>
               <div className="upload-dropzone">
                 <input
@@ -843,9 +856,10 @@ const ARAssets = () => {
 
       {/* Add / Edit Style Pose Reference Modal */}
       {isPoseModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsPoseModalOpen(false)}>
+        <div className="modal-overlay" role="presentation" onClick={() => setIsPoseModalOpen(false)}>
           <div
             className="modal-content modal-lg"
+            role="presentation"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 650, maxHeight: '90vh', overflowY: 'auto' }}
           >
@@ -858,8 +872,9 @@ const ARAssets = () => {
             <div className="modal-body space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Pose Name *</label>
+                  <label className="label" htmlFor="pose-name">Pose Name *</label>
                   <input
+                    id="pose-name"
                     type="text"
                     className="input-field"
                     placeholder="e.g., Gala Red Carpet Pose"
@@ -868,8 +883,9 @@ const ARAssets = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Category</label>
+                  <label className="label" htmlFor="pose-category">Category</label>
                   <select
+                    id="pose-category"
                     className="input-field"
                     value={poseForm.category}
                     onChange={(e) => setPoseForm({ ...poseForm, category: e.target.value })}
@@ -885,8 +901,9 @@ const ARAssets = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="form-group">
-                  <label className="label">Occasion</label>
+                  <label className="label" htmlFor="pose-occasion">Occasion</label>
                   <select
+                    id="pose-occasion"
                     className="input-field"
                     value={poseForm.occasion}
                     onChange={(e) => setPoseForm({ ...poseForm, occasion: e.target.value })}
@@ -901,8 +918,9 @@ const ARAssets = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Difficulty</label>
+                  <label className="label" htmlFor="pose-difficulty">Difficulty</label>
                   <select
+                    id="pose-difficulty"
                     className="input-field"
                     value={poseForm.difficulty}
                     onChange={(e) => setPoseForm({ ...poseForm, difficulty: e.target.value })}
@@ -913,8 +931,9 @@ const ARAssets = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="label">Base AR Matcher</label>
+                  <label className="label" htmlFor="pose-base-matcher">Base AR Matcher</label>
                   <select
+                    id="pose-base-matcher"
                     className="input-field"
                     value={poseForm.base_pose_type}
                     onChange={(e) => setPoseForm({ ...poseForm, base_pose_type: e.target.value })}
@@ -928,7 +947,7 @@ const ARAssets = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Styled Reference Image</label>
+                <label className="label" htmlFor="pose-image">Styled Reference Image</label>
                 <div className="flex items-center gap-4">
                   {(poseFile || poseForm.image_url) && (
                     <div className="w-20 h-24 rounded border overflow-hidden bg-slate-900 flex-shrink-0">
@@ -940,6 +959,7 @@ const ARAssets = () => {
                     </div>
                   )}
                   <input
+                    id="pose-image"
                     type="file"
                     accept="image/*"
                     className="input-field"
@@ -953,8 +973,9 @@ const ARAssets = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Description / Styling Tip</label>
+                <label className="label" htmlFor="pose-description">Description / Styling Tip</label>
                 <textarea
+                  id="pose-description"
                   className="input-field"
                   rows={2}
                   placeholder="e.g., Stand with one leg slightly forward to highlight full dress silhouette..."
@@ -1053,9 +1074,9 @@ const ARAssets = () => {
             <div className="modal-body align-modal-body">
               <div className="align-workspace">
                 <div className="align-preview-area">
-                  {configAsset && configAsset.model3DURL ? (
+                  {configAsset && configAsset.model_3dUrl ? (
                     <model-viewer
-                      src={configAsset.model3DURL}
+                      src={configAsset.model_3dUrl}
                       alt={configAsset.name}
                       auto-rotate
                       camera-controls

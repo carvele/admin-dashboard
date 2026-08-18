@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Box, Flame } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame } from 'lucide-react';
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -73,7 +73,7 @@ const ClothingCatalog = () => {
         setInventoryMap(map);
 
         setCatalog(catalogWithReservations);
-      } catch (err) {
+      } catch {
         toast.error('Failed to load products');
       } finally {
         setLoading(false);
@@ -201,7 +201,7 @@ const ClothingCatalog = () => {
     try {
       await updateProduct(item.docId, { tags: newTags });
       setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, tags: newTags } : c));
-    } catch (e) {
+    } catch {
       toast.error('Failed to update tags');
     }
   };
@@ -212,7 +212,7 @@ const ClothingCatalog = () => {
       await updateProduct(item.docId, { isFeatured: !item.isFeatured });
       setCatalog(catalog.map(c => c.docId === item.docId ? { ...c, isFeatured: !c.isFeatured } : c));
       toast.success(`Product ${!item.isFeatured ? 'featured' : 'unfeatured'}`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update featured status');
     }
   };
@@ -320,6 +320,14 @@ const ClothingCatalog = () => {
               key={item.id}
               className={`product-card card ${item.deleted ? 'archived-card' : ''}`}
               onClick={() => navigate('/catalog/view/' + item.docId)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/catalog/view/' + item.docId);
+                }
+              }}
               style={{ cursor: 'pointer' }}
               title="View product details"
             >
@@ -351,8 +359,8 @@ const ClothingCatalog = () => {
                 
                 {/* Conditional AR Badge */}
                 {(item.tags || []).includes('AR Try-On') && (
-                  <div className={`ar-badge ${item.model3DURL ? 'ready' : 'missing'}`}>
-                    {item.model3DURL ? (
+                  <div className={`ar-badge ${item.model_3dUrl ? 'ready' : 'missing'}`}>
+                    {item.model_3dUrl ? (
                       <span className="flex align-center gap-1"><Sparkles size={10} /> AR Ready</span>
                     ) : 'AR Missing'}
                   </div>

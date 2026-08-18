@@ -1,10 +1,10 @@
 # Security Hardening Plan — Admin Dashboard
 
-Written 2026-07-23 following a structural security audit of this repo (paired with an equivalent audit of the `jezsy-mobile-app` repo, which shares the same Supabase project). This doc is the punch list for whoever — human or agent — picks up this repo next. Each item below is self-contained: what's wrong, why, and the exact fix. Nothing here has been applied yet.
+Written 2026-07-23 following a structural security audit of this repo (paired with an equivalent audit of the `jezsy-mobile-app` repo, which shares the same Supabase project). This doc is the punch list for whoever — human or agent — picks up this repo next. Each item below is self-contained: what's wrong, why, and the exact fix.
 
-Do these in order. Items 1-2 are quick and safe; do them before anything else, ideally before your next commit.
+**Status as of 2026-08-13, verified against current repo state (not just claimed):** items 1 and 2 are done — `.gitignore` covers the listed secrets/scratch files, and `.env.example` documents the current Supabase/Cloudinary/Sentry stack with no Firebase leftovers. Item 5's code portion is done (both edge functions read `ALLOWED_ORIGINS` dynamically) — whether the secret is actually *set* to a real deployed origin is an operational step, not verifiable from the repo. Items 3 and 4 are still open: item 3 is a Cloudinary console setting (can't be verified from code); item 4's legacy Firebase files (`functions/src/triggers/staffTriggers.ts`, `scripts/export_db.cjs`) are still present.
 
-## 1. Gitignore the secrets sitting in the working tree (do this first)
+## 1. Gitignore the secrets sitting in the working tree — ✅ DONE
 
 **What's wrong:** `serviceAccountKey.json` (a Firebase Admin SDK service-account key — full admin access to the `jeszybotiquear` Firebase project) and `database_dump.json` (a full DB export containing customer data) are untracked files in this repo, and `.gitignore` does **not** cover them. Confirmed via `git check-ignore serviceAccountKey.json database_dump.json` → neither is ignored.
 
@@ -20,7 +20,9 @@ Also worth ignoring the other scratch files currently untracked in this tree so 
 
 Verify after editing: `git check-ignore serviceAccountKey.json database_dump.json` should print both paths back.
 
-## 2. Rewrite `.env.example` — it's stale and describes the wrong stack
+**Verified 2026-08-13:** `git check-ignore -v serviceAccountKey.json database_dump.json` prints both back. Done.
+
+## 2. Rewrite `.env.example` — ✅ DONE
 
 **What's wrong:** `.env.example` currently documents only Firebase variables, populated with **real legacy values** (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID=jeszybotiquear`, sender ID, app ID). It documents **none** of the variables the app actually reads today: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (`src/lib/supabaseClient.js`), `VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UPLOAD_PRESET` (`src/lib/storage.js`), `VITE_SENTRY_DSN` (`src/main.jsx`).
 
@@ -36,6 +38,8 @@ VITE_SENTRY_DSN=
 ```
 Drop the Firebase section entirely. Separately (not a code change): verify the `jeszybotiquear` Firebase project's rules/status.
 
+**Verified 2026-08-13:** `.env.example` now documents only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UPLOAD_PRESET`, `VITE_SENTRY_DSN` — no Firebase section. The separate manual check (old Firebase project's rules/status) is not something a repo scan can confirm — still open if nobody's done it.
+
 ## 3. Constrain the Cloudinary unsigned upload preset
 
 **What's wrong:** `src/lib/storage.js` (`uploadToCloudinary`) uploads directly to Cloudinary using `VITE_CLOUDINARY_CLOUD_NAME` + `VITE_CLOUDINARY_UPLOAD_PRESET`, and the preset must be **Unsigned** (per the function's own error message). Both values ship in the public JS bundle.
@@ -44,7 +48,9 @@ Drop the Firebase section entirely. Separately (not a code change): verify the `
 
 **Fix (Cloudinary console, not code):** on the unsigned preset used here, set: allowed formats (images only), a max file size, a fixed destination folder, and enable moderation/incoming-transformation limits. This is the low-effort mitigation. A signed-upload flow (an edge function signs the request; the app never sees the preset) is more correct but a bigger lift — only do that if the console constraints aren't sufficient.
 
-## 4. Remove legacy Firebase migration leftovers (once migration is confirmed done)
+## 4. Remove legacy Firebase migration leftovers (once migration is confirmed done) — still open
+
+**Verified 2026-08-13:** `functions/src/triggers/staffTriggers.ts` and `scripts/export_db.cjs` are both still present. Not started.
 
 **What's wrong:** `functions/src/triggers/staffTriggers.ts` (firebase-admin Firestore triggers) and `scripts/export_db.cjs` (which reads `serviceAccountKey.json`) are Firebase→Supabase migration tooling, still in the tree after the app itself has fully moved to Supabase.
 
@@ -52,13 +58,15 @@ Drop the Firebase section entirely. Separately (not a code change): verify the `
 
 **Fix:** confirm the Firebase migration is fully complete (no remaining reads/writes against Firestore anywhere in `src/`), then delete `functions/src/triggers/staffTriggers.ts`, `scripts/export_db.cjs`, and `serviceAccountKey.json` itself. Do this after items 1-2 are in place, not before.
 
-## 5. Narrow edge-function CORS
+## 5. Narrow edge-function CORS — code done, activation unverified
 
 **What's wrong:** Both Supabase edge functions this repo calls — `create-staff-account` and `activate-staff-account` — set `Access-Control-Allow-Origin: *`.
 
 **Why it matters:** Low severity — authorization in both functions rests on the caller's verified JWT and a server-side role check against `profiles`, not on request origin, so a forged origin gains nothing today. Narrowing CORS to this dashboard's actual deployed origin is still cheap defense-in-depth and cuts down on cross-origin noise.
 
 **Fix:** in `supabase/functions/create-staff-account/index.ts` and `supabase/functions/activate-staff-account/index.ts`, change the `corsHeaders` constant's `Access-Control-Allow-Origin` from `*` to the dashboard's actual origin (or an env-driven allow-list if there's more than one deploy target, e.g. staging + prod).
+
+**Verified 2026-08-13:** both functions now read `ALLOWED_ORIGINS` from `Deno.env.get()` with `*` only as a fallback default (see `docs/DEPLOYMENT.md` Step 2) — the code-side fix is in. Whether `ALLOWED_ORIGINS` is actually set to a real deployed origin in the Supabase project's function secrets is a deployment-time step this repo scan can't confirm.
 
 ## What's already good (don't touch)
 

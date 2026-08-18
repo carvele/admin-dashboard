@@ -232,7 +232,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           {showSearchResults && searchQuery.trim() && searchResults.length === 0 && (
             <div className="search-dropdown card">
               <div className="search-no-results">
-                No results found for "{sanitizeForDisplay(searchQuery)}"
+                No results found for &quot;{sanitizeForDisplay(searchQuery)}&quot;
               </div>
             </div>
           )}

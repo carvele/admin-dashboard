@@ -16,9 +16,11 @@ export const RESERVATION_STATUSES = [
   'To Pay',
   'Approved',
   'Confirmed',
+  'Preparing',
   'To Pickup',
   'Fitting',
   'Active',
+  'Ready',
   'Completed',
   'Cancelled',
 ];
@@ -52,9 +54,11 @@ export const EARNED_STATUSES = ['Completed'];
 export const COMMITTED_STATUSES = [
   'Approved',
   'Confirmed',
+  'Preparing',
   'To Pickup',
   'Fitting',
   'Active',
+  'Ready',
 ];
 
 /**
@@ -80,9 +84,11 @@ export const STOCK_HOLDING_STATUSES = [
   'Approved',
   'Confirmed',
   'To Pay',
+  'Preparing',
   'To Pickup',
   'Fitting',
   'Active',
+  'Ready',
 ];
 
 /** Does this status currently hold a unit out of sellable stock? */

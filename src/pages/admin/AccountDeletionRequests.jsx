@@ -5,13 +5,11 @@ import {
   getPendingDeletionRequests,
   getBlockingObligations,
   processAccountDeletion,
+  rejectAccountDeletion,
 } from '../../services/accountDeletionService';
-import { logAction } from '../../lib/supabaseService';
-import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatDate } from '../../utils/helpers';
 
 const AccountDeletionRequests = () => {
-  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -81,17 +79,37 @@ const AccountDeletionRequests = () => {
         toast.success(`Account deleted for ${reviewing.customerName}.`);
       }
 
-      await logAction(user, 'Processed account deletion request', {
-        targetType: 'profile',
-        targetId: reviewing.userId,
-        customerName: reviewing.customerName,
-      });
+      // process_account_deletion now logs this itself server-side
+      // (guaranteed, not dependent on this client call succeeding) --
+      // see jezsy-mobile-app's audit_log_hardening migration.
 
       setReviewing(null);
       setObligations(null);
       setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
     } catch (e) {
       toast.error('Failed to process this request: ' + (e?.message || 'unknown error'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reviewing) return;
+    if (!window.confirm(`Decline this deletion request from ${reviewing.customerName}? Nothing is erased -- the customer keeps their account and can request again later.`)) {
+      return;
+    }
+    setProcessing(true);
+    try {
+      await rejectAccountDeletion(reviewing.docId);
+      toast.success(`Deletion request declined for ${reviewing.customerName}.`);
+      // reject_account_deletion_request now logs this itself server-side
+      // (guaranteed, not dependent on this client call succeeding) --
+      // see jezsy-mobile-app's audit_log_hardening migration.
+      setReviewing(null);
+      setObligations(null);
+      setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
+    } catch (e) {
+      toast.error('Failed to decline this request: ' + (e?.message || 'unknown error'));
     } finally {
       setProcessing(false);
     }
@@ -174,8 +192,15 @@ const AccountDeletionRequests = () => {
       </div>
 
       {reviewing && (
-        <div className="modal-overlay" onClick={closeReview}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div
+          className="modal-overlay"
+          onClick={closeReview}
+          onKeyDown={(e) => e.key === 'Escape' && closeReview()}
+          role="button"
+          tabIndex={0}
+          aria-label="Close dialog"
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} role="presentation" style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h2>Delete {reviewing.customerName}?</h2>
               <button className="close-btn" onClick={closeReview}>&times;</button>
@@ -258,7 +283,10 @@ const AccountDeletionRequests = () => {
                   <Mail size={14} /> Send Email Notice
                 </button>
                 <button className="btn-outline" onClick={closeReview} disabled={processing}>
-                  Cancel
+                  Close
+                </button>
+                <button className="btn-outline" onClick={handleReject} disabled={processing}>
+                  Decline Request
                 </button>
                 <button
                   className="btn-danger"

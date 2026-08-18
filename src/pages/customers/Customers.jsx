@@ -118,10 +118,19 @@ const Customers = () => {
     return () => {
       controller.abort();
     };
+    // Intentionally mount-only: fetchCustomers closes over lastDoc, which it
+    // sets after every fetch. Tracking it here would re-run this effect (and
+    // re-fetch page 1) every time lastDoc changes -- the "Load More" button
+    // at line ~600 is the only place pagination should advance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // debounce(...) only closes over the stable setSearchTerm setter, so an
+  // empty dep array is correct; eslint can't statically verify that through
+  // the debounce() call wrapper.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 300),
     []
@@ -324,7 +333,7 @@ const Customers = () => {
       toast.success(`Removed customer ${getUserDisplayName(deleteConfirm)}`);
       setDeleteConfirm(null);
       setSelectedCustomer(null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete customer');
     }
   };
@@ -347,7 +356,7 @@ const Customers = () => {
       toast.success('Message sent successfully');
       setMsgModal(null);
       setMsgText('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to send message');
     } finally {
       setSendingMsg(false);
@@ -617,8 +626,17 @@ const Customers = () => {
             setSelectedCustomer(null);
             setIsEditing(false);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setSelectedCustomer(null);
+              setIsEditing(false);
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
-          <div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content profile-modal" onClick={(e) => e.stopPropagation()} role="presentation">
             <div className="modal-header">
               <h2>Customer Profile</h2>
               <div className="flex-center gap-2">
@@ -1041,15 +1059,26 @@ const Customers = () => {
 
       {/* ===== SEND MESSAGE MODAL ===== */}
       {msgModal && (
-        <div className="modal-overlay" onClick={() => setMsgModal(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div
+          className="modal-overlay"
+          onClick={() => setMsgModal(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setMsgModal(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }} role="presentation">
             <div className="modal-header">
               <h2>Message {getUserDisplayName(msgModal)}</h2>
               <button className="close-btn" onClick={() => setMsgModal(null)}>&times;</button>
             </div>
             <div className="p-4">
               <p className="text-secondary text-sm mb-4">
-                This message will appear in the customer's mobile app inbox.
+                This message will appear in the customer&apos;s mobile app inbox.
               </p>
               <textarea
                 className="input-field w-full"
@@ -1057,7 +1086,6 @@ const Customers = () => {
                 placeholder="Type your message here..."
                 value={msgText}
                 onChange={(e) => setMsgText(e.target.value)}
-                autoFocus
               ></textarea>
               <div className="modal-footer justify-end mt-4 px-0">
                 <button className="btn-outline" onClick={() => setMsgModal(null)} disabled={sendingMsg}>

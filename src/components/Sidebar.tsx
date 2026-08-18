@@ -119,7 +119,21 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   return (
     <>
       {/* Overlay for mobile */}
-      {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
+      {isOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={onClose}
+          role="button"
+          tabIndex={0}
+          aria-label="Close sidebar"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onClose?.();
+            }
+          }}
+        />
+      )}
 
       <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">

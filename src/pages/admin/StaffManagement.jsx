@@ -75,9 +75,18 @@ const StaffManagement = () => {
 
     const fetchNotes = async () => {
       try {
+        // log_staff_status_change() (DB trigger) writes a separate row per
+        // changed field -- employment_status and block_status can each get
+        // their own row from the same update_staff_status() call, sharing
+        // the same note text and near-identical timestamp. Scoping to
+        // employment_status here matters when they *don't* share a note: an
+        // archived member whose block status was toggled afterward, in a
+        // separate action with its own note, would otherwise show that
+        // later, unrelated block-status note as their "Archive Reason".
         const { data, error } = await supabase
           .from('staff_status_history')
           .select('staff_id, note, created_at')
+          .eq('change_type', 'employment_status')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -179,14 +188,11 @@ const StaffManagement = () => {
         new_role: newRole,
       });
       if (error) throw error;
-      await logAction(user, 'Changed staff role', {
-        targetType: 'profile',
-        targetId: member.id,
-        staffName: name,
-        newRole,
-      });
+      // update_staff_role now logs this itself server-side (guaranteed,
+      // not dependent on this client call succeeding) -- see
+      // jezsy-mobile-app's audit_log_hardening migration.
       toast.success(`${name} is now ${newRole}`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to update role');
     } finally {
       setRoleToggleConfirm(null);
@@ -209,7 +215,7 @@ const StaffManagement = () => {
         staffName: name,
       });
       toast.success(`${name} has been archived`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to archive staff member');
     } finally {
       setRemoveConfirm(null);
@@ -329,6 +335,14 @@ const StaffManagement = () => {
           <div
             className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}
             onClick={() => toggleRole(member)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleRole(member);
+              }
+            }}
+            role="button"
+            tabIndex={0}
             style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
             title={member.role === 'owner' ? 'Role locked' : 'Click to toggle role'}
           >
@@ -583,8 +597,9 @@ const StaffManagement = () => {
             </div>
             <form onSubmit={handleCreateAccount} className="modal-body">
               <div className="form-group">
-                <label className="label">Email Address</label>
+                <label className="label" htmlFor="create-staff-email">Email Address</label>
                 <input
+                  id="create-staff-email"
                   type="email"
                   className="input-field"
                   value={createForm.email}
@@ -593,8 +608,9 @@ const StaffManagement = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="label">Access Role</label>
+                <label className="label" htmlFor="create-staff-role">Access Role</label>
                 <select
+                  id="create-staff-role"
                   className="input-field"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
@@ -604,8 +620,8 @@ const StaffManagement = () => {
                 </select>
               </div>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
-                We'll email a verification link to this address. Once they click it and set a
-                password, their account activates and they'll appear in Team Management.
+                We&apos;ll email a verification link to this address. Once they click it and set a
+                password, their account activates and they&apos;ll appear in Team Management.
               </p>
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setIsCreateModalOpen(false)}>
@@ -640,10 +656,11 @@ const StaffManagement = () => {
                 become visible on the Active tab again.
               </p>
               <div className="form-group">
-                <label className="label">
+                <label className="label" htmlFor="reactivate-note">
                   Reactivation Note <span style={{ color: 'var(--color-danger)' }}>*</span>
                 </label>
                 <textarea
+                  id="reactivate-note"
                   className="input-field"
                   rows={3}
                   placeholder="e.g. Rehired for seasonal position, starting 2026-08-01"

@@ -61,6 +61,7 @@ import { getCustomers } from '../../services/customerService';
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
+import { isPending } from '../../utils/reservationStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 // @ts-ignore
@@ -140,7 +141,7 @@ const Dashboard = () => {
       clearInterval(intervalId);
       unsubInventory();
     };
-  }, []);
+  }, [loadDashboard]);
 
   // 5-tier stock alert analysis (demand-aware, real-time) - Active items only
   const activeInventory = inventory.filter((i: any) => i.deleted !== true);
@@ -152,9 +153,7 @@ const Dashboard = () => {
   const totalReservations = reservations.length;
   // profiles has no `status` column — "active" = not blocked
   const activeCustomers = customers.filter((c) => !c.isBlocked).length;
-  const pendingRequests = reservations.filter(
-    (r) => r.status === 'Pending' || r.status === 'Request Approval' || r.status === 'To Pay'
-  ).length;
+  const pendingRequests = reservations.filter((r) => isPending(r.status)).length;
   // 5-tier: alert = very-low + critical + no-stock items (Active items only)
   const lowStockItems = activeInventory
     .filter((i: any) => isStockAlert(i.available, i.total, i.reserved || 0))
@@ -172,25 +171,22 @@ const Dashboard = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 1. Daily Logistics (Pickups/Returns for Today)
+  // 1. Daily Logistics (Pickups for Today) -- JezSy is reserve-and-collect
+  // only, there is no rental return leg, so this tracks pickups alone.
   const todayLogistics = reservations
     .filter(r => {
       const pickupDate = parseDate(r.reservationDate || r.date);
-      const returnDate = parseDate(r.returnDate || r.endDate);
       pickupDate.setHours(0,0,0,0);
-      returnDate.setHours(0,0,0,0);
-      return pickupDate.getTime() === today.getTime() || returnDate.getTime() === today.getTime();
+      return pickupDate.getTime() === today.getTime();
     })
     .map(r => {
       const pickupDate = parseDate(r.reservationDate || r.date);
-      const isReturn = parseDate(r.returnDate || r.endDate).setHours(0,0,0,0) === today.getTime();
       return {
         ...r,
-        actionType: isReturn ? 'Return' : 'Pickup',
-        timeStr: pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        actionType: 'Pickup',
+        timeStr: r.appointmentTime || pickupDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
       };
-    })
-    .sort((a, _b) => (a.actionType === 'Return' ? -1 : 1)); // Priority to Returns
+    });
 
   // 2. Unified Activity Feed (Last 10 events)
   const activityFeed = [
@@ -637,7 +633,7 @@ const Dashboard = () => {
           <div className="card-header">
             <div className="flex align-center gap-2">
               <MapPin size={20} className="text-accent" />
-              <h3>Today&apos;s Logistics Monitor</h3>
+              <h3>Today&apos;s Pickups</h3>
             </div>
             <span className="badge secondary">{todayLogistics.length} Events</span>
           </div>
@@ -645,7 +641,7 @@ const Dashboard = () => {
           <div className="logistics-timeline mt-4">
             {todayLogistics.length === 0 ? (
               <div className="p-8 text-center text-secondary bg-cream rounded-xl">
-                No pickups or returns scheduled for today.
+                No pickups scheduled for today.
               </div>
             ) : (
               todayLogistics.map((item, idx) => (
@@ -722,28 +718,28 @@ const Dashboard = () => {
                 <div className="pref-list">
                   <div className="pref-item">
                     <label className="pref-label" htmlFor="pref-total-reservations">Total Reservations</label>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Total Reservations">
                       <input type="checkbox" id="pref-total-reservations" className="toggle-input" checked={widgetPrefs.statTotalReservations} onChange={() => togglePref('statTotalReservations')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <label className="pref-label" htmlFor="pref-active-customers">Active Customers</label>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Active Customers">
                       <input type="checkbox" id="pref-active-customers" className="toggle-input" checked={widgetPrefs.statActiveCustomers} onChange={() => togglePref('statActiveCustomers')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <label className="pref-label" htmlFor="pref-pending-requests">Pending Requests</label>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Pending Requests">
                       <input type="checkbox" id="pref-pending-requests" className="toggle-input" checked={widgetPrefs.statPendingRequests} onChange={() => togglePref('statPendingRequests')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <label className="pref-label" htmlFor="pref-ar-usage">AR Try-On Usage</label>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle AR Try-On Usage">
                       <input type="checkbox" id="pref-ar-usage" className="toggle-input" checked={widgetPrefs.statARUsage} onChange={() => togglePref('statARUsage')} />
                       <span className="toggle-slider"></span>
                     </label>
@@ -756,14 +752,14 @@ const Dashboard = () => {
                 <div className="pref-list">
                   <div className="pref-item">
                     <span className="pref-label">Reservation Trends</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Reservation Trends">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartReservationTrends} onChange={() => togglePref('chartReservationTrends')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Popular Outfits</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Popular Outfits">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartPopularOutfits} onChange={() => togglePref('chartPopularOutfits')} />
                       <span className="toggle-slider"></span>
                     </label>
@@ -776,35 +772,35 @@ const Dashboard = () => {
                 <div className="pref-list">
                   <div className="pref-item">
                     <span className="pref-label">Low Stock Alerts</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Low Stock Alerts">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLowStock} onChange={() => togglePref('widgetLowStock')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Recent Customers</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Recent Customers">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Logistics Monitor</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Logistics Monitor">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLogistics} onChange={() => togglePref('widgetLogistics')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Activity Pulse</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Activity Pulse">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetActivityFeed} onChange={() => togglePref('widgetActivityFeed')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Operational Insights</span>
-                    <label className="toggle-switch">
+                    <label className="toggle-switch" aria-label="Toggle Operational Insights">
                       <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetWeather} onChange={() => togglePref('widgetWeather')} />
                       <span className="toggle-slider"></span>
                     </label>

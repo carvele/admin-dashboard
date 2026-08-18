@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { getAllReviews, deleteReview } from '../../services/reviewService';
 import { Star, CheckCircle, Trash2, X, Filter } from 'lucide-react';
@@ -19,19 +19,19 @@ const Reviews = () => {
   
   const limit = 20;
 
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     try {
       setIsLoading(true);
       const rating = ratingFilter ? parseInt(ratingFilter) : null;
       const { reviews: data, count: total } = await getAllReviews(page, limit, rating, searchQuery);
       setReviews(data);
       setCount(total);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load reviews');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, ratingFilter, searchQuery]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -39,7 +39,7 @@ const Reviews = () => {
     }, 500); // Debounce search
 
     return () => clearTimeout(delayDebounceFn);
-  }, [page, ratingFilter, searchQuery]);
+  }, [fetchReviews]);
 
   const handleDeleteConfirm = async () => {
     if (!reviewToDelete) return;
@@ -47,7 +47,7 @@ const Reviews = () => {
       await deleteReview(reviewToDelete);
       toast.success('Review deleted');
       fetchReviews(); // Refresh current page
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete review');
     } finally {
       setReviewToDelete(null);
@@ -137,13 +137,18 @@ const Reviews = () => {
                 {review.images && review.images.length > 0 && (
                   <div className="review-images">
                     {review.images.map((img, idx) => (
-                      <img 
-                        key={idx} 
-                        src={img} 
-                        alt="Review attachment" 
-                        className="review-thumb"
+                      <button
+                        key={idx}
+                        type="button"
+                        className="review-thumb-btn"
                         onClick={() => setSelectedImage(img)}
-                      />
+                      >
+                        <img
+                          src={img}
+                          alt="Review attachment"
+                          className="review-thumb"
+                        />
+                      </button>
                     ))}
                   </div>
                 )}
@@ -187,8 +192,20 @@ const Reviews = () => {
       )}
 
       {selectedImage && (
-        <div className="image-modal-overlay" onClick={() => setSelectedImage(null)}>
-          <div className="image-modal-content" onClick={e => e.stopPropagation()}>
+        <div
+          className="image-modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) setSelectedImage(null); }}
+          onKeyDown={e => {
+            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              setSelectedImage(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close image preview"
+        >
+          <div className="image-modal-content">
             <button className="image-modal-close" onClick={() => setSelectedImage(null)}>
               <X size={24} />
             </button>

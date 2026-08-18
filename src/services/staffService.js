@@ -9,7 +9,6 @@
 
 import { supabase } from '../lib/supabaseClient';
 import {
-  getCollection,
   subscribeToCollection,
   subscribeToDocument,
   logAction,

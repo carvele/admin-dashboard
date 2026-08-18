@@ -10,11 +10,12 @@
 // everything rarer (cancel, reschedule) is secondary.
 export const PRIMARY_ACTION = {
   Pending: { action: 'approve_pay', label: 'Approve' },
-  'To Pay': { action: 'ready_pickup', label: 'Mark paid' },
+  'To Pay': { action: 'mark_paid', label: 'Mark paid' },
+  Preparing: { action: 'ready_pickup', label: 'Mark ready' },
   'To Pickup': { action: 'complete', label: 'Hand over' },
 };
 
-export const CAN_RESCHEDULE_STATUSES = new Set(['Pending', 'To Pay', 'To Pickup']);
+export const CAN_RESCHEDULE_STATUSES = new Set(['Pending', 'To Pay', 'Preparing', 'To Pickup']);
 
 export const isAwaitingReceipt = (res) =>
   res.displayStatus === 'To Pay' &&

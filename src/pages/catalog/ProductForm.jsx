@@ -5,7 +5,6 @@ import {
   createProduct,
   updateProduct,
   getProductById,
-  getCategories,
   createInventoryItem,
   getInventory,
   getStockMovements,
@@ -13,19 +12,17 @@ import {
 import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
 import HistoryTimeline from '../../components/HistoryTimeline';
-import { routeAndUploadFile, deleteFile } from '../../lib/storage';
+import { routeAndUploadFile } from '../../lib/storage';
 import { getReservationsByProduct } from '../../services/reservationService';
-import {
-  subscribeToSuggestedOutfits,
-} from '../../services/wardrobeService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
-import { AVAILABLE_SIZES, SEASONS } from '../../utils/constants';
+import { AVAILABLE_SIZES } from '../../utils/constants';
 import { getColorList, getPatternList } from '../../services/inventoryService';
 import { Logger } from '../../utils/Logger';
+import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import './ProductForm.css';
 
@@ -37,7 +34,7 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
-  const [oldData, setOldData] = useState(null); // To track changes for sync
+  const [, setOldData] = useState(null); // To track changes for sync
   const [orderHistory, setOrderHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [productHistory, setProductHistory] = useState([]);
@@ -76,20 +73,26 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [categories, setCategories] = useState([]);
   const [colorList, setColorList] = useState([]);
-  const [patternList, setPatternList] = useState([]);
+  const [, setPatternList] = useState([]);
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [, setUploadProgress] = useState({ current: 0, total: 0 });
   const previewUrlsRef = React.useRef([]);
 
-  // Cleanup local image preview object URLs on component unmount to prevent memory leaks
+  // Cleanup local image preview object URLs on component unmount to prevent memory leaks.
+  // Intentionally reads previewUrlsRef.current at cleanup time (not a mount-time
+  // snapshot) so it revokes every URL accumulated over the form's lifetime, not
+  // just what existed when this effect first ran.
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       previewUrlsRef.current.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
-        } catch (e) {}
+        } catch {
+          // URL may already be revoked; safe to ignore
+        }
       });
     };
   }, []);
@@ -222,7 +225,7 @@ const ProductForm = ({ readOnly = false }) => {
              toast.error('Product not found.');
              navigate('/catalog');
           }
-        } catch (e) {
+        } catch {
           toast.error('Failed to load product details.');
         } finally {
           setLoading(false);
@@ -265,7 +268,7 @@ const ProductForm = ({ readOnly = false }) => {
     } else {
       setFormData((prev) => ({ ...prev, subCategory: '' }));
     }
-  }, [formData.category, categories]);
+  }, [formData.category, formData.subCategory, categories]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -284,7 +287,9 @@ const ProductForm = ({ readOnly = false }) => {
     if (previews[index]) {
       try {
         URL.revokeObjectURL(previews[index]);
-      } catch (e) {}
+      } catch {
+        // URL may already be revoked; safe to ignore
+      }
     }
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviews((prev) => prev.filter((_, i) => i !== index));
@@ -304,19 +309,6 @@ const ProductForm = ({ readOnly = false }) => {
     
     [newImages[index], newImages[newPos]] = [newImages[newPos], newImages[index]];
     setFormData(prev => ({ ...prev, images: newImages }));
-  };
-
-  const moveSelectedFile = (index, direction) => {
-    const newFiles = [...selectedFiles];
-    const newPrev = [...previews];
-    const newPos = index + direction;
-    if (newPos < 0 || newPos >= newFiles.length) return;
-
-    [newFiles[index], newFiles[newPos]] = [newFiles[newPos], newFiles[index]];
-    [newPrev[index], newPrev[newPos]] = [newPrev[newPos], newPrev[index]];
-
-    setSelectedFiles(newFiles);
-    setPreviews(newPrev);
   };
 
   const toggleSize = (size) => {
@@ -611,8 +603,9 @@ const ProductForm = ({ readOnly = false }) => {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="label">Product Name *</label>
+                    <label className="label" htmlFor="product-name">Product Name *</label>
                     <input
+                      id="product-name"
                       type="text"
                       name="name"
                       className="input-field"
@@ -623,16 +616,17 @@ const ProductForm = ({ readOnly = false }) => {
                     />
                   </div>
                   <div>
-                    <label className="label">Category *</label>
-                    <select name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
+                    <label className="label" htmlFor="product-category">Category *</label>
+                    <select id="product-category" name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
                       {categories.map((c) => (
                         <option key={c.name} value={c.name}>{c.name}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="label">Sub-Category</label>
+                    <label className="label" htmlFor="product-subcategory">Sub-Category</label>
                     <select
+                      id="product-subcategory"
                       name="subCategory"
                       className="input-field"
                       value={formData.subCategory || ''}
@@ -653,8 +647,8 @@ const ProductForm = ({ readOnly = false }) => {
                 {/* Mobile-only Status Toggles */}
                 <div className="md:hidden space-y-4 pt-4 border-t border-dashed">
                    <div className="flex items-center justify-between">
-                      <label className="label mb-0">Visibility</label>
-                      <select name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
+                      <label className="label mb-0" htmlFor="product-visibility-mobile">Visibility</label>
+                      <select id="product-visibility-mobile" name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
                         <option value="draft">Draft</option>
                         <option value="public">Published</option>
                       </select>
@@ -679,8 +673,8 @@ const ProductForm = ({ readOnly = false }) => {
                 </h2>
                 <div className="space-y-3">
                    <div>
-                      <label className="label">Visibility</label>
-                      <select name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
+                      <label className="label" htmlFor="product-visibility-desktop">Visibility</label>
+                      <select id="product-visibility-desktop" name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
                         <option value="draft">Draft</option>
                         <option value="public">Published</option>
                       </select>
@@ -691,7 +685,7 @@ const ProductForm = ({ readOnly = false }) => {
                         <span className="text-sm font-medium group-hover:text-primary transition-colors">Featured Item</span>
                       </label>
 
-                      <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer group pt-2 border-t border-dashed mt-1" aria-label="Force New Arrival">
                          <input type="checkbox" name="isNewArrival" checked={formData.isNewArrival} onChange={handleChange} className="w-4 h-4 accent-primary" style={{ flexShrink: 0 }} />
                          <div style={{ minWidth: 0, overflow: 'hidden' }}>
                             <span className="text-sm font-bold text-primary transition-colors flex items-center gap-1">
@@ -715,13 +709,15 @@ const ProductForm = ({ readOnly = false }) => {
               <h2 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${formData.onSale ? 'text-red-700' : 'text-secondary'}`}>
                  <DollarSign size={14} /> Pricing & Promotion
               </h2>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer" htmlFor="onSale-toggle">
                  <span className={`text-sm font-bold ${formData.onSale ? 'text-red-600' : 'text-secondary'}`}>ON SALE</span>
-                 <div 
+                 <div
+                    id="onSale-toggle"
                     role="checkbox"
                     aria-checked={formData.onSale}
                     tabIndex="0"
                     onClick={() => handleChange({ target: { name: 'onSale', type: 'checkbox', checked: !formData.onSale } })}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleChange({ target: { name: 'onSale', type: 'checkbox', checked: !formData.onSale } }); } }}
                     className={`w-10 h-5 rounded-full relative transition-colors ${formData.onSale ? 'bg-red-500' : 'bg-gray-300'}`}
                  >
                     <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${formData.onSale ? 'translate-x-5' : ''}`} />
@@ -731,10 +727,10 @@ const ProductForm = ({ readOnly = false }) => {
 
            <div className={`grid grid-cols-1 ${formData.onSale ? 'md:grid-cols-3' : ''} gap-6`}>
               <div>
-                 <label className="label">Regular Rental Price (₱) *</label>
+                 <label className="label" htmlFor="product-price">Regular Rental Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
-                    <input type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
+                    <input id="product-price" type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
                  </div>
               </div>
 
@@ -815,7 +811,7 @@ const ProductForm = ({ readOnly = false }) => {
                  </div>
                  <div>
                     <h3 className="text-sm font-bold text-indigo-900">Virtual Try-On (AR)</h3>
-                    <p className="text-xs text-indigo-700">Add "AR Try-On" tag below to enable for this item.</p>
+                    <p className="text-xs text-indigo-700">Add &quot;AR Try-On&quot; tag below to enable for this item.</p>
                  </div>
               </div>
               <button type="button" onClick={() => readOnly ? navigate('/ar-assets') : setShowArConfirm(true)} className="btn-outline small border-indigo-200 text-indigo-600 hover:bg-indigo-50">
@@ -834,7 +830,7 @@ const ProductForm = ({ readOnly = false }) => {
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                 <label className="label">Product Color *</label>
+                 <span className="label">Product Color *</span>
                  {colorList.length === 0 ? (
                     <p className="text-sm text-secondary mt-2">
                        No colors defined yet. Add colors in Settings to enable selection.
@@ -864,8 +860,8 @@ const ProductForm = ({ readOnly = false }) => {
               </div>
 
               <div>
-                 <label className="label">Material / Fabric</label>
-                 <input type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
+                 <label className="label" htmlFor="product-material">Material / Fabric</label>
+                 <input id="product-material" type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
               </div>
            </div>
         </section>
@@ -888,7 +884,7 @@ const ProductForm = ({ readOnly = false }) => {
            </div>
 
            <div className="mb-6">
-              <label className="label">Available Sizes *</label>
+              <span className="label">Available Sizes *</span>
               <div className="flex flex-wrap gap-3 mt-3">
                  {AVAILABLE_SIZES.map((size) => (
                     <button
@@ -909,8 +905,8 @@ const ProductForm = ({ readOnly = false }) => {
 
            <div className="border-t pt-6">
               <div className="mb-4" style={{ maxWidth: '20rem' }}>
-                 <label className="label">Fit Type</label>
-                 <select name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
+                 <label className="label" htmlFor="product-fit-type">Fit Type</label>
+                 <select id="product-fit-type" name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
                     <option value="">Standard Fit</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
@@ -937,15 +933,15 @@ const ProductForm = ({ readOnly = false }) => {
            </h2>
            <div className="space-y-4">
               <div>
-                 <label className="label">Full Description</label>
-                 <textarea name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
+                 <label className="label" htmlFor="product-description">Full Description</label>
+                 <textarea id="product-description" name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
               </div>
               <div>
-                 <label className="label">Care Instructions</label>
-                 <input type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
+                 <label className="label" htmlFor="product-care-instructions">Care Instructions</label>
+                 <input id="product-care-instructions" type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
               </div>
               <div>
-                 <label className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</label>
+                 <span className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</span>
                  <div className="flex flex-wrap gap-3">
                     {[
                        { label: 'New Arrival', stateKey: 'isNewArrival' },

@@ -43,10 +43,21 @@ const ConfirmDialog = ({
   if (!isOpen) return null;
 
   return (
-    <div className="confirm-dialog-overlay" onClick={isLoading ? undefined : onCancel}>
-      <div 
-        className="confirm-dialog-content" 
-        onClick={e => e.stopPropagation()}
+    <div
+      className="confirm-dialog-overlay"
+      onClick={e => { if (!isLoading && e.target === e.currentTarget) onCancel(); }}
+      onKeyDown={e => {
+        if (!isLoading && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={cancelText}
+    >
+      <div
+        className="confirm-dialog-content"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialog-title"

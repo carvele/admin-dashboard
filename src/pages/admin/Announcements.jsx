@@ -27,7 +27,7 @@ const Announcements = () => {
       setIsLoading(true);
       const data = await getAnnouncements();
       setAnnouncements(data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load announcements');
     } finally {
       setIsLoading(false);
@@ -67,7 +67,7 @@ const Announcements = () => {
       setIsModalOpen(false);
       setFormData({ title: '', body: '', type: 'promo', expires_at: '' });
       fetchAnnouncements();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create announcement');
     }
   };
@@ -79,7 +79,7 @@ const Announcements = () => {
       await deleteAnnouncement(id);
       toast.success('Announcement deleted');
       fetchAnnouncements();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete announcement');
     }
   };
@@ -164,8 +164,9 @@ const Announcements = () => {
 
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-group">
-                <label className="label">Title *</label>
+                <label className="label" htmlFor="announcement-title">Title *</label>
                 <input
+                  id="announcement-title"
                   type="text"
                   name="title"
                   value={formData.title}
@@ -177,8 +178,9 @@ const Announcements = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Type</label>
+                <label className="label" htmlFor="announcement-type">Type</label>
                 <select
+                  id="announcement-type"
                   name="type"
                   value={formData.type}
                   onChange={handleInputChange}
@@ -190,8 +192,9 @@ const Announcements = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Message *</label>
+                <label className="label" htmlFor="announcement-body">Message *</label>
                 <textarea
+                  id="announcement-body"
                   name="body"
                   value={formData.body}
                   onChange={handleInputChange}
@@ -203,8 +206,9 @@ const Announcements = () => {
               </div>
 
               <div className="form-group">
-                <label className="label">Expires At (Optional)</label>
+                <label className="label" htmlFor="announcement-expires-at">Expires At (Optional)</label>
                 <input
+                  id="announcement-expires-at"
                   type="datetime-local"
                   name="expires_at"
                   value={formData.expires_at}

@@ -36,7 +36,7 @@ jest.mock('../lib/supabaseService', () => ({
   toCamel: (o) => o,
 }));
 
-const { getCustomerStatsBatch } = require('./customerService');
+import { getCustomerStatsBatch } from './customerService';
 
 const CUST = 'cust-1';
 const OTHER = 'cust-2';

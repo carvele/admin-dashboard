@@ -22,6 +22,7 @@ import {
   subscribeToInventory,
   subscribeToProducts,
   updateInventoryItem,
+  adjustInventoryStockDelta,
   archiveInventoryItem,
   restoreInventoryItem,
   getInventory,
@@ -37,6 +38,7 @@ import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
+import { downloadCSV } from '../../utils/reportExporter';
 import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -87,7 +89,7 @@ const Inventory = () => {
           setLoadingWaitlist(false);
         });
     }
-  }, [activeTab]);
+  }, [activeTab, waitlistDemand.length]);
 
   // Product list — needed to map each inventory row to its category/subcategory
   // (category_id lives on products, not on inventory rows) and to feed the
@@ -322,15 +324,20 @@ const Inventory = () => {
     }
 
     try {
-      await updateInventoryItem(restockModal.docId, {
-        total: restockModal.total + qty,
-        available: restockModal.available + qty,
+      // Delta applied atomically server-side, not restockModal.total + qty --
+      // restockModal is a snapshot from whenever this modal opened, so two
+      // restocks landing close together (a double-click, two staff acting
+      // near-simultaneously) used to both add qty to the same stale starting
+      // number, silently losing one restock's units.
+      const result = await adjustInventoryStockDelta(restockModal.docId, {
+        totalDelta: qty,
+        availableDelta: qty,
       });
       await syncProductStock(restockModal.productDocId, restockModal.sku);
       await logStockMovement(
         restockModal.productDocId,
-        restockModal.total,
-        restockModal.total + qty,
+        result?.prevTotal ?? restockModal.total,
+        result?.newTotal ?? restockModal.total + qty,
         'restock',
         `Restock: +${qty} units of ${restockModal.item} (size ${restockModal.size})`,
       );
@@ -344,7 +351,7 @@ const Inventory = () => {
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
       setRestockQty('');
-    } catch (e) {
+    } catch {
       toast.error('Failed to restock items');
     }
   };
@@ -413,7 +420,7 @@ const Inventory = () => {
       });
       toast.success(`Updated ${editModal.item} (${editModal.size})`);
       setEditModal(null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to update inventory');
     }
   };
@@ -437,7 +444,7 @@ const Inventory = () => {
         size: item.size,
       });
       toast.success(`Archived ${item.item} (${item.size}) from inventory`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to archive item');
     } finally {
       setArchiveConfirm(null);
@@ -462,7 +469,7 @@ const Inventory = () => {
         size: item.size,
       });
       toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to restore item');
     }
   };
@@ -504,7 +511,7 @@ const Inventory = () => {
         sku: inv.sku
       });
       toast.success(`Product ${inv.item} has been added/published`);
-    } catch (e) {
+    } catch {
       toast.error('Failed to add product to app');
     }
   };
@@ -514,20 +521,18 @@ const Inventory = () => {
     setEditModal(inv);
   };
 
+  const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
   const handleExportCSV = () => {
-    const header = 'SKU,Product,Category,Size,Total,Reserved,Available\n';
-    const rows = inventory
-      .map(
-        (i) => `${i.id},${i.item},${i.category},${i.size},${i.total},${i.reserved},${i.available}`,
-      )
-      .join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'inventory_export.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    // Exports filteredInv, not the raw inventory list, so the file matches
+    // whatever search/category/active-archived view the staff member is
+    // currently looking at rather than silently dumping everything.
+    const header = ['SKU', 'Product', 'Category', 'Size', 'Total', 'Reserved', 'Available'].join(',');
+    const rows = filteredInv.map((i) =>
+      [csvField(i.sku || i.id), csvField(i.item), csvField(i.category), csvField(i.size), i.total, i.reserved || 0, i.available].join(','),
+    );
+    const timestamp = new Date().toISOString().split('T')[0];
+    downloadCSV(`JezSy_Inventory_${viewMode}_${timestamp}.csv`, [header, ...rows].join('\n'));
     toast.success('Inventory exported as CSV');
   };
 
@@ -976,7 +981,7 @@ const Inventory = () => {
                         </div>
                         <h3 className="text-lg font-medium">No inventory items found</h3>
                         <p className="text-secondary text-center max-w-sm">
-                          We couldn't find any inventory records matching your current search. Try
+                          We couldn&apos;t find any inventory records matching your current search. Try
                           adjusting your filters.
                         </p>
                         {searchTerm && (
@@ -1000,10 +1005,11 @@ const Inventory = () => {
 
       {/* ===== RESTOCK MODAL ===== */}
       {restockModal && (
-        <div className="modal-overlay" onClick={() => setRestockModal(null)}>
+        <div className="modal-overlay" onClick={() => setRestockModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
@@ -1024,15 +1030,15 @@ const Inventory = () => {
                 Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}
               </p>
               <div className="form-group">
-                <label className="label">Quantity to Add</label>
+                <label className="label" htmlFor="restock-qty">Quantity to Add</label>
                 <input
+                  id="restock-qty"
                   type="number"
                   className="input-field"
                   min="1"
                   placeholder="Enter quantity"
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
-                  autoFocus
                   required
                 />
               </div>
@@ -1058,10 +1064,11 @@ const Inventory = () => {
 
       {/* ===== EDIT STOCK MODAL ===== */}
       {editModal && (
-        <div className="modal-overlay" onClick={() => setEditModal(null)}>
+        <div className="modal-overlay" onClick={() => setEditModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1074,13 +1081,14 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleEdit}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem' }}>
-                Directly overwrites the stock counts for this size — use Restock instead if you're
+                Directly overwrites the stock counts for this size — use Restock instead if you&apos;re
                 just adding newly-arrived units.
               </p>
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label className="label">Total Units</label>
+                  <label className="label" htmlFor="edit-stock-total">Total Units</label>
                   <input
+                    id="edit-stock-total"
                     type="number"
                     className="input-field"
                     min="0"
@@ -1099,8 +1107,9 @@ const Inventory = () => {
                   />
                 </div>
                 <div className="form-group flex-1">
-                  <label className="label">Reserved</label>
+                  <label className="label" htmlFor="edit-stock-reserved">Reserved</label>
                   <input
+                    id="edit-stock-reserved"
                     type="number"
                     className="input-field"
                     min="0"
@@ -1149,10 +1158,11 @@ const Inventory = () => {
 
       {/* ===== SELL / POS MODAL ===== */}
       {sellModal && (
-        <div className="modal-overlay" onClick={() => setSellModal(null)}>
+        <div className="modal-overlay" onClick={() => setSellModal(null)} role="presentation">
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            role="presentation"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
@@ -1186,8 +1196,9 @@ const Inventory = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Actual Unit Price (₱)</label>
+                  <label className="label" htmlFor="sell-unit-price">Actual Unit Price (₱)</label>
                   <input
+                    id="sell-unit-price"
                     type="number"
                     className="input-field"
                     placeholder="UnitPrice"
@@ -1197,8 +1208,9 @@ const Inventory = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="label">Quantity Sold</label>
+                  <label className="label" htmlFor="sell-qty">Quantity Sold</label>
                   <input
+                    id="sell-qty"
                     type="number"
                     className="input-field"
                     min="1"

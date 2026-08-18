@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -7,8 +7,6 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
   AreaChart,
   Area,
   Legend,
@@ -16,12 +14,13 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, Users, ShoppingBag, Eye, Settings2, X, ChevronDown, Filter, PieChart as PieIcon, Activity } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
 import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
+import { countsAsRevenue } from '../../utils/reservationStatus';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -124,41 +123,47 @@ const Analytics = () => {
     setEndDate(now.toISOString().split('T')[0]);
   };
 
-  const parseResDate = (item, overrideField = null) => {
+  const parseResDate = useCallback((item, overrideField = null) => {
     const raw = overrideField ? item[overrideField] : (item.reservationDate || item.date || item.timestamp || item.createdAt || item.joinedAt);
     if (!raw) return null;
     // Supabase returns ISO strings; legacy Firestore may have .toDate() or .seconds
     if (raw?.toDate) return raw.toDate();
     if (raw?.seconds) return new Date(raw.seconds * 1000);
     return new Date(raw);
-  };
+  }, []);
 
-  const isInRange = (date) => {
+  const isInRange = useCallback((date) => {
     if (!date) return false;
     const d = new Date(date);
     const s = new Date(startDate);
     const e = new Date(endDate);
     e.setHours(23, 59, 59, 999);
     return d >= s && d <= e;
-  };
+  }, [startDate, endDate]);
 
   // Filter Data
   const filteredReservations = useMemo(
     () => reservations.filter(r => isInRange(parseResDate(r))),
-    [reservations, startDate, endDate]
+    [reservations, isInRange, parseResDate]
   );
   const filteredCustomers = useMemo(
     () => customers.filter(c => isInRange(parseResDate(c))),
-    [customers, startDate, endDate]
+    [customers, isInRange, parseResDate]
   );
   const currentTotalCustomers = customers.length; // Absolute total
 
   // Compute Revenue and Growth
-  const { totalRev, completedOrConfirmed } = useMemo(() => {
+  //
+  // Revenue is recognised at handover, matching reservationStatus.js's
+  // countsAsRevenue (Completed only) -- this used to hand-roll its own list
+  // that counted every in-progress status as revenue, including reservations
+  // still awaiting payment. That inflated "Total Revenue" with money that had
+  // neither been earned nor received, and drifted further out of date with
+  // every status-vocabulary change since it never imported the shared
+  // definition other pages already use.
+  const { totalRev, earnedReservations } = useMemo(() => {
     let rev = 0;
-    const list = filteredReservations.filter(
-      (r) => r.status === 'Completed' || r.status === 'Confirmed' || r.status === 'Approved' || r.status === 'To Pickup' || r.status === 'Active' || r.status === 'To Pay',
-    );
+    const list = filteredReservations.filter((r) => countsAsRevenue(r));
     list.forEach((r) => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
@@ -168,10 +173,10 @@ const Analytics = () => {
         rev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
       }
     });
-    return { totalRev: rev, completedOrConfirmed: list };
+    return { totalRev: rev, earnedReservations: list };
   }, [filteredReservations, catalog]);
 
-  const getGrowth = (list, dateField = null) => {
+  const getGrowth = useCallback((list, dateField = null) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const duration = end - start;
@@ -189,16 +194,16 @@ const Analytics = () => {
     if (prevCount === 0) return { text: `+${currentCount} this period`, trend: 'up' };
     const pct = Math.round(((currentCount - prevCount) / prevCount) * 100);
     return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
-  };
+  }, [startDate, endDate, isInRange, parseResDate]);
 
-  const revDelta = useMemo(() => getGrowth(completedOrConfirmed), [completedOrConfirmed, startDate, endDate]);
-  const custDelta = useMemo(() => getGrowth(customers), [customers, startDate, endDate]);
-  const resDelta = useMemo(() => getGrowth(reservations), [reservations, startDate, endDate]);
+  const revDelta = useMemo(() => getGrowth(earnedReservations), [earnedReservations, getGrowth]);
+  const custDelta = useMemo(() => getGrowth(customers), [customers, getGrowth]);
+  const resDelta = useMemo(() => getGrowth(reservations), [reservations, getGrowth]);
 
   // New Visualization: Revenue by Category
   const categoryShareData = useMemo(() => {
     const categoryRev = {};
-    completedOrConfirmed.forEach(r => {
+    earnedReservations.forEach(r => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
       const cat = item?.category || 'Uncategorized';
@@ -209,7 +214,7 @@ const Analytics = () => {
     return Object.entries(categoryRev)
       .map(([name, value]) => ({ name, value }))
       .sort((a,b) => b.value - a.value);
-  }, [completedOrConfirmed, catalog]);
+  }, [earnedReservations, catalog]);
 
   const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
 
@@ -431,7 +436,7 @@ const Analytics = () => {
             change={revDelta.text}
             trend={revDelta.trend}
             icon={TrendingUp}
-            tooltip={`Revenue from ${completedOrConfirmed.length} records in this period.`}
+            tooltip={`Earned revenue from ${earnedReservations.length} completed reservation(s) in this period.`}
           />
           <StatCard
             title="Total Customers"
@@ -684,7 +689,7 @@ const Analytics = () => {
               <div className="metric-row mt-6">
                  <div className="flex-between mb-1">
                    <span className="text-sm">Avg Reservation Value</span>
-                   <span className="font-bold">₱{ (totalRev / (completedOrConfirmed.length || 1)).toLocaleString() }</span>
+                   <span className="font-bold">₱{ (totalRev / (earnedReservations.length || 1)).toLocaleString() }</span>
                  </div>
                  <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: '#1F2937' }}></div></div>
               </div>
@@ -695,8 +700,8 @@ const Analytics = () => {
 
       {/* Analytics Preferences Modal */}
       {showPreferences && (
-        <div className="modal-overlay" onClick={() => setShowPreferences(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={() => setShowPreferences(false)}>
+          <div className="modal-content" role="presentation" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Customize Analytics Dashboard</h2>
               <button className="close-btn" onClick={() => setShowPreferences(false)}>
@@ -714,7 +719,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Top Statistics</h4>
                   <p className="text-sm text-secondary">Summary cards for Revenue, Customers, etc.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Top Statistics">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showTopStats}
@@ -729,7 +734,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Trends Chart</h4>
                   <p className="text-sm text-secondary">Reservation & Revenue area trends.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Trends Chart">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showRevenueTrends}
@@ -744,7 +749,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Conversion Chart</h4>
                   <p className="text-sm text-secondary">AR Try-On vs Reservation comparisons.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Conversion Chart">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showARConversions}
@@ -759,7 +764,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Category Breakdown</h4>
                   <p className="text-sm text-secondary">Pie chart showing category profit distribution.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Category Breakdown">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showCategoryShare}
@@ -774,7 +779,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Top Performing Items</h4>
                   <p className="text-sm text-secondary">Table showing the most generated revenue list.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Top Performing Items">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showTopItems}
@@ -789,7 +794,7 @@ const Analytics = () => {
                   <h4 className="font-medium mb-1">Customer Metrics</h4>
                   <p className="text-sm text-secondary">Breakdowns for Returning rates, Active growth, etc.</p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Toggle Customer Metrics">
                   <input
                     type="checkbox"
                     checked={widgetPrefs.showMetrics}

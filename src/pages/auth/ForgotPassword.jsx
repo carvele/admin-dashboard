@@ -55,7 +55,7 @@ const ForgotPassword = () => {
           <p>Fashion Management System</p>
         </div>
         <div className="forgot-password-testimonial">
-          <blockquote>"Security and style perfectly balanced."</blockquote>
+          <blockquote>&quot;Security and style perfectly balanced.&quot;</blockquote>
           <cite>— Admin Portal</cite>
         </div>
         <div className="forgot-password-left-shapes">
@@ -87,14 +87,20 @@ const ForgotPassword = () => {
           {status !== 'success' && (
             <form onSubmit={handleSubmit} className="login-form">
               <div className="form-group">
-                <label className="label">Email Address</label>
+                <label className="label" htmlFor="forgot-password-email">
+                  Email Address
+                </label>
                 <input
+                  id="forgot-password-email"
                   type="email"
                   className="input-field"
                   placeholder="admin@jezsy.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={status === 'loading'}
+                  // Autofocus is appropriate here: this is the sole field of a
+                  // just-opened, single-purpose recovery form.
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus
                 />
               </div>
