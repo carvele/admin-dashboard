@@ -21,6 +21,17 @@
 --
 -- RUN ORDER: sections 1 -> 2 -> 3, then section 4 to verify, inside one
 -- transaction. Section 5 is the rollback, run only if verification fails.
+--
+-- BEFORE YOU RUN BEGIN BELOW: run the 4a query once now, in its own
+-- statement, and save the output. By the time you reach section 4 you are
+-- already inside the transaction that made the change, so this is the only
+-- chance to capture genuine "before" numbers to diff against.
+--
+--   SELECT product_doc_id, SUM(total) AS total_units,
+--          SUM(reserved) AS reserved_units, SUM(available) AS available_units,
+--          COUNT(*) AS variant_rows
+--   FROM public.inventory WHERE deleted = false
+--   GROUP BY product_doc_id ORDER BY product_doc_id;
 -- ============================================================================
 
 BEGIN;
@@ -50,13 +61,37 @@ COMMENT ON COLUMN public.inventory.variant_sku IS
 --
 -- Each existing inventory row currently represents (product, size) with the
 -- product's own colour/pattern implied. We make that implication explicit.
--- products.color is a comma-joined list, so baseColor (the primary colour) is
--- the correct single value to adopt here.
+-- products.color is a comma-joined list, so base_color (the primary colour)
+-- is the correct single value to adopt here.
 --
--- Quantities are untouched: this statement sets only colour/pattern.
+-- COLUMN NAME WARNING: the app's generic write path (addDocument /
+-- updateDocument in src/lib/supabaseService.js) runs every payload through a
+-- camelCase -> snake_case converter before it reaches Postgres, so the JS
+-- field `baseColor` is stored as `base_color`. This is NOT universal, though:
+-- `stockbaseline` on `products` is a documented exception (see the comment on
+-- updateStockBaseline in src/services/inventoryService.js) that bypasses the
+-- converter and lives as one lowercase word. Do not assume either convention
+-- for a column you have not confirmed — run
+--   SELECT column_name FROM information_schema.columns
+--   WHERE table_schema='public' AND table_name='products'
+--   ORDER BY column_name;
+-- and adjust `base_color` below if it disagrees. Silently matching zero rows
+-- here would backfill every variant to '' instead of erroring, so section 2a
+-- checks the column exists before proceeding.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'products' AND column_name = 'base_color'
+  ) THEN
+    RAISE EXCEPTION
+      'Expected public.products.base_color — run the information_schema query above and fix the column name in this migration before proceeding.';
+  END IF;
+END $$;
 
 UPDATE public.inventory AS i
-SET color   = COALESCE(NULLIF(TRIM(p."baseColor"), ''), ''),
+SET color   = COALESCE(NULLIF(TRIM(p.base_color), ''), ''),
     pattern = COALESCE(NULLIF(TRIM(p.pattern), ''), 'Solid')
 FROM public.products AS p
 WHERE i.product_doc_id = p.id
@@ -82,15 +117,74 @@ WHERE variant_sku IS NULL
 
 -- ── 3. Uniqueness: one row per (product, size, colour, pattern) ─────────────
 --
--- IMPORTANT: inspect the existing constraint name first. The statement below
--- assumes `inventory_product_doc_id_size_key`; adjust to whatever
---   \d public.inventory
--- actually reports. Dropping a constraint that does not exist is a no-op with
--- IF EXISTS, but the OLD constraint MUST be gone or the new dimensions cannot
--- be used (a second colourway in the same size would be rejected).
+-- The old one-row-per-(product, size) constraint has to go, or it keeps
+-- silently enforcing itself alongside the new index below: a second
+-- colourway in an already-used size would still get rejected, just by a
+-- constraint nobody's looking for anymore.
+--
+-- A hardcoded `DROP CONSTRAINT IF EXISTS <guessed name>` is exactly how that
+-- would happen — guess wrong and IF EXISTS makes it a silent no-op, so the
+-- migration reports success while the real constraint is still live. This
+-- looks the constraint up by what it actually enforces (a unique index on
+-- exactly (product_doc_id, size)) instead of by a name anyone assumed.
 
-ALTER TABLE public.inventory
-  DROP CONSTRAINT IF EXISTS inventory_product_doc_id_size_key;
+DO $$
+DECLARE
+  old_constraint text;
+BEGIN
+  SELECT con.conname INTO old_constraint
+  FROM pg_constraint con
+  JOIN pg_class rel ON rel.oid = con.conrelid
+  JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+  WHERE ns.nspname = 'public'
+    AND rel.relname = 'inventory'
+    AND con.contype = 'u'
+    AND (
+      SELECT array_agg(attname ORDER BY attname)
+      FROM unnest(con.conkey) AS k(attnum)
+      JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+    ) = ARRAY['product_doc_id', 'size']::text[];
+
+  IF old_constraint IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.inventory DROP CONSTRAINT %I', old_constraint);
+    RAISE NOTICE 'Dropped old unique constraint: %', old_constraint;
+  ELSE
+    RAISE NOTICE 'No (product_doc_id, size) unique CONSTRAINT found. Checking for a bare unique INDEX (no owning constraint) next.';
+  END IF;
+END $$;
+
+-- A unique constraint always has a backing index, but Postgres also allows a
+-- bare `CREATE UNIQUE INDEX` with no constraint behind it — the block above
+-- would not see one of those. Catch that case too, the same way: by what it
+-- enforces, not by an assumed name.
+DO $$
+DECLARE
+  old_index text;
+BEGIN
+  SELECT ic.relname INTO old_index
+  FROM pg_index idx
+  JOIN pg_class rel ON rel.oid = idx.indrelid
+  JOIN pg_class ic ON ic.oid = idx.indexrelid
+  JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+  WHERE ns.nspname = 'public'
+    AND rel.relname = 'inventory'
+    AND idx.indisunique
+    AND NOT EXISTS ( -- already-handled constraint-backed indexes
+      SELECT 1 FROM pg_constraint c WHERE c.conindid = idx.indexrelid
+    )
+    AND (
+      SELECT array_agg(attname ORDER BY attname)
+      FROM unnest(idx.indkey) AS k(attnum)
+      JOIN pg_attribute a ON a.attrelid = idx.indrelid AND a.attnum = k.attnum
+    ) = ARRAY['product_doc_id', 'size']::text[];
+
+  IF old_index IS NOT NULL THEN
+    EXECUTE format('DROP INDEX public.%I', old_index);
+    RAISE NOTICE 'Dropped old unique index: %', old_index;
+  ELSE
+    RAISE NOTICE 'No bare (product_doc_id, size) unique index found either. If you know one exists under a name this could not find, drop it manually before continuing.';
+  END IF;
+END $$;
 
 -- Partial index: soft-deleted rows are excluded so archiving a variant and
 -- re-creating it later does not collide.

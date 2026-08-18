@@ -255,12 +255,18 @@ export const syncProductAttributesFromVariants = async (productDocId) => {
   const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
   const patterns = [...new Set(variants.map((v) => v.pattern).filter(Boolean))];
 
+  // This goes straight to supabase.from(...).update() below, bypassing the
+  // app's usual toSnake() boundary conversion (see updateDocument in
+  // lib/supabaseService.js) — so keys here must already be real column
+  // names, not JS camelCase. products.baseColor is stored as base_color;
+  // writing the camelCase key here would either throw (column not found) or,
+  // worse, silently create nothing and leave the field unsynced.
   const updates = { updated_at: new Date().toISOString() };
   // Only write dimensions the product actually uses — an empty variant axis
   // must not blank out a value the mobile app is still relying on.
   if (colors.length) {
     updates.color = colors.join(', ');
-    updates.baseColor = colors[0];
+    updates.base_color = colors[0];
   }
   if (patterns.length) {
     updates.pattern = patterns[0];
