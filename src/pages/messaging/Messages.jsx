@@ -661,11 +661,17 @@ const Messages = () => {
 
   // ── Message bubble renderer ────────────────────────────────────────────
   const renderBubble = (msg, index) => {
+    const isAutoResponse = Boolean(
+      msg.isAutoResponse ||
+      msg.is_auto_response ||
+      msg.senderType === 'auto_response' ||
+      msg.sender_type === 'auto_response'
+    );
     // messages has no `sender` column — the reliable signal is sender_id.
     // A message is FROM THE CUSTOMER only when sender_id matches this
     // conversation's customer_id; everything else (staff's own id, or null,
     // per how the admin app writes it) is an outgoing/staff message.
-    const isSent = msg.senderId !== activeChat?.customerId;
+    const isSent = isAutoResponse || msg.senderId !== activeChat?.customerId;
     const groupedReactions = getGroupedReactions(msg.reactions);
     const isReservationCard = typeof msg.text === 'string' && msg.text.startsWith(RESERVATION_CARD_PREFIX);
     const reservationData = isReservationCard
@@ -732,7 +738,13 @@ const Messages = () => {
           ) : (
             /* Normal text / image bubble */
             <div
-              className={`message-bubble ${isSent ? 'bubbles-sent' : 'bubbles-received'} bubble-hoverable`}
+              className={`message-bubble ${
+                isAutoResponse
+                  ? 'bubbles-auto-reply'
+                  : isSent
+                  ? 'bubbles-sent'
+                  : 'bubbles-received'
+              } bubble-hoverable`}
               onMouseEnter={(e) => {
                 e.currentTarget.querySelectorAll('.reaction-trigger').forEach((btn) => {
                   btn.style.opacity = '1';
@@ -759,6 +771,12 @@ const Messages = () => {
               aria-label={isSent ? 'Toggle delivery status' : undefined}
               style={isSent ? { cursor: 'pointer' } : undefined}
             >
+              {isAutoResponse && (
+                <div className="auto-response-badge">
+                  <Zap size={11} className="mr-1 inline" />
+                  <span>Automated Acknowledgment</span>
+                </div>
+              )}
               {/* Product Context Card */}
               {msg.contextType === 'product' ? (
                 (() => {

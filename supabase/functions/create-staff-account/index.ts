@@ -38,6 +38,13 @@ function corsHeadersFor(req: Request): Record<string, string> {
   };
 }
 
+function json(req: Request, body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
+  });
+}
+
 const ALLOWED_INVITE_ROLES = ['staff', 'admin'];
 
 Deno.serve(async (req) => {
@@ -140,9 +147,3 @@ Deno.serve(async (req) => {
   }
 });
 
-function json(req: Request, body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
-  });
-}

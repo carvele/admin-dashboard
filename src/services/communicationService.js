@@ -161,3 +161,51 @@ export const markNotificationRead = (docId) =>
   updateDocument('notifications', docId, { is_read: true });
 
 export const deleteNotification = (docId) => deleteDocument('notifications', docId);
+
+// --- Auto-Reply Settings ---
+
+export const DEFAULT_AUTO_REPLY_MESSAGE =
+  'Thank you for your message! We have received it and notified the Jezsy Staff. Please wait patiently while a staff member reviews your message and responds to you. 💕';
+
+/**
+ * Fetch automatic message acknowledgment settings from public.settings.
+ */
+export const getAutoReplySettings = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'autoReply')
+      .maybeSingle();
+
+    if (error) throw error;
+    return {
+      enabled: data?.value?.enabled ?? true,
+      message: data?.value?.message || DEFAULT_AUTO_REPLY_MESSAGE,
+    };
+  } catch (err) {
+    console.error('Error fetching autoReply settings:', err);
+    return {
+      enabled: true,
+      message: DEFAULT_AUTO_REPLY_MESSAGE,
+    };
+  }
+};
+
+/**
+ * Update automatic message acknowledgment settings in public.settings.
+ */
+export const updateAutoReplySettings = async ({ enabled, message }) => {
+  const payload = {
+    key: 'autoReply',
+    value: {
+      enabled: Boolean(enabled),
+      message: message?.trim() || DEFAULT_AUTO_REPLY_MESSAGE,
+    },
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from('settings').upsert(payload, { onConflict: 'key' });
+  if (error) throw error;
+};
+

@@ -5,6 +5,11 @@ import {
   Loader2,
   Image,
   Upload,
+  MessageSquare,
+  Sparkles,
+  RotateCcw,
+  Bot,
+  CheckCircle2,
   Clock,
   Calendar,
   Trash2,
@@ -15,6 +20,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { logAction } from '../../lib/supabaseService';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
+import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
 import './Settings.css';
 
 const Settings = () => {
@@ -50,6 +56,9 @@ const Settings = () => {
     enableGlobalAR: true,
     autoApproveAR: false,
     maxFileSize: 10,
+    // Auto Reply Settings
+    enableAutoReply: true,
+    autoReplyMessage: DEFAULT_AUTO_REPLY_MESSAGE,
     // Account (Local update for display name only)
     displayName: '',
   });
@@ -63,11 +72,14 @@ const Settings = () => {
         const { data: settingsRows, error: sErr } = await supabase.from('settings').select('key, value');
         if (!sErr && settingsRows) {
           const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
+          const autoReply = settingsMap.autoReply || {};
           setFormData((prev) => ({
             ...prev,
             ...(settingsMap.storeInfo || {}),
             ...(settingsMap.reservations || {}),
             ...(settingsMap.ar || {}),
+            enableAutoReply: autoReply.enabled ?? true,
+            autoReplyMessage: autoReply.message || DEFAULT_AUTO_REPLY_MESSAGE,
             displayName: user?.name || '',
           }));
         }
@@ -220,6 +232,17 @@ const Settings = () => {
           updated_at: now,
         }, { onConflict: 'key' });
         toast.success('AR settings saved!');
+
+      } else if (activeTab === 'messaging') {
+        await supabase.from('settings').upsert({
+          key: 'autoReply',
+          value: {
+            enabled: Boolean(formData.enableAutoReply),
+            message: formData.autoReplyMessage.trim() || DEFAULT_AUTO_REPLY_MESSAGE,
+          },
+          updated_at: now,
+        }, { onConflict: 'key' });
+        toast.success('Auto-acknowledgment settings saved!');
       }
 
       await logAction(user, 'Updated ' + activeTab + ' settings');
@@ -247,24 +270,20 @@ const Settings = () => {
         redirectTo: `${window.location.origin}/login`,
       });
       if (error) throw error;
-      toast.success(`Password reset email sent to ${email}`);
-      await logAction(user, 'Requested password reset');
+      toast.success('Password reset link sent to your email!');
     } catch (error) {
-      toast.error(error.message || 'Failed to send reset email.');
+      toast.error('Error sending reset email: ' + error.message);
     }
   };
 
-  const handleGcashQrUpload = async (file) => {
+  const handleGcashQrUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     setIsLoading(true);
     try {
-      const result = await uploadToCloudinary(file);
-      if (result?.secure_url) {
-        setFormData((prev) => ({ ...prev, gcashQrUrl: result.secure_url }));
-        toast.success('GCash QR Code uploaded! Please save settings to apply.');
-      } else {
-        toast.error('Upload failed — please try again.');
-      }
+      const url = await uploadToCloudinary(file);
+      setFormData((prev) => ({ ...prev, gcashQrUrl: url }));
+      toast.success('GCash QR Code uploaded! Please save settings to apply.');
     } catch (err) {
       toast.error('Image upload error: ' + err.message);
     } finally {
@@ -303,6 +322,12 @@ const Settings = () => {
           onClick={() => setActiveTab('ar')}
         >
           AR Try-On
+        </button>
+        <button
+          className={`nav-tab ${activeTab === 'messaging' ? 'active' : ''}`}
+          onClick={() => setActiveTab('messaging')}
+        >
+          Messaging & Auto-Reply
         </button>
         <button
           className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
@@ -767,6 +792,93 @@ const Settings = () => {
                   value={formData.maxFileSize}
                   onChange={handleChange}
                 />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'messaging' && (
+            <div className="animate-fade-in max-w-xl">
+              <div className="section-header-icon">
+                <MessageSquare size={18} className="text-secondary" />
+                <h3 className="section-title mb-0">Automatic Message Acknowledgment</h3>
+              </div>
+
+              <div className="toggle-group mt-4">
+                <div className="toggle-info">
+                  <h4>Enable Automatic Acknowledgment</h4>
+                  <p>
+                    Instantly send an automated response when a customer sends a message before staff manually replies.
+                  </p>
+                </div>
+                <label className="toggle-switch" aria-label="Enable Automatic Acknowledgment">
+                  <input
+                    type="checkbox"
+                    name="enableAutoReply"
+                    checked={formData.enableAutoReply}
+                    onChange={handleChange}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="form-group mt-5">
+                <div className="flex-between mb-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="label mb-0" htmlFor="autoReplyMessage">Default Acknowledgment Message</label>
+                  <button
+                    type="button"
+                    className="btn-text small text-secondary flex-center gap-1"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        autoReplyMessage: DEFAULT_AUTO_REPLY_MESSAGE,
+                      }))
+                    }
+                    title="Reset message to default text"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#ec4899', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <RotateCcw size={12} /> Reset to Default
+                  </button>
+                </div>
+                <textarea
+                  id="autoReplyMessage"
+                  name="autoReplyMessage"
+                  className="input-field textarea-field"
+                  rows={4}
+                  value={formData.autoReplyMessage}
+                  onChange={handleChange}
+                  placeholder="Enter automated acknowledgment message..."
+                />
+                <span className="helper-text">
+                  This response is stored as an automated system message in the conversation thread.
+                </span>
+              </div>
+
+              {/* Live Preview Card */}
+              <div className="auto-reply-preview-container mt-5">
+                <div className="preview-label flex-center gap-1" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#ec4899', marginBottom: '8px' }}>
+                  <Sparkles size={14} />
+                  <span>Live Preview (How it appears in Customer Chat)</span>
+                </div>
+                <div className="mock-chat-window">
+                  <div className="mock-chat-bubble mock-customer">
+                    <p>Hi, is the White Dress still available for reservation?</p>
+                    <span className="mock-time">10:42 AM</span>
+                  </div>
+                  {formData.enableAutoReply ? (
+                    <div className="mock-chat-bubble mock-auto-reply animate-fade-in">
+                      <div className="mock-bot-badge">
+                        <Bot size={12} />
+                        <span>Automated Acknowledgment</span>
+                      </div>
+                      <p>{formData.autoReplyMessage || 'Default acknowledgment message...'}</p>
+                      <span className="mock-time">10:42 AM</span>
+                    </div>
+                  ) : (
+                    <div className="mock-chat-disabled-notice animate-fade-in">
+                      ⚠️ Automatic acknowledgment is currently disabled. Customers will wait for a manual staff reply.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
