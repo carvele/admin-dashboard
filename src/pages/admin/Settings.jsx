@@ -9,7 +9,6 @@ import {
   Sparkles,
   RotateCcw,
   Bot,
-  CheckCircle2,
   Clock,
   Calendar,
   Trash2,

@@ -497,10 +497,52 @@ export const deleteCategoryAdmin = async (id, name, isSubcategory = false) => {
  * Healing function for data mismatches.
  */
 export const recalculateAllInventoryStock = async () => {
-  // Shared with the reservation lifecycle. This list used to be inline here and
-  // included 'Pending', while the lifecycle only ever moved stock at
-  // 'To Pickup' -- so a sync and a status change disagreed about the same
-  // reservation, stranding units as reserved against bookings already cancelled.
+  // 0. Auto-create missing color variants for existing products that have multi-color arrays
+  try {
+    const { data: prods } = await supabase.from('products').select('*').eq('deleted', false);
+    const { data: existingInv } = await supabase.from('inventory').select('*').eq('deleted', false);
+
+    if (prods && existingInv) {
+      const newVariantsToCreate = [];
+      for (const p of prods) {
+        if (!p.color || !p.sizes || !Array.isArray(p.sizes)) continue;
+        const colors = typeof p.color === 'string' ? p.color.split(',').map(c => c.trim()).filter(Boolean) : (Array.isArray(p.color) ? p.color : []);
+        if (colors.length <= 1) continue;
+
+        const prodInv = existingInv.filter(i => (i.product_doc_id === p.id || i.product_doc_id === p.doc_id || i.sku === p.id));
+        const existingCombos = new Set(prodInv.map(i => i.size + '|||' + (i.color || '')));
+
+        for (const size of p.sizes) {
+          for (const color of colors) {
+            const key = size + '|||' + color;
+            if (!existingCombos.has(key)) {
+              const skuStr = (p.style_code || p.id || 'ITEM') + '-' + color.toUpperCase().replace(/\s+/g, '') + '-' + size;
+              newVariantsToCreate.push({
+                product_doc_id: p.id,
+                sku: p.style_code || p.id,
+                variant_sku: skuStr,
+                item: p.name,
+                category: p.category || 'Uncategorized',
+                size,
+                color,
+                pattern: '',
+                total: 0,
+                reserved: 0,
+                available: 0,
+                deleted: false
+              });
+            }
+          }
+        }
+      }
+      if (newVariantsToCreate.length > 0) {
+        await supabase.from('inventory').insert(newVariantsToCreate);
+      }
+    }
+  } catch (err) {
+    console.warn('Auto-variant sync notice:', err.message);
+  }
+
   // 1. Get all reservations currently holding stock
   const { data: activeRes, error: resErr } = await supabase
     .from('reservations')

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, Settings2, Palette, FolderTree } from 'lucide-react';
 import {
   addColor,
   addPattern,
@@ -141,92 +141,73 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   };
 
   // ── Generic lookup list renderer (Colors / Patterns) ──────────────────────
-  const list = (title, items, add, update, remove) => (
-    <div className="form-group flex-1" style={{ minWidth: '250px' }}>
-      <label className="label font-bold" style={{ fontSize: '0.95rem' }}>{title}</label>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const n = e.target.name.value.trim();
-          if (n) {
-            try {
-              await add(n);
-              e.target.reset();
-              load();
-            } catch (err) {
-              setError(err.message);
+  const list = (title, items, add, update, remove) => {
+    const singular = title.toLowerCase().slice(0, -1);
+    const inputId = `aip-add-${singular}`;
+    return (
+      <div className="aip-field">
+        <span className="aip-col-title">{title}</span>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const n = e.target.name.value.trim();
+            if (n) {
+              try {
+                await add(n);
+                e.target.reset();
+                load();
+              } catch (err) {
+                setError(err.message);
+              }
             }
-          }
-        }}
-        className="d-flex gap-2"
-        style={{ marginBottom: '0.75rem' }}
-      >
-        <input
-          name="name"
-          className="input-field"
-          style={{ padding: '0.5rem 0.75rem' }}
-          placeholder={`Add new ${title.toLowerCase().slice(0, -1)}...`}
-          aria-label={`New ${title}`}
-        />
-        <button className="btn-primary" style={{ padding: '0.5rem 1rem' }}>Add</button>
-      </form>
-      <ul
-        style={{
-          maxHeight: '180px',
-          overflowY: 'auto',
-          border: '1px solid var(--border-color)',
-          borderRadius: '8px',
-          padding: '0.5rem',
-          backgroundColor: 'var(--cream)',
-          listStyle: 'none',
-          margin: 0,
-        }}
-      >
-        {items.length === 0 ? (
-          <li className="text-secondary text-center text-sm py-2">No {title.toLowerCase()} configured</li>
-        ) : (
-          items.map((item) => (
-            <li
-              key={item.id}
-              className="d-flex justify-between align-center"
-              style={{
-                padding: '0.25rem 0.5rem',
-                borderBottom: '1px solid var(--border-color)',
-                backgroundColor: 'var(--white)',
-                borderRadius: '4px',
-                marginBottom: '0.25rem',
-              }}
-            >
-              <input
-                defaultValue={item.name}
-                className="input-field"
-                style={{ border: 'none', background: 'transparent', padding: '0.25rem', fontSize: '0.875rem', boxShadow: 'none', width: '70%' }}
-                aria-label={`${title} name`}
-                onBlur={(e) => {
-                  const val = e.target.value.trim();
-                  if (val && val !== item.name) {
-                    update(item.id, val).then(load).catch((err) => setError(err.message));
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn-outline"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderColor: 'var(--status-cancelled-text)', color: 'var(--status-cancelled-text)', backgroundColor: 'transparent' }}
-                onClick={() => {
-                  if (window.confirm(`Delete ${item.name}?`)) {
-                    remove(item.id).then(load).catch((err) => setError(err.message));
-                  }
-                }}
-              >
-                Delete
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
-    </div>
-  );
+          }}
+          className="aip-add-form"
+        >
+          <input
+            id={inputId}
+            name="name"
+            className="input-field"
+            placeholder={`Add new ${singular}...`}
+            aria-label={`New ${singular}`}
+          />
+          <button className="btn-primary">Add</button>
+        </form>
+        <ul className="aip-list">
+          {items.length === 0 ? (
+            <li className="aip-empty">No {title.toLowerCase()} configured</li>
+          ) : (
+            items.map((item) => (
+              <li key={item.id} className="aip-item">
+                <input
+                  defaultValue={item.name}
+                  className="input-field aip-item-name"
+                  aria-label={`${singular} name`}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val && val !== item.name) {
+                      update(item.id, val).then(load).catch((err) => setError(err.message));
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-outline aip-delete"
+                  onClick={() => {
+                    if (window.confirm(`Delete ${item.name}?`)) {
+                      remove(item.id).then(load).catch((err) => setError(err.message));
+                    }
+                  }}
+                  aria-label={`Delete ${singular} ${item.name}`}
+                >
+                  Delete
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+    );
+  };
 
   // ── Categories section ─────────────────────────────────────────────────────
   const handleAddTopCategory = async (e) => {
@@ -287,50 +268,18 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
     }
   };
 
-  const itemRowStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0.3rem 0.5rem',
-    borderBottom: '1px solid var(--border-color)',
-    backgroundColor: 'var(--white)',
-    borderRadius: '4px',
-    marginBottom: '0.25rem',
-  };
-
-  const deleteButtonStyle = {
-    padding: '0.2rem 0.5rem',
-    fontSize: '0.7rem',
-    borderColor: 'var(--status-cancelled-text)',
-    color: 'var(--status-cancelled-text)',
-    backgroundColor: 'transparent',
-    flexShrink: 0,
-  };
-
   // Thumbnail + upload button shown next to a category/subcategory's name.
   // Shared by the top-level list and the subcategory list below.
   const renderImageControl = (cat) => (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+    <div className="aip-thumb-wrap">
       {cat.imageUrl ? (
-        <img
-          src={cat.imageUrl}
-          alt=""
-          style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover', marginRight: '0.35rem' }}
-        />
+        <img src={cat.imageUrl} alt="" className="aip-thumb" />
       ) : (
-        <div
-          title="No image set"
-          style={{
-            width: 24, height: 24, borderRadius: 4, marginRight: '0.35rem',
-            backgroundColor: 'var(--cream)', border: '1px dashed var(--border-color)',
-          }}
-        />
+        <div title="No image set" className="aip-thumb-empty" />
       )}
-      <label
-        title="Upload image"
-        style={{ color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.35rem', display: 'flex' }}
-      >
+      <label title="Upload image" className="aip-upload">
         <Upload size={14} />
+        <span className="aip-sr-only">Upload image for {cat.name}</span>
         <input
           type="file"
           accept="image/*"
@@ -339,61 +288,30 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
         />
       </label>
       {uploadingCatId === cat.id && (
-        <div
-          style={{
-            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', backgroundColor: 'var(--glass-bg)', borderRadius: 4,
-          }}
-        >
+        <div className="aip-upload-busy">
           <div className="loading-spinner" style={{ width: 14, height: 14 }} />
         </div>
       )}
     </div>
   );
 
-  const scrollListStyle = {
-    maxHeight: '220px',
-    overflowY: 'auto',
-    border: '1px solid var(--border-color)',
-    borderRadius: '8px',
-    padding: '0.5rem',
-    backgroundColor: 'var(--cream)',
-    listStyle: 'none',
-    margin: 0,
-  };
-
   return (
     <>
       {/* Deletion-blocked error dialog */}
       {dialogMsg && <ErrorDialog message={dialogMsg} onClose={() => setDialogMsg('')} />}
 
-      <div className="card page-animate" style={{ marginBottom: '1.5rem', backgroundColor: 'var(--white)' }}>
-        <div
-          className="card-header d-flex justify-between align-center"
-          style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}
-        >
-          <h3 className="page-title" style={{ fontSize: '1.2rem', margin: 0 }}>Inventory Administration</h3>
+      <div className="card page-animate aip-panel">
+        <div className="card-header aip-header">
+          <h3 className="page-title">Inventory Administration</h3>
           <button className="btn-secondary small" onClick={onClose}>Close Panel</button>
         </div>
 
         {error && (
-          <div
-            role="alert"
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: 'var(--status-cancelled-bg)',
-              color: 'var(--status-cancelled-text)',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              border: '1px solid rgba(153, 27, 27, 0.1)',
-            }}
-          >
-            {error}
+          <div role="alert" className="aip-error">
+            <span>{error}</span>
             <button
               onClick={() => setError('')}
-              style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 700 }}
+              className="aip-error-dismiss"
               aria-label="Dismiss error"
             >
               ✕
@@ -401,113 +319,133 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
           </div>
         )}
 
-        {/* ── Row 1: Stock Baseline + Colors + Patterns ── */}
-        <div className="d-flex flex-wrap gap-6" style={{ marginBottom: '1.5rem' }}>
-          {/* Baseline */}
-          <form onSubmit={save} className="form-group flex-1" style={{ minWidth: '250px' }}>
-            <span className="label font-bold" style={{ fontSize: '0.95rem' }}>Stock Baseline Settings</span>
-            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="label" style={{ fontSize: '0.75rem' }} htmlFor="baseline-product-select">Select Product</label>
-              <select
-                id="baseline-product-select"
-                className="input-field"
-                value={productId}
-                onChange={(e) => {
-                  setProductId(e.target.value);
-                  setBaseline(products.find((p) => p.id === e.target.value)?.stockbaseline ?? '');
-                }}
-                style={{ fontSize: '0.875rem' }}
-              >
-                <option value="">Choose a product...</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+        <div className="aip-sections">
+          {/* ── Section 1: Stock Baseline ── */}
+          <section className="aip-section">
+            <div className="aip-section-head">
+              <div className="aip-section-icon"><Settings2 size={18} /></div>
+              <div>
+                <h4 className="aip-section-title">Stock Baseline Settings</h4>
+                <p className="aip-section-subtitle">
+                  The reorder threshold a product is measured against when flagging low stock.
+                </p>
+              </div>
             </div>
-            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="label" style={{ fontSize: '0.75rem' }} htmlFor="baseline-qty-input">Baseline Quantity</label>
-              <input
-                id="baseline-qty-input"
-                type="number"
-                min="0"
-                step="1"
-                className="input-field"
-                value={baseline}
-                onChange={(e) => setBaseline(e.target.value)}
-                placeholder="e.g. 10"
-                style={{ fontSize: '0.875rem' }}
-              />
-            </div>
-            <button className="btn-primary" style={{ width: '100%', padding: '0.6rem' }}>
-              Save Baseline
-            </button>
-          </form>
 
-          {list('Colors', colors, addColor, updateColor, deleteColor)}
-          {list('Patterns', patterns, addPattern, updatePattern, deletePattern)}
-        </div>
-
-        {/* ── Row 2: Categories (full width) ── */}
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-          <span className="label font-bold" style={{ fontSize: '0.95rem', display: 'block', marginBottom: '1rem' }}>
-            Categories &amp; Sub-Categories
-          </span>
-
-          <div className="d-flex flex-wrap gap-6">
-            {/* Left: Add top-level category */}
-            <div className="form-group flex-1" style={{ minWidth: '220px' }}>
-              <span className="label" style={{ fontSize: '0.8rem' }}>Add Top-Level Category</span>
-              <form onSubmit={handleAddTopCategory} className="d-flex gap-2" style={{ marginBottom: '0.75rem' }}>
-                <input
-                  name="catName"
+            <form onSubmit={save} className="aip-baseline-row">
+              <div className="aip-field">
+                <label className="label" htmlFor="baseline-product-select">Select Product</label>
+                <select
+                  id="baseline-product-select"
                   className="input-field"
-                  style={{ padding: '0.5rem 0.75rem' }}
-                  placeholder="e.g. Gowns"
-                  aria-label="New top-level category name"
+                  value={productId}
+                  onChange={(e) => {
+                    setProductId(e.target.value);
+                    setBaseline(products.find((p) => p.id === e.target.value)?.stockbaseline ?? '');
+                  }}
+                >
+                  <option value="">Choose a product...</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="aip-field">
+                <label className="label" htmlFor="baseline-qty-input">Baseline Quantity</label>
+                <input
+                  id="baseline-qty-input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="input-field"
+                  value={baseline}
+                  onChange={(e) => setBaseline(e.target.value)}
+                  placeholder="e.g. 10"
                 />
-                <button className="btn-primary" style={{ padding: '0.5rem 1rem', flexShrink: 0 }}>Add</button>
-              </form>
+              </div>
+              <button className="btn-primary aip-save-btn">Save Baseline</button>
+            </form>
+          </section>
 
-              {/* Top-level categories list */}
-              <ul style={scrollListStyle}>
-                {categoryTree.length === 0 ? (
-                  <li className="text-secondary text-center text-sm py-2">No categories yet</li>
-                ) : (
-                  categoryTree.map((cat) => (
-                    <li key={cat.id} style={itemRowStyle}>
-                      {renderImageControl(cat)}
-                      <input
-                        defaultValue={cat.name}
-                        className="input-field"
-                        style={{ border: 'none', background: 'transparent', padding: '0.25rem', fontSize: '0.875rem', boxShadow: 'none', fontWeight: 600, width: '65%' }}
-                        aria-label="Category name"
-                        onBlur={(e) => handleRenameCategory(cat.id, cat.name, e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn-outline"
-                        style={deleteButtonStyle}
-                        onClick={() => handleDeleteCategory(cat.id, cat.name, false)}
-                        aria-label={`Delete category ${cat.name}`}
-                      >
-                        Delete
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
+          {/* ── Section 2: Master Attributes ── */}
+          <section className="aip-section">
+            <div className="aip-section-head">
+              <div className="aip-section-icon"><Palette size={18} /></div>
+              <div>
+                <h4 className="aip-section-title">Master Attributes</h4>
+                <p className="aip-section-subtitle">
+                  Colours and patterns available when creating a product. Renaming one updates it everywhere.
+                </p>
+              </div>
             </div>
 
-            {/* Right: Add subcategory (pick parent first) */}
-            <div className="form-group flex-1" style={{ minWidth: '220px' }}>
-              <span className="label" style={{ fontSize: '0.8rem' }}>Add Sub-Category</span>
-              <form onSubmit={handleAddSubCategory} style={{ marginBottom: '0.75rem' }}>
-                <div className="d-flex gap-2" style={{ marginBottom: '0.5rem' }}>
+            <div className="aip-grid-2">
+              {list('Colors', colors, addColor, updateColor, deleteColor)}
+              {list('Patterns', patterns, addPattern, updatePattern, deletePattern)}
+            </div>
+          </section>
+
+          {/* ── Section 3: Taxonomy ── */}
+          <section className="aip-section">
+            <div className="aip-section-head">
+              <div className="aip-section-icon"><FolderTree size={18} /></div>
+              <div>
+                <h4 className="aip-section-title">Taxonomy</h4>
+                <p className="aip-section-subtitle">
+                  Categories and sub-categories, with the images shown to customers in the mobile app.
+                </p>
+              </div>
+            </div>
+
+            <div className="aip-grid-2">
+              {/* Left: Add top-level category */}
+              <div className="aip-field">
+                <span className="aip-col-title">Top-Level Categories</span>
+                <form onSubmit={handleAddTopCategory} className="aip-add-form">
+                  <input
+                    name="catName"
+                    className="input-field"
+                    placeholder="e.g. Gowns"
+                    aria-label="New top-level category name"
+                  />
+                  <button className="btn-primary">Add</button>
+                </form>
+
+                <ul className="aip-list">
+                  {categoryTree.length === 0 ? (
+                    <li className="aip-empty">No categories yet</li>
+                  ) : (
+                    categoryTree.map((cat) => (
+                      <li key={cat.id} className="aip-item">
+                        {renderImageControl(cat)}
+                        <input
+                          defaultValue={cat.name}
+                          className="input-field aip-item-name aip-item-name-bold"
+                          aria-label="Category name"
+                          onBlur={(e) => handleRenameCategory(cat.id, cat.name, e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn-outline aip-delete"
+                          onClick={() => handleDeleteCategory(cat.id, cat.name, false)}
+                          aria-label={`Delete category ${cat.name}`}
+                        >
+                          Delete
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+
+              {/* Right: Add subcategory (pick parent first) */}
+              <div className="aip-field">
+                <span className="aip-col-title">Sub-Categories</span>
+                <form onSubmit={handleAddSubCategory} className="aip-add-form-stacked">
                   <select
                     className="input-field"
                     value={newSubParentId}
                     onChange={(e) => setNewSubParentId(e.target.value)}
-                    style={{ fontSize: '0.875rem' }}
                     aria-label="Select parent category"
                   >
                     <option value="">Select parent category...</option>
@@ -515,70 +453,54 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
-                </div>
-                <div className="d-flex gap-2">
-                  <input
-                    className="input-field"
-                    style={{ padding: '0.5rem 0.75rem' }}
-                    placeholder="Sub-category name..."
-                    value={newSubName}
-                    onChange={(e) => setNewSubName(e.target.value)}
-                    aria-label="New sub-category name"
-                  />
-                  <button className="btn-primary" style={{ padding: '0.5rem 1rem', flexShrink: 0 }}>Add</button>
-                </div>
-              </form>
+                  <div className="aip-add-form-row">
+                    <input
+                      className="input-field"
+                      placeholder="Sub-category name..."
+                      value={newSubName}
+                      onChange={(e) => setNewSubName(e.target.value)}
+                      aria-label="New sub-category name"
+                    />
+                    <button className="btn-primary">Add</button>
+                  </div>
+                </form>
 
-              {/* Subcategories list — grouped under each parent */}
-              <ul style={scrollListStyle}>
-                {categoryTree.every((c) => c.subcategories.length === 0) ? (
-                  <li className="text-secondary text-center text-sm py-2">No sub-categories yet</li>
-                ) : (
-                  categoryTree.flatMap((cat) =>
-                    cat.subcategories.length === 0 ? [] : [
-                      <li
-                        key={`hdr-${cat.id}`}
-                        style={{
-                          padding: '0.2rem 0.5rem',
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          color: 'var(--secondary)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          backgroundColor: 'var(--beige)',
-                          borderRadius: '4px',
-                          marginBottom: '0.2rem',
-                        }}
-                      >
-                        {cat.name}
-                      </li>,
-                      ...cat.subcategories.map((sub) => (
-                        <li key={sub.id} style={{ ...itemRowStyle, marginLeft: '0.5rem' }}>
-                          {renderImageControl(sub)}
-                          <input
-                            defaultValue={sub.name}
-                            className="input-field"
-                            style={{ border: 'none', background: 'transparent', padding: '0.25rem', fontSize: '0.875rem', boxShadow: 'none', width: '65%' }}
-                            aria-label="Sub-category name"
-                            onBlur={(e) => handleRenameCategory(sub.id, sub.name, e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="btn-outline"
-                            style={deleteButtonStyle}
-                            onClick={() => handleDeleteCategory(sub.id, sub.name, true)}
-                            aria-label={`Delete sub-category ${sub.name}`}
-                          >
-                            Delete
-                          </button>
-                        </li>
-                      )),
-                    ]
-                  )
-                )}
-              </ul>
+                {/* Subcategories list — grouped under each parent */}
+                <ul className="aip-list">
+                  {categoryTree.every((c) => c.subcategories.length === 0) ? (
+                    <li className="aip-empty">No sub-categories yet</li>
+                  ) : (
+                    categoryTree.flatMap((cat) =>
+                      cat.subcategories.length === 0 ? [] : [
+                        <li key={`hdr-${cat.id}`} className="aip-group-label">
+                          {cat.name}
+                        </li>,
+                        ...cat.subcategories.map((sub) => (
+                          <li key={sub.id} className="aip-item aip-item-indent">
+                            {renderImageControl(sub)}
+                            <input
+                              defaultValue={sub.name}
+                              className="input-field aip-item-name"
+                              aria-label="Sub-category name"
+                              onBlur={(e) => handleRenameCategory(sub.id, sub.name, e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="btn-outline aip-delete"
+                              onClick={() => handleDeleteCategory(sub.id, sub.name, true)}
+                              aria-label={`Delete sub-category ${sub.name}`}
+                            >
+                              Delete
+                            </button>
+                          </li>
+                        )),
+                      ]
+                    )
+                  )}
+                </ul>
+              </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </>
