@@ -23,7 +23,7 @@
 }
 
 .incident-log-header:hover {
-  background: #f0eade;
+  background: var(--warm-gray);
 }
 
 .incident-header-icon {
@@ -51,7 +51,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   background: var(--color-danger, #ef4444);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .incident-add-btn {
@@ -72,7 +72,7 @@
 .incident-add-btn:hover {
   border-color: var(--color-danger, #ef4444);
   color: var(--color-danger, #ef4444);
-  background: #fef2f2;
+  background: var(--status-cancelled-bg);
 }
 
 /* ── Form ── */
@@ -84,7 +84,7 @@
 .incident-form {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
-  background: #fffcf5;
+  background: var(--cream);
   animation: slideDown 0.2s ease;
 }
 
@@ -191,8 +191,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
   border: 1px solid #fde68a;
 }
 

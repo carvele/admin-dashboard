@@ -18,23 +18,43 @@
   --pink-border: #fbcfe8;
 
   --border-color: #efe9db;
+  --border-light: #e5e5e5;
   --focus-ring: rgba(212, 175, 55, 0.4);
 
-  /* Theme Aliases */
-  --surface: #ffffff;
-  --surface-hover: #f5eedc;
-  --background: #fdfbf7;
-  --border: #efe9db;
-  --text-main: #1f1c18;
-  --bg-card: #ffffff;
-  --bg-light: #fdfbf7;
-  --bg-hover: #f5eedc;
-  --bg-main: #fdfbf7;
-  --color-gold: #d4af37;
+  /* Theme Aliases -- kept as var() references (not literal hex) so a
+     single :root.dark override below actually reaches every alias that
+     points at it, instead of each alias needing its own dark redefinition. */
+  --surface: var(--white);
+  --surface-hover: var(--beige);
+  --background: var(--cream);
+  --border: var(--border-color);
+  --text-main: var(--text-primary);
+  --bg-card: var(--white);
+  --bg-light: var(--cream);
+  --bg-hover: var(--beige);
+  --bg-main: var(--cream);
+  --color-gold: var(--accent);
   --color-warning: #f59e0b;
   --color-success: #10b981;
   --color-danger: #ef4444;
-  
+
+  --status-rejected-bg: #fde8e8;
+  --status-rejected-text: #c81e1e;
+
+  /* Fixed white -- for glyph/text sitting on a saturated colour badge
+     (accent gold, indigo, orange icon circles), NOT a page/card surface.
+     --white itself flips to a dark surface tone in :root.dark below, so
+     reusing it for this purpose goes near-invisible once dark mode is
+     actually active. */
+  --on-accent: #ffffff;
+  /* Mirror of --on-accent -- for dark glyph/text sitting on the gold accent
+     gradient specifically (--accent/--highlight are the same hex in both
+     themes, so text on them needs to stay fixed-dark, not flip with
+     --charcoal). */
+  --on-accent-dark: #1f1c18;
+
+  --toggle-track: #cbd5e1;
+
   /* Glassmorphism base */
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(239, 233, 219, 0.5);
@@ -52,6 +72,14 @@
   --status-confirmed-text: #155e75;
   --status-fitting-bg: #f3e8ff;
   --status-fitting-text: #6b21a8;
+
+  /* Category icon-circle pairs (Dashboard stat/activity icons) -- same
+     light-bg/saturated-text shape as the status tokens above, kept separate
+     since they're a different semantic (category, not status). */
+  --category-indigo-bg: #e0e7ff;
+  --category-indigo-text: #4338ca;
+  --category-violet-bg: #f3e8ff;
+  --category-violet-text: #7e22ce;
 
   /* Stock Health — 5 Tiers (+ bg variants for badges) */
   --stock-healthy:        #10b981;  /* Emerald */
@@ -105,10 +133,28 @@
   --text-secondary: #a0a0a0;
 
   --border-color: #333333;
+  --border-light: #3a3a3a;
   --focus-ring: rgba(212, 175, 55, 0.3);
-  
+
   --glass-bg: rgba(30, 30, 30, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
+
+  --color-warning: #fbbf24;
+  --color-success: #34d399;
+  --color-danger: #f87171;
+
+  --pink-accent: #f472b6;
+  --pink-soft: rgba(236, 72, 153, 0.15);
+  --pink-border: rgba(236, 72, 153, 0.35);
+
+  --status-rejected-bg: rgba(239, 68, 68, 0.2);
+  --status-rejected-text: #f87171;
+
+  /* #6b7280 verified >=3.4:1 against both --cream and --beige dark values
+     per WCAG 2.1 SC 1.4.11 (non-text contrast, 3:1 min for UI component
+     state) -- --warm-gray's dark value only clears ~1.1-1.25:1 here and
+     would make the "off" track effectively invisible. */
+  --toggle-track: #6b7280;
 
   /* Adjust status backgrounds for dark mode */
   --status-pending-bg: rgba(245, 158, 11, 0.2);
@@ -123,6 +169,11 @@
   --status-confirmed-text: #22d3ee;
   --status-fitting-bg: rgba(139, 92, 246, 0.2);
   --status-fitting-text: #a78bfa;
+
+  --category-indigo-bg: rgba(67, 56, 202, 0.2);
+  --category-indigo-text: #a5b4fc;
+  --category-violet-bg: rgba(126, 34, 206, 0.2);
+  --category-violet-text: #d8b4fe;
 
   /* Stock Health — dark mode overrides */
   --stock-healthy:        #34d399;
@@ -224,7 +275,10 @@ button {
     transform 0.1s;
 }
 .btn-primary:hover {
-  background-color: #1a1a1a;
+  /* opacity rather than a fixed dark hex -- --charcoal flips from near-black
+     (light mode) to near-white (dark mode), so a literal dark hover colour
+     would go invisible-on-invisible against the dark-mode button. */
+  opacity: 0.85;
 }
 .btn-primary:active {
   transform: scale(0.98);
@@ -263,6 +317,10 @@ button {
 .input-field {
   width: 100%;
   padding: 0.75rem 1rem;
+  /* Never had an explicit background -- fell back to the browser's native
+     white form-control default, which no CSS variable could ever override. */
+  background-color: var(--white);
+  color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   outline: none;
@@ -343,7 +401,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #cbd5e1;
+  background-color: var(--toggle-track);
   transition: 0.4s;
   border-radius: 24px;
 }
@@ -541,9 +599,9 @@ input:checked + .toggle-slider:before {
 .sticky { position: sticky; }
 .z-20 { z-index: 20; }
 .bottom-0 { bottom: 0; }
-.border { border-width: 1px; border-style: solid; border-color: var(--border-light, #e5e5e5); }
-.border-b { border-bottom-width: 1px; border-bottom-style: solid; border-color: var(--border-light, #e5e5e5); }
-.border-t { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light, #e5e5e5); }
+.border { border-width: 1px; border-style: solid; border-color: var(--border-light); }
+.border-b { border-bottom-width: 1px; border-bottom-style: solid; border-color: var(--border-light); }
+.border-t { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light); }
 .border-transparent { border-color: transparent; }
 .rounded { border-radius: 0.25rem; }
 .rounded-md { border-radius: 0.375rem; }
@@ -579,20 +637,20 @@ input:checked + .toggle-slider:before {
 .transition-transform { transition-property: transform; transition-duration: 150ms; }
 .shadow-inner { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06); }
 .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
-.bg-gray-100 { background-color: #f3f4f6; }
-.bg-white { background-color: #fff; }
-.text-danger { color: #dc2626; }
-.text-primary { color: var(--color-gold, #c9a84c); }
-.text-gray-400 { color: #9ca3af; }
-.text-gray-500 { color: #6b7280; }
-.text-gray-600 { color: #4b5563; }
-.text-gray-900 { color: #111827; }
-.accent-primary { accent-color: var(--color-gold, #c9a84c); }
-.accent-red-500 { accent-color: #ef4444; }
+.bg-gray-100 { background-color: var(--beige); }
+.bg-white { background-color: var(--white); }
+.text-danger { color: var(--color-danger); }
+.text-primary { color: var(--color-gold); }
+.text-gray-400 { color: var(--text-secondary); }
+.text-gray-500 { color: var(--text-secondary); }
+.text-gray-600 { color: var(--text-secondary); }
+.text-gray-900 { color: var(--text-primary); }
+.accent-primary { accent-color: var(--color-gold); }
+.accent-red-500 { accent-color: var(--color-danger); }
 .backdrop-blur-sm { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-.border-gray-200 { border-color: #e5e7eb; }
-.border-gray-300 { border-color: #d1d5db; }
-.text-yellow-400 { color: #facc15; }
+.border-gray-200 { border-color: var(--border-color); }
+.border-gray-300 { border-color: var(--border-color); }
+.text-yellow-400 { color: #facc15; } /* rating-star yellow -- intentionally constant across themes */
 /* Opacity-modifier variants (Tailwind's bg-color/NN syntax) — same missing-
    utility problem, just with a slash in the class name. */
 .bg-white\/80 { background-color: rgba(255, 255, 255, 0.8); }
@@ -700,8 +758,8 @@ input:checked + .toggle-slider:before {
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .rounded-full { border-radius: 9999px; }
 .text-accent { color: var(--accent); }
-.text-success { color: #16a34a; }
-.text-warning { color: #d97706; }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
 .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
 .text-xs { font-size: 0.75rem; line-height: 1rem; }
 
@@ -720,11 +778,11 @@ input:checked + .toggle-slider:before {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.badge-danger { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
-.badge-success { background: var(--status-approved-bg, #e6f4ea); color: var(--status-approved-text, #1e7e34); }
-.badge-secondary { background: #eef0f2; color: #475569; }
+.badge-danger { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+.badge-success { background: var(--status-approved-bg); color: var(--status-approved-text); }
+.badge-secondary { background: var(--beige); color: var(--text-secondary); }
 .badge.accent { background: rgba(212, 175, 55, 0.15); color: var(--accent); }
-.badge.secondary { background: #eef0f2; color: #475569; }
+.badge.secondary { background: var(--beige); color: var(--text-secondary); }
 .flex-row { flex-direction: row; }
 .flex-column { flex-direction: column; }
 .h-auto { height: auto; }
@@ -732,8 +790,8 @@ input:checked + .toggle-slider:before {
 .rounded-xl { border-radius: 0.75rem; }
 .rounded-tl-lg { border-top-left-radius: 0.5rem; }
 .border-0 { border-width: 0; }
-.border-secondary { border-color: var(--border-light, #e5e5e5); }
-.divide-y > * + * { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light, #e5e5e5); }
+.border-secondary { border-color: var(--border-light); }
+.divide-y > * + * { border-top-width: 1px; border-top-style: solid; border-color: var(--border-light); }
 .opacity-0 { opacity: 0; }
 .opacity-30 { opacity: 0.3; }
 .opacity-50 { opacity: 0.5; }
@@ -780,12 +838,12 @@ input:checked + .toggle-slider:before {
   color: var(--status-approved-text);
 }
 .status-vip {
-  background: #f3e8ff;
-  color: #6b21a8;
+  background: var(--status-fitting-bg);
+  color: var(--status-fitting-text);
 }
 .status-inactive {
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--border-color);
+  color: var(--text-secondary);
 }
 .status-pending, .status-request-approval {
   background: var(--status-pending-bg);
@@ -812,8 +870,8 @@ input:checked + .toggle-slider:before {
   color: var(--status-fitting-text);
 }
 .status-disabled {
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--border-color);
+  color: var(--text-secondary);
 }
 
 /* ===== 5-Tier Stock Health Badges (global — used in Inventory + Catalog) ===== */
@@ -946,8 +1004,8 @@ input:checked + .toggle-slider:before {
   }
 }
 .modal-content {
-  background-color: #ffffff !important;
-  background: #ffffff !important;
+  background-color: var(--white) !important;
+  background: var(--white) !important;
   border: 1px solid var(--border-color);
   border-radius: 16px;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
@@ -1014,7 +1072,7 @@ input:checked + .toggle-slider:before {
   justify-content: flex-end;
   align-items: center;
   gap: 0.75rem;
-  background-color: var(--cream, #fdfbf7);
+  background-color: var(--cream);
   border-bottom-left-radius: 15px;
   border-bottom-right-radius: 15px;
 }
@@ -1143,4 +1201,24 @@ input:checked + .toggle-slider:before {
   background: var(--white);
   box-shadow: 0 0 0 3px var(--focus-ring);
   outline: none;
+}
+
+/* Recharts renders its tooltip with a fixed white background/border via an
+   inline style (not a stylesheet rule), set directly by the library's JS on
+   every render -- a plain CSS rule can't win against inline styles, hence
+   !important here specifically. */
+.recharts-default-tooltip {
+  background-color: var(--white) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary);
+}
+
+/* react-loading-skeleton ships its own fixed-light --base-color/--highlight-
+   color (#ebebeb/#f5f5f5) via its own stylesheet import, so skeleton loaders
+   stayed light-gray regardless of theme. :root selector for extra
+   specificity so this reliably wins regardless of the two stylesheets'
+   import order. */
+:root .react-loading-skeleton {
+  --base-color: var(--beige);
+  --highlight-color: var(--warm-gray);
 }

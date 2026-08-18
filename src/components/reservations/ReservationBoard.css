@@ -40,7 +40,7 @@
 
 .res-board-count {
   margin-left: auto;
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+  background: var(--beige);
   border-radius: 999px;
   padding: 1px 8px;
   font-size: 0.75rem;
@@ -57,7 +57,7 @@
 }
 
 .res-card {
-  background: var(--card-bg, #fff);
+  background: var(--white);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px;
@@ -184,7 +184,7 @@
 /* Money still to take at the counter. Uses the same gold as the payment
    deadline chip: both mean "staff still have to do something about money". */
 .res-card-balance {
-  color: var(--gold, #8A6D3B);
+  color: var(--color-gold);
 }
 
 .res-card-actions {

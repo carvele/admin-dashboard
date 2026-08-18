@@ -53,15 +53,15 @@
 }
 .align-status.verified {
   background-color: var(--status-completed-bg);
-  color: #065f46;
+  color: var(--status-completed-text);
 }
 .align-status.pending {
   background-color: var(--status-pending-bg);
-  color: #92400e;
+  color: var(--status-pending-text);
 }
 .align-status.failed {
   background-color: var(--status-cancelled-bg);
-  color: #991b1b;
+  color: var(--status-cancelled-text);
 }
 
 .avatar {
@@ -192,7 +192,7 @@ model-viewer {
 .Hotspot {
   background: var(--accent);
   border-radius: 32px;
-  border: 2px solid #fff;
+  border: 2px solid var(--on-accent);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   cursor: pointer;
@@ -202,7 +202,7 @@ model-viewer {
 }
 .Hotspot:not([data-visible]) {
   background: transparent;
-  border: 2px solid #fff;
+  border: 2px solid var(--on-accent);
   box-shadow: none;
   opacity: 0.5;
 }
@@ -211,7 +211,7 @@ model-viewer {
   width: 12px;
   height: 12px;
   background-color: var(--accent);
-  border: 2px solid white;
+  border: 2px solid var(--on-accent);
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   cursor: crosshair;
@@ -239,18 +239,18 @@ model-viewer {
 }
 
 .upload-dropzone {
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--border-color);
   border-radius: 12px;
   padding: 2.5rem;
   text-align: center;
-  background-color: #f8fafc;
+  background-color: var(--beige);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .upload-dropzone:hover {
-  border-color: var(--primary);
-  background-color: #f1f5f9;
+  border-color: var(--accent);
+  background-color: var(--warm-gray);
 }
 
 .file-input-hidden {

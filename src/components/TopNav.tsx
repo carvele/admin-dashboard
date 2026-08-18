@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, Search, Menu, X } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { Bell, LogOut, Search, Menu, X, Sun, Moon } from 'lucide-react';
 import {
   getAvatarColor,
   getInitials,
@@ -19,6 +20,7 @@ interface TopNavProps {
 
 const TopNav = ({ user, onHamburger }: TopNavProps) => {
   const { logout, isAdminUnlocked } = useAuth() as any;
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -244,6 +246,15 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           <div className="sync-indicator"></div>
           <span className="sync-text">Live</span>
         </div>
+
+        <button
+          className="icon-btn"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
 
         <div className="notification-wrapper">
           <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>

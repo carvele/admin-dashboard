@@ -321,7 +321,7 @@ const StaffManagement = () => {
           <div className="member-info">
             <div
               className="avatar small-av"
-              style={{ backgroundColor: 'var(--color-gold)', color: 'white' }}
+              style={{ backgroundColor: 'var(--color-gold)', color: 'var(--on-accent)' }}
             >
               {(getDisplayName(member) || 'U')[0]}
             </div>
@@ -426,7 +426,7 @@ const StaffManagement = () => {
           <div className="member-info">
             <div
               className="avatar small-av"
-              style={{ backgroundColor: 'var(--color-muted, #aaa)', color: 'white' }}
+              style={{ backgroundColor: 'var(--stock-none)', color: 'var(--on-accent)' }}
             >
               {(getDisplayName(member) || 'U')[0]}
             </div>

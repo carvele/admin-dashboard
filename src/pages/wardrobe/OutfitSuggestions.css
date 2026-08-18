@@ -1,6 +1,6 @@
 /* ── Feminine accent overrides for Outfit page ── */
 :root {
-  --rose-light: #fce8ef;
+  --rose-light: var(--pink-soft);
   --rose-mid: var(--accent);
   --rose-dark: var(--highlight);
   --blush: var(--beige);
@@ -115,7 +115,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #cbd5e1;
+  background: var(--toggle-track);
   flex-shrink: 0;
 }
 
@@ -155,7 +155,7 @@
 }
 
 .icon-btn-small.text-rose:hover {
-  background: var(--rose-light, #fce8ef);
+  background: var(--rose-light);
 }
 
 .icon-btn-small.text-danger {
@@ -195,7 +195,7 @@
 }
 
 .confirm-del-btn:hover {
-  background: #b91c1c;
+  background: var(--status-rejected-text);
 }
 
 .cancel-del-btn {
@@ -229,11 +229,11 @@
   border-radius: 20px;
 }
 
-.pill-occasion { background: #fce8ef; color: var(--rose-dark, var(--highlight)); }
-.pill-season   { background: var(--status-pending-bg); color: #92400e; }
-.pill-gender   { background: #dbeafe; color: #1e40af; }
-.pill-vibe     { background: #ede9fe; color: #5b21b6; }
-.pill-color    { background: #dcfce7; color: #166534; }
+.pill-occasion { background: var(--rose-light); color: var(--rose-dark, var(--highlight)); }
+.pill-season   { background: var(--status-pending-bg); color: var(--status-pending-text); }
+.pill-gender   { background: var(--status-approved-bg); color: var(--status-approved-text); }
+.pill-vibe     { background: var(--status-fitting-bg); color: var(--status-fitting-text); }
+.pill-color    { background: var(--status-completed-bg); color: var(--status-completed-text); }
 
 /* ── Description ── */
 .outfit-description {
@@ -446,7 +446,7 @@
 
 .image-upload-zone:hover {
   border-color: var(--rose-mid, var(--accent));
-  background: #fce8ef;
+  background: var(--rose-light);
 }
 
 .image-upload-placeholder {
@@ -471,7 +471,7 @@
   bottom: 0.5rem;
   right: 0.5rem;
   background: rgba(0,0,0,0.6);
-  color: white;
+  color: var(--on-accent);
   border: none;
   border-radius: 6px;
   padding: 0.3rem 0.6rem;
@@ -549,7 +549,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: white;
+  background: var(--white);
   border: 1px solid var(--border-color);
   padding: 0.25rem 0.5rem;
   border-radius: 20px;
@@ -636,7 +636,7 @@
   cursor: pointer;
   text-align: center;
   transition: all 0.15s;
-  background: white;
+  background: var(--white);
 }
 
 .available-item-card:hover {
@@ -646,7 +646,7 @@
 
 .available-item-card.selected {
   border-color: var(--rose-mid, var(--accent));
-  background: linear-gradient(135deg, #fce8ef, var(--cream));
+  background: linear-gradient(135deg, var(--rose-light), var(--cream));
   box-shadow: 0 0 0 2px rgba(225, 127, 160, 0.2);
 }
 

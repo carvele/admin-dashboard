@@ -35,7 +35,7 @@
   font-weight: 500;
 }
 .text-success {
-  color: #059669;
+  color: var(--color-success);
 }
 .text-danger {
   color: var(--stock-low);
@@ -56,7 +56,7 @@
 .date-picker-group {
   display: flex;
   align-items: center;
-  background: white;
+  background: var(--white);
   padding: 0.25rem 1rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -83,7 +83,7 @@
   top: 100%;
   right: 0;
   margin-top: 0.5rem;
-  background: white;
+  background: var(--white);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 10px 15px -3px rgba(31, 28, 24, 0.1);
@@ -96,7 +96,7 @@
   width: 100%;
   padding: 0.75rem 1rem;
   text-align: left;
-  background: white;
+  background: var(--white);
   border: none;
   font-size: 0.875rem;
   cursor: pointer;
@@ -104,12 +104,12 @@
 }
 
 .dropdown-menu button:hover {
-  background: #f8fafc;
+  background: var(--beige);
 }
 
 .badge.accent {
   background-color: var(--status-pending-bg);
-  color: #d97706;
+  color: var(--status-pending-text);
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.75rem;
@@ -140,7 +140,7 @@
 
 .metric-row {
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .metric-row:last-child {

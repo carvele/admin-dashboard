@@ -342,7 +342,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
         <div
           style={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 4,
+            justifyContent: 'center', backgroundColor: 'var(--glass-bg)', borderRadius: 4,
           }}
         >
           <div className="loading-spinner" style={{ width: 14, height: 14 }} />

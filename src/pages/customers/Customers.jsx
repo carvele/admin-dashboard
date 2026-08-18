@@ -365,10 +365,10 @@ const Customers = () => {
 
   const getCustomerTags = (cust) => {
     const tags = [];
-    if ((cust.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: '#a16207', bg: '#fef9c3' });
-    if ((cust.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: '#065f46', bg: '#d1fae5' });
-    if (cust.hasMeasurements || (cust.topBust && cust.waist)) tags.push({ label: '📏 Fit Profile', color: '#1e40af', bg: '#dbeafe' });
-    if (cust.isBlocked) tags.push({ label: '⛔ Blocked', color: '#991b1b', bg: '#fee2e2' });
+    if ((cust.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: 'var(--status-pending-text)', bg: 'var(--status-pending-bg)' });
+    if ((cust.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: 'var(--status-completed-text)', bg: 'var(--status-completed-bg)' });
+    if (cust.hasMeasurements || (cust.topBust && cust.waist)) tags.push({ label: '📏 Fit Profile', color: 'var(--status-approved-text)', bg: 'var(--status-approved-bg)' });
+    if (cust.isBlocked) tags.push({ label: '⛔ Blocked', color: 'var(--status-cancelled-text)', bg: 'var(--status-cancelled-bg)' });
     return tags;
   };
 
@@ -725,10 +725,10 @@ const Customers = () => {
                     </span>
                     {(() => {
                       const tags = [];
-                      if ((selectedCustomer.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: '#a16207', bg: '#fef9c3' });
-                      if ((selectedCustomer.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: '#065f46', bg: '#d1fae5' });
-                      if (custMeasurements && Object.values(custMeasurements).some(v => v)) tags.push({ label: '📏 Fit Profile', color: '#1e40af', bg: '#dbeafe' });
-                      if (selectedCustomer.isBlocked) tags.push({ label: '⛔ Blocked', color: '#991b1b', bg: '#fee2e2' });
+                      if ((selectedCustomer.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: 'var(--status-pending-text)', bg: 'var(--status-pending-bg)' });
+                      if ((selectedCustomer.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: 'var(--status-completed-text)', bg: 'var(--status-completed-bg)' });
+                      if (custMeasurements && Object.values(custMeasurements).some(v => v)) tags.push({ label: '📏 Fit Profile', color: 'var(--status-approved-text)', bg: 'var(--status-approved-bg)' });
+                      if (selectedCustomer.isBlocked) tags.push({ label: '⛔ Blocked', color: 'var(--status-cancelled-text)', bg: 'var(--status-cancelled-bg)' });
                       if (tags.length === 0) return null;
                       return (
                         <div className="customer-tags mt-2">

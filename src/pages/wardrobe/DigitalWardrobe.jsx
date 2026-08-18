@@ -197,7 +197,7 @@ const DigitalWardrobe = () => {
                       overflow: 'hidden',
                       padding: displayImage?.startsWith && displayImage.startsWith('http') ? '0' : '2rem',
                       minHeight: '200px',
-                      backgroundColor: '#f1f5f9',
+                      backgroundColor: 'var(--beige)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -206,17 +206,17 @@ const DigitalWardrobe = () => {
                   >
                     {renderItemImage(displayImage)}
                   </div>
-                  <div className="dw-item-details" style={{ flex: 1, padding: '1rem', color: '#0f172a' }}>
+                  <div className="dw-item-details" style={{ flex: 1, padding: '1rem', color: 'var(--text-primary)' }}>
                     <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
-                      <span className="dw-category" style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>
+                      <span className="dw-category" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
                         {item.category || (matchedProduct?.category) || 'Clothing'}
                       </span>
                     </div>
-                    <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+                    <h4 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 0.5rem 0' }}>
                       {displayName}
                     </h4>
                     {/* Safe fallback display just in case data structure differs from expected */}
-                    <div style={{ fontSize: '0.7rem', color: '#ef4444', wordBreak: 'break-all' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-danger)', wordBreak: 'break-all' }}>
                       {!item.productId && !item.imageUrl && JSON.stringify(item)}
                     </div>
                   </div>

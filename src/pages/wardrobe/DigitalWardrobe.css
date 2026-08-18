@@ -181,7 +181,7 @@
   font-size: 0.65rem;
   padding: 0.2rem 0.5rem;
   background-color: var(--border-color);
-  color: #475569;
+  color: var(--text-secondary);
   border-radius: 4px;
   font-weight: 600;
   text-transform: uppercase;

@@ -26,7 +26,7 @@
 }
 
 .feedback-card {
-  background: var(--bg-surface, #ffffff);
+  background: var(--white);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 12px;
   padding: 1.5rem;
@@ -88,7 +88,7 @@
   color: var(--text-main, #333);
   line-height: 1.5;
   flex-grow: 1;
-  background-color: var(--bg-body, #f9f9f9);
+  background-color: var(--cream);
   padding: 1rem;
   border-radius: 8px;
   border: 1px solid var(--border-color, #eee);
@@ -113,7 +113,7 @@
 .feedback-delete-btn {
   background: none;
   border: none;
-  color: #ef4444; /* red */
+  color: var(--color-danger);
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 6px;
@@ -135,7 +135,7 @@
   justify-content: center;
   padding: 4rem 2rem;
   text-align: center;
-  background: var(--bg-surface, #ffffff);
+  background: var(--white);
   border-radius: 12px;
   border: 1px dashed var(--border-color, #ccc);
   color: var(--text-secondary, #666);
