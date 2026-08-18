@@ -810,7 +810,7 @@ const Settings = () => {
                     Instantly send an automated response when a customer sends a message before staff manually replies.
                   </p>
                 </div>
-                <label className="toggle-switch">
+                <label className="toggle-switch" aria-label="Enable Automatic Acknowledgment">
                   <input
                     type="checkbox"
                     name="enableAutoReply"
@@ -823,7 +823,7 @@ const Settings = () => {
 
               <div className="form-group mt-5">
                 <div className="flex-between mb-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label className="label mb-0">Default Acknowledgment Message</label>
+                  <label className="label mb-0" htmlFor="autoReplyMessage">Default Acknowledgment Message</label>
                   <button
                     type="button"
                     className="btn-text small text-secondary flex-center gap-1"
@@ -840,6 +840,7 @@ const Settings = () => {
                   </button>
                 </div>
                 <textarea
+                  id="autoReplyMessage"
                   name="autoReplyMessage"
                   className="input-field textarea-field"
                   rows={4}
