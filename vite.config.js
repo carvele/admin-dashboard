@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    esbuildOptions: {
+    rolldownOptions: {
       target: 'es2015',
     },
   },
