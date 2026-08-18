@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles, Edit2 } from 'lucide-react';
+import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles, Edit2, Grid3X3, CheckSquare, Square } from 'lucide-react';
 import {
   createProduct,
   updateProduct,
@@ -21,6 +21,12 @@ import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
 import { getColorList, getPatternList } from '../../services/inventoryService';
+import {
+  buildVariantMatrix,
+  createVariant,
+  variantColumnsAvailable,
+  variantKey,
+} from '../../services/variantService';
 import { Logger } from '../../utils/Logger';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
@@ -73,7 +79,12 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [categories, setCategories] = useState([]);
   const [colorList, setColorList] = useState([]);
-  const [, setPatternList] = useState([]);
+  const [patternList, setPatternList] = useState([]);
+  // Variant matrix
+  const [variantColumnsReady, setVariantColumnsReady] = useState(false);
+  const [variantMatrix, setVariantMatrix] = useState([]);
+  // Set<variantKey> of combinations the staff has ticked
+  const [selectedVariants, setSelectedVariants] = useState(new Set());
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -114,12 +125,11 @@ const ProductForm = ({ readOnly = false }) => {
     return () => unsubscribeCategories();
   }, []);
 
-  // Load admin-managed color and pattern lists from Supabase
+  // Load admin-managed color and pattern lists from Supabase + probe variant columns
   useEffect(() => {
     getColorList()
       .then((list) => {
         setColorList(list);
-        // Seed baseColor default to first entry if not already set
         setFormData((prev) => ({
           ...prev,
           baseColor: prev.baseColor || (list[0]?.name ?? ''),
@@ -128,10 +138,12 @@ const ProductForm = ({ readOnly = false }) => {
       .catch((err) => console.error('Failed to load color list:', err));
 
     getPatternList()
-      .then((list) => {
-        setPatternList(list);
-      })
+      .then((list) => setPatternList(list))
       .catch((err) => console.error('Failed to load pattern list:', err));
+
+    variantColumnsAvailable()
+      .then((ok) => setVariantColumnsReady(ok))
+      .catch(() => setVariantColumnsReady(false));
   }, []);
 
   useEffect(() => {
@@ -250,6 +262,42 @@ const ProductForm = ({ readOnly = false }) => {
     }
   }, [formData.name, isEditing]);
 
+  // Rebuild variant matrix: Size × Color only (no pattern dimension)
+  const rebuildMatrix = useCallback(
+    (sizes, colors, existingVariants = []) => {
+      // Always pass patterns=[''] so every cell has pattern=''
+      const matrix = buildVariantMatrix({ sizes, colors, patterns: [''] }, existingVariants);
+      setVariantMatrix(matrix);
+      // Auto-select all existing variants; new combos start unselected
+      setSelectedVariants((prev) => {
+        const next = new Set(prev);
+        matrix.forEach((cell) => {
+          if (cell.exists) next.add(cell.key);
+        });
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Re-run whenever sizes or colors change
+  useEffect(() => {
+    if (!variantColumnsReady) return;
+    rebuildMatrix(formData.sizes, formData.colors || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.sizes, formData.colors, variantColumnsReady]);
+
+  // When editing: fetch live variants to pre-tick existing combos
+  useEffect(() => {
+    if (!isEditing || !id || !variantColumnsReady) return;
+    import('../../services/variantService').then(({ getProductVariants }) => {
+      getProductVariants(id).then((existing) => {
+        rebuildMatrix(formData.sizes, formData.colors || [], existing);
+      }).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, id, variantColumnsReady]);
+
 
 
   // Handle subcategory logic when category changes
@@ -325,6 +373,44 @@ const ProductForm = ({ readOnly = false }) => {
       ? current.filter((c) => c !== colorName)
       : [...current, colorName];
     setFormData({ ...formData, colors: next });
+  };
+
+  const toggleVariant = (key) => {
+    setSelectedVariants((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllVariantsForSize = (size) => {
+    const sizeKeys = variantMatrix.filter((c) => c.size === size).map((c) => c.key);
+    const allSelected = sizeKeys.every((k) => selectedVariants.has(k));
+    setSelectedVariants((prev) => {
+      const next = new Set(prev);
+      sizeKeys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)));
+      return next;
+    });
+  };
+
+  const toggleAllVariantsForColor = (color) => {
+    const colorKeys = variantMatrix.filter((c) => c.color === color).map((c) => c.key);
+    const allSelected = colorKeys.every((k) => selectedVariants.has(k));
+    setSelectedVariants((prev) => {
+      const next = new Set(prev);
+      colorKeys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)));
+      return next;
+    });
+  };
+
+  const selectAllVariants = () => {
+    setSelectedVariants(new Set(variantMatrix.map((c) => c.key)));
+  };
+
+  const clearAllVariants = () => {
+    // Keep existing variants selected (can't de-select stocked combos)
+    setSelectedVariants(new Set(variantMatrix.filter((c) => c.exists).map((c) => c.key)));
   };
 
   const setAsPrimary = (index) => {
@@ -452,49 +538,89 @@ const ProductForm = ({ readOnly = false }) => {
       if (isEditing) {
         await updateProduct(id, payload);
 
-        // Fetch current inventory and check if any new sizes were added
+        // Sync inventory: create new variant combos, soft-delete removed ones
         try {
           const allInv = await getInventory();
-          const existingSizesForProduct = allInv
-            .filter((inv) => (inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode)
-            .map((inv) => inv.size);
-          
-          const newSizes = payload.sizes.filter((size) => !existingSizesForProduct.includes(size));
-          
-          if (newSizes.length > 0) {
-            Logger.info(`Initializing missing inventory for updated sizes ${id}...`);
-            const inventoryPromises = newSizes.map((size) =>
-              createInventoryItem({
-                productDocId: id,
-                sku: payload.id || payload.styleCode,
+          const productInv = allInv.filter(
+            (inv) => (inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode,
+          );
+
+          if (variantColumnsReady && selectedVariants.size > 0) {
+            // Variant-aware path: add newly selected combos
+            const existingKeys = new Set(
+              productInv.filter((inv) => !inv.deleted).map((inv) =>
+                variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' }),
+              ),
+            );
+            const toCreate = variantMatrix.filter(
+              (cell) => selectedVariants.has(cell.key) && !existingKeys.has(cell.key),
+            );
+            for (const cell of toCreate) {
+              await createVariant(id, {
+                size: cell.size,
+                color: cell.color,
+                pattern: '',
                 item: payload.name,
                 category: payload.category,
-                size: size,
-                total: 0,
-                reserved: 0,
-                available: 0,
-              }),
-            );
-            await Promise.all(inventoryPromises);
-          }
+                sku: payload.styleCode,
+                price: payload.price,
+              });
+            }
+            Logger.info(`Created ${toCreate.length} new variant rows for product ${id}`);
 
-          // Soft-delete inventory for sizes that were removed from the product
-          const removedInventory = allInv.filter(
-            (inv) =>
-              ((inv.productDocId || inv.sku) === id || inv.sku === formData.styleCode) &&
-              !payload.sizes.includes(inv.size) &&
-              !inv.deleted
-          );
-          if (removedInventory.length > 0) {
-            const now = new Date().toISOString();
-            await supabase
-              .from('inventory')
-              .update({ deleted: true, deleted_at: now, updated_at: now })
-              .in('id', removedInventory.map((inv) => inv.id));
-            Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
+            // Soft-delete deselected variants that have zero stock
+            const toSoftDelete = productInv.filter((inv) => {
+              if (inv.deleted) return false;
+              const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' });
+              return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0;
+            });
+            if (toSoftDelete.length > 0) {
+              const now = new Date().toISOString();
+              await supabase
+                .from('inventory')
+                .update({ deleted: true, deleted_at: now, updated_at: now })
+                .in('id', toSoftDelete.map((inv) => inv.id));
+              Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
+            }
+          } else {
+            // Legacy path: diff by size only
+            const existingSizes = productInv.filter((inv) => !inv.deleted).map((inv) => inv.size);
+            const newSizes = payload.sizes.filter((sz) => !existingSizes.includes(sz));
+            if (newSizes.length > 0) {
+              Logger.info(`Initializing missing inventory for updated sizes ${id}...`);
+              await Promise.all(
+                newSizes.map((size) =>
+                  createInventoryItem({
+                    productDocId: id,
+                    sku: payload.id || payload.styleCode,
+                    item: payload.name,
+                    category: payload.category,
+                    size,
+                    total: 0,
+                    reserved: 0,
+                    available: 0,
+                  }),
+                ),
+              );
+            }
+            // Soft-delete removed sizes with zero stock
+            const removedInventory = productInv.filter(
+              (inv) =>
+                !inv.deleted &&
+                !payload.sizes.includes(inv.size) &&
+                Number(inv.total ?? 0) === 0,
+            );
+            if (removedInventory.length > 0) {
+              const now = new Date().toISOString();
+              await supabase
+                .from('inventory')
+                .update({ deleted: true, deleted_at: now, updated_at: now })
+                .in('id', removedInventory.map((inv) => inv.id));
+              Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
+            }
           }
-        } catch(invErr) {
-          console.error('Checking/Adding missing sizes failed:', invErr);
+        } catch (invErr) {
+          console.error('Checking/Adding missing variant combinations failed:', invErr);
         }
 
         await logAction(user, 'Updated product details', {
@@ -513,21 +639,37 @@ const ProductForm = ({ readOnly = false }) => {
 
         const newDocId = await createProduct(payload);
 
-        // Init inventory per size in parallel
-        Logger.info(`Initializing inventory for new product ${newDocId}...`);
-        const inventoryPromises = payload.sizes.map((size) =>
-          createInventoryItem({
-            productDocId: newDocId,
-            sku: payload.id || payload.styleCode,
-            item: payload.name,
-            category: payload.category,
-            size: size,
-            total: 0,
-            reserved: 0,
-            available: 0,
-          }),
-        );
-        await Promise.all(inventoryPromises);
+        Logger.info(`Initializing inventory variants for new product ${newDocId}...`);
+        if (variantColumnsReady && selectedVariants.size > 0) {
+          // Variant-aware path: create one row per selected (size, color) combo
+          const toCreate = variantMatrix.filter((cell) => selectedVariants.has(cell.key));
+          for (const cell of toCreate) {
+            await createVariant(newDocId, {
+              size: cell.size,
+              color: cell.color,
+              pattern: '',
+              item: payload.name,
+              category: payload.category,
+              sku: payload.styleCode,
+              price: payload.price,
+            });
+          }
+        } else {
+          // Legacy fallback: one row per size, no colour/pattern
+          const inventoryPromises = payload.sizes.map((size) =>
+            createInventoryItem({
+              productDocId: newDocId,
+              sku: payload.id || payload.styleCode,
+              item: payload.name,
+              category: payload.category,
+              size: size,
+              total: 0,
+              reserved: 0,
+              available: 0,
+            }),
+          );
+          await Promise.all(inventoryPromises);
+        }
 
         await logAction(user, 'Created new product', {
           targetType: 'product',
@@ -923,6 +1065,125 @@ const ProductForm = ({ readOnly = false }) => {
               />
            </div>
         </section>
+
+        {/* ══════════════════════════════════════════════
+            ZONE E.5 — Stock Variant Selector
+            (which color variants to stock per size)
+        ══════════════════════════════════════════════ */}
+        {variantColumnsReady && formData.sizes.length > 0 && (formData.colors || []).length > 0 && (
+        <section className="card p-6" style={{ border: '2px solid #e0e7ff' }}>
+           <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: '#4f46e5' }}>
+                 <Grid3X3 size={14} /> Stock Variant Selector
+              </h2>
+              <div className="flex items-center gap-2">
+                 <span className="text-xs text-secondary">
+                    {selectedVariants.size} / {variantMatrix.length} combinations selected
+                 </span>
+                 <button
+                   type="button"
+                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#e0e7ff', color: '#4f46e5', border: 'none', cursor: 'pointer' }}
+                   onClick={selectAllVariants}
+                 >
+                   Select All
+                 </button>
+                 <button
+                   type="button"
+                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#6b7280', border: 'none', cursor: 'pointer' }}
+                   onClick={clearAllVariants}
+                 >
+                   Reset
+                 </button>
+              </div>
+           </div>
+           <p className="text-xs text-secondary mb-5">
+             Choose which color variants to stock for each size. Each selected combination gets its own inventory row — restocking or selling always targets the exact size + color.
+           </p>
+
+           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+             {formData.sizes.map((size) => {
+               const sizeVariants = variantMatrix.filter((c) => c.size === size);
+               const allSelected = sizeVariants.length > 0 && sizeVariants.every((c) => selectedVariants.has(c.key));
+               const someSelected = sizeVariants.some((c) => selectedVariants.has(c.key));
+               return (
+                 <div
+                   key={size}
+                   style={{
+                     display: 'flex',
+                     alignItems: 'center',
+                     gap: 12,
+                     padding: '10px 14px',
+                     borderRadius: 10,
+                     background: someSelected ? '#f0f4ff' : '#fafafa',
+                     border: `1.5px solid ${someSelected ? '#c7d2fe' : '#e5e7eb'}`,
+                     transition: 'all 0.15s',
+                   }}
+                 >
+                   {/* Size label + row toggle */}
+                   <div style={{ minWidth: 80, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                     <span className="size-badge" style={{ fontSize: 13, fontWeight: 800 }}>{size}</span>
+                     <button
+                       type="button"
+                       onClick={() => toggleAllVariantsForSize(size)}
+                       style={{ fontSize: '9px', fontWeight: 700, color: '#4f46e5', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                     >
+                       {allSelected ? 'Deselect all' : 'Select all'}
+                     </button>
+                   </div>
+
+                   {/* Color chips */}
+                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                     {sizeVariants.map((cell) => {
+                       const checked = selectedVariants.has(cell.key);
+                       return (
+                         <button
+                           key={cell.key}
+                           type="button"
+                           onClick={() => toggleVariant(cell.key)}
+                           style={{
+                             display: 'inline-flex',
+                             alignItems: 'center',
+                             gap: 5,
+                             padding: '5px 12px',
+                             borderRadius: 20,
+                             fontSize: 12,
+                             fontWeight: 600,
+                             cursor: 'pointer',
+                             border: `2px solid ${checked ? '#4f46e5' : '#d1d5db'}`,
+                             background: checked ? '#4f46e5' : '#fff',
+                             color: checked ? '#fff' : '#6b7280',
+                             transition: 'all 0.15s',
+                             position: 'relative',
+                           }}
+                         >
+                           {checked ? <CheckSquare size={12} /> : <Square size={12} />}
+                           {cell.color || 'Default'}
+                           {cell.exists && (
+                             <span
+                               title="Already stocked"
+                               style={{
+                                 width: 6, height: 6,
+                                 borderRadius: '50%',
+                                 background: '#10b981',
+                                 display: 'inline-block',
+                                 marginLeft: 2,
+                               }}
+                             />
+                           )}
+                         </button>
+                       );
+                     })}
+                   </div>
+                 </div>
+               );
+             })}
+           </div>
+
+           <p style={{ fontSize: 10, color: '#9ca3af', marginTop: 10 }}>
+             <span style={{ color: '#10b981', fontWeight: 700 }}>●</span> Already stocked — deselecting a stocked variant with existing units will NOT delete it.
+           </p>
+        </section>
+        )}
 
         {/* ══════════════════════════════════════════════
             ZONE F — Product Story & Metadata

@@ -54,7 +54,7 @@ const sizeRank = (s) => {
   return i === -1 ? SIZE_ORDER.length : i;
 };
 
-const TABLE_COLUMNS = 9;
+const TABLE_COLUMNS = 10;
 
 const Inventory = () => {
   const { user, isAdminUnlocked } = useAuth();
@@ -104,10 +104,20 @@ const Inventory = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [colorFilter, setColorFilter] = useState('All');
   const [categoryTree, setCategoryTree] = useState([]); // [{id,name,subcategories:[{id,name}]}]
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ key: 'stockStatus', direction: 'ascending' });
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
+
+  // Extract unique colors for filter
+  const uniqueColors = useMemo(() => {
+    const set = new Set();
+    inventory.forEach((item) => {
+      if (item.color) set.add(item.color);
+    });
+    return ['All', ...Array.from(set).sort()];
+  }, [inventory]);
 
   // Subscribe to the real category tree for both the filter dropdown and the
   // Category → Subcategory grouping below.
@@ -209,18 +219,26 @@ const Inventory = () => {
     if (viewMode === 'active' && isArchived) return false;
     if (viewMode === 'archived' && !isArchived) return false;
 
+    const term = (searchTerm || '').toLowerCase();
     const matchesSearch =
-      (item.item || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
-      (item.id || '').toLowerCase().includes((searchTerm || '').toLowerCase());
+      (item.item || '').toLowerCase().includes(term) ||
+      (item.sku || '').toLowerCase().includes(term) ||
+      (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
+      (item.color || '').toLowerCase().includes(term) ||
+      (item.id || '').toLowerCase().includes(term);
+
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesColor = colorFilter === 'All' || (item.color || '') === colorFilter;
+
+    return matchesSearch && matchesCategory && matchesColor;
   });
 
   // ── Category → Subcategory grouping (the "browsing" view) ──────────────────
-  // Only used when neither search nor the category dropdown narrows the list —
-  // the moment either does, a flat filtered/sorted table (below) is more
-  // useful than a tree the user has to dig through.
-  const isBrowsingMode = !searchTerm.trim() && categoryFilter === 'All';
+  // Only used when search, category, and color filters are default.
+  const isBrowsingMode =
+    !searchTerm.trim() &&
+    categoryFilter === 'All' &&
+    colorFilter === 'All';
 
   const productMetaById = useMemo(() => {
     const map = {};
@@ -532,9 +550,19 @@ const Inventory = () => {
     // Exports filteredInv, not the raw inventory list, so the file matches
     // whatever search/category/active-archived view the staff member is
     // currently looking at rather than silently dumping everything.
-    const header = ['SKU', 'Product', 'Category', 'Size', 'Total', 'Reserved', 'Available'].join(',');
+    const header = ['SKU/Variant', 'Product', 'Category', 'Size', 'Color', 'Pattern', 'Total', 'Reserved', 'Available'].join(',');
     const rows = filteredInv.map((i) =>
-      [csvField(i.sku || i.id), csvField(i.item), csvField(i.category), csvField(i.size), i.total, i.reserved || 0, i.available].join(','),
+      [
+        csvField(i.variantSku || i.variant_sku || i.sku || i.id),
+        csvField(i.item),
+        csvField(i.category),
+        csvField(i.size),
+        csvField(i.color || 'Standard'),
+        csvField(i.pattern || 'Solid'),
+        i.total,
+        i.reserved || 0,
+        i.available
+      ].join(','),
     );
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(`JezSy_Inventory_${viewMode}_${timestamp}.csv`, [header, ...rows].join('\n'));
@@ -545,14 +573,22 @@ const Inventory = () => {
   // the grouped (browsing) view, so the two never drift out of sync. ────────
   const renderInvRow = (inv) => {
     const health = getStockHealth(inv.available, inv.total, inv.reserved || 0);
+    const skuDisplay = inv.variantSku || inv.variant_sku || inv.sku || inv.id;
 
     return (
-      <tr key={`${inv.id}-${inv.size}`}>
-        <td className="font-mono text-xs text-secondary">{inv.sku || inv.id}</td>
+      <tr key={`${inv.id}-${inv.size}-${inv.color || ''}-${inv.pattern || ''}`}>
+        <td className="font-mono text-xs text-secondary">{skuDisplay}</td>
         <td className="font-medium">{inv.item}</td>
         <td>{inv.category}</td>
         <td>
           <span className="size-badge">{inv.size}</span>
+        </td>
+        <td>
+          {inv.color ? (
+            <span className="color-badge">{inv.color}</span>
+          ) : (
+            <span className="text-secondary text-xs">—</span>
+          )}
         </td>
         <td className="text-right">{inv.total}</td>
         <td className="text-right text-secondary">{inv.reserved || 0}</td>
@@ -802,7 +838,7 @@ const Inventory = () => {
                   <Search size={18} className="search-icon" />
                   <input
                     type="text"
-                    placeholder="Search SKU or Name..."
+                    placeholder="Search Variant SKU, Name, Color..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="input-field pl-10"
@@ -812,6 +848,7 @@ const Inventory = () => {
                   className="input-field category-filter"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
+                  aria-label="Filter by category"
                 >
                   {dropdownCategories.map((cat) => (
                     <option key={cat} value={cat}>
@@ -819,6 +856,20 @@ const Inventory = () => {
                     </option>
                   ))}
                 </select>
+                {uniqueColors.length > 1 && (
+                  <select
+                    className="input-field category-filter"
+                    value={colorFilter}
+                    onChange={(e) => setColorFilter(e.target.value)}
+                    aria-label="Filter by color"
+                  >
+                    {uniqueColors.map((col) => (
+                      <option key={col} value={col}>
+                        {col === 'All' ? 'All Colors' : col}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {isAdminUnlocked && (
                   <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '4px' }}>
                     <button
@@ -892,7 +943,7 @@ const Inventory = () => {
               <thead>
                 <tr>
                   <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer' }}>
-                    SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                    Variant SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                   </th>
                   <th onClick={() => handleSort('item')} style={{ cursor: 'pointer' }}>
                     Product Name {sortConfig.key === 'item' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
@@ -901,6 +952,7 @@ const Inventory = () => {
                     Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                   </th>
                   <th>Size</th>
+                  <th>Color</th>
                   <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer' }}>
                     Total {sortConfig.key === 'total' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                   </th>
@@ -1018,20 +1070,21 @@ const Inventory = () => {
             style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
-              <h2>Restock Item</h2>
+              <h2>Restock Variant</h2>
               <button className="close-btn" onClick={() => setRestockModal(null)}>
                 &times;
               </button>
             </div>
             <form className="modal-body" onSubmit={handleRestock}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                Adds units to this size only — other sizes of the same product are unaffected.
+                Adds units to this exact variant only — other sizes or colors of this product are unaffected.
               </p>
-              <div className="restock-item-info">
+              <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
+                {restockModal.color && <span className="color-badge">{restockModal.color}</span>}
               </div>
-              <p className="text-secondary text-sm">
+              <p className="text-secondary text-sm" style={{ marginTop: '0.5rem' }}>
                 Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}
               </p>
               <div className="form-group">
@@ -1078,7 +1131,7 @@ const Inventory = () => {
           >
             <div className="modal-header">
               <h2>
-                Edit Stock — {editModal.item} ({editModal.size})
+                Edit Stock — {editModal.item} ({editModal.size}{editModal.color ? ` · ${editModal.color}` : ''})
               </h2>
               <button className="close-btn" onClick={() => setEditModal(null)}>
                 &times;
@@ -1086,8 +1139,7 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleEdit}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem' }}>
-                Directly overwrites the stock counts for this size — use Restock instead if you&apos;re
-                just adding newly-arrived units.
+                Directly overwrites stock counts for this specific variant — use Restock instead if you are adding newly-arrived units.
               </p>
               <div className="form-row">
                 <div className="form-group flex-1">
@@ -1155,7 +1207,7 @@ const Inventory = () => {
       <ConfirmDialog
         isOpen={!!archiveConfirm}
         title="Archive Item?"
-        message={`Move ${archiveConfirm?.item} (${archiveConfirm?.size}) to the archive? History and reservation metrics will be preserved. You can restore it anytime.`}
+        message={`Move ${archiveConfirm?.item} (${archiveConfirm?.size}${archiveConfirm?.color ? ` · ${archiveConfirm.color}` : ''}) to the archive? History and reservation metrics will be preserved. You can restore it anytime.`}
         confirmText="Archive"
         onConfirm={handleArchive}
         onCancel={() => setArchiveConfirm(null)}
@@ -1181,12 +1233,12 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleSell}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem' }}>
-                Records a walk-in sale and deducts it from available stock — for orders placed
-                through the app, stock already adjusts automatically on reservation.
+                Records a walk-in sale and deducts it from available stock for this variant.
               </p>
-              <div className="restock-item-info">
+              <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{sellModal.item}</strong>
                 <span className="size-badge">{sellModal.size}</span>
+                {sellModal.color && <span className="color-badge">{sellModal.color}</span>}
               </div>
               <div className="p-3 bg-light rounded-lg mt-2 mb-4">
                 <div className="d-flex justify-between text-sm mb-1">

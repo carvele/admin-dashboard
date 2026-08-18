@@ -175,9 +175,32 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
+.color-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+.pattern-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  background-color: var(--cream);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
 .text-xs {
   font-size: 0.75rem;
 }
+
 
 /* ===== 5-Tier Stock Health Badges ===== */
 .stock-tier-badge {
