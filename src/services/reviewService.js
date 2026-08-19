@@ -45,6 +45,7 @@ export const getProductReviews = async (productId) => {
       rating: Number(row.rating),
       reviewText: row.comment,
       images: row.images,
+      verifiedPurchase: row.verified_purchase || false,
       timestamp: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       userName,
       displayName: userName

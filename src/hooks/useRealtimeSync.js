@@ -21,20 +21,30 @@ let reservationsChannel = null;
 let messagesChannel = null;
 const listeners = new Set();
 let teardownTimeoutId = null;
+// Re-entrancy guard: removeChannel() fires _onClose which triggers the status
+// callback again with "CLOSED". Without this flag that causes infinite recursion
+// → Maximum call stack size exceeded.
+let isTearingDown = false;
 
 // Resets the module state so the next mount reopens both channels. Called on
-// last-listener teardown and on a channel error/close so a dropped socket
-// doesn't leave isSubscribed permanently latched true with no way back in.
+// last-listener teardown and on a channel error so a dropped socket doesn't
+// leave isSubscribed permanently latched true with no way back in.
 function teardown() {
-  if (reservationsChannel) {
-    supabase.removeChannel(reservationsChannel);
-    reservationsChannel = null;
+  if (isTearingDown) return;
+  isTearingDown = true;
+  try {
+    if (reservationsChannel) {
+      supabase.removeChannel(reservationsChannel);
+      reservationsChannel = null;
+    }
+    if (messagesChannel) {
+      supabase.removeChannel(messagesChannel);
+      messagesChannel = null;
+    }
+    isSubscribed = false;
+  } finally {
+    isTearingDown = false;
   }
-  if (messagesChannel) {
-    supabase.removeChannel(messagesChannel);
-    messagesChannel = null;
-  }
-  isSubscribed = false;
 }
 
 export const useRealtimeSync = (onUpdate) => {
@@ -55,7 +65,10 @@ export const useRealtimeSync = (onUpdate) => {
       requestNotificationPermission().catch(console.warn);
 
       const onChannelStatus = (status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
+        // CLOSED fires during normal intentional removeChannel() — do NOT
+        // teardown there or we recurse back into removeChannel infinitely.
+        // Only reset on genuine transport errors.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           teardown();
         }
       };
