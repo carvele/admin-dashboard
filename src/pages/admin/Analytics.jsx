@@ -15,7 +15,6 @@ import {
   Cell,
 } from 'recharts';
 import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
@@ -306,12 +305,7 @@ const Analytics = () => {
       Price: r.rentalPrice || r.price || r.totalAmount || 0
     }));
 
-    if (type === 'xlsx') {
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Reservations");
-      XLSX.writeFile(wb, `JezSy_Report_${startDate}_to_${endDate}.xlsx`);
-    } else if (type === 'pdf') {
+    if (type === 'pdf') {
       const doc = new jsPDF();
       doc.text("JezSy Collection Analytics Report", 14, 15);
       doc.text(`Period: ${startDate} to ${endDate}`, 14, 25);
@@ -413,7 +407,6 @@ const Analytics = () => {
             {exportRef && (
               <div className="dropdown-menu">
                 <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
-                <button onClick={() => handleExport('xlsx')}>Revenue Summary (.xlsx)</button>
                 <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
                 <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
                 <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
@@ -683,7 +676,7 @@ const Analytics = () => {
                       : 0}%
                    </span>
                  </div>
-                 <div className="demo-bar"><div className="demo-fill" style={{ width: '45%', backgroundColor: '#D97706' }}></div></div>
+                 <div className="demo-bar"><div className="demo-fill" style={{ width: '45%', backgroundColor: 'var(--color-warning)' }}></div></div>
               </div>
 
               <div className="metric-row mt-6">
@@ -691,7 +684,7 @@ const Analytics = () => {
                    <span className="text-sm">Avg Reservation Value</span>
                    <span className="font-bold">₱{ (totalRev / (earnedReservations.length || 1)).toLocaleString() }</span>
                  </div>
-                 <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: '#1F2937' }}></div></div>
+                 <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: 'var(--charcoal)' }}></div></div>
               </div>
             </div>
           </div>

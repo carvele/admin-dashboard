@@ -14,12 +14,11 @@ const withTimeout = (promise, ms = 5000) =>
   ]);
 
 // ── Device helpers ──────────────────────────────────────────
-
-/**
- * Upsert a device row in public.devices.
- * PK is the fingerprint text column.
+/*
+ * Device registration is performed by the register-device Edge Function.
+ * The browser may read status, but it must not write approval records.
  */
-const registerDevice = async (fingerprint, userAgent, staffEmail = '', staffName = '') => {
+/*
   const now = new Date().toISOString();
   const { data: existing } = await supabase
     .from('devices')
@@ -52,7 +51,7 @@ const registerDevice = async (fingerprint, userAgent, staffEmail = '', staffName
       updated_at: now,
     }).eq('fingerprint', fingerprint);
   }
-};
+}; */
 
 // Lightweight pure JS SHA-256 fallback for non-secure HTTP contexts where crypto.subtle is undefined
 function fallbackSha256(ascii) {
@@ -199,13 +198,16 @@ export const AuthProvider = ({ children }) => {
       }
       setDeviceFingerprint(visitorId);
 
-      // --- 2. Register device (fire-and-forget) ---
-      registerDevice(
-        visitorId,
-        navigator.userAgent,
-        supabaseUser.email,
-        supabaseUser.user_metadata?.full_name || '',
-      ).catch((err) => console.warn('[Device] Registration write failed:', err));
+      // --- 2. Register device through the server-side function. Staff have
+      // read-only RLS access to devices; client-side inserts must not be used.
+      const { error: registrationError } = await supabase.functions.invoke('register-device', {
+        body: {
+          fingerprint: visitorId,
+          user_agent: navigator.userAgent,
+          staff_name: supabaseUser.user_metadata?.full_name || '',
+        },
+      });
+      if (registrationError) throw registrationError;
 
       // --- 3. Start live device listener ---
       clearDeviceChannel();
@@ -241,8 +243,9 @@ export const AuthProvider = ({ children }) => {
         setDeviceData(row);
         setDeviceStatus(row.status);
       } else {
-        // Doc not yet written (registration still in-flight)
-        setDeviceStatus('approved');
+        // Never fail open. A missing device row means registration or lookup
+        // failed and must be reviewed, not silently approved.
+        setDeviceStatus('pending');
       }
 
       // --- 4. Staff role lookup from public.profiles ---
