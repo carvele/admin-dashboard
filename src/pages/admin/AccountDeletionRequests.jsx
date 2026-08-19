@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { UserX, Mail, Phone, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
 import {
   getPendingDeletionRequests,
@@ -17,6 +18,7 @@ const AccountDeletionRequests = () => {
   const [obligations, setObligations] = useState(null);
   const [obligationsLoading, setObligationsLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -93,11 +95,14 @@ const AccountDeletionRequests = () => {
     }
   };
 
-  const handleReject = async () => {
+  const handleReject = () => {
     if (!reviewing) return;
-    if (!window.confirm(`Decline this deletion request from ${reviewing.customerName}? Nothing is erased -- the customer keeps their account and can request again later.`)) {
-      return;
-    }
+    setRejectConfirmOpen(true);
+  };
+
+  const executeReject = async () => {
+    setRejectConfirmOpen(false);
+    if (!reviewing) return;
     setProcessing(true);
     try {
       await rejectAccountDeletion(reviewing.docId);
@@ -273,15 +278,6 @@ const AccountDeletionRequests = () => {
               )}
 
               <div className="modal-footer justify-end flex gap-2">
-                <button
-                  type="button"
-                  className="btn-outline flex items-center gap-1.5"
-                  onClick={() => {
-                    toast.success(`Email notification dispatched to ${reviewing.customerEmail || reviewing.customerName}`);
-                  }}
-                >
-                  <Mail size={14} /> Send Email Notice
-                </button>
                 <button className="btn-outline" onClick={closeReview} disabled={processing}>
                   Close
                 </button>
@@ -300,6 +296,17 @@ const AccountDeletionRequests = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={rejectConfirmOpen}
+        title="Decline Deletion Request"
+        message={`Decline this deletion request from ${reviewing?.customerName}? Nothing is erased — the customer keeps their account and can request again later.`}
+        confirmText="Decline Request"
+        cancelText="Cancel"
+        isDestructive={false}
+        onConfirm={executeReject}
+        onCancel={() => setRejectConfirmOpen(false)}
+      />
     </div>
   );
 };

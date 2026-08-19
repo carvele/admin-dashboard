@@ -26,22 +26,21 @@ const ReviewImageLightbox = ({ src, onClose }) => {
         justifyContent: 'center',
         zIndex: 1200,
       }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Image preview"
-      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Close image preview"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={e => {
         if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onClose();
         }
       }}
-      tabIndex={-1}
     >
-      {/* Stop clicks on the image itself from closing the overlay */}
       <div
-        role="presentation"
-        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image preview"
         style={{ position: 'relative' }}
       >
         <button

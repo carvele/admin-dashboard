@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Ruler, RefreshCw, Copy } from 'lucide-react';
 import { DEFAULT_MEASUREMENT_METRICS, AVAILABLE_SIZES } from '../../utils/constants';
+import ConfirmDialog from '../ConfirmDialog';
 
 const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory }) => {
   const [newMetric, setNewMetric] = useState('');
   const [unit, setUnit] = useState('cm'); // 'cm' | 'in'
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   // Smart template matching logic
   const findSmartTemplate = () => {
@@ -134,13 +136,16 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
   };
 
   const handleClearAll = () => {
-    if (window.confirm('Clear all measurements?')) {
-      const updated = {};
-      sizes.forEach(size => {
-        updated[size] = {};
-      });
-      onChange(updated);
-    }
+    setClearConfirmOpen(true);
+  };
+
+  const executeClearAll = () => {
+    setClearConfirmOpen(false);
+    const updated = {};
+    sizes.forEach(size => {
+      updated[size] = {};
+    });
+    onChange(updated);
   };
 
   if (!sizes || sizes.length === 0) {
@@ -279,6 +284,17 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
       <p className="mt-2 text-xs text-secondary">
         Tip: Enter dimensions as they apply to the garment (e.g., &quot;70 cm&quot;). These will be visible to customers in the app&apos;s size guide.
       </p>
+
+      <ConfirmDialog
+        isOpen={clearConfirmOpen}
+        title="Clear All Measurements"
+        message="Are you sure you want to clear all measurements for all sizes? This cannot be undone."
+        confirmText="Clear All"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={executeClearAll}
+        onCancel={() => setClearConfirmOpen(false)}
+      />
     </div>
   );
 };

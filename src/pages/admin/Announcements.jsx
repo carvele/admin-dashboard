@@ -7,6 +7,7 @@ import {
   deleteAnnouncement,
 } from '../../services/announcementService';
 import { Plus, Trash2, Megaphone, Bell } from 'lucide-react';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './Announcements.css';
 
 const Announcements = () => {
@@ -14,6 +15,7 @@ const Announcements = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -72,9 +74,13 @@ const Announcements = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this announcement?')) return;
-    
+  const handleDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const executeDelete = async () => {
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
     try {
       await deleteAnnouncement(id);
       toast.success('Announcement deleted');
@@ -229,6 +235,17 @@ const Announcements = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        title="Delete Announcement"
+        message="Are you sure you want to delete this announcement? This cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={executeDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 };

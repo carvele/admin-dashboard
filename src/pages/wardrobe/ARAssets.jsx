@@ -29,6 +29,7 @@ import {
   getPoseGuideProducts,
 } from '../../services/wardrobeService';
 import { routeAndUploadFile } from '../../lib/storage';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import '@google/model-viewer';
 import './ARAssets.css';
 
@@ -106,6 +107,7 @@ const ARAssets = () => {
   const [poseFile, setPoseFile] = useState(null);
   const [editingPoseId, setEditingPoseId] = useState(null);
   const [poseProductsMap, setPoseProductsMap] = useState({});
+  const [deletePoseConfirm, setDeletePoseConfirm] = useState(null);
 
   // Alignment form state
   const [alignPoints, setAlignPoints] = useState({
@@ -339,8 +341,14 @@ const ARAssets = () => {
     }
   };
 
-  const handleDeletePose = async (pose) => {
-    if (!window.confirm(`Delete pose "${pose.name}"?`)) return;
+  const handleDeletePose = (pose) => {
+    setDeletePoseConfirm(pose);
+  };
+
+  const executeDeletePose = async () => {
+    const pose = deletePoseConfirm;
+    setDeletePoseConfirm(null);
+    if (!pose) return;
     try {
       await deletePoseGuide(pose.docId || pose.id);
       toast.success('Pose deleted');
@@ -1138,6 +1146,17 @@ const ARAssets = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deletePoseConfirm}
+        title="Delete Pose Guide"
+        message={`Delete pose "${deletePoseConfirm?.name}"? This cannot be undone.`}
+        confirmText="Delete Pose"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={executeDeletePose}
+        onCancel={() => setDeletePoseConfirm(null)}
+      />
     </div>
   );
 };
