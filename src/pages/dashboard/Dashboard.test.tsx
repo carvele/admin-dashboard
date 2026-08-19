@@ -1,6 +1,6 @@
 // removed React import
 // @ts-ignore
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import '@testing-library/jest-dom';
@@ -51,7 +51,7 @@ jest.mock('recharts', () => {
 });
 
 describe('Dashboard Component', () => {
-  it('renders the Dashboard overview header and metrics', () => {
+  it('renders the Dashboard overview header and metrics', async () => {
     render(
       <BrowserRouter>
         <Dashboard />
@@ -61,5 +61,9 @@ describe('Dashboard Component', () => {
     expect(screen.getByText('Dashboard Overview')).toBeInTheDocument();
     expect(screen.getByText('Total Reservations')).toBeInTheDocument();
     expect(screen.getByText('Active Customers')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Live from DB/i).length).toBeGreaterThan(0);
+    });
   });
 });
