@@ -19,6 +19,7 @@ import {
   updateCategory,
 } from '../../services/productService';
 import { uploadToCloudinary } from '../../lib/storage';
+import ConfirmDialog from '../ConfirmDialog';
 
 // ── Inline error dialog (replaces window.alert for deletion errors) ──────────
 const ErrorDialog = ({ message, onClose }) => (
@@ -94,6 +95,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   const [baseline, setBaseline] = useState('');
   const [error, setError] = useState('');
   const [dialogMsg, setDialogMsg] = useState(''); // for deletion-blocked dialog
+  const [deleteConfirmState, setDeleteConfirmState] = useState(null);
 
   // Sub-category add form state
   const [newSubName, setNewSubName] = useState('');
@@ -193,9 +195,11 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                   type="button"
                   className="btn-outline aip-delete"
                   onClick={() => {
-                    if (window.confirm(`Delete ${item.name}?`)) {
-                      remove(item.id).then(load).catch((err) => setError(err.message));
-                    }
+                    setDeleteConfirmState({
+                      title: `Delete ${singular}`,
+                      message: `Delete ${item.name}? This will remove it from available options.`,
+                      onConfirm: () => remove(item.id).then(load).catch((err) => setError(err.message)),
+                    });
                   }}
                   aria-label={`Delete ${singular} ${item.name}`}
                 >
@@ -503,6 +507,21 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmState}
+        title={deleteConfirmState?.title || 'Delete Item'}
+        message={deleteConfirmState?.message || ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          const action = deleteConfirmState?.onConfirm;
+          setDeleteConfirmState(null);
+          if (action) action();
+        }}
+        onCancel={() => setDeleteConfirmState(null)}
+      />
     </>
   );
 }

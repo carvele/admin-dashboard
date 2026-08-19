@@ -26,6 +26,7 @@ import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
@@ -194,6 +195,7 @@ const Reservations = () => {
     dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
   }));
   const [receiptModalUrl, setReceiptModalUrl] = useState(null);
+  const [confirmDialogState, setConfirmDialogState] = useState(null);
   // receipt_url on the row is a bare storage path in a private bucket, not a
   // usable URL -- resolve it to a signed URL whenever the detail modal opens
   // on a reservation that has one.
@@ -393,30 +395,43 @@ const Reservations = () => {
         // with no electronic trail. Completing without recording it was how a
         // forgotten balance disappeared silently.
         const outstanding = outstandingBalance(res);
-        if (outstanding > 0) {
-          if (
-            !window.confirm(
-              `${formatCurrency(outstanding)} is still owed on ${id}.\n\n` +
-                'Confirm you have collected it before handing the item over. ' +
-                'This is recorded against your account.',
-            )
-          ) {
-            return;
+        const executeComplete = async () => {
+          try {
+            if (outstanding > 0) {
+              // Recorded before the status moves: if this throws, the reservation
+              // stays in To Pickup rather than completing with the money unlogged.
+              await settleReservationBalance(res.id);
+            }
+
+            await updateReservation(res.docId, { status: 'Completed' });
+            // Consume reserved stock (item purchased/picked up forever)
+            const stockOk = await adjustStockForReservation(res, 1, true);
+            toast.success(
+              outstanding > 0
+                ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
+                : `Reservation ${id} completed — stock consumed permanently`,
+            );
+            if (!stockOk) toast.error(`Stock consumption for ${id} may have failed — check inventory`);
+            await logAction(user, 'Completed reservation', { reservationId: id });
+          } catch {
+            toast.error('Failed to update reservation');
           }
-          // Recorded before the status moves: if this throws, the reservation
-          // stays in To Pickup rather than completing with the money unlogged.
-          await settleReservationBalance(res.id);
+        };
+
+        if (outstanding > 0) {
+          setConfirmDialogState({
+            title: 'Confirm Balance Collection',
+            message: `${formatCurrency(outstanding)} is still owed on ${id}.\n\nConfirm you have collected it before handing the item over. This is recorded against your account.`,
+            confirmText: 'Confirm & Complete',
+            cancelText: 'Cancel',
+            isDestructive: false,
+            onConfirm: executeComplete,
+          });
+          return;
         }
 
-        await updateReservation(res.docId, { status: 'Completed' });
-        // Consume reserved stock (item purchased/picked up forever)
-        const stockOk = await adjustStockForReservation(res, 1, true);
-        toast.success(
-          outstanding > 0
-            ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
-            : `Reservation ${id} completed — stock consumed permanently`,
-        );
-        if (!stockOk) toast.error(`Stock consumption for ${id} may have failed — check inventory`);
+        await executeComplete();
+        return;
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
         // Restore exactly when the previous status was holding stock. Using the
@@ -459,38 +474,48 @@ const Reservations = () => {
         r.size === rescheduleModal.size &&
         Math.abs(parseDate(r.reservationDate || r.date) - new Date(newDate)) < 2 * 60 * 60 * 1000,
     );
-    if (
-      conflict &&
-      !window.confirm(
-        'Warning: This outfit/size is already reserved within 2 hours of the new time. Proceed anyway?',
-      )
-    )
-      return;
-    try {
-      // Moving the appointment invalidates the old payment window: the trigger
-      // only stamps on entry to an awaiting-payment status and COALESCEs, so
-      // without this the deadline can outlast the new appointment, or have
-      // already expired for one moved further out.
-      const stillAwaitingPayment =
-        rescheduleModal.displayStatus === 'To Pay' &&
-        !['paid', 'submitted'].includes(String(rescheduleModal.paymentStatus || '').toLowerCase());
 
-      await updateReservation(rescheduleModal.docId, {
-        reservationDate: new Date(newDate),
-        date: new Date(newDate), // Fallback for Android which parses 'date'
-        countdown: true,
-        ...(stillAwaitingPayment ? { payment_due_at: computePaymentDueAt(newDate) } : {}),
+    const executeReschedule = async () => {
+      try {
+        // Moving the appointment invalidates the old payment window: the trigger
+        // only stamps on entry to an awaiting-payment status and COALESCEs, so
+        // without this the deadline can outlast the new appointment, or have
+        // already expired for one moved further out.
+        const stillAwaitingPayment =
+          rescheduleModal.displayStatus === 'To Pay' &&
+          !['paid', 'submitted'].includes(String(rescheduleModal.paymentStatus || '').toLowerCase());
+
+        await updateReservation(rescheduleModal.docId, {
+          reservationDate: new Date(newDate),
+          date: new Date(newDate), // Fallback for Android which parses 'date'
+          countdown: true,
+          ...(stillAwaitingPayment ? { payment_due_at: computePaymentDueAt(newDate) } : {}),
+        });
+        await logAction(user, 'Rescheduled reservation', {
+          reservationId: rescheduleModal.id,
+          newDate,
+        });
+        toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
+        setRescheduleModal(null);
+        setNewDate('');
+      } catch {
+        toast.error('Failed to reschedule');
+      }
+    };
+
+    if (conflict) {
+      setConfirmDialogState({
+        title: 'Reservation Conflict Warning',
+        message: 'This outfit/size is already reserved within 2 hours of the new time. Proceed anyway?',
+        confirmText: 'Reschedule Anyway',
+        cancelText: 'Cancel',
+        isDestructive: false,
+        onConfirm: executeReschedule,
       });
-      await logAction(user, 'Rescheduled reservation', {
-        reservationId: rescheduleModal.id,
-        newDate,
-      });
-      toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
-      setRescheduleModal(null);
-      setNewDate('');
-    } catch {
-      toast.error('Failed to reschedule');
+      return;
     }
+
+    await executeReschedule();
   };
 
   // Shared by the modal footer, the board card, and the table row -- used to
@@ -609,49 +634,58 @@ const Reservations = () => {
         Math.abs(parseDate(r.reservationDate || r.date) - new Date(newRes.date)) <
           2 * 60 * 60 * 1000,
     );
-    if (
-      conflict &&
-      !window.confirm(
-        'Warning: This outfit/size is already reserved within 2 hours of this time. Proceed anyway?',
-      )
-    )
-      return;
 
-    // Find the customer_id FK from the selected customer name
-    const matchedCustomer = customers.find(
-      (c) => (c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim()) === newRes.customer,
-    );
-    const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
+    const executeCreate = async () => {
+      // Find the customer_id FK from the selected customer name
+      const matchedCustomer = customers.find(
+        (c) => (c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim()) === newRes.customer,
+      );
+      const customerId = matchedCustomer?.docId || matchedCustomer?.id || '';
 
-    // Find productId and imageUrl if possible
-    const matchedProduct = products.find((p) => p.name === newRes.outfit);
-    try {
-      await createReservation({
-        customerName: newRes.customer,
-        customerId: customerId, // FK to users collection (matches Android field name)
-        productName: newRes.outfit,
-        productId: matchedProduct?.id || '',
-        imageUrl: matchedProduct?.images?.[0] || '',
-        reservationDate: new Date(newRes.date),
-        date: new Date(newRes.date), // Fallback for Android which parses 'date'
-        status: 'Pending',
-        assigned_staff_id: '', // Will be set on Confirm
-        countdown: true,
-        size: newRes.size,
-        // deposit is the numeric amount owed (50%, matching the standard
-        // convention elsewhere in this codebase), not a paid/unpaid flag --
-        // that belongs on payment_status, which the checkbox actually means.
-        deposit: Math.round((matchedProduct?.price || 0) * 0.5 * 100) / 100,
-        payment_status: newRes.deposit ? 'Paid' : 'Pending',
-        rentalPrice: matchedProduct?.price || 0,
+      // Find productId and imageUrl if possible
+      const matchedProduct = products.find((p) => p.name === newRes.outfit);
+      try {
+        await createReservation({
+          customerName: newRes.customer,
+          customerId: customerId, // FK to users collection (matches Android field name)
+          productName: newRes.outfit,
+          productId: matchedProduct?.id || '',
+          imageUrl: matchedProduct?.images?.[0] || '',
+          reservationDate: new Date(newRes.date),
+          date: new Date(newRes.date), // Fallback for Android which parses 'date'
+          status: 'Pending',
+          assigned_staff_id: '', // Will be set on Confirm
+          countdown: true,
+          size: newRes.size,
+          // deposit is the numeric amount owed (50%, matching the standard
+          // convention elsewhere in this codebase), not a paid/unpaid flag --
+          // that belongs on payment_status, which the checkbox actually means.
+          deposit: Math.round((matchedProduct?.price || 0) * 0.5 * 100) / 100,
+          payment_status: newRes.deposit ? 'Paid' : 'Pending',
+          rentalPrice: matchedProduct?.price || 0,
+        });
+        await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
+        setIsModalOpen(false);
+        toast.success('Reservation created successfully');
+        setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
+      } catch {
+        toast.error('Failed to create reservation');
+      }
+    };
+
+    if (conflict) {
+      setConfirmDialogState({
+        title: 'Reservation Conflict Warning',
+        message: 'Warning: This outfit/size is already reserved within 2 hours of this time. Proceed anyway?',
+        confirmText: 'Create Anyway',
+        cancelText: 'Cancel',
+        isDestructive: false,
+        onConfirm: executeCreate,
       });
-      await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
-      setIsModalOpen(false);
-      toast.success('Reservation created successfully');
-      setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
-    } catch {
-      toast.error('Failed to create reservation');
+      return;
     }
+
+    await executeCreate();
   };
 
   return (
@@ -1602,6 +1636,20 @@ const Reservations = () => {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={!!confirmDialogState}
+        title={confirmDialogState?.title || 'Confirm Action'}
+        message={confirmDialogState?.message || ''}
+        confirmText={confirmDialogState?.confirmText || 'Confirm'}
+        cancelText={confirmDialogState?.cancelText || 'Cancel'}
+        isDestructive={confirmDialogState?.isDestructive ?? false}
+        onConfirm={async () => {
+          const action = confirmDialogState?.onConfirm;
+          setConfirmDialogState(null);
+          if (action) await action();
+        }}
+        onCancel={() => setConfirmDialogState(null)}
+      />
     </div>
   );
 };

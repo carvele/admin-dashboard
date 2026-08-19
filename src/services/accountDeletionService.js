@@ -80,6 +80,21 @@ export const getBlockingObligations = async (userId) => {
   };
 };
 
+const getEnv = (key) => {
+  try {
+    const meta = new Function('return import.meta')();
+    if (meta && meta.env && meta.env[key]) {
+      return meta.env[key];
+    }
+  } catch {
+    // fallback for environments without import.meta
+  }
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return '';
+};
+
 /**
  * Calls the process-account-deletion Edge Function, which runs the DB-side
  * scrub then revokes the login. Returns { blocked: true, ... } if the RPC
@@ -90,14 +105,17 @@ export const processAccountDeletion = async (requestId) => {
   const token = sessionData?.session?.access_token;
   if (!token) throw new Error('Your session has expired. Please log in again.');
 
+  const supabaseUrl = getEnv('VITE_SUPABASE_URL') || 'https://wufcmtndotfvxvvxkamv.supabase.co';
+  const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY') || '';
+
   const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-account-deletion`,
+    `${supabaseUrl}/functions/v1/process-account-deletion`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        apikey: supabaseAnonKey,
       },
       body: JSON.stringify({ request_id: requestId }),
     },

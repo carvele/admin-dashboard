@@ -128,11 +128,26 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
 /**
  * Uploads a file to Cloudinary and returns the { secure_url, public_id } object.
  */
+const getEnv = (key) => {
+  try {
+    const meta = new Function('return import.meta')();
+    if (meta && meta.env && meta.env[key]) {
+      return meta.env[key];
+    }
+  } catch {
+    // fallback for environments without import.meta
+  }
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return '';
+};
+
 export const uploadToCloudinary = async (file, retries = 2) => {
   if (!file) throw new Error('No file provided');
 
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  const cloudName = getEnv('VITE_CLOUDINARY_CLOUD_NAME');
+  const uploadPreset = getEnv('VITE_CLOUDINARY_UPLOAD_PRESET');
 
   if (!cloudName || !uploadPreset) {
     const error = new Error('Cloudinary configuration missing. Please check VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your .env file.');

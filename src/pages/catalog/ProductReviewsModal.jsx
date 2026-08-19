@@ -31,9 +31,10 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged, triggerRef })
     // Move focus into the modal (to the close button) when it mounts.
     closeBtnRef.current?.focus();
 
+    const triggerNode = triggerRef?.current;
     // Return focus to the catalog trigger when the modal unmounts.
     return () => {
-      triggerRef?.current?.focus();
+      triggerNode?.focus();
     };
   }, [triggerRef]);
 
@@ -97,8 +98,10 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged, triggerRef })
   return (
     <div
       className="modal-overlay"
-      role="presentation"
-      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Close modal overlay"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={handleKeyDown}
       style={{ zIndex: 1000 }}
     >
@@ -107,7 +110,6 @@ const ProductReviewsModal = ({ product, onClose, onReviewsChanged, triggerRef })
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        onClick={e => e.stopPropagation()}
         style={{ width: '90%', maxWidth: '640px', maxHeight: '80vh', overflowY: 'auto' }}
       >
         <div className="flex-between mb-4">
