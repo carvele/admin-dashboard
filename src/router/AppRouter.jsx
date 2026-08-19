@@ -26,6 +26,7 @@ const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
 const ActivityLog = lazy(() => import('../pages/admin/ActivityLog'));
 const AccountDeletionRequests = lazy(() => import('../pages/admin/AccountDeletionRequests'));
+const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
 
 // Suspense fallback
 const PageLoader = () => (
@@ -368,6 +369,18 @@ const AnimatedRoutes = () => {
                 <RequireAdmin>
                   <Suspense fallback={<PageLoader />}>
                     <AccountDeletionRequests />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="devices"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeviceManagement />
                   </Suspense>
                 </RequireAdmin>
               </ProtectedRoute>

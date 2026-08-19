@@ -90,7 +90,7 @@
 }
 .search-clear-btn:hover {
   background: var(--charcoal);
-  color: white;
+  color: var(--white);
 }
 
 /* Search dropdown */
@@ -192,7 +192,7 @@
 }
 
 .sync-status:hover {
-  background-color: var(--status-completed-bg);
+  /* Background intentionally fixed -- only the lift is the hover feedback. */
   transform: translateY(-1px);
 }
 

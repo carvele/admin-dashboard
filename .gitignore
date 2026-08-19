@@ -7,6 +7,7 @@ dist/
 .env.production.local
 .DS_Store
 .vscode/
+.claude/
 
 # Secrets / credentials — never commit (per SECURITY_HARDENING_PLAN.md item 1)
 serviceAccountKey.json

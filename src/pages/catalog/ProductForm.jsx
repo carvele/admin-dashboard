@@ -20,7 +20,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
-import { getColorList, getPatternList } from '../../services/inventoryService';
+import { getColorList } from '../../services/inventoryService';
 import {
   buildVariantMatrix,
   createVariant,
@@ -80,7 +80,6 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [categories, setCategories] = useState([]);
   const [colorList, setColorList] = useState([]);
-  const [patternList, setPatternList] = useState([]);
   // Variant matrix
   const [variantColumnsReady, setVariantColumnsReady] = useState(false);
   const [variantMatrix, setVariantMatrix] = useState([]);
@@ -137,10 +136,6 @@ const ProductForm = ({ readOnly = false }) => {
         }));
       })
       .catch((err) => console.error('Failed to load color list:', err));
-
-    getPatternList()
-      .then((list) => setPatternList(list))
-      .catch((err) => console.error('Failed to load pattern list:', err));
 
     variantColumnsAvailable()
       .then((ok) => setVariantColumnsReady(ok))
@@ -270,7 +265,7 @@ const ProductForm = ({ readOnly = false }) => {
       const matrix = buildVariantMatrix({ sizes, colors, patterns: [''] }, existingVariants);
       setVariantMatrix(matrix);
       // Auto-select all size x color combinations by default
-      setSelectedVariants((prev) => {
+      setSelectedVariants(() => {
         const next = new Set();
         matrix.forEach((cell) => {
           next.add(cell.key);
@@ -391,16 +386,6 @@ const ProductForm = ({ readOnly = false }) => {
     setSelectedVariants((prev) => {
       const next = new Set(prev);
       sizeKeys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)));
-      return next;
-    });
-  };
-
-  const toggleAllVariantsForColor = (color) => {
-    const colorKeys = variantMatrix.filter((c) => c.color === color).map((c) => c.key);
-    const allSelected = colorKeys.every((k) => selectedVariants.has(k));
-    setSelectedVariants((prev) => {
-      const next = new Set(prev);
-      colorKeys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)));
       return next;
     });
   };

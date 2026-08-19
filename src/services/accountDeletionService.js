@@ -37,7 +37,7 @@ export const getPendingDeletionRequests = async () => {
         phone
       )
     `)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'auth_revocation_pending'])
     .order('created_at', { ascending: true });
 
   if (error) throw error;

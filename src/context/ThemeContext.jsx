@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 const ThemeContext = createContext(null);
 
@@ -12,6 +12,10 @@ function getInitialTheme() {
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(getInitialTheme);
+  // Captured once at render time, before the effect below can ever write to
+  // localStorage -- otherwise both effects run on the same mount and the
+  // listener-attach effect's own guard always sees a value it just wrote.
+  const hadStoredPref = useRef(!!localStorage.getItem(STORAGE_KEY));
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -22,7 +26,7 @@ export function ThemeProvider({ children }) {
   // theme in this app -- an explicit choice should stick even if the OS
   // preference changes later.
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY)) return;
+    if (hadStoredPref.current) return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = (e) => setTheme(e.matches ? 'dark' : 'light');
     mq.addEventListener('change', onChange);

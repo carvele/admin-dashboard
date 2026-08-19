@@ -8,7 +8,10 @@
 .login-left {
   width: 420px;
   min-width: 420px;
-  background: linear-gradient(160deg, var(--charcoal) 0%, #2d2522 100%);
+  /* Fixed dark gradient -- a permanently-dark brand panel by design, same
+     treatment as Sidebar.css, not a themed surface. var(--charcoal) used to
+     anchor this but flips near-white in dark mode. */
+  background: linear-gradient(160deg, #1f1c18 0%, #2d2522 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -42,7 +45,7 @@
 .login-brand h1 {
   font-size: 2rem;
   font-weight: 400;
-  color: var(--white);
+  color: var(--on-accent);
 }
 .login-brand p {
   font-size: 1rem;

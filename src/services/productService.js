@@ -9,7 +9,6 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
-import { STOCK_HOLDING_STATUSES } from '../utils/reservationStatus';
 import {
   getCollection,
   getDocument,
@@ -543,70 +542,8 @@ export const recalculateAllInventoryStock = async () => {
     console.warn('Auto-variant sync notice:', err.message);
   }
 
-  // 1. Get all reservations currently holding stock
-  const { data: activeRes, error: resErr } = await supabase
-    .from('reservations')
-    .select('product_id, product_name, size, quantity')
-    .in('status', STOCK_HOLDING_STATUSES);
-  if (resErr) throw resErr;
-
-  // 2. Get all inventory items
-  const { data: invRows, error: invErr } = await supabase
-    .from('inventory')
-    .select('id, product_doc_id, sku, item, size, total, reserved, available');
-  if (invErr) throw invErr;
-
-  // 3. Recalculate reserved per inventory row
-  const updates = [];
-  for (const inv of invRows) {
-    const matching = activeRes.filter((r) => {
-      const resSize = r.size || '';
-      const pId = r.product_id || '';
-      const pName = r.product_name || '';
-      return (
-        resSize === inv.size &&
-        (pId === inv.product_doc_id || pId === inv.sku || pName === inv.item)
-      );
-    });
-    const newReserved = matching.reduce((sum, r) => sum + (r.quantity || 1), 0);
-    const newAvailable = Math.max(0, (inv.total || 0) - newReserved);
-    if (inv.reserved !== newReserved || inv.available !== newAvailable) {
-      updates.push({ id: inv.id, reserved: newReserved, available: newAvailable });
-    }
-  }
-
-  // Batch-update inventory
-  for (const u of updates) {
-    await supabase.from('inventory').update({
-      reserved: u.reserved,
-      available: u.available,
-      updated_at: new Date().toISOString(),
-    }).eq('id', u.id);
-  }
-
-  // 4. Sync stock / status back to products table
-  const productMap = {};
-  for (const inv of invRows) {
-    const pId = inv.product_doc_id;
-    if (!pId) continue;
-    if (!productMap[pId]) productMap[pId] = { available: 0, reserved: 0 };
-    // Use updated values if we changed them
-    const upd = updates.find((u) => u.id === inv.id);
-    productMap[pId].available += upd ? upd.available : (inv.available || 0);
-    productMap[pId].reserved += upd ? upd.reserved : (inv.reserved || 0);
-  }
-
-  for (const [pId, stats] of Object.entries(productMap)) {
-    let status = 'In Boutique';
-    if (stats.available <= 0) {
-      status = stats.reserved > 0 ? 'Reserved' : 'Out of Stock';
-    }
-    await supabase.from('products').update({
-      stock: stats.available,
-      status,
-      updated_at: new Date().toISOString(),
-    }).eq('id', pId);
-  }
+  const { error } = await supabase.rpc('recalculate_inventory_stock');
+  if (error) throw error;
 
   queryCache.invalidateByPrefix('inventory');
   queryCache.invalidateByPrefix('products');
