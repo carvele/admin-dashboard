@@ -1,28 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { getAllReviews, deleteReview } from '../../services/reviewService';
-import { Star, CheckCircle, Trash2, X, Filter } from 'lucide-react';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import { Filter } from 'lucide-react';
+import ReviewCard from '../../components/ReviewCard';
 import './Reviews.css';
 
 const Reviews = () => {
-  const [reviews, setReviews] = useState([]);
-  const [count, setCount] = useState(0);
+  const [reviews, setReviews]     = useState([]);
+  const [count, setCount]         = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  
-  const [page, setPage] = useState(1);
+
+  const [page, setPage]               = useState(1);
   const [ratingFilter, setRatingFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [reviewToDelete, setReviewToDelete] = useState(null);
-  
+  const [searchQuery, setSearchQuery]   = useState('');
+
   const limit = 20;
 
   const fetchReviews = useCallback(async () => {
     try {
       setIsLoading(true);
-      const rating = ratingFilter ? parseInt(ratingFilter) : null;
+      const rating = ratingFilter ? parseInt(ratingFilter, 10) : null;
       const { reviews: data, count: total } = await getAllReviews(page, limit, rating, searchQuery);
       setReviews(data);
       setCount(total);
@@ -33,37 +30,22 @@ const Reviews = () => {
     }
   }, [page, ratingFilter, searchQuery]);
 
+  // Debounce so typing in the search box doesn't fire a request per keystroke.
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchReviews();
-    }, 500); // Debounce search
-
-    return () => clearTimeout(delayDebounceFn);
+    const timer = setTimeout(fetchReviews, 500);
+    return () => clearTimeout(timer);
   }, [fetchReviews]);
 
-  const handleDeleteConfirm = async () => {
-    if (!reviewToDelete) return;
+  /** Called by ReviewCard after the user confirms deletion. */
+  const handleDelete = useCallback(async (reviewId) => {
     try {
-      await deleteReview(reviewToDelete);
+      await deleteReview(reviewId);
       toast.success('Review deleted');
-      fetchReviews(); // Refresh current page
+      fetchReviews(); // Re-fetch current page (handles edge-case of last item on page)
     } catch {
       toast.error('Failed to delete review');
-    } finally {
-      setReviewToDelete(null);
     }
-  };
-
-  const renderStars = (rating) => {
-    return Array.from({ length: 5 }).map((_, idx) => (
-      <Star 
-        key={idx} 
-        size={16} 
-        className={`star ${idx < rating ? 'filled' : 'empty'}`}
-        fill={idx < rating ? 'currentColor' : 'none'}
-      />
-    ));
-  };
+  }, [fetchReviews]);
 
   return (
     <div className="reviews-page">
@@ -71,27 +53,23 @@ const Reviews = () => {
         <h1>Review Moderation Center</h1>
         <div className="filter-controls-panel">
           <div className="filter-controls-header">
-            <Filter size={16} />
+            <Filter size={16} aria-hidden="true" />
             <span>Filter Controls</span>
           </div>
           <div className="filters-bar">
-            <input 
-              type="text" 
-              placeholder="Search by product name..." 
+            <input
+              type="text"
+              placeholder="Search by product name…"
               className="filter-input"
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPage(1); // reset to first page on search
-              }}
+              onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+              aria-label="Search reviews by product name"
             />
-            <select 
+            <select
               className="filter-select"
               value={ratingFilter}
-              onChange={(e) => {
-                setRatingFilter(e.target.value);
-                setPage(1);
-              }}
+              onChange={e => { setRatingFilter(e.target.value); setPage(1); }}
+              aria-label="Filter by star rating"
             >
               <option value="">All Ratings</option>
               <option value="5">5 Stars</option>
@@ -106,7 +84,7 @@ const Reviews = () => {
 
       {isLoading && reviews.length === 0 ? (
         <div className="flex-center-vh">
-          <div className="loading-spinner"></div>
+          <div className="loading-spinner" role="status" aria-label="Loading reviews" />
         </div>
       ) : reviews.length === 0 ? (
         <div className="empty-state">
@@ -115,113 +93,39 @@ const Reviews = () => {
       ) : (
         <>
           <div className="reviews-grid">
-            {reviews.map((review) => (
-              <div key={review.id} className="review-card">
-                <div className="review-header">
-                  <div>
-                    <div className="review-author">
-                      {review.userName}
-                      {review.verifiedPurchase && (
-                        <CheckCircle size={14} className="verified-badge" title="Verified Purchase" />
-                      )}
-                    </div>
-                    <div className="review-product">Product: {review.productName}</div>
-                  </div>
-                  <div className="stars">
-                    {renderStars(review.rating)}
-                  </div>
-                </div>
-                
-                <p className="review-body">{review.comment}</p>
-                
-                {review.images && review.images.length > 0 && (
-                  <div className="review-images">
-                    {review.images.map((img, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        className="review-thumb-btn"
-                        onClick={() => setSelectedImage(img)}
-                      >
-                        <img
-                          src={img}
-                          alt="Review attachment"
-                          className="review-thumb"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="review-footer">
-                  <span className="review-date">
-                    {new Date(review.createdAt).toLocaleDateString()}
-                  </span>
-                  <button 
-                    className="delete-btn"
-                    onClick={() => setReviewToDelete(review.id)}
-                    title="Delete Review"
-                  >
-                    <Trash2 size={16} /> Delete
-                  </button>
-                </div>
-              </div>
+            {reviews.map(review => (
+              <ReviewCard
+                key={review.id}
+                review={review}
+                onDelete={handleDelete}
+                showProductName
+              />
             ))}
           </div>
 
-          <div className="pagination">
-            <button 
+          <div className="pagination" role="navigation" aria-label="Review pages">
+            <button
               className="pagination-btn"
               disabled={page === 1}
               onClick={() => setPage(p => p - 1)}
+              aria-label="Previous page"
             >
               Previous
             </button>
             <span className="pagination-info">
               Page {page} of {Math.ceil(count / limit) || 1} ({count} total)
             </span>
-            <button 
+            <button
               className="pagination-btn"
               disabled={page >= Math.ceil(count / limit)}
               onClick={() => setPage(p => p + 1)}
+              aria-label="Next page"
             >
               Next
             </button>
           </div>
         </>
       )}
-
-      {selectedImage && (
-        <div
-          className="image-modal-overlay"
-          onClick={e => { if (e.target === e.currentTarget) setSelectedImage(null); }}
-          onKeyDown={e => {
-            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-              e.preventDefault();
-              setSelectedImage(null);
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          aria-label="Close image preview"
-        >
-          <div className="image-modal-content">
-            <button className="image-modal-close" onClick={() => setSelectedImage(null)}>
-              <X size={24} />
-            </button>
-            <img src={selectedImage} alt="Full resolution" className="image-modal-img" />
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        isOpen={!!reviewToDelete}
-        title="Delete Review"
-        message="Are you sure you want to delete this review? This action cannot be undone."
-        confirmText="Delete"
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setReviewToDelete(null)}
-      />
     </div>
   );
 };
