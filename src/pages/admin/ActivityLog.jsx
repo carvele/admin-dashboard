@@ -82,7 +82,6 @@ const ActivityLog = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null); // full log object for the drawer
-  const [showRaw, setShowRaw] = useState(false);
   const [actors, setActors] = useState([]);
 
   // Filters (initialized from URL search params for deep-linking)
@@ -173,7 +172,6 @@ const ActivityLog = () => {
   const openDrawer = (log, evt) => {
     lastTriggerRef.current = evt?.currentTarget ?? null;
     setSelected(log);
-    setShowRaw(false);
   };
 
   const closeDrawer = useCallback(() => {
@@ -198,7 +196,6 @@ const ActivityLog = () => {
       if (nextIdx < 0 || nextIdx >= rows.length) return;
       e.preventDefault();
       setSelected(rows[nextIdx]);
-      setShowRaw(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -445,8 +442,6 @@ const ActivityLog = () => {
         <LogDrawer
           log={selected}
           onClose={closeDrawer}
-          showRaw={showRaw}
-          onToggleRaw={() => setShowRaw((v) => !v)}
           drawerRef={drawerRef}
         />
       )}
@@ -456,7 +451,7 @@ const ActivityLog = () => {
 
 // ── Details drawer ───────────────────────────────────────────────────────────
 
-const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
+const LogDrawer = ({ log, onClose, drawerRef }) => {
   const kind = getActionKind(log.action);
   const Icon = KIND_ICONS[kind] || Activity;
   const sentence = formatLogSentence(log);
@@ -581,15 +576,6 @@ const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
 
           {!hasDetails && (
             <p className="text-secondary al-drawer-none">No extra details were recorded for this action.</p>
-          )}
-
-          {hasDetails && (
-            <section className="al-drawer-section">
-              <button type="button" className="al-raw-toggle" onClick={onToggleRaw} aria-expanded={showRaw}>
-                {showRaw ? 'Hide' : 'View'} raw data
-              </button>
-              {showRaw && <pre className="al-raw">{JSON.stringify(log.details, null, 2)}</pre>}
-            </section>
           )}
         </div>
       </aside>

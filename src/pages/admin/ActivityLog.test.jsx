@@ -86,7 +86,7 @@ describe('ActivityLog', () => {
     expect(screen.getByText('View Profile')).toBeInTheDocument();
   });
 
-  it('opens a details drawer with summary card, item details, and raw data toggle', async () => {
+  it('opens a details drawer with summary card and item details', async () => {
     renderComponent();
 
     fireEvent.click(await screen.findByRole('button', { name: /restocked/i }));
@@ -96,11 +96,6 @@ describe('ActivityLog', () => {
     expect(within(drawer).getByText('prod-9')).toBeInTheDocument();
     expect(within(drawer).getByText('Item & Action Details')).toBeInTheDocument();
     expect(within(drawer).getByText('Red')).toBeInTheDocument();
-
-    // Raw JSON is not shown until asked for — but it is still available.
-    expect(within(drawer).queryByText(/"qtyAdded": 8/)).not.toBeInTheDocument();
-    fireEvent.click(within(drawer).getByRole('button', { name: /view raw data/i }));
-    expect(within(drawer).getByText(/"qtyAdded": 8/)).toBeInTheDocument();
   });
 
   it('closes the drawer on Escape', async () => {
