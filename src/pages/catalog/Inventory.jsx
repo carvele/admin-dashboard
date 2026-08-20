@@ -563,6 +563,7 @@ const Inventory = () => {
         targetId: restockModal.productDocId,
         itemName: restockModal.item,
         size: restockModal.size,
+        color: restockModal.color || restockModal.colour || '',
         qtyAdded: qty,
         // Before/after come from the atomic RPC's own return values, so the
         // activity log shows the true stock movement rather than a number
@@ -639,6 +640,11 @@ const Inventory = () => {
         targetId: editModal.productDocId,
         itemName: editModal.item,
         size: editModal.size,
+        color: editModal.color || editModal.colour || '',
+        qtyBefore: editModal.total,
+        qtyAfter: t,
+        reservedBefore: editModal.reserved,
+        reservedAfter: r,
       });
       toast.success(`Updated ${editModal.item} (${editModal.size})`);
       setEditModal(null);

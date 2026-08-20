@@ -167,23 +167,15 @@ export const extractChanges = (details) => {
 };
 
 /**
- * Remaining detail keys worth showing as plain key/value rows —
- * everything not already consumed by the sentence or the diff table.
+ * Extract item and detail context key/value rows for the drawer.
+ * Displays all item attributes (itemName, size, color, qtyAdded, category, price, etc.)
+ * excluding diff pairs that are rendered in the "What changed" table.
  */
 export const extractContext = (details) => {
   if (!details || typeof details !== 'object') return [];
-  const consumed = new Set([
-    ...SUBJECT_KEYS,
-    ...QUALIFIER_KEYS,
-    ...DIFF_PAIRS.flat(),
-    'changes',
-    'field',
-    'qtyAdded',
-    'quantity',
-    'amount',
-  ]);
+  const diffKeys = new Set([...DIFF_PAIRS.flat(), 'changes', 'field']);
   return Object.entries(details)
-    .filter(([k, v]) => !consumed.has(k) && v !== undefined && v !== null && v !== '')
+    .filter(([k, v]) => !diffKeys.has(k) && v !== undefined && v !== null && v !== '')
     .map(([k, v]) => ({ key: humanizeKey(k), value: formatValue(v) }));
 };
 

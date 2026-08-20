@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ScrollText,
   ChevronLeft,
@@ -13,6 +14,7 @@ import {
   Shield,
   Send,
   Activity,
+  ExternalLink,
 } from 'lucide-react';
 import { getPaginatedLogs } from '../../lib/supabaseService';
 import { getStaffMembers } from '../../services/staffService';
@@ -55,9 +57,25 @@ const KIND_ICONS = {
   neutral: Activity,
 };
 
+const getTargetLink = (targetType, targetId) => {
+  if (!targetId || !targetType) return null;
+  const type = String(targetType).toLowerCase();
+  if (type === 'product' || type === 'inventory') {
+    return { url: `/catalog/view/${targetId}`, label: 'View Product' };
+  }
+  if (type === 'reservation') {
+    return { url: `/reservations?search=${encodeURIComponent(targetId)}`, label: 'View Reservation' };
+  }
+  if (type === 'profile' || type === 'staff') {
+    return { url: `/staff/${targetId}`, label: 'View Profile' };
+  }
+  return null;
+};
+
 const ActivityLog = () => {
   const { user } = useAuth();
   const canView = can(user?.role, 'view_logs');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -67,12 +85,17 @@ const ActivityLog = () => {
   const [showRaw, setShowRaw] = useState(false);
   const [actors, setActors] = useState([]);
 
-  // Filters
-  const [targetType, setTargetType] = useState('');
-  const [actionSearch, setActionSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [actorId, setActorId] = useState('');
+  // Filters (initialized from URL search params for deep-linking)
+  const [targetType, setTargetType] = useState(() => searchParams.get('targetType') || '');
+  const [targetId, setTargetId] = useState(() => searchParams.get('targetId') || '');
+  const [actionSearch, setActionSearch] = useState(
+    () => searchParams.get('actionSearch') || searchParams.get('action') || '',
+  );
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') || '');
+  const [dateTo, setDateTo] = useState(() => searchParams.get('to') || '');
+  const [actorId, setActorId] = useState(
+    () => searchParams.get('userId') || searchParams.get('actorId') || '',
+  );
 
   // Focus restore: the row button that opened the drawer.
   const lastTriggerRef = useRef(null);
@@ -89,6 +112,7 @@ const ActivityLog = () => {
   const buildFilters = useCallback(() => {
     const f = {};
     if (targetType) f.targetType = targetType;
+    if (targetId) f.targetId = targetId;
     if (actionSearch.trim()) f.actionSearch = actionSearch.trim();
     if (actorId) f.userId = actorId;
     if (dateFrom) f.from = new Date(dateFrom).toISOString();
@@ -98,14 +122,17 @@ const ActivityLog = () => {
       f.to = end.toISOString();
     }
     return f;
-  }, [targetType, actionSearch, dateFrom, dateTo, actorId]);
+  }, [targetType, targetId, actionSearch, dateFrom, dateTo, actorId]);
 
   // Reload on filter change (debounced for the text field), reset to page 0
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedLoad = useCallback(debounce((filters) => {
-    setPage(0);
-    load(0, filters);
-  }, 350), [load]);
+  const debouncedLoad = useCallback(
+    debounce((filters) => {
+      setPage(0);
+      load(0, filters);
+    }, 350),
+    [load],
+  );
 
   useEffect(() => {
     if (!canView) return;
@@ -121,14 +148,18 @@ const ActivityLog = () => {
       .catch(() => setActors([]));
   }, [canView]);
 
-  const hasFilters = Boolean(targetType || actionSearch.trim() || dateFrom || dateTo || actorId);
+  const hasFilters = Boolean(
+    targetType || targetId || actionSearch.trim() || dateFrom || dateTo || actorId,
+  );
 
   const clearFilters = () => {
     setTargetType('');
+    setTargetId('');
     setActionSearch('');
     setDateFrom('');
     setDateTo('');
     setActorId('');
+    setSearchParams({});
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -313,6 +344,7 @@ const ActivityLog = () => {
                   const s = formatLogSentence(log);
                   const av = avatarColor(log.userId || log.userName || '');
                   const isOpen = selected?.id === log.id;
+                  const targetLink = getTargetLink(log.targetType, log.targetId);
 
                   return (
                     <li key={log.id}>
@@ -358,6 +390,15 @@ const ActivityLog = () => {
                               <span className={`al-target-chip al-target-${log.targetType}`}>
                                 {log.targetType}
                               </span>
+                            )}
+                            {targetLink && (
+                              <Link
+                                to={targetLink.url}
+                                className="al-entity-link"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {targetLink.label} <ExternalLink size={12} aria-hidden="true" />
+                              </Link>
                             )}
                             <span className="al-time" title={absoluteTime(log.timestamp)}>
                               {relativeTime(log.timestamp)}
@@ -418,9 +459,11 @@ const ActivityLog = () => {
 const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
   const kind = getActionKind(log.action);
   const Icon = KIND_ICONS[kind] || Activity;
+  const sentence = formatLogSentence(log);
   const changes = extractChanges(log.details);
   const context = extractContext(log.details);
   const hasDetails = log.details && Object.keys(log.details).length > 0;
+  const targetLink = getTargetLink(log.targetType, log.targetId);
 
   return (
     <>
@@ -446,6 +489,26 @@ const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
         </header>
 
         <div className="al-drawer-body">
+          {/* Action Summary Card */}
+          <div className="al-drawer-summary-card">
+            <p className="al-drawer-summary-text">
+              <strong className="al-actor">{log.userName || 'System'}</strong>
+              {' '}
+              <span className="al-verb">{sentence.action}</span>
+              {sentence.subject && <> <strong className="al-subject">{sentence.subject}</strong></>}
+              {sentence.qualifier && <span className="al-qualifier"> · {sentence.qualifier}</span>}
+              {sentence.delta && (
+                <span className="al-delta">
+                  {' — '}
+                  <span className="al-delta-from">{sentence.delta.from}</span>
+                  {' → '}
+                  <span className="al-delta-to">{sentence.delta.to}</span>
+                </span>
+              )}
+              {!sentence.delta && sentence.amount && <span className="al-amount"> {sentence.amount}</span>}
+            </p>
+          </div>
+
           <dl className="al-kv">
             <div className="al-kv-row">
               <dt>Performed by</dt>
@@ -466,7 +529,14 @@ const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
             {log.targetId && (
               <div className="al-kv-row">
                 <dt>Target ID</dt>
-                <dd><code className="al-code">{log.targetId}</code></dd>
+                <dd className="flex-center gap-2 justify-start">
+                  <code className="al-code">{log.targetId}</code>
+                  {targetLink && (
+                    <Link to={targetLink.url} className="al-drawer-target-link">
+                      {targetLink.label} <ExternalLink size={12} aria-hidden="true" />
+                    </Link>
+                  )}
+                </dd>
               </div>
             )}
           </dl>
@@ -497,7 +567,7 @@ const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
 
           {context.length > 0 && (
             <section className="al-drawer-section">
-              <h3 className="al-drawer-section-title">Details</h3>
+              <h3 className="al-drawer-section-title">Item & Action Details</h3>
               <dl className="al-kv">
                 {context.map((c) => (
                   <div className="al-kv-row" key={c.key}>

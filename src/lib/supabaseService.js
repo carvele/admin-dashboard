@@ -273,6 +273,7 @@ export const getLogsForTarget = async (targetType, targetId, limit = 50) => {
 export const getPaginatedLogs = async (page = 0, pageSize = 25, filters = {}) => {
   let q = supabase.from('logs').select('*', { count: 'exact' });
   if (filters.targetType) q = q.eq('target_type', filters.targetType);
+  if (filters.targetId) q = q.eq('target_id', String(filters.targetId));
   if (filters.userId) q = q.eq('user_id', filters.userId);
   if (filters.actionSearch) q = q.ilike('action', `%${filters.actionSearch}%`);
   if (filters.from) q = q.gte('timestamp', filters.from);

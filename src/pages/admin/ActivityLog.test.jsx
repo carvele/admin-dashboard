@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import ActivityLog from './ActivityLog';
 import '@testing-library/jest-dom';
 
@@ -11,7 +12,7 @@ const mockLogs = [
     targetType: 'product',
     targetId: 'prod-9',
     timestamp: new Date().toISOString(), // today
-    details: { itemName: 'Ivory Gown', size: 'M', qtyAdded: 8, qtyBefore: 4, qtyAfter: 12 },
+    details: { itemName: 'Ivory Gown', size: 'M', color: 'Red', qtyAdded: 8, qtyBefore: 4, qtyAfter: 12 },
   },
   {
     id: 'log-2',
@@ -43,9 +44,16 @@ jest.mock('../../services/staffService', () => ({
   ])),
 }));
 
+const renderComponent = (initialEntries = ['/activity-log']) =>
+  render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <ActivityLog />
+    </MemoryRouter>,
+  );
+
 describe('ActivityLog', () => {
   it('renders a readable sentence instead of a raw JSON dump', async () => {
-    render(<ActivityLog />);
+    renderComponent();
 
     expect(await screen.findByText('Ivory Gown')).toBeInTheDocument();
     expect(screen.getByText('Restocked inventory item')).toBeInTheDocument();
@@ -55,7 +63,7 @@ describe('ActivityLog', () => {
   });
 
   it('separates entries into calendar-day groups', async () => {
-    render(<ActivityLog />);
+    renderComponent();
 
     // Today's group, plus a second group headed by the older entry's weekday.
     expect(await screen.findByText('Today')).toBeInTheDocument();
@@ -68,27 +76,35 @@ describe('ActivityLog', () => {
   });
 
   it('shows the total count badge', async () => {
-    render(<ActivityLog />);
+    renderComponent();
     expect(await screen.findByText('2 recorded')).toBeInTheDocument();
   });
 
-  it('opens a details drawer with raw data kept behind a toggle', async () => {
-    render(<ActivityLog />);
+  it('renders contextual target links for products and staff', async () => {
+    renderComponent();
+    expect(await screen.findByText('View Product')).toBeInTheDocument();
+    expect(screen.getByText('View Profile')).toBeInTheDocument();
+  });
+
+  it('opens a details drawer with summary card, item details, and raw data toggle', async () => {
+    renderComponent();
 
     fireEvent.click(await screen.findByRole('button', { name: /Restocked inventory item/i }));
 
     const drawer = await screen.findByRole('dialog');
     expect(within(drawer).getByText('Performed by')).toBeInTheDocument();
     expect(within(drawer).getByText('prod-9')).toBeInTheDocument();
+    expect(within(drawer).getByText('Item & Action Details')).toBeInTheDocument();
+    expect(within(drawer).getByText('Red')).toBeInTheDocument();
 
     // Raw JSON is not shown until asked for — but it is still available.
-    expect(within(drawer).queryByText(/qtyAdded/)).not.toBeInTheDocument();
+    expect(within(drawer).queryByText(/"qtyAdded": 8/)).not.toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole('button', { name: /view raw data/i }));
-    expect(within(drawer).getByText(/qtyAdded/)).toBeInTheDocument();
+    expect(within(drawer).getByText(/"qtyAdded": 8/)).toBeInTheDocument();
   });
 
   it('closes the drawer on Escape', async () => {
-    render(<ActivityLog />);
+    renderComponent();
     fireEvent.click(await screen.findByRole('button', { name: /Restocked inventory item/i }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
@@ -97,12 +113,17 @@ describe('ActivityLog', () => {
   });
 
   it('offers Clear filters only once a filter is active', async () => {
-    render(<ActivityLog />);
+    renderComponent();
     await screen.findByText('Ivory Gown');
 
     expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Target'), { target: { value: 'product' } });
+    expect(await screen.findByRole('button', { name: /clear filters/i })).toBeInTheDocument();
+  });
+
+  it('initializes filters from URL search params for deep-linking', async () => {
+    renderComponent(['/activity-log?targetType=product&targetId=prod-9']);
     expect(await screen.findByRole('button', { name: /clear filters/i })).toBeInTheDocument();
   });
 });
