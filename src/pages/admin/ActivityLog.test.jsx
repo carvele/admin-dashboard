@@ -56,7 +56,7 @@ describe('ActivityLog', () => {
     renderComponent();
 
     expect(await screen.findByText('Ivory Gown')).toBeInTheDocument();
-    expect(screen.getByText('Restocked inventory item')).toBeInTheDocument();
+    expect(screen.getByText('restocked')).toBeInTheDocument();
     // before -> after, sourced from qtyBefore/qtyAfter
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('ActivityLog', () => {
   it('opens a details drawer with summary card, item details, and raw data toggle', async () => {
     renderComponent();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Restocked inventory item/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /restocked/i }));
 
     const drawer = await screen.findByRole('dialog');
     expect(within(drawer).getByText('Performed by')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('ActivityLog', () => {
 
   it('closes the drawer on Escape', async () => {
     renderComponent();
-    fireEvent.click(await screen.findByRole('button', { name: /Restocked inventory item/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /restocked/i }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Escape' });

@@ -100,6 +100,8 @@ export const formatValue = (value) => {
  *            delta: {from: string, to: string}|null, amount: string|null}}
  */
 export const formatLogSentence = (log) => {
+  const actionStr = String(log?.action || '').trim();
+  const a = actionStr.toLowerCase();
   const details = log?.details && typeof log.details === 'object' ? log.details : {};
 
   const subject = pick(details, SUBJECT_KEYS);
@@ -121,12 +123,33 @@ export const formatLogSentence = (log) => {
   let amount = null;
   if (amountEntry) {
     const n = Number(amountEntry.value);
-    amount = Number.isFinite(n) && n > 0 ? `+${n}` : formatValue(amountEntry.value);
+    amount = Number.isFinite(n) && n > 0 ? `+${n} units` : formatValue(amountEntry.value);
+  }
+
+  // Derive human action verb
+  let verb = actionStr || 'recorded activity';
+  if (/restock/i.test(a)) {
+    verb = 'restocked';
+  } else if (/updated inventory/i.test(a) || /inventory item/i.test(a)) {
+    verb = delta ? 'updated inventory stock for' : 'updated inventory details for';
+  } else if (/updated product/i.test(a)) {
+    verb = 'updated product details for';
+  } else if (/created product|new product/i.test(a)) {
+    verb = 'created new product';
+  } else if (/archived staff/i.test(a)) {
+    verb = 'archived staff account';
+  } else if (/invited staff|invite/i.test(a)) {
+    verb = 'invited staff member';
+  } else if (/in-store sale|sale/i.test(a)) {
+    verb = 'recorded in-store sale of';
+  } else if (/approved/i.test(a)) {
+    verb = 'approved';
+  } else if (/declined/i.test(a)) {
+    verb = 'declined';
   }
 
   return {
-    // Always present — the raw action is the guaranteed fallback.
-    action: log?.action || 'Recorded activity',
+    action: verb,
     subject: subject ? formatValue(subject.value) : null,
     qualifier: qualifierParts.length ? qualifierParts.join(' / ') : null,
     delta,

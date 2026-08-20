@@ -529,7 +529,7 @@ const LogDrawer = ({ log, onClose, showRaw, onToggleRaw, drawerRef }) => {
             {log.targetId && (
               <div className="al-kv-row">
                 <dt>Target ID</dt>
-                <dd className="flex-center gap-2 justify-start">
+                <dd className="al-target-id-container">
                   <code className="al-code">{log.targetId}</code>
                   {targetLink && (
                     <Link to={targetLink.url} className="al-drawer-target-link">
