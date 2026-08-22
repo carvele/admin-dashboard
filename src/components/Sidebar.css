@@ -27,6 +27,28 @@
     justify-content: center;
     padding: 0.75rem 0;
     margin: 0.15rem 0.5rem;
+    position: relative;
+  }
+  /* Floating hover popover tooltip when collapsed */
+  .sidebar.sidebar-collapsed .nav-link:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1f1c18;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    pointer-events: none;
+    z-index: 9999;
+    letter-spacing: 0.3px;
+    animation: tooltipFade 0.15s ease-out;
   }
   .sidebar.sidebar-collapsed .sidebar-brand {
     padding: 1.25rem 0.5rem;
@@ -37,6 +59,11 @@
   .sidebar.sidebar-collapsed .sidebar-footer {
     padding: 0.75rem 0.5rem;
   }
+}
+
+@keyframes tooltipFade {
+  from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
 /* Mobile */

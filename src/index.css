@@ -363,8 +363,12 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color);
   background-color: var(--beige);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 .table td {
   padding: 0.85rem 1rem;
@@ -376,7 +380,7 @@ button {
   transition: background-color 0.15s ease;
 }
 .table tbody tr:hover {
-  background-color: rgba(212, 175, 55, 0.02);
+  background-color: rgba(212, 175, 55, 0.08);
 }
 
 /* Typography styles */

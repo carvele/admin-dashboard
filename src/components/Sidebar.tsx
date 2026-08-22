@@ -187,6 +187,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
                     className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
                     onClick={(e) => handleNavClick(e, link.to)}
                     title={isCollapsed ? link.label : undefined}
+                    data-tooltip={link.label}
                   >
                     <Icon size={20} className="nav-icon" />
                     {!isCollapsed && <span className="nav-label">{link.label}</span>}
