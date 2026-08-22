@@ -26,6 +26,10 @@ const ClothingCatalog = () => {
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
+  // subcatName → parentName map (e.g. 'Sneakers' → 'Footwear', 'Boots' → 'Footwear')
+  // Used so the catalog filter works whether products.category stores a parent
+  // name ('Footwear') or a subcategory name ('Sneakers' / 'Boots').
+  const [subcatToParent, setSubcatToParent] = useState({});
   const [loading, setLoading] = useState(true);
   // productDocId → { available, total, reserved } aggregated across all sizes
   const [inventoryMap, setInventoryMap] = useState({});
@@ -81,16 +85,22 @@ const ClothingCatalog = () => {
     };
     fetchProducts();
 
-    // Fetch dynamic categories once (could also subscribe if needed)
+    // Fetch dynamic categories once
     const fetchCategories = async () => {
       try {
         const cats = await getCategories();
         setDbCategories((cats || []).map((c) => c.name));
+        // Build subcategory → parent name lookup
+        const map = {};
+        (cats || []).forEach((parent) => {
+          (parent.subcategories || []).forEach((sub) => {
+            map[sub.name] = parent.name;
+          });
+          // Parent also maps to itself so an exact parent match still works
+          map[parent.name] = parent.name;
+        });
+        setSubcatToParent(map);
       } catch (err) {
-        // No hardcoded fallback list — one would inevitably drift from the
-        // real taxonomy (as the old one did). Degrade to "All" only; the
-        // filter dropdown just won't offer per-category options until the
-        // next successful load.
         Logger.error('Failed to load categories for filter dropdown', err);
         setDbCategories([]);
       }
@@ -142,7 +152,13 @@ const ClothingCatalog = () => {
     const matchesSearch = (item.name || '')
       .toLowerCase()
       .includes((searchTerm || '').toLowerCase());
-    const matchesCat = activeCategory === 'All' || item.category === activeCategory;
+
+    // Resolve the product's effective parent category.
+    // products.category may hold either a parent name ('Footwear') or a
+    // subcategory name ('Sneakers'/'Boots'). Resolve both via the lookup map.
+    const effectiveParentCat = subcatToParent[item.category] || item.category || '';
+    const matchesCat = activeCategory === 'All' || effectiveParentCat === activeCategory;
+
     // A product can have several colours (comma-joined in `color`); match if the
     // selected colour is any of them. Fall back to baseColor for legacy rows.
     const itemColors = item.color
