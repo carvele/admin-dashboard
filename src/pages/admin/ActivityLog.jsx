@@ -33,6 +33,7 @@ import {
   initialsOf,
   avatarColor,
 } from '../../utils/activityLogFormat';
+import PageHeader from '../../components/PageHeader';
 import './ActivityLog.css';
 
 const PAGE_SIZE = 25;
@@ -223,15 +224,12 @@ const ActivityLog = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title flex-center gap-2 justify-start">
-            <ScrollText size={24} className="al-title-icon" /> Activity Log
-            <span className="al-count-badge">{total.toLocaleString()} recorded</span>
-          </h1>
-          <p className="page-subtitle">Every recorded admin action — who did what, and when</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Activity Log"
+        subtitle="Every recorded admin action — who did what, and when"
+        category="AUDIT & SECURITY"
+        badge={<span className="al-count-badge">{total.toLocaleString()} recorded</span>}
+      />
 
       {/* Filters */}
       <div className="card al-filters">

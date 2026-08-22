@@ -22,6 +22,8 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
+import SkeletonTable from '../../components/SkeletonTable';
 import './StaffManagement.css';
 
 const EMPLOYMENT_STATUS_META = {
@@ -493,20 +495,21 @@ const StaffManagement = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Team Management</h1>
-          <p className="page-subtitle">Create and manage staff accounts for the admin dashboard</p>
-        </div>
-        {viewMode === 'active' && (
-          <button
-            className="btn-primary flex-center gap-2"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            <UserPlus size={18} /> Invite Staff Member
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Team Management"
+        subtitle="Create and manage staff accounts for the admin dashboard"
+        category="ADMINISTRATION"
+        actions={
+          viewMode === 'active' && (
+            <button
+              className="btn-primary flex-center gap-2"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <UserPlus size={18} /> Invite Staff Member
+            </button>
+          )
+        }
+      />
 
       <div className="card">
         {/* ── Tab toggle ── */}

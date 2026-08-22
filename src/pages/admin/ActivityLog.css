@@ -103,9 +103,6 @@
 .al-group + .al-group { border-top: 1px solid var(--border-color); }
 
 .al-group-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   margin: 0;
   padding: 0.6rem 1.25rem;
   font-size: 0.72rem;
