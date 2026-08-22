@@ -40,6 +40,7 @@ import { can } from '../../utils/permissions';
 import { downloadCSV } from '../../utils/reportExporter';
 import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
 import StockStatusBadge from '../../components/inventory/StockStatusBadge';
+import PageHeader from '../../components/PageHeader';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
@@ -775,36 +776,35 @@ const Inventory = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Inventory Management</h1>
-          <p className="page-subtitle">
-            Track stock levels and quantities per size across all products
-          </p>
-        </div>
-        <div className="flex-center gap-2">
-          {canManageLookups && (
+      <PageHeader
+        title="Inventory Management"
+        subtitle="Track stock levels and quantities per size across all products"
+        category="OPERATIONS"
+        actions={
+          <div className="flex-center gap-2">
+            {canManageLookups && (
+              <button
+                className={`btn-outline flex-center gap-2 ${showAdmin ? 'active' : ''}`}
+                onClick={() => setShowAdmin(!showAdmin)}
+                aria-label={showAdmin ? 'Hide admin controls' : 'Show admin controls'}
+              >
+                <Settings2 size={18} /> {showAdmin ? 'Hide Admin' : 'Show Admin'}
+              </button>
+            )}
             <button
-              className={`btn-outline flex-center gap-2 ${showAdmin ? 'active' : ''}`}
-              onClick={() => setShowAdmin(!showAdmin)}
-              aria-label={showAdmin ? 'Hide admin controls' : 'Show admin controls'}
+              className="btn-outline flex-center gap-2"
+              onClick={handleSyncStock}
+              disabled={isSyncing}
             >
-              <Settings2 size={18} /> {showAdmin ? 'Hide Admin' : 'Show Admin'}
+              <RefreshCw size={18} className={isSyncing ? 'spin' : ''} />
+              {isSyncing ? 'Syncing...' : 'Fix & Sync Stock'}
             </button>
-          )}
-          <button
-            className="btn-outline flex-center gap-2"
-            onClick={handleSyncStock}
-            disabled={isSyncing}
-          >
-            <RefreshCw size={18} className={isSyncing ? 'spin' : ''} />
-            {isSyncing ? 'Syncing...' : 'Fix & Sync Stock'}
-          </button>
-          <button className="btn-outline flex-center gap-2" onClick={handleExportCSV}>
-            <Download size={18} /> Export CSV
-          </button>
-        </div>
-      </div>
+            <button className="btn-outline flex-center gap-2" onClick={handleExportCSV}>
+              <Download size={18} /> Export CSV
+            </button>
+          </div>
+        }
+      />
 
       {showAdmin && canManageLookups && (
         <AdminInventoryPanel

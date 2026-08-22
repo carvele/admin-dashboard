@@ -522,8 +522,11 @@ input:checked + .toggle-slider:before {
 }
 .page-header {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
 }
 .page-subtitle {
   font-size: 0.875rem;

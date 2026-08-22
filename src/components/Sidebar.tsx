@@ -18,6 +18,8 @@ import {
   UserX,
   Megaphone,
   MonitorSmartphone,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 // @ts-ignore
 import { useAuth } from '../context/AuthContext';
@@ -32,9 +34,11 @@ const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/staff', '/settings', '/activ
 interface SidebarProps {
   isOpen: boolean;
   onClose?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: SidebarProps) => {
   const { user, isAdminUnlocked } = useAuth();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -137,15 +141,34 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         />
       )}
 
-      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
         <div className="sidebar-brand">
-          <div>
-            <h2 className="font-serif">JezSy Couture</h2>
-            <span className="brand-subtitle accent-pink-text">by Ms. Jholy</span>
+          {!isCollapsed ? (
+            <div className="brand-text">
+              <h2 className="font-serif">JezSy Couture</h2>
+              <span className="brand-subtitle accent-pink-text">by Ms. Jholy</span>
+            </div>
+          ) : (
+            <div className="brand-collapsed-logo" title="JezSy Couture">
+              <span className="font-serif">JC</span>
+            </div>
+          )}
+          <div className="sidebar-brand-controls">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                className="sidebar-collapse-btn desktop-only"
+                onClick={onToggleCollapse}
+                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+              </button>
+            )}
+            <button className="sidebar-close-btn mobile-only" onClick={onClose} aria-label="Close sidebar">
+              <X size={20} />
+            </button>
           </div>
-          <button className="sidebar-close-btn" onClick={onClose}>
-            <X size={20} />
-          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -163,13 +186,18 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                     to={link.to}
                     className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
                     onClick={(e) => handleNavClick(e, link.to)}
+                    title={isCollapsed ? link.label : undefined}
                   >
-                    <Icon size={20} />
-                    <span>{link.label}</span>
-                    {link.badge && <span className="badge-unread">{link.badge}</span>}
+                    <Icon size={20} className="nav-icon" />
+                    {!isCollapsed && <span className="nav-label">{link.label}</span>}
+                    {link.badge && (
+                      <span className={`badge-unread ${isCollapsed ? 'collapsed-dot' : ''}`}>
+                        {isCollapsed ? '' : link.badge}
+                      </span>
+                    )}
                     {(link as any).alertType && (
-                      <span className={`sidebar-alert-icon ${(link as any).alertType}`}>
-                        <AlertTriangle size={16} strokeWidth={2.5} />
+                      <span className={`sidebar-alert-icon ${(link as any).alertType} ${isCollapsed ? 'collapsed' : ''}`}>
+                        <AlertTriangle size={isCollapsed ? 12 : 16} strokeWidth={2.5} />
                       </span>
                     )}
                   </NavLink>
@@ -183,21 +211,23 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           <Link
             to={`/staff/${(user as any)?.uid}`}
             className="profile-badge"
-            title="View my profile"
-            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            title={(user as any)?.name ? `${(user as any)?.name} (${isAdminUnlocked ? 'Owner' : 'Sales Staff'})` : 'View my profile'}
+            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: isCollapsed ? '0' : '10px', justifyContent: isCollapsed ? 'center' : 'flex-start', cursor: 'pointer' }}
           >
             <div className="profile-avatar">
               <span>{(user as any)?.name?.[0]?.toUpperCase() || 'S'}</span>
             </div>
-            <div className="profile-info">
-              <span className="profile-name">{(user as any)?.name || 'Staff Member'}</span>
-              <span
-                className="profile-role"
-                style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
-              >
-                {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
-              </span>
-            </div>
+            {!isCollapsed && (
+              <div className="profile-info">
+                <span className="profile-name">{(user as any)?.name || 'Staff Member'}</span>
+                <span
+                  className="profile-role"
+                  style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
+                >
+                  {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
+                </span>
+              </div>
+            )}
           </Link>
         </div>
       </aside>

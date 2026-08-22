@@ -61,6 +61,7 @@ import { getCustomers } from '../../services/customerService';
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
+import PageHeader from '../../components/PageHeader';
 import { isPending } from '../../utils/reservationStatus';
 // @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
@@ -259,33 +260,32 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-page">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Dashboard Overview</h1>
-          <p className="page-subtitle">
-            Welcome back! Here is what is happening at JezSy Collection today.
-          </p>
-        </div>
-        <div className="system-health flex-center gap-3">
-          <div
-            className="health-indicator flex-center gap-1 text-success text-sm font-medium px-3 py-1 rounded-full"
-            style={{ backgroundColor: 'var(--status-completed-bg)' }}
-          >
-            <CheckCircle2 size={16} /> Pipeline Healthy
-          </div>
-          <div className="sync-status flex-center gap-1 text-secondary text-xs">
-            Last synced: {lastSynced.toLocaleTimeString()}
-          </div>
-          <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadDashboard}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          {canCustomize && (
-            <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
-              <Settings2 size={14} /> Customize
+      <PageHeader
+        title="Dashboard Overview"
+        subtitle="Welcome back! Here is what is happening at JezSy Collection today."
+        category="OVERVIEW"
+        actions={
+          <div className="system-health flex-center gap-3">
+            <div
+              className="health-indicator flex-center gap-1 text-success text-sm font-medium px-3 py-1 rounded-full"
+              style={{ backgroundColor: 'var(--status-completed-bg)' }}
+            >
+              <CheckCircle2 size={16} /> Pipeline Healthy
+            </div>
+            <div className="sync-status flex-center gap-1 text-secondary text-xs">
+              Last synced: {lastSynced.toLocaleTimeString()}
+            </div>
+            <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadDashboard}>
+              <RefreshCw size={14} /> Refresh
             </button>
-          )}
-        </div>
-      </div>
+            {canCustomize && (
+              <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
+                <Settings2 size={14} /> Customize
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* QUICK ACTIONS BAR */}
       <motion.div 

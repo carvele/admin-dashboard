@@ -110,4 +110,3 @@ describe('Stock Status Utility Logic', () => {
     });
   });
 });
-});

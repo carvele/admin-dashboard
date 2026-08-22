@@ -9,16 +9,32 @@ import './DashboardLayout.css';
 const DashboardLayout = () => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
   const location = useLocation();
   const outlet = useOutlet();
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('sidebar_collapsed', String(next));
+      return next;
+    });
+  };
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="layout-container">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <div className={`layout-container ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={toggleCollapse}
+      />
       <div className="layout-main">
         <TopNav user={user} onHamburger={() => setSidebarOpen(true)} />
         <main className="layout-content">

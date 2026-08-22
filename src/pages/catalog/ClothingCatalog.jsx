@@ -5,6 +5,7 @@ import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import StockStatusBadge from '../../components/inventory/StockStatusBadge';
+import PageHeader from '../../components/PageHeader';
 import {
   getProducts,
   updateProduct,
@@ -242,20 +243,21 @@ const ClothingCatalog = () => {
 
   return (
     <div className="catalog-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Clothing Catalog</h1>
-          <p className="page-subtitle">Manage products, variants, and gallery</p>
-        </div>
-        {isAdminUnlocked && (
-          <button
-            className="btn-primary flex-center gap-2"
-            onClick={() => navigate('/catalog/new')}
-          >
-            <Plus size={18} /> Add New Product
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Clothing Catalog"
+        subtitle="Manage products, variants, and gallery"
+        category="CATALOG"
+        actions={
+          isAdminUnlocked && (
+            <button
+              className="btn-primary flex-center gap-2"
+              onClick={() => navigate('/catalog/new')}
+            >
+              <Plus size={18} /> Add New Product
+            </button>
+          )
+        }
+      />
 
       <div className="catalog-toolbar card">
         <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '1rem' }}>

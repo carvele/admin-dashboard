@@ -27,6 +27,8 @@ import SkeletonTable from '../../components/SkeletonTable';
 import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
+import ReservationFormModal from '../../components/reservations/ReservationFormModal';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
@@ -230,7 +232,7 @@ const Reservations = () => {
     setPaymentRecordsLoading(true);
     getPaymentsForReservation(viewModal.id)
       .then((rows) => { if (!cancelled) setPaymentRecords(rows); })
-      .catch(() => { if (!cancelled) setPaymentRecords([]); })
+      .catch(() => { if (!cancelled) setPaymentRecords([]) })
       .finally(() => { if (!cancelled) setPaymentRecordsLoading(false); });
     return () => { cancelled = true; };
   }, [viewModal?.id]);
@@ -690,48 +692,49 @@ const Reservations = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Reservation Management</h1>
-          <p className="page-subtitle">Manage customer bookings and outfit try-ons</p>
-        </div>
-        <div className="header-actions">
-          <div className="view-toggle">
-            <button
-              className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
-              onClick={() => setViewMode('board')}
-            >
-              Board
-            </button>
-            <button
-              className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
-              onClick={() => setViewMode('table')}
-            >
-              List View
-            </button>
-            <button
-              className={`toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-              onClick={() => setViewMode('calendar')}
-            >
-              Calendar
-            </button>
+      <PageHeader
+        title="Reservation Management"
+        subtitle="Manage customer bookings and outfit try-ons"
+        category="OPERATIONS"
+        actions={
+          <div className="header-actions flex-center gap-2">
+            <div className="view-toggle">
+              <button
+                className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
+                onClick={() => setViewMode('board')}
+              >
+                Board
+              </button>
+              <button
+                className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
+                onClick={() => setViewMode('table')}
+              >
+                List View
+              </button>
+              <button
+                className={`toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                onClick={() => setViewMode('calendar')}
+              >
+                Calendar
+              </button>
+            </div>
+            {canManage && (
+              <button
+                className="btn-outline flex-center gap-2"
+                onClick={() => { setShowQRModal(true); setQrToken(''); setQrResult(null); }}
+                title="Verify pickup token or scan QR"
+              >
+                <QrCode size={16} /> Verify Pickup
+              </button>
+            )}
+            {can(user?.role, 'create_reservation') && (
+              <button className="btn-primary flex-center gap-2" onClick={() => setIsModalOpen(true)}>
+                <Plus size={18} /> New Reservation
+              </button>
+            )}
           </div>
-          {canManage && (
-            <button
-              className="btn-outline flex-center gap-2"
-              onClick={() => { setShowQRModal(true); setQrToken(''); setQrResult(null); }}
-              title="Verify pickup token or scan QR"
-            >
-              <QrCode size={16} /> Verify Pickup
-            </button>
-          )}
-          {can(user?.role, 'create_reservation') && (
-            <button className="btn-primary flex-center gap-2" onClick={() => setIsModalOpen(true)}>
-              <Plus size={18} /> New Reservation
-            </button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       <div className="card">
         <div className="card-toolbar">

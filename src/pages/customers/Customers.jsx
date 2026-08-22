@@ -40,6 +40,7 @@ import {
 } from '../../utils/helpers';
 import { can } from '../../utils/permissions';
 import { useAuth } from '../../context/AuthContext';
+import PageHeader from '../../components/PageHeader';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './Customers.css';
@@ -374,14 +375,11 @@ const Customers = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">App Customers</h1>
-          <p className="page-subtitle">
-            View registered app users, profiles, and engagement metrics
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="App Customers"
+        subtitle="View registered app users, profiles, and engagement metrics"
+        category="PEOPLE"
+      />
 
       {/* ===== STATS ROW ===== */}
       <div className="customer-stats-row">
