@@ -366,8 +366,26 @@ const Inventory = () => {
   );
   const lowStockCount = stockBreakdown.alerts; // very-low + critical + no-stock
 
+  // Detect active catalog products that have NO inventory rows at all.
+  // These are data-integrity gaps: the catalog shows them as a product but
+  // there is nothing to restock, sell, or track against.
+  const inventoryProductIds = useMemo(() => {
+    const ids = new Set();
+    inventory.forEach((r) => { if (r.productDocId) ids.add(r.productDocId); });
+    return ids;
+  }, [inventory]);
+
+  const productsWithNoInventory = useMemo(() =>
+    products.filter(
+      (p) => !p.deleted && !inventoryProductIds.has(p.id)
+    ),
+    [products, inventoryProductIds]
+  );
+
   // Extract unique categories for filter - Sync with DB categories
   const dropdownCategories = ['All', ...categoryTree.map((c) => c.name)];
+
+  const [noInvBannerDismissed, setNoInvBannerDismissed] = useState(false);
 
   const handleSort = (key) => {
     let direction = 'ascending';
@@ -851,6 +869,45 @@ const Inventory = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Products-with-no-inventory warning banner ── */}
+      {!noInvBannerDismissed && productsWithNoInventory.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            background: 'var(--status-pending-bg, #fffbeb)',
+            border: '1px solid var(--stock-very-low, #f59e0b)',
+            borderRadius: '10px',
+            padding: '0.85rem 1rem',
+            marginBottom: '0.75rem',
+            fontSize: '0.85rem',
+            color: 'var(--charcoal)',
+          }}
+        >
+          <AlertTriangle size={18} style={{ color: 'var(--stock-very-low, #f59e0b)', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <strong>Catalog products missing inventory rows ({productsWithNoInventory.length}):</strong>{' '}
+            {productsWithNoInventory.map((p, i) => (
+              <span key={p.id}>
+                <span style={{ fontWeight: 600 }}>{p.name}</span>
+                {i < productsWithNoInventory.length - 1 ? ', ' : ''}
+              </span>
+            ))}
+            <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
+              — Open each product in the Catalog and add size variants, or add rows directly through the Admin panel.
+            </span>
+          </div>
+          <button
+            onClick={() => setNoInvBannerDismissed(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, color: 'var(--text-secondary)', flexShrink: 0 }}
+            aria-label="Dismiss warning"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       <div className="card mt-2">
         <div className="catalog-toolbar" style={{ borderBottom: '1px solid var(--border-color)', padding: '1rem' }}>
