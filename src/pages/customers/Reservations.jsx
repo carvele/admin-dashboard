@@ -28,7 +28,6 @@ import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
-import ReservationFormModal from '../../components/reservations/ReservationFormModal';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
