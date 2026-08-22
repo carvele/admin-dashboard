@@ -39,6 +39,7 @@ import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
 import { downloadCSV } from '../../utils/reportExporter';
 import AdminInventoryPanel from '../../components/inventory/AdminInventoryPanel';
+import StockStatusBadge from '../../components/inventory/StockStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
@@ -170,10 +171,11 @@ const GroupedInvRow = ({
                 style={{ width: `${health.percent}%`, backgroundColor: health.color }}
               />
             </div>
-            <span className={`stock-tier-badge ${health.tier}`}>
-              {health.tier === 'critical' && <Flame size={10} />}
-              {health.label}
-            </span>
+            <StockStatusBadge
+              available={displayedAvailable}
+              total={displayedTotal}
+              reserved={displayedReserved}
+            />
             {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
               <span className={`demand-badge ${health.demandLevel}`}>
                 🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand

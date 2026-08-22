@@ -92,6 +92,8 @@
   --stock-critical-bg:    #fee2e2;
   --stock-none:           #6b7280;  /* Gray    */
   --stock-none-bg:        #f3f4f6;
+  --stock-reserved:       #8b5cf6;  /* Purple  */
+  --stock-reserved-bg:    #f3e8ff;
   /* Legacy aliases — kept so old references don't break */
   --stock-high:           #10b981;
   --stock-med:            #f97316;
@@ -186,6 +188,8 @@
   --stock-critical-bg:    rgba(239, 68, 68, 0.15);
   --stock-none:           #9ca3af;
   --stock-none-bg:        rgba(107, 114, 128, 0.15);
+  --stock-reserved:       #c084fc;
+  --stock-reserved-bg:    rgba(139, 92, 246, 0.15);
   --stock-high:           #34d399;
   --stock-med:            #fb923c;
 }
@@ -895,6 +899,7 @@ input:checked + .toggle-slider:before {
   animation: criticalPulse 2s ease-in-out infinite;
 }
 .stock-tier-badge.no-stock { background-color: var(--stock-none-bg);      color: var(--stock-none);     }
+.stock-tier-badge.fully-reserved { background-color: var(--stock-reserved-bg); color: var(--stock-reserved); }
 @keyframes criticalPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
   50%       { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }

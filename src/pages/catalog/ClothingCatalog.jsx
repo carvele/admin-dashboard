@@ -4,6 +4,7 @@ import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, 
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import StockStatusBadge from '../../components/inventory/StockStatusBadge';
 import {
   getProducts,
   updateProduct,
@@ -473,10 +474,11 @@ const ClothingCatalog = () => {
                 {/* Stock Health Badge */}
                 {!item.deleted && (
                   <div className="flex align-center gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
-                    <span className={`stock-tier-badge ${stockHealth.tier}`}>
-                      {stockHealth.tier === 'critical' && <Flame size={9} />}
-                      {stockHealth.label}
-                    </span>
+                    <StockStatusBadge
+                      available={invData ? invData.available : (item.stock ?? 0)}
+                      total={invData ? invData.total : 10}
+                      reserved={invData ? invData.reserved : 0}
+                    />
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
                       {invData ? invData.available : (item.stock ?? 0)} / {invData ? invData.total : 10} units
                     </span>

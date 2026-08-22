@@ -4,20 +4,20 @@ describe('Stock Status Utility Logic', () => {
   const TOTAL_CAPACITY = 10;
 
   describe('Integer Range Tier Mapping (reserved = 0)', () => {
-    test('Healthy tier (8-10 units)', () => {
+    test('Healthy / In Stock tier (8-10 units)', () => {
       [8, 9, 10].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('healthy');
-        expect(health.label).toBe('Healthy');
+        expect(health.label).toBe('In Stock');
         expect(health.percent).toBe(available * 10);
       });
     });
 
-    test('Low tier (6-7 units)', () => {
+    test('Low Stock tier (6-7 units)', () => {
       [6, 7].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('low');
-        expect(health.label).toBe('Low');
+        expect(health.label).toBe('Low Stock');
         expect(health.percent).toBe(available * 10);
       });
     });
@@ -31,28 +31,32 @@ describe('Stock Status Utility Logic', () => {
       });
     });
 
-    test('Critical tier (1-3 units)', () => {
+    test('Critical Stock tier (1-3 units)', () => {
       [1, 2, 3].forEach((available) => {
         const health = getStockHealth(available, TOTAL_CAPACITY, 0);
         expect(health.tier).toBe('critical');
-        expect(health.label).toBe('Critical');
+        expect(health.label).toBe('Critical Stock');
         expect(health.percent).toBe(available * 10);
       });
     });
 
-    test('No Stock tier (0 units)', () => {
+    test('Out of Stock tier (0 units available, 0 reserved)', () => {
       const health = getStockHealth(0, TOTAL_CAPACITY, 0);
       expect(health.tier).toBe('no-stock');
-      expect(health.label).toBe('No Stock');
+      expect(health.label).toBe('Out of Stock');
+      expect(health.percent).toBe(0);
+    });
+
+    test('Fully Reserved tier (0 units available, >0 reserved)', () => {
+      const health = getStockHealth(0, TOTAL_CAPACITY, 5);
+      expect(health.tier).toBe('fully-reserved');
+      expect(health.label).toBe('Fully Reserved');
       expect(health.percent).toBe(0);
     });
   });
 
   describe('Demand-Adjusted Scoring / Escalation', () => {
     test('Reserved stock escalates tier due to demand pressure', () => {
-      // 6 units available (normally Low, ratio 0.6)
-      // With 4 units reserved (demand pressure 0.4), score is 0.6 - 0.4 * 0.25 = 0.5.
-      // A score of 0.5 is not > 0.50, so it falls to Very Low!
       const normalHealth = getStockHealth(6, TOTAL_CAPACITY, 0);
       expect(normalHealth.tier).toBe('low');
 
@@ -60,9 +64,9 @@ describe('Stock Status Utility Logic', () => {
       expect(pressuredHealth.tier).toBe('very-low');
     });
 
-    test('Zero available is always No Stock regardless of reservations', () => {
+    test('Zero available with active reservations is Fully Reserved', () => {
       const health = getStockHealth(0, TOTAL_CAPACITY, 5);
-      expect(health.tier).toBe('no-stock');
+      expect(health.tier).toBe('fully-reserved');
     });
   });
 
@@ -75,12 +79,13 @@ describe('Stock Status Utility Logic', () => {
       expect(getStockPriority(0, TOTAL_CAPACITY, 0)).toBe(1);  // no-stock
     });
 
-    test('isStockAlert identifies alerting tiers (very-low, critical, no-stock)', () => {
+    test('isStockAlert identifies alerting tiers (very-low, critical, no-stock, fully-reserved)', () => {
       expect(isStockAlert(8, TOTAL_CAPACITY, 0)).toBe(false);
       expect(isStockAlert(6, TOTAL_CAPACITY, 0)).toBe(false);
       expect(isStockAlert(5, TOTAL_CAPACITY, 0)).toBe(true);
       expect(isStockAlert(2, TOTAL_CAPACITY, 0)).toBe(true);
       expect(isStockAlert(0, TOTAL_CAPACITY, 0)).toBe(true);
+      expect(isStockAlert(0, TOTAL_CAPACITY, 5)).toBe(true);
     });
   });
 
@@ -92,6 +97,7 @@ describe('Stock Status Utility Logic', () => {
         { available: 6, total: 10, reserved: 0 },  // low
         { available: 4, total: 10, reserved: 0 },  // very-low
         { available: 0, total: 10, reserved: 0 },  // no-stock
+        { available: 0, total: 10, reserved: 5 },  // fully-reserved
       ];
       const breakdown = getStockBreakdown(items);
       expect(breakdown.healthy).toBe(2);
@@ -99,7 +105,9 @@ describe('Stock Status Utility Logic', () => {
       expect(breakdown.veryLow).toBe(1);
       expect(breakdown.critical).toBe(0);
       expect(breakdown.noStock).toBe(1);
-      expect(breakdown.alerts).toBe(2); // veryLow (1) + critical (0) + noStock (1)
+      expect(breakdown.fullyReserved).toBe(1);
+      expect(breakdown.alerts).toBe(3); // veryLow (1) + noStock (1) + fullyReserved (1)
     });
   });
+});
 });

@@ -97,19 +97,29 @@ export const getStockHealth = (available, total, reserved = 0) => {
 
   // --- Tier classification via adjustedScore ---
   if (safeAvailable === 0) {
-    // Explicit zero available — always No Stock regardless of demand
-    const tooltip = safeReserved > 0
-      ? `All ${safeTotal} units are currently reserved. No units available for new reservations.`
-      : 'This item is completely out of stock. Restock immediately.';
+    if (safeReserved > 0) {
+      return {
+        tier: 'fully-reserved',
+        label: 'Fully Reserved',
+        color: 'var(--stock-reserved)',
+        bgColor: 'var(--stock-reserved-bg)',
+        percent: 0,
+        adjustedScore: 0,
+        demandLevel,
+        urgencyTooltip: `All ${safeTotal} units are currently reserved. No units available for new reservations.`,
+        priority: 1,
+        demandScore,
+      };
+    }
     return {
       tier: 'no-stock',
-      label: 'No Stock',
+      label: 'Out of Stock',
       color: 'var(--stock-none)',
       bgColor: 'var(--stock-none-bg)',
       percent: 0,
       adjustedScore: 0,
       demandLevel,
-      urgencyTooltip: tooltip,
+      urgencyTooltip: 'This item is completely out of stock. Restock immediately.',
       priority: 1,
       demandScore,
     };
@@ -118,13 +128,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   if (adjustedScore > 0.75) {
     return {
       tier: 'healthy',
-      label: 'Healthy',
+      label: 'In Stock',
       color: 'var(--stock-healthy)',
       bgColor: 'var(--stock-healthy-bg)',
       percent,
       adjustedScore,
       demandLevel,
-      urgencyTooltip: buildTooltip('Healthy', percent, demandLevel, safeReserved, safeTotal),
+      urgencyTooltip: buildTooltip('In Stock', percent, demandLevel, safeReserved, safeTotal),
       priority: 5,
       demandScore,
     };
@@ -133,13 +143,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   if (adjustedScore > 0.50) {
     return {
       tier: 'low',
-      label: 'Low',
+      label: 'Low Stock',
       color: 'var(--stock-low)',
       bgColor: 'var(--stock-low-bg)',
       percent,
       adjustedScore,
       demandLevel,
-      urgencyTooltip: buildTooltip('Low', percent, demandLevel, safeReserved, safeTotal),
+      urgencyTooltip: buildTooltip('Low Stock', percent, demandLevel, safeReserved, safeTotal),
       priority: 4,
       demandScore,
     };
@@ -163,13 +173,13 @@ export const getStockHealth = (available, total, reserved = 0) => {
   // adjustedScore > 0 (already handled available===0 above)
   return {
     tier: 'critical',
-    label: 'Critical',
+    label: 'Critical Stock',
     color: 'var(--stock-critical)',
     bgColor: 'var(--stock-critical-bg)',
     percent,
     adjustedScore,
     demandLevel,
-    urgencyTooltip: buildTooltip('Critical', percent, demandLevel, safeReserved, safeTotal),
+    urgencyTooltip: buildTooltip('Critical Stock', percent, demandLevel, safeReserved, safeTotal),
     priority: 2,
     demandScore,
   };
@@ -193,10 +203,13 @@ function buildTooltip(tierLabel, percent, demandLevel, reserved, total) {
   }[demandLevel];
 
   const actionNote = {
-    'Healthy':   'No action needed. Monitor regularly.',
-    'Low':       'Consider scheduling a restock in the near future.',
-    'Very Low':  'Restock advised — stock may run out soon especially with current demand.',
-    'Critical':  'Urgent restock required. Risk of stockout for incoming reservations.',
+    'In Stock':        'No action needed. Monitor regularly.',
+    'Healthy':         'No action needed. Monitor regularly.',
+    'Low Stock':       'Consider scheduling a restock in the near future.',
+    'Low':             'Consider scheduling a restock in the near future.',
+    'Very Low':        'Restock advised — stock may run out soon especially with current demand.',
+    'Critical Stock':  'Urgent restock required. Risk of stockout for incoming reservations.',
+    'Critical':        'Urgent restock required. Risk of stockout for incoming reservations.',
   }[tierLabel] || '';
 
   return `${tierLabel}: ${demandNote} ${actionNote}`.trim();
@@ -216,7 +229,7 @@ export const getStockPriority = (available, total, reserved = 0) => {
 
 /**
  * Returns true if the item should trigger an alert on the Dashboard.
- * Alerts = tier is very-low, critical, or no-stock.
+ * Alerts = tier is very-low, critical, no-stock, or fully-reserved.
  * @param {number} available
  * @param {number} total
  * @param {number} [reserved=0]
@@ -224,23 +237,24 @@ export const getStockPriority = (available, total, reserved = 0) => {
  */
 export const isStockAlert = (available, total, reserved = 0) => {
   const { tier } = getStockHealth(available, total, reserved);
-  return tier === 'very-low' || tier === 'critical' || tier === 'no-stock';
+  return tier === 'very-low' || tier === 'critical' || tier === 'no-stock' || tier === 'fully-reserved';
 };
 
 /**
  * Returns a tier breakdown count object from an array of inventory items.
  * @param {Array<{available: number, total: number, reserved: number}>} items
- * @returns {{ healthy: number, low: number, veryLow: number, critical: number, noStock: number, alerts: number }}
+ * @returns {{ healthy: number, low: number, veryLow: number, critical: number, noStock: number, fullyReserved: number, alerts: number }}
  */
 export const getStockBreakdown = (items = []) => {
-  const counts = { healthy: 0, low: 0, veryLow: 0, critical: 0, noStock: 0 };
+  const counts = { healthy: 0, low: 0, veryLow: 0, critical: 0, noStock: 0, fullyReserved: 0 };
   items.forEach(({ available, total, reserved }) => {
     const { tier } = getStockHealth(available, total, reserved);
-    if (tier === 'healthy')    counts.healthy++;
-    else if (tier === 'low')   counts.low++;
-    else if (tier === 'very-low')  counts.veryLow++;
-    else if (tier === 'critical')  counts.critical++;
+    if (tier === 'healthy')              counts.healthy++;
+    else if (tier === 'low')             counts.low++;
+    else if (tier === 'very-low')        counts.veryLow++;
+    else if (tier === 'critical')        counts.critical++;
+    else if (tier === 'fully-reserved')  counts.fullyReserved++;
     else counts.noStock++;
   });
-  return { ...counts, alerts: counts.veryLow + counts.critical + counts.noStock };
+  return { ...counts, alerts: counts.veryLow + counts.critical + counts.noStock + counts.fullyReserved };
 };
