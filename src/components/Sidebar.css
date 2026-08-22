@@ -3,16 +3,14 @@
   width: 260px;
   min-width: 260px;
   height: 100vh;
-  /* Fixed dark gradient -- the sidebar is a permanently-dark brand nav column
-     by design, not a themed surface. var(--text-primary) used to anchor this,
-     but that flips to a light gray in dark mode, turning the sidebar's top
-     half light while its own text color (--on-accent) stays fixed white. */
+  max-height: 100vh;
   background: linear-gradient(180deg, #1f1c18 0%, #151310 100%);
   color: var(--on-accent);
   display: flex;
   flex-direction: column;
   position: relative;
   flex-shrink: 0;
+  overflow: hidden;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: var(--z-sticky);
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
