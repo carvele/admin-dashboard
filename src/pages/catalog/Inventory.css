@@ -153,6 +153,17 @@
   border: 1px dashed var(--border-color);
 }
 
+/* Hide native number-input spinners on the restock qty field */
+#restock-qty::-webkit-outer-spin-button,
+#restock-qty::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#restock-qty {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .delete-icon-wrap {
   width: 64px;
   height: 64px;

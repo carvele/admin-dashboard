@@ -6,7 +6,6 @@ import {
   PackageOpen,
   Package,
   AlertTriangle,
-  Edit,
   Archive,
   ArchiveRestore,
   RefreshCw,
@@ -90,7 +89,6 @@ const GroupedInvRow = ({
   setRestockQty,
   setSellModal,
   setSalePriceInput,
-  openEditModal,
   setArchiveConfirm,
 }) => {
   const [selectedColor, setSelectedColor] = useState('ALL');
@@ -230,22 +228,13 @@ const GroupedInvRow = ({
                 <ShoppingCart size={15} />
               </button>
               {isAdminUnlocked && (
-                <>
-                  <button
-                    className="icon-btn-small"
-                    title="Edit"
-                    onClick={() => openEditModal(targetInv)}
-                  >
-                    <Edit size={15} />
-                  </button>
-                  <button
-                    className="icon-btn-small text-warning"
-                    title="Archive"
-                    onClick={() => setArchiveConfirm(targetInv)}
-                  >
-                    <Archive size={15} />
-                  </button>
-                </>
+                <button
+                  className="icon-btn-small text-warning"
+                  title="Archive"
+                  onClick={() => setArchiveConfirm(targetInv)}
+                >
+                  <Archive size={15} />
+                </button>
               )}
             </>
           )}
@@ -327,14 +316,12 @@ const Inventory = () => {
 
   // Modals
   const [restockModal, setRestockModal] = useState(null); // inv item or null
-  const [editModal, setEditModal] = useState(null);
   const [sellModal, setSellModal] = useState(null); // Added for POS
   const [archiveConfirm, setArchiveConfirm] = useState(null);
 
   // Form state
   const [restockQty, setRestockQty] = useState('');
   const [salePriceInput, setSalePriceInput] = useState('');
-  const [editForm, setEditForm] = useState({ total: '', reserved: '', available: '' });
 
   // ── Demand score persistence (fire-and-forget, debounced per item) ──────────
   // Runs whenever inventory changes. Writes demandScore + tier to Firestore
@@ -606,52 +593,6 @@ const Inventory = () => {
     }
   };
 
-  const handleEdit = async (e) => {
-    e.preventDefault();
-    const t = parseInt(editForm.total),
-      r = parseInt(editForm.reserved);
-    if (isNaN(t) || isNaN(r) || t < 0 || r < 0) {
-      toast.error('Enter valid numbers');
-      return;
-    }
-    if (r > t) {
-      toast.error('Reserved cannot exceed total');
-      return;
-    }
-
-    try {
-      await updateInventoryItem(editModal.docId, {
-        total: t,
-        reserved: r,
-        available: t - r,
-      });
-      await syncProductStock(editModal.productDocId, editModal.sku);
-      if (t !== editModal.total) {
-        await logStockMovement(
-          editModal.productDocId,
-          editModal.total,
-          t,
-          'manual_adjustment',
-          `Manual edit of ${editModal.item} (size ${editModal.size})`,
-        );
-      }
-      await logAction(user, 'Updated inventory item details', {
-        targetType: 'product',
-        targetId: editModal.productDocId,
-        itemName: editModal.item,
-        size: editModal.size,
-        color: editModal.color || editModal.colour || '',
-        qtyBefore: editModal.total,
-        qtyAfter: t,
-        reservedBefore: editModal.reserved,
-        reservedAfter: r,
-      });
-      toast.success(`Updated ${editModal.item} (${editModal.size})`);
-      setEditModal(null);
-    } catch {
-      toast.error('Failed to update inventory');
-    }
-  };
 
   const handleArchive = async () => {
     const item = archiveConfirm;
@@ -744,10 +685,6 @@ const Inventory = () => {
     }
   };
 
-  const openEditModal = (inv) => {
-    setEditForm({ total: inv.total, reserved: inv.reserved, available: inv.available });
-    setEditModal(inv);
-  };
 
   const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
@@ -786,7 +723,6 @@ const Inventory = () => {
         setRestockQty={setRestockQty}
         setSellModal={setSellModal}
         setSalePriceInput={setSalePriceInput}
-        openEditModal={openEditModal}
         setArchiveConfirm={setArchiveConfirm}
       />
     );
@@ -1205,15 +1141,9 @@ const Inventory = () => {
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
                   required
+                  style={{ MozAppearance: 'textfield', appearance: 'textfield' }}
                 />
               </div>
-              {restockQty && parseInt(restockQty) > 0 && (
-                <div className="restock-preview">
-                  New Total: <strong>{restockModal.total + parseInt(restockQty)}</strong>{' '}
-                  &nbsp;|&nbsp; New Available:{' '}
-                  <strong>{restockModal.available + parseInt(restockQty)}</strong>
-                </div>
-              )}
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setRestockModal(null)}>
                   Cancel
@@ -1227,89 +1157,6 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* ===== EDIT STOCK MODAL ===== */}
-      {editModal && (
-        <div className="modal-overlay" onClick={() => setEditModal(null)} role="presentation">
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            role="presentation"
-            style={{ maxWidth: 500 }}
-          >
-            <div className="modal-header">
-              <h2>
-                Edit Stock — {editModal.item} ({editModal.size}{editModal.color ? ` · ${editModal.color}` : ''})
-              </h2>
-              <button className="close-btn" onClick={() => setEditModal(null)}>
-                &times;
-              </button>
-            </div>
-            <form className="modal-body" onSubmit={handleEdit}>
-              <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem' }}>
-                Directly overwrites stock counts for this specific variant — use Restock instead if you are adding newly-arrived units.
-              </p>
-              <div className="form-row">
-                <div className="form-group flex-1">
-                  <label className="label" htmlFor="edit-stock-total">Total Units</label>
-                  <input
-                    id="edit-stock-total"
-                    type="number"
-                    className="input-field"
-                    min="0"
-                    value={editForm.total}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        total: e.target.value,
-                        available: Math.max(
-                          0,
-                          parseInt(e.target.value || 0) - parseInt(editForm.reserved || 0),
-                        ),
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="form-group flex-1">
-                  <label className="label" htmlFor="edit-stock-reserved">Reserved</label>
-                  <input
-                    id="edit-stock-reserved"
-                    type="number"
-                    className="input-field"
-                    min="0"
-                    value={editForm.reserved}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        reserved: e.target.value,
-                        available: Math.max(
-                          0,
-                          parseInt(editForm.total || 0) - parseInt(e.target.value || 0),
-                        ),
-                      })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <div className="restock-preview">
-                Calculated Available:{' '}
-                <strong>
-                  {Math.max(0, parseInt(editForm.total || 0) - parseInt(editForm.reserved || 0))}
-                </strong>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setEditModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       <ConfirmDialog
         isOpen={!!archiveConfirm}
