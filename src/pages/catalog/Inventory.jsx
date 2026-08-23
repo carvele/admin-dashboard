@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -166,7 +167,14 @@ const GroupedInvRow = ({
       <td className="stock-cell">
         <div className="urgency-tooltip-wrap">
           <div className="stock-progress-container" style={{ flex: 1 }}>
-            <div className="stock-progress-bar">
+            <div
+              className="stock-progress-bar"
+              role="progressbar"
+              aria-valuenow={Math.round(health.percent)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Stock level: ${health.label}`}
+            >
               <div
                 className="stock-progress-fill"
                 style={{ width: `${health.percent}%`, backgroundColor: health.color }}
@@ -179,7 +187,7 @@ const GroupedInvRow = ({
             />
             {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
               <span className={`demand-badge ${health.demandLevel}`}>
-                🔥 {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
+                <span aria-hidden="true">🔥</span> {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
               </span>
             )}
           </div>
@@ -293,13 +301,31 @@ const Inventory = () => {
     return () => unsub();
   }, []);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  const [colorFilter, setColorFilter] = useState('All');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'All');
+  const [colorFilter, setColorFilter] = useState(() => searchParams.get('color') || 'All');
   const [categoryTree, setCategoryTree] = useState([]); // [{id,name,subcategories:[{id,name}]}]
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ key: 'stockStatus', direction: 'ascending' });
-  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
+  const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'active'); // 'active' | 'archived'
+  const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '0', 10) || 0);
+
+  // Sync state changes back to URL search params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) params.set('search', searchTerm.trim());
+    if (categoryFilter && categoryFilter !== 'All') params.set('category', categoryFilter);
+    if (colorFilter && colorFilter !== 'All') params.set('color', colorFilter);
+    if (viewMode && viewMode !== 'active') params.set('view', viewMode);
+    if (page > 0) params.set('page', String(page));
+    setSearchParams(params, { replace: true });
+  }, [searchTerm, categoryFilter, colorFilter, viewMode, page, setSearchParams]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, categoryFilter, colorFilter, viewMode]);
 
   // Extract unique colors for filter
   const uniqueColors = useMemo(() => {
@@ -325,6 +351,17 @@ const Inventory = () => {
   // Form state
   const [restockQty, setRestockQty] = useState('');
   const [salePriceInput, setSalePriceInput] = useState('');
+
+  // Handle escape key for open modals
+  useEffect(() => {
+    const onEsc = (e) => {
+      if (e.key !== 'Escape') return;
+      if (restockModal) setRestockModal(null);
+      else if (sellModal) setSellModal(null);
+    };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [restockModal, sellModal]);
 
   // ── Demand score persistence (fire-and-forget, debounced per item) ──────────
   // Runs whenever inventory changes. Writes demandScore + tier to Firestore
@@ -398,6 +435,13 @@ const Inventory = () => {
     setSortConfig({ key, direction });
   };
 
+  const ariaSort = (key) =>
+    sortConfig.key !== key
+      ? 'none'
+      : sortConfig.direction === 'ascending'
+        ? 'ascending'
+        : 'descending';
+
   // Sorting uses the shared getStockPriority from the stockStatus utility
   // (demand-aware priority: 1 = worst, 5 = best)
 
@@ -439,6 +483,13 @@ const Inventory = () => {
 
     return matchesSearch && matchesCategory && matchesColor;
   });
+
+  const PAGE_SIZE = 25;
+  const filteredGroups = useMemo(() => groupInventoryRows(filteredInv), [filteredInv]);
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+  const pagedGroups = useMemo(() => {
+    return filteredGroups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  }, [filteredGroups, page]);
 
   // ── Category → Subcategory grouping (the "browsing" view) ──────────────────
   // Only used when search, category, and color filters are default.
@@ -707,7 +758,12 @@ const Inventory = () => {
   };
 
 
-  const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const csvField = (value) => {
+    let s = String(value ?? '').replace(/"/g, '""');
+    // Neutralize spreadsheet formula injection (OWASP CSV Injection)
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s}"`;
+  };
 
   const handleExportCSV = () => {
     // Exports filteredInv, not the raw inventory list, so the file matches
@@ -753,14 +809,14 @@ const Inventory = () => {
     <tr
       key={key}
       className={`inv-group-header depth-${depth}`}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
-      aria-expanded={isExpanded}
     >
       <td colSpan={TABLE_COLUMNS}>
-        <div className="inv-group-header-content">
+        <button
+          type="button"
+          className="inv-group-header-content inv-group-toggle-btn"
+          onClick={onClick}
+          aria-expanded={isExpanded}
+        >
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           <span className="inv-group-label">{label}</span>
           <span className="inv-group-count">{rowCount} {rowCount === 1 ? 'item' : 'items'}</span>
@@ -769,7 +825,7 @@ const Inventory = () => {
               <AlertTriangle size={12} /> {alertCount} need{alertCount === 1 ? 's' : ''} attention
             </span>
           )}
-        </div>
+        </button>
       </td>
     </tr>
   );
@@ -938,6 +994,7 @@ const Inventory = () => {
                   <input
                     type="text"
                     placeholder="Search Variant SKU, Name, Color..."
+                    aria-label="Search variant SKU, product name, or color"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="input-field pl-10"
@@ -1041,28 +1098,82 @@ const Inventory = () => {
             <table className="table inv-table">
               <thead>
                 <tr>
-                  <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer' }}>
-                    Variant SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col" aria-sort={ariaSort('sku')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn"
+                      onClick={() => handleSort('sku')}
+                    >
+                      Variant SKU
+                      {sortConfig.key === 'sku' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th onClick={() => handleSort('item')} style={{ cursor: 'pointer' }}>
-                    Product Name {sortConfig.key === 'item' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col" aria-sort={ariaSort('item')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn"
+                      onClick={() => handleSort('item')}
+                    >
+                      Product Name
+                      {sortConfig.key === 'item' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
-                    Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col" aria-sort={ariaSort('category')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn"
+                      onClick={() => handleSort('category')}
+                    >
+                      Category
+                      {sortConfig.key === 'category' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th>Size</th>
-                  <th>Color</th>
-                  <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer' }}>
-                    Total {sortConfig.key === 'total' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col">Size</th>
+                  <th scope="col">Color</th>
+                  <th scope="col" className="text-right" aria-sort={ariaSort('total')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn justify-end"
+                      onClick={() => handleSort('total')}
+                    >
+                      Total
+                      {sortConfig.key === 'total' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th className="text-right">Reserved</th>
-                  <th className="text-right" onClick={() => handleSort('available')} style={{ cursor: 'pointer' }}>
-                    Available {sortConfig.key === 'available' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col" className="text-right">Reserved</th>
+                  <th scope="col" className="text-right" aria-sort={ariaSort('available')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn justify-end"
+                      onClick={() => handleSort('available')}
+                    >
+                      Available
+                      {sortConfig.key === 'available' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th onClick={() => handleSort('stockStatus')} style={{ cursor: 'pointer' }}>
-                    Stock Level {sortConfig.key === 'stockStatus' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  <th scope="col" aria-sort={ariaSort('stockStatus')}>
+                    <button
+                      type="button"
+                      className="th-sort-btn"
+                      onClick={() => handleSort('stockStatus')}
+                    >
+                      Stock Level
+                      {sortConfig.key === 'stockStatus' && (
+                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
+                      )}
+                    </button>
                   </th>
-                  <th className="text-right">Actions</th>
+                  <th scope="col" className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1131,7 +1242,7 @@ const Inventory = () => {
                       )}
                     </>
                   )
-                ) : filteredInv.length === 0 ? (
+                ) : filteredGroups.length === 0 ? (
                   <tr>
                     <td colSpan={TABLE_COLUMNS}>
                       <div className="empty-state flex-col flex-center gap-3 p-8">
@@ -1152,10 +1263,35 @@ const Inventory = () => {
                     </td>
                   </tr>
                 ) : (
-                  groupInventoryRows(filteredInv).map(renderGroupedInvRow)
+                  pagedGroups.map(renderGroupedInvRow)
                 )}
               </tbody>
             </table>
+            {!isBrowsingMode && filteredGroups.length > PAGE_SIZE && (
+              <div className="inv-pagination" role="navigation" aria-label="Inventory table pagination">
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  aria-label="Go to previous page"
+                >
+                  ← Previous
+                </button>
+                <span className="inv-pagination-info text-sm text-secondary">
+                  Page {page + 1} of {totalPages} ({filteredGroups.length} items)
+                </span>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  aria-label="Go to next page"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         )}
         </>
@@ -1164,16 +1300,24 @@ const Inventory = () => {
 
       {/* ===== RESTOCK MODAL ===== */}
       {restockModal && (
-        <div className="modal-overlay" onClick={() => setRestockModal(null)} role="presentation">
+        <div
+          className="modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setRestockModal(null); }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close restock dialog"
+          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setRestockModal(null); } }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            role="presentation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restock-dialog-title"
             style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
-              <h2>Restock Variant</h2>
-              <button className="close-btn" onClick={() => setRestockModal(null)}>
+              <h2 id="restock-dialog-title">Restock Variant</h2>
+              <button className="close-btn" onClick={() => setRestockModal(null)} aria-label="Close dialog">
                 &times;
               </button>
             </div>
@@ -1228,19 +1372,27 @@ const Inventory = () => {
 
       {/* ===== SELL / POS MODAL ===== */}
       {sellModal && (
-        <div className="modal-overlay" onClick={() => setSellModal(null)} role="presentation">
+        <div
+          className="modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setSellModal(null); }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close sale dialog"
+          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSellModal(null); } }}
+        >
           <div
             className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            role="presentation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pos-sale-dialog-title"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
               <div className="flex-center gap-2">
                 <ShoppingCart size={20} className="text-secondary" />
-                <h2>Record In-Store Sale</h2>
+                <h2 id="pos-sale-dialog-title">Record In-Store Sale</h2>
               </div>
-              <button className="close-btn" onClick={() => setSellModal(null)}>
+              <button className="close-btn" onClick={() => setSellModal(null)} aria-label="Close dialog">
                 &times;
               </button>
             </div>

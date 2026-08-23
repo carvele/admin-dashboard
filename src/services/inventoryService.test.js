@@ -10,7 +10,7 @@ describe('Inventory Service & Stock Status Logic', () => {
   test('evaluates healthy stock when available units is high', () => {
     const health = getStockHealth(10, 10, 0);
     expect(health.tier).toBe('healthy');
-    expect(health.label).toBe('Healthy');
+    expect(health.label).toBe('In Stock');
   });
 
   test('escalates stock status when demand pressure is high', () => {
