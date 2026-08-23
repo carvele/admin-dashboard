@@ -1,16 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
-import { Search, Grid, List as ListIcon, Shirt } from 'lucide-react';
+import { Search, Grid, List as ListIcon, Shirt, ArrowLeft } from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
 import { getAvatarColor, getUserDisplayName } from '../../utils/helpers';
+import PageHeader from '../../components/PageHeader';
 import './DigitalWardrobe.css';
 
 const DigitalWardrobe = () => {
   const [wardrobeItems, setWardrobeItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeUserId, setActiveUserId] = useState(null);
+  const [mobileView, setMobileView] = useState('customers');
   
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,12 +89,13 @@ const DigitalWardrobe = () => {
 
   return (
     <div className="dw-container">
-      <div className="page-header">
-        <h1 className="page-title">Digital Wardrobe Management</h1>
-        <p className="page-subtitle">View items saved by customers from the app</p>
-      </div>
+      <PageHeader
+        category="CATALOG"
+        title="Digital Wardrobe Management"
+        subtitle="View items saved by customers from the app"
+      />
 
-      <div className="card dw-layout">
+      <div className="card dw-layout" data-mobile-view={mobileView}>
         {/* Customer List Sidebar */}
         <div className="dw-sidebar">
           <div className="dw-sidebar-header">
@@ -105,8 +108,16 @@ const DigitalWardrobe = () => {
                 <div
                   key={user.id}
                   className={`dw-customer-item ${activeUserId === user.id ? 'active' : ''}`}
-                  onClick={() => setActiveUserId(user.id)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setActiveUserId(user.id)}
+                  onClick={() => {
+                    setActiveUserId(user.id);
+                    setMobileView('items');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setActiveUserId(user.id);
+                      setMobileView('items');
+                    }
+                  }}
                   role="button"
                   tabIndex={0}
                   aria-pressed={activeUserId === user.id}
@@ -133,6 +144,14 @@ const DigitalWardrobe = () => {
         {/* Main Wardrobe Display */}
         <div className="dw-main">
           <div className="dw-toolbar">
+            <button
+              type="button"
+              className="dw-back-btn"
+              onClick={() => setMobileView('customers')}
+              aria-label="Back to customer list"
+            >
+              <ArrowLeft size={18} /> Customers
+            </button>
             {activeUser ? (
               <div className="flex-center gap-3">
                 <div

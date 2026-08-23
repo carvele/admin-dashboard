@@ -30,6 +30,7 @@ import {
 } from '../../services/wardrobeService';
 import { routeAndUploadFile } from '../../lib/storage';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
 import '@google/model-viewer';
 import './ARAssets.css';
 
@@ -370,41 +371,42 @@ const ARAssets = () => {
 
   return (
     <div className="ar-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">AR Try-On Management</h1>
-          <p className="page-subtitle">Configure 3D assets, alignment points, and pose guides</p>
-        </div>
-        <div className="tab-switcher card p-1">
-          <button
-            className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pending')}
-          >
-            <Plus size={16} /> Pending Setup
-            {pendingProducts.length > 0 && (
-              <span className="count-badge">{pendingProducts.length}</span>
-            )}
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'assets' ? 'active' : ''}`}
-            onClick={() => setActiveTab('assets')}
-          >
-            <Check size={16} /> Linked Products
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'library' ? 'active' : ''}`}
-            onClick={() => setActiveTab('library')}
-          >
-            <Shirt size={16} /> Global Library
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'poses' ? 'active' : ''}`}
-            onClick={() => setActiveTab('poses')}
-          >
-            <Camera size={16} /> Pose Guides
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        category="OPERATIONS"
+        title="AR Try-On Management"
+        subtitle="Configure 3D assets, alignment points, and pose guides"
+        actions={
+          <div className="tab-switcher card p-1">
+            <button
+              className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pending')}
+            >
+              <Plus size={16} /> Pending Setup
+              {pendingProducts.length > 0 && (
+                <span className="count-badge">{pendingProducts.length}</span>
+              )}
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'assets' ? 'active' : ''}`}
+              onClick={() => setActiveTab('assets')}
+            >
+              <Check size={16} /> Linked Products
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'library' ? 'active' : ''}`}
+              onClick={() => setActiveTab('library')}
+            >
+              <Shirt size={16} /> Global Library
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'poses' ? 'active' : ''}`}
+              onClick={() => setActiveTab('poses')}
+            >
+              <Camera size={16} /> Pose Guides
+            </button>
+          </div>
+        }
+      />
 
       {activeTab === 'pending' && (
         <div className="card">
@@ -412,51 +414,53 @@ const ARAssets = () => {
             <h3>Production Line: Items Needing AR Setup</h3>
             <p className="text-secondary text-sm">Products tagged &quot;AR Try-On&quot; in the Catalog waiting for 3D Assets.</p>
           </div>
-          <table className="table mt-4">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingProducts.map((p) => (
-                <tr key={p.docId}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div className="avatar bg-light text-primary flex-center text-lg">{p.imageUrl || '👗'}</div>
-                      <span className="font-medium">{p.name}</span>
-                    </div>
-                  </td>
-                  <td>{p.category}</td>
-                  <td>
-                    <span className="align-status pending">Missing Assets</span>
-                  </td>
-                  <td>
-                    <button 
-                      className="btn-primary small"
-                      onClick={() => {
-                        setProductToLink(p);
-                        setIsLinkModalOpen(true);
-                      }}
-                    >
-                      Setup AR
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {pendingProducts.length === 0 && (
+          <div className="table-container">
+            <table className="table mt-4">
+              <thead>
                 <tr>
-                  <td colSpan="4" className="text-center p-12 text-secondary">
-                    <Check size={48} className="mx-auto block opacity-20 mb-2" />
-                    No pending products. All AR items are configured!
-                  </td>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pendingProducts.map((p) => (
+                  <tr key={p.docId}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="avatar bg-light text-primary flex-center text-lg">{p.imageUrl || '👗'}</div>
+                        <span className="font-medium">{p.name}</span>
+                      </div>
+                    </td>
+                    <td>{p.category}</td>
+                    <td>
+                      <span className="align-status pending">Missing Assets</span>
+                    </td>
+                    <td>
+                      <button 
+                        className="btn-primary small"
+                        onClick={() => {
+                          setProductToLink(p);
+                          setIsLinkModalOpen(true);
+                        }}
+                      >
+                        Setup AR
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pendingProducts.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="text-center p-12 text-secondary">
+                      <Check size={48} className="mx-auto block opacity-20 mb-2" />
+                      No pending products. All AR items are configured!
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -471,66 +475,68 @@ const ARAssets = () => {
               <Upload size={16} /> Upload New Asset
             </button>
           </div>
-          <table className="table mt-4">
-            <thead>
-              <tr>
-                <th>Asset ID</th>
-                <th>Associated Item</th>
-                <th>File Type</th>
-                <th>Alignment Config</th>
-                <th>AR Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => {
-                const status = asset.arData?.status || 'Active';
-                const alignments = asset.arData?.alignments || 'Pending';
+          <div className="table-container">
+            <table className="table mt-4">
+              <thead>
+                <tr>
+                  <th>Asset ID</th>
+                  <th>Associated Item</th>
+                  <th>File Type</th>
+                  <th>Alignment Config</th>
+                  <th>AR Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assets.map((asset) => {
+                  const status = asset.arData?.status || 'Active';
+                  const alignments = asset.arData?.alignments || 'Pending';
 
-                return (
-                  <tr key={asset.docId}>
-                    <td className="font-mono text-sm">{asset.docId.substring(0, 8)}...</td>
-                    <td className="font-medium">{asset.name}</td>
-                    <td className="text-secondary">3D Model (.glb)</td>
-                    <td>
-                      <span className={`align-status ${alignments.toLowerCase()}`}>
-                        {alignments === 'Verified' && <Check size={14} />}
-                        {alignments === 'Pending' && <Settings size={14} />}
-                        {alignments === 'Failed' && <Crosshair size={14} />}
-                        {alignments}
-                      </span>
-                    </td>
-                    <td>
-                      <label className="toggle-switch" aria-label="Toggle AR asset status">
-                        <input
-                          type="checkbox"
-                          checked={status === 'Active'}
-                          onChange={() => toggleStatus(asset)}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button className="btn-outline small" onClick={() => openConfig(asset)}>
-                          Configure Points
-                        </button>
-                        <button className="btn-outline small">Preview</button>
-                      </div>
+                  return (
+                    <tr key={asset.docId}>
+                      <td className="font-mono text-sm">{asset.docId.substring(0, 8)}...</td>
+                      <td className="font-medium">{asset.name}</td>
+                      <td className="text-secondary">3D Model (.glb)</td>
+                      <td>
+                        <span className={`align-status ${alignments.toLowerCase()}`}>
+                          {alignments === 'Verified' && <Check size={14} />}
+                          {alignments === 'Pending' && <Settings size={14} />}
+                          {alignments === 'Failed' && <Crosshair size={14} />}
+                          {alignments}
+                        </span>
+                      </td>
+                      <td>
+                        <label className="toggle-switch" aria-label="Toggle AR asset status">
+                          <input
+                            type="checkbox"
+                            checked={status === 'Active'}
+                            onChange={() => toggleStatus(asset)}
+                          />
+                          <span className="toggle-slider"></span>
+                        </label>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="btn-outline small" onClick={() => openConfig(asset)}>
+                            Configure Points
+                          </button>
+                          <button className="btn-outline small">Preview</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {assets.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan="6" className="text-center p-8 text-secondary">
+                      No active AR assets linked yet.
                     </td>
                   </tr>
-                );
-              })}
-
-              {assets.length === 0 && !loading && (
-                <tr>
-                  <td colSpan="6" className="text-center p-8 text-secondary">
-                    No active AR assets linked yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -562,69 +568,71 @@ const ARAssets = () => {
               </span>
             )}
           </p>
-          <table className="table mt-4">
-            <thead>
-              <tr>
-                <th>Asset Name</th>
-                <th>Type</th>
-                <th>Uploaded</th>
-                <th>Linked Products</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {globalLibrary.map((item) => {
-                // ar_assets has no name/type/timestamp columns -- derived
-                // from model_url (via toCamel: item.modelUrl) instead.
-                const fileName = item.modelUrl?.split('/').pop() || 'Untitled asset';
-                const isModel = item.modelUrl?.toLowerCase().endsWith('.glb');
-                const assetLabel = isModel ? '3D Model' : 'Segmentation Mask';
-                const usage = assets.filter(p => p.model_3dUrl === item.modelUrl || p.maskUrl === item.modelUrl).length;
-                return (
-                  <tr key={item.id}>
-                    <td className="font-medium">{fileName}</td>
-                    <td>{assetLabel}</td>
-                    <td className="text-secondary">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</td>
-                    <td>
-                      <span className={`tag-badge ${usage > 0 ? 'success' : 'warning'}`}>
-                        {usage} products
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        {window._targetProduct ? (
-                          <button
-                            className="btn-primary small"
-                            onClick={async () => {
-                              const updateData = isModel
-                                ? { model_3dUrl: item.modelUrl, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
-                                : { maskUrl: item.modelUrl };
-                              await updateProduct(window._targetProduct.docId, updateData);
-                              toast.success(`Linked ${fileName} to ${window._targetProduct.name}`);
-                              window._targetProduct = null;
-                              setActiveTab('assets');
-                            }}
-                          >
-                            Link to Product
-                          </button>
-                        ) : (
-                          <button className="btn-outline small">Preview</button>
-                        )}
-                        <button className="btn-outline small text-danger">Delete</button>
-                      </div>
+          <div className="table-container">
+            <table className="table mt-4">
+              <thead>
+                <tr>
+                  <th>Asset Name</th>
+                  <th>Type</th>
+                  <th>Uploaded</th>
+                  <th>Linked Products</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {globalLibrary.map((item) => {
+                  // ar_assets has no name/type/timestamp columns -- derived
+                  // from model_url (via toCamel: item.modelUrl) instead.
+                  const fileName = item.modelUrl?.split('/').pop() || 'Untitled asset';
+                  const isModel = item.modelUrl?.toLowerCase().endsWith('.glb');
+                  const assetLabel = isModel ? '3D Model' : 'Segmentation Mask';
+                  const usage = assets.filter(p => p.model_3dUrl === item.modelUrl || p.maskUrl === item.modelUrl).length;
+                  return (
+                    <tr key={item.id}>
+                      <td className="font-medium">{fileName}</td>
+                      <td>{assetLabel}</td>
+                      <td className="text-secondary">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</td>
+                      <td>
+                        <span className={`tag-badge ${usage > 0 ? 'success' : 'warning'}`}>
+                          {usage} products
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          {window._targetProduct ? (
+                            <button
+                              className="btn-primary small"
+                              onClick={async () => {
+                                const updateData = isModel
+                                  ? { model_3dUrl: item.modelUrl, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
+                                  : { maskUrl: item.modelUrl };
+                                await updateProduct(window._targetProduct.docId, updateData);
+                                toast.success(`Linked ${fileName} to ${window._targetProduct.name}`);
+                                window._targetProduct = null;
+                                setActiveTab('assets');
+                              }}
+                            >
+                              Link to Product
+                            </button>
+                          ) : (
+                            <button className="btn-outline small">Preview</button>
+                          )}
+                          <button className="btn-outline small text-danger">Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {globalLibrary.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center p-8 text-secondary">
+                      No files found in the global library.
                     </td>
                   </tr>
-                );
-              })}
-              {globalLibrary.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="text-center p-8 text-secondary">
-                    No files found in the global library.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

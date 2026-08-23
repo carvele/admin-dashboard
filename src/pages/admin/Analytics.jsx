@@ -20,6 +20,7 @@ import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
 import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
 import { countsAsRevenue } from '../../utils/reservationStatus';
+import PageHeader from '../../components/PageHeader';
 import './Analytics.css';
 
 const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
@@ -357,69 +358,73 @@ const Analytics = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Analytics Dashboard</h1>
-          <p className="page-subtitle">Comprehensive performance metrics for JezSy Collection</p>
-        </div>
-        <div className="flex-center gap-3">
-          <div className="date-picker-group">
-            <div className="search-box">
-              <Calendar size={18} className="search-icon" />
-              <select
-                className="input-field pl-10 bg-transparent border-none font-medium"
-                value={dateRange}
-                onChange={(e) => handleDatePresetChange(e.target.value)}
-              >
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="quarter">Last Quarter</option>
-                <option value="ytd">Year to Date</option>
-                <option value="custom">Custom Range</option>
-              </select>
+      <PageHeader
+        category="ANALYTICS"
+        title="Analytics Dashboard"
+        subtitle="Comprehensive performance metrics for JezSy Collection"
+        actions={
+          <div className="analytics-controls flex-center gap-3">
+            <div className="date-picker-group">
+              <div className="search-box">
+                <Calendar size={18} className="search-icon" />
+                <select
+                  aria-label="Date range preset"
+                  className="input-field pl-10 bg-transparent border-none font-medium"
+                  value={dateRange}
+                  onChange={(e) => handleDatePresetChange(e.target.value)}
+                >
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="quarter">Last Quarter</option>
+                  <option value="ytd">Year to Date</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              
+              <div className="flex-center gap-2 ml-4 date-inputs-row">
+                <input 
+                  type="date" 
+                  aria-label="Start date"
+                  className="input-field small-date" 
+                  value={startDate} 
+                  onChange={(e) => { setStartDate(e.target.value); setDateRange('custom'); }}
+                />
+                <span className="text-secondary">to</span>
+                <input 
+                  type="date" 
+                  aria-label="End date"
+                  className="input-field small-date" 
+                  value={endDate} 
+                  onChange={(e) => { setEndDate(e.target.value); setDateRange('custom'); }}
+                />
+              </div>
             </div>
             
-            <div className="flex-center gap-2 ml-4">
-              <input 
-                type="date" 
-                className="input-field small-date" 
-                value={startDate} 
-                onChange={(e) => { setStartDate(e.target.value); setDateRange('custom'); }}
-              />
-              <span className="text-secondary">to</span>
-              <input 
-                type="date" 
-                className="input-field small-date" 
-                value={endDate} 
-                onChange={(e) => { setEndDate(e.target.value); setDateRange('custom'); }}
-              />
+            <button className="btn-outline small flex-center gap-1" onClick={() => setShowPreferences(true)}>
+              <Settings2 size={18} /> Customize View
+            </button>
+            
+            <div className="dropdown-container">
+              <button className="btn-primary flex-center gap-2" onClick={() => setExportRef(!exportRef)}>
+                <Download size={18} /> Export <ChevronDown size={14} />
+              </button>
+              {exportRef && (
+                <div className="dropdown-menu">
+                  <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
+                  <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
+                  <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
+                  <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
+                    👗 Garment Performance (CSV)
+                  </button>
+                  <button onClick={() => { exportInventoryDepreciationReport(catalog, reservations); setExportRef(false); }}>
+                    📊 Depreciation & ROI (CSV)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          
-          <button className="btn-outline small flex-center gap-1" onClick={() => setShowPreferences(true)}>
-            <Settings2 size={18} /> Customize View
-          </button>
-          
-          <div className="dropdown-container">
-            <button className="btn-primary flex-center gap-2" onClick={() => setExportRef(!exportRef)}>
-              <Download size={18} /> Export <ChevronDown size={14} />
-            </button>
-            {exportRef && (
-              <div className="dropdown-menu">
-                <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
-                <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
-                <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
-                <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
-                  👗 Garment Performance (CSV)
-                </button>
-                <button onClick={() => { exportInventoryDepreciationReport(catalog, reservations); setExportRef(false); }}>
-                  📊 Depreciation & ROI (CSV)
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {widgetPrefs.showTopStats && (
         <div className="analytics-grid-4">

@@ -186,3 +186,61 @@
   font-weight: 600;
   text-transform: uppercase;
 }
+
+/* ── Mobile Back Button (hidden on desktop) ── */
+.dw-back-btn {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  min-height: 44px;
+}
+.dw-back-btn:hover {
+  background-color: var(--beige);
+}
+
+@media (max-width: 768px) {
+  .dw-container {
+    height: auto;
+    min-height: calc(100vh - 120px);
+  }
+  .dw-layout {
+    flex-direction: column;
+    min-height: 500px;
+  }
+  .dw-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  /* Panel switching pattern — mirrors Messages.css */
+  .dw-layout .dw-sidebar,
+  .dw-layout .dw-main {
+    display: none;
+  }
+  .dw-layout[data-mobile-view='customers'] .dw-sidebar {
+    display: flex;
+  }
+  .dw-layout[data-mobile-view='items'] .dw-main {
+    display: flex;
+  }
+  .dw-back-btn {
+    display: flex;
+  }
+  .dw-toolbar {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  .dw-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

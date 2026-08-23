@@ -541,4 +541,60 @@
   border-color: #fca5a5;
 }
 
+/* Form Helper Hint (WCAG 3.3.2) */
+.form-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Reservation Table Pagination (NN/g H7) */
+.res-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--card-bg, #ffffff);
+}
+
+.res-pagination .btn-sm {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.825rem;
+}
+
+.res-pagination-info {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .header-actions .view-toggle {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  .header-actions .view-toggle .toggle-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .header-actions .btn-primary,
+  .header-actions .btn-outline {
+    flex: 1 1 calc(50% - 0.5rem);
+    justify-content: center;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+    min-height: 44px;
+  }
+}
+
+
+
 

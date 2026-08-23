@@ -81,7 +81,7 @@ const Login = () => {
                 className="input-field"
                 name="email"
                 autoComplete="username"
-                placeholder="you@example.com"
+                placeholder="Enter email address"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of the sign-in page
