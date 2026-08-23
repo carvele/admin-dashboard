@@ -315,6 +315,7 @@ const Reservations = () => {
           productId: res.productId,
           productName: res.productName || res.outfit,
           size: res.size,
+          color: res.color,
           quantity: res.quantity ?? 1,
         }];
 
@@ -326,6 +327,7 @@ const Reservations = () => {
         line.size,
         deltaPerUnit * qty,
         isConsume,
+        line.color || '',
       );
       if (!ok) allOk = false;
     }

@@ -837,3 +837,72 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ── Accessible table sort buttons ────────────────────────── */
+.th-sort-btn {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.th-sort-btn.justify-end {
+  justify-content: flex-end;
+}
+
+.th-sort-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #4f46e5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Accessible category group toggle button ──────────────── */
+.inv-group-toggle-btn {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+}
+
+.inv-group-toggle-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #4f46e5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Inventory table pagination ───────────────────────────── */
+.inv-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--card-bg, #ffffff);
+}
+
+.inv-pagination .btn-sm {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.825rem;
+}
+
+.inv-pagination-info {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+

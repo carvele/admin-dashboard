@@ -236,6 +236,7 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'appointment_time',
   'status',
   'size',
+  'color',
   'deposit',
   'rental_price',
   'receipt_url',
@@ -290,25 +291,26 @@ export const createReservation = async (data) => {
   return addDocument('reservations', payload);
 };
 
-export const updateReservation = (docId, updates) => {
-  let payload = { ...updates };
-  if (payload.date || payload.reservationDate || payload.appointmentTime) {
-    const date = payload.date || payload.reservationDate || undefined;
-    const time = payload.appointmentTime ?? undefined;
-    if (date || time) {
-      payload.appointment_time = buildTimestamp(date, time);
-    }
-    delete payload.appointmentTime;
+export const updateReservation = async (docId, updates) => {
+  const payload = sanitizeReservationPayload(updates);
+
+  if (updates.appointmentTime && (updates.date || updates.reservationDate)) {
+    payload.appointment_time = buildTimestamp(
+      updates.date || updates.reservationDate,
+      updates.appointmentTime,
+    );
+  }
+  if (updates.date || updates.reservationDate) {
+    payload.date = toLocalDateString(updates.date || updates.reservationDate);
+  }
+  if (updates.returnDate) {
+    payload.return_date = toLocalDateString(updates.returnDate);
   }
 
-  if (payload.date || payload.reservationDate) {
-    payload.date = toLocalDateString(payload.date || payload.reservationDate);
-  }
-
-  return updateDocument('reservations', docId, sanitizeReservationPayload(payload));
+  return updateDocument('reservations', docId, payload);
 };
 
-export const deleteReservation = (docId) => {
+export const deleteReservation = async (docId) => {
   return deleteDocument('reservations', docId);
 };
 
@@ -334,56 +336,91 @@ export const settleReservationBalance = async (reservationId, method = 'cash') =
 // ── Inventory adjustment ─────────────────────────────────────
 
 /**
- * Adjust inventory available/reserved counts when a reservation status changes.
- * `delta` = positive when releasing (e.g. cancelled), negative when consuming.
- * `isConsume` = true permanently reduces total stock (for sales).
+ * Adjusts inventory stock for a reservation item.
+ *
+ * @param {string} productIdOrName - UUID, SKU, or item name
+ * @param {string} size - size label (e.g. 'M')
+ * @param {number} delta - positive = return to available, negative = take hold
+ * @param {boolean} isConsume - true on completed pickup (decrements total + reserved)
+ * @param {string} [color=''] - optional colorway (e.g. 'Royal Blue')
  */
-export const adjustInventoryForReservation = async (productIdOrName, size, delta, isConsume = false) => {
+export const adjustInventoryForReservation = async (productIdOrName, size, delta, isConsume = false, color = '') => {
   try {
     let invRow = null;
 
     // 1. Try by product_doc_id (uuid)
-    const { data: byId } = await supabase
-      .from('inventory')
-      .select('id')
-      .eq('product_doc_id', productIdOrName)
-      .eq('size', size)
-      .maybeSingle();
-    invRow = byId;
+    if (color) {
+      const { data } = await supabase
+        .from('inventory')
+        .select('id')
+        .eq('product_doc_id', productIdOrName)
+        .eq('size', size)
+        .eq('color', color)
+        .maybeSingle();
+      invRow = data;
+    }
+    if (!invRow) {
+      const { data: byId } = await supabase
+        .from('inventory')
+        .select('id')
+        .eq('product_doc_id', productIdOrName)
+        .eq('size', size)
+        .maybeSingle();
+      invRow = byId;
+    }
 
     // 2. Try by SKU
     if (!invRow) {
-      const { data: bySku } = await supabase
-        .from('inventory')
-        .select('id')
-        .eq('sku', productIdOrName)
-        .eq('size', size)
-        .maybeSingle();
-      invRow = bySku;
+      if (color) {
+        const { data } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('sku', productIdOrName)
+          .eq('size', size)
+          .eq('color', color)
+          .maybeSingle();
+        invRow = data;
+      }
+      if (!invRow) {
+        const { data: bySku } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('sku', productIdOrName)
+          .eq('size', size)
+          .maybeSingle();
+        invRow = bySku;
+      }
     }
 
     // 3. Try by item name
     if (!invRow) {
-      const { data: byName } = await supabase
-        .from('inventory')
-        .select('id')
-        .eq('item', productIdOrName)
-        .eq('size', size)
-        .maybeSingle();
-      invRow = byName;
+      if (color) {
+        const { data } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('item', productIdOrName)
+          .eq('size', size)
+          .eq('color', color)
+          .maybeSingle();
+        invRow = data;
+      }
+      if (!invRow) {
+        const { data: byName } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('item', productIdOrName)
+          .eq('size', size)
+          .maybeSingle();
+        invRow = byName;
+      }
     }
 
     if (!invRow) {
-      console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size})`);
+      console.warn(`[Inventory] No matching item found for ${productIdOrName} (${size}${color ? `, ${color}` : ''})`);
       return false;
     }
 
-    // Deltas applied atomically server-side (adjust_inventory_stock), not a
-    // JS-side read-compute-write -- two near-simultaneous calls against the
-    // same row (a double-click, two staff acting close together, a realtime
-    // refresh racing a manual action) used to both read the same starting
-    // total/reserved/available and whichever UPDATE landed second silently
-    // overwrote the first's result, losing one of the two deltas.
+    // Deltas applied atomically server-side (adjust_inventory_stock)
     const params = isConsume
       ? { p_total_delta: -Math.abs(delta), p_reserved_delta: -Math.abs(delta) }
       : { p_available_delta: delta, p_reserved_delta: -delta };
@@ -396,7 +433,7 @@ export const adjustInventoryForReservation = async (productIdOrName, size, delta
       console.warn('[Inventory] Adjust failed:', error.message);
       return false;
     }
-    console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}): delta=${delta}`);
+    console.log(`[Inventory] Adjusted stock for ${productIdOrName} (${size}${color ? `, ${color}` : ''}): delta=${delta}`);
     return true;
   } catch (err) {
     console.warn('Stock adjustment failed:', err);

@@ -83,13 +83,13 @@ describe('formatLogSentence', () => {
       details: { itemName: 'Ivory Gown', qtyAdded: 8 },
     });
     expect(s.delta).toBeNull();
-    expect(s.amount).toBe('+8');
+    expect(s.amount).toBe('+8 units');
   });
 
   it('always returns a usable action for unknown shapes', () => {
     expect(formatLogSentence({ action: 'Updated store operating hours' }).action)
       .toBe('Updated store operating hours');
-    expect(formatLogSentence({}).action).toBe('Recorded activity');
+    expect(formatLogSentence({}).action).toBe('recorded activity');
     expect(formatLogSentence({ action: 'X', details: 'not-an-object' }).subject).toBeNull();
   });
 });
@@ -112,16 +112,21 @@ describe('extractChanges', () => {
 });
 
 describe('extractContext', () => {
-  it('returns only keys not already used by the sentence or diff', () => {
+  it('returns context rows excluding diff pairs and changes map', () => {
     const ctx = extractContext({
-      itemName: 'Ivory Gown', // subject — consumed
-      size: 'M', // qualifier — consumed
-      qtyBefore: 4, // diff — consumed
-      qtyAfter: 12, // diff — consumed
-      qtyAdded: 8, // amount — consumed
-      reason: 'Supplier delivery', // context — kept
+      itemName: 'Ivory Gown',
+      size: 'M',
+      qtyBefore: 4, // diff — excluded
+      qtyAfter: 12, // diff — excluded
+      qtyAdded: 8,
+      reason: 'Supplier delivery',
     });
-    expect(ctx).toEqual([{ key: 'Reason', value: 'Supplier delivery' }]);
+    expect(ctx).toEqual([
+      { key: 'Item Name', value: 'Ivory Gown' },
+      { key: 'Size', value: 'M' },
+      { key: 'Qty Added', value: '8' },
+      { key: 'Reason', value: 'Supplier delivery' },
+    ]);
   });
 });
 
