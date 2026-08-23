@@ -248,6 +248,22 @@
   gap: 0.75rem;
 }
 
+.device-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-prune {
+  color: var(--color-warning, #d97706);
+  border-color: var(--color-warning, #d97706);
+}
+
+.btn-prune:hover {
+  background: rgba(217, 119, 6, 0.08);
+}
+
 @media (max-width: 768px) {
   .device-item {
     flex-direction: column;
@@ -257,5 +273,16 @@
     width: 100%;
     justify-content: space-between;
     margin-top: 0.5rem;
+  }
+  .device-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .btn-sm.btn-delete {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }

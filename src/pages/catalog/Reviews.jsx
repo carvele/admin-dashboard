@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { getAllReviews, deleteReview } from '../../services/reviewService';
 import { Filter } from 'lucide-react';
 import ReviewCard from '../../components/ReviewCard';
+import PageHeader from '../../components/PageHeader';
 import './Reviews.css';
 
 const Reviews = () => {
@@ -49,14 +50,18 @@ const Reviews = () => {
 
   return (
     <div className="reviews-page">
-      <div className="reviews-header">
-        <h1>Review Moderation Center</h1>
-        <div className="filter-controls-panel">
-          <div className="filter-controls-header">
-            <Filter size={16} aria-hidden="true" />
-            <span>Filter Controls</span>
-          </div>
-          <div className="filters-bar">
+      <PageHeader
+        category="MODERATION"
+        title="Review Moderation Center"
+        subtitle="Manage and moderate customer product feedback and ratings."
+      />
+
+      <div className="filter-controls-panel">
+        <div className="filter-controls-header">
+          <Filter size={16} aria-hidden="true" />
+          <span>Filter Controls</span>
+        </div>
+        <div className="filters-bar">
             <input
               type="text"
               placeholder="Search by product name…"
@@ -80,9 +85,8 @@ const Reviews = () => {
             </select>
           </div>
         </div>
-      </div>
 
-      {isLoading && reviews.length === 0 ? (
+        {isLoading && reviews.length === 0 ? (
         <div className="flex-center-vh">
           <div className="loading-spinner" role="status" aria-label="Loading reviews" />
         </div>

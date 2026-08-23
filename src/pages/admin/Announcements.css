@@ -193,3 +193,14 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+@media (max-width: 640px) {
+  .announcements-grid {
+    grid-template-columns: 1fr;
+  }
+  .announcement-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

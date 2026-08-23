@@ -8,6 +8,7 @@ import {
 } from '../../services/announcementService';
 import { Plus, Trash2, Megaphone, Bell } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
 import './Announcements.css';
 
 const Announcements = () => {
@@ -110,13 +111,17 @@ const Announcements = () => {
 
   return (
     <div className="announcements-page">
-      <div className="announcements-header">
-        <h1>Broadcast Announcements</h1>
-        <button className="create-btn" onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} />
-          New Broadcast
-        </button>
-      </div>
+      <PageHeader
+        category="COMMUNICATIONS"
+        title="Broadcast Announcements"
+        subtitle="Send announcements and push banners to the mobile app."
+        actions={
+          <button className="create-btn" onClick={() => setIsModalOpen(true)}>
+            <Plus size={20} />
+            New Broadcast
+          </button>
+        }
+      />
 
       {announcements.length === 0 ? (
         <div className="empty-state">
@@ -160,9 +165,9 @@ const Announcements = () => {
 
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="broadcast-modal-title">
             <div className="modal-header">
-              <h2>New Broadcast</h2>
+              <h2 id="broadcast-modal-title">New Broadcast</h2>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>
                 &times;
               </button>

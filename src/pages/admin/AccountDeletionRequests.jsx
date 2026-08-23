@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { UserX, Mail, Phone, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
 import { toast } from 'sonner';
 import {
   getPendingDeletionRequests,
@@ -122,15 +123,11 @@ const AccountDeletionRequests = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header d-flex justify-between align-center">
-        <div>
-          <h1 className="page-title">Account Deletion Requests</h1>
-          <p className="page-subtitle">
-            Customer-initiated requests to delete their account. Filing a request does not
-            erase anything automatically -- each one is reviewed and processed by hand.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        category="PRIVACY"
+        title="Account Deletion Requests"
+        subtitle="Review and process user account data erasure requests under privacy compliance."
+      />
 
       <div className="card">
         <div className="table-container">
