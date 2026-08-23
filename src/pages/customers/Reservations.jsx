@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import debounce from 'lodash.debounce';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -161,8 +161,9 @@ const Reservations = () => {
       unsubP();
     };
   }, []);
-  const [searchInput, setSearchInput] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || '');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
 
   // debounce(...) only closes over the stable setSearchTerm setter, so an
   // empty dep array is correct; eslint can't statically verify that through
@@ -178,11 +179,11 @@ const Reservations = () => {
     debouncedSearch(e.target.value);
   };
 
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'All');
   // Board first: the day-to-day job is working the queue, and a flat table
   // gave no sense of what needs doing next. List view is still there for
   // scanning history.
-  const [viewMode, setViewMode] = useState('board');
+  const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'board');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
@@ -197,6 +198,41 @@ const Reservations = () => {
   }));
   const [receiptModalUrl, setReceiptModalUrl] = useState(null);
   const [confirmDialogState, setConfirmDialogState] = useState(null);
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(() => {
+    const p = parseInt(searchParams.get('page') || '1', 10);
+    return isNaN(p) || p < 1 ? 0 : p - 1;
+  });
+
+  // Keep URL search params in sync with active filters/view/pagination
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (viewMode && viewMode !== 'board') params.set('view', viewMode);
+    if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
+    if (searchTerm.trim()) params.set('search', searchTerm.trim());
+    if (viewMode === 'table' && page > 0) params.set('page', String(page + 1));
+    setSearchParams(params, { replace: true });
+  }, [viewMode, statusFilter, searchTerm, page, setSearchParams]);
+
+  // Reset page to first whenever search, status filter, or view mode changes
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter, viewMode]);
+
+  // Dismiss topmost modal on Escape key (WCAG 2.1.2)
+  useEffect(() => {
+    const onEsc = (e) => {
+      if (e.key !== 'Escape') return;
+      if (receiptModalUrl) setReceiptModalUrl(null);
+      else if (viewModal) setViewModal(null);
+      else if (rescheduleModal) setRescheduleModal(null);
+      else if (isModalOpen) setIsModalOpen(false);
+      else if (showQRModal) setShowQRModal(false);
+    };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [receiptModalUrl, viewModal, rescheduleModal, isModalOpen, showQRModal]);
+
   // receipt_url on the row is a bare storage path in a private bucket, not a
   // usable URL -- resolve it to a signed URL whenever the detail modal opens
   // on a reservation that has one.
@@ -296,6 +332,18 @@ const Reservations = () => {
 
     return matchesSearch && matchesStatus;
   });
+
+  const sortedReservations = [...filteredReservations].sort((a, b) => {
+    let va, vb;
+    if (listSort.key === 'customer') { va = a.displayName; vb = b.displayName; }
+    else if (listSort.key === 'balance') { va = outstandingBalance(a) || 0; vb = outstandingBalance(b) || 0; }
+    else { va = a.displayDate?.getTime?.() || 0; vb = b.displayDate?.getTime?.() || 0; }
+    if (va < vb) return listSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return listSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const totalPages = Math.max(1, Math.ceil(sortedReservations.length / PAGE_SIZE));
+  const pagedReservations = sortedReservations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // --- Stock adjustment helper ---
   const adjustStock = async (outfit, size, delta, isConsume = false) => {
@@ -701,20 +749,26 @@ const Reservations = () => {
           <div className="header-actions flex-center gap-2">
             <div className="view-toggle">
               <button
+                type="button"
                 className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
                 onClick={() => setViewMode('board')}
+                aria-pressed={viewMode === 'board'}
               >
                 Board
               </button>
               <button
+                type="button"
                 className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
                 onClick={() => setViewMode('table')}
+                aria-pressed={viewMode === 'table'}
               >
                 List View
               </button>
               <button
+                type="button"
                 className={`toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
                 onClick={() => setViewMode('calendar')}
+                aria-pressed={viewMode === 'calendar'}
               >
                 Calendar
               </button>
@@ -744,6 +798,7 @@ const Reservations = () => {
             <input
               type="text"
               placeholder="Search by ID or customer name..."
+              aria-label="Search by reservation ID or customer name"
               value={searchInput}
               onChange={handleSearchChange}
               className="input-field pl-10"
@@ -755,6 +810,7 @@ const Reservations = () => {
               style={{ width: 'auto', minWidth: 150 }}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by reservation status"
             >
               <option value="All">All Statuses</option>
               <option value="Pending">Pending / Requests</option>
@@ -811,188 +867,189 @@ const Reservations = () => {
             <table className="table res-list-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>
+                  <th scope="col">ID</th>
+                  <th
+                    scope="col"
+                    aria-sort={listSort.key === 'customer' ? (listSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
                     <button className="sort-header-btn" onClick={() => toggleSort('customer')}>
-                      Customer <ArrowUpDown size={13} />
+                      Customer <ArrowUpDown size={13} aria-hidden="true" />
                     </button>
                   </th>
-                  <th>Item</th>
-                  <th>
+                  <th scope="col">Item</th>
+                  <th
+                    scope="col"
+                    aria-sort={listSort.key === 'date' ? (listSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
                     <button className="sort-header-btn" onClick={() => toggleSort('date')}>
-                      Date &amp; Time <ArrowUpDown size={13} />
+                      Date &amp; Time <ArrowUpDown size={13} aria-hidden="true" />
                     </button>
                   </th>
-                  <th>Status</th>
-                  <th>
+                  <th scope="col">Status</th>
+                  <th
+                    scope="col"
+                    aria-sort={listSort.key === 'balance' ? (listSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
                     <button className="sort-header-btn" onClick={() => toggleSort('balance')}>
-                      Balance <ArrowUpDown size={13} />
+                      Balance <ArrowUpDown size={13} aria-hidden="true" />
                     </button>
                   </th>
-                  <th>Actions</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {[...filteredReservations]
-                  .sort((a, b) => {
-                    let va, vb;
-                    if (listSort.key === 'customer') { va = a.displayName; vb = b.displayName; }
-                    else if (listSort.key === 'balance') { va = outstandingBalance(a) || 0; vb = outstandingBalance(b) || 0; }
-                    else { va = a.displayDate?.getTime?.() || 0; vb = b.displayDate?.getTime?.() || 0; }
-                    if (va < vb) return listSort.dir === 'asc' ? -1 : 1;
-                    if (va > vb) return listSort.dir === 'asc' ? 1 : -1;
-                    return 0;
-                  })
-                  .map((res) => {
-                    const balance = outstandingBalance(res);
-                    const primaryAction = PRIMARY_ACTION[res.displayStatus];
-                    const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
-                    const firstLine = res.lines[0];
-                    const imageUrl = res.imageUrl || firstLine?.imageUrl;
-                    const isExpanded = !!expandedRows[res.id];
-                    const hasMultipleLines = res.lines.length > 1;
-                    const resYear = res.createdAt ? new Date(res.createdAt).getFullYear() : new Date().getFullYear();
-                    // res.displayId is already the real display_id column
-                    // (RES-...), populated by reservationService's
-                    // normaliseReservation and used correctly elsewhere in
-                    // this file (see the reschedule toast messages above).
-                    // This row alone ignored it and fabricated a fake
-                    // ORD-<year>-<uuid prefix> id from the raw primary key,
-                    // which showed a different identifier for the same
-                    // reservation than the card view and the details modal.
-                    const formattedId = res.displayId
-                      || (res.id?.startsWith('ORD-') || res.id?.startsWith('RES-')
-                        ? res.id
-                        : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`);
+                {pagedReservations.map((res) => {
+                  const balance = outstandingBalance(res);
+                  const primaryAction = PRIMARY_ACTION[res.displayStatus];
+                  const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+                  const firstLine = res.lines[0];
+                  const imageUrl = res.imageUrl || firstLine?.imageUrl;
+                  const isExpanded = !!expandedRows[res.id];
+                  const hasMultipleLines = res.lines.length > 1;
+                  const resYear = res.createdAt ? new Date(res.createdAt).getFullYear() : new Date().getFullYear();
+                  // res.displayId is already the real display_id column
+                  // (RES-...), populated by reservationService's
+                  // normaliseReservation and used correctly elsewhere in
+                  // this file (see the reschedule toast messages above).
+                  // This row alone ignored it and fabricated a fake
+                  // ORD-<year>-<uuid prefix> id from the raw primary key,
+                  // which showed a different identifier for the same
+                  // reservation than the card view and the details modal.
+                  const formattedId = res.displayId
+                    || (res.id?.startsWith('ORD-') || res.id?.startsWith('RES-')
+                      ? res.id
+                      : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`);
 
-                    return (
-                      <tr key={res.id}>
-                        <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>
-                          <div className="flex items-center gap-1">
-                            {hasMultipleLines && (
+                  return (
+                    <tr key={res.id}>
+                      <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex items-center gap-1">
+                          {hasMultipleLines && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandRow(res.id)}
+                              className="p-0.5 hover:bg-gray-100 rounded text-gray-500"
+                              title={isExpanded ? "Collapse items" : "Expand items"}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? "Collapse item list" : `Expand ${res.lines.length} items`}
+                            >
+                              {isExpanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+                            </button>
+                          )}
+                          <span>{formattedId}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="res-customer-cell">
+                          <div className="res-cust-name">{res.displayName}</div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="res-item-cell">
+                          {imageUrl && (
+                            <img src={imageUrl} alt="" className="res-thumb" />
+                          )}
+                          <div className="res-item-info">
+                            {(hasMultipleLines && !isExpanded ? res.lines.slice(0, 1) : res.lines).map((line, index) => (
+                              <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary pt-1 border-t border-dashed mt-1' : 'font-medium'}>
+                                {line.productName || res.productName || res.outfit}
+                                {line.size && <span className="size-pill ml-1">{line.size}</span>}
+                                {(line.quantity ?? 1) > 1 && <span className="text-secondary text-sm"> ×{line.quantity}</span>}
+                              </div>
+                            ))}
+                            {hasMultipleLines && !isExpanded && (
                               <button
                                 type="button"
                                 onClick={() => toggleExpandRow(res.id)}
-                                className="p-0.5 hover:bg-gray-100 rounded text-gray-500"
-                                title={isExpanded ? "Collapse items" : "Expand items"}
+                                className="text-[11px] text-primary font-bold hover:underline mt-1 block"
                               >
-                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                +{res.lines.length - 1} more item{res.lines.length - 1 > 1 ? 's' : ''} (click to expand)
                               </button>
                             )}
-                            <span>{formattedId}</span>
                           </div>
-                        </td>
-                        <td>
-                          <div className="res-customer-cell">
-                            <div className="res-cust-name">{res.displayName}</div>
+                        </div>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div className="font-medium">
+                          {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
+                        </div>
+                        <div className="text-secondary text-sm">
+                          {res.appointmentTime || res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                        </div>
+                        {(res.createdAt || res.created_at) && (
+                          <div className="text-[11px] text-secondary mt-1">
+                            Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} {parseDate(res.createdAt || res.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
                           </div>
-                        </td>
-                        <td>
-                          <div className="res-item-cell">
-                            {imageUrl && (
-                              <img src={imageUrl} alt="" className="res-thumb" />
-                            )}
-                            <div className="res-item-info">
-                              {(hasMultipleLines && !isExpanded ? res.lines.slice(0, 1) : res.lines).map((line, index) => (
-                                <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary pt-1 border-t border-dashed mt-1' : 'font-medium'}>
-                                  {line.productName || res.productName || res.outfit}
-                                  {line.size && <span className="size-pill ml-1">{line.size}</span>}
-                                  {(line.quantity ?? 1) > 1 && <span className="text-secondary text-sm"> ×{line.quantity}</span>}
-                                </div>
-                              ))}
-                              {hasMultipleLines && !isExpanded && (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpandRow(res.id)}
-                                  className="text-[11px] text-primary font-bold hover:underline mt-1 block"
-                                >
-                                  +{res.lines.length - 1} more item{res.lines.length - 1 > 1 ? 's' : ''} (click to expand)
-                                </button>
-                              )}
-                            </div>
+                        )}
+                        {res.countdown && (res.displayStatus === 'Pending') && (
+                          <CountdownTimer targetDate={res.reservationDate || res.date} />
+                        )}
+                        {deadline && (
+                          <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                            {deadline.label}
                           </div>
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <div className="font-medium">
-                            {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
-                          </div>
-                          <div className="text-secondary text-sm">
-                            {res.appointmentTime || res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
-                          </div>
-                          {(res.createdAt || res.created_at) && (
-                            <div className="text-[11px] text-secondary mt-1">
-                              Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} {parseDate(res.createdAt || res.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
-                            </div>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                          <StatusBadge status={res.displayStatus} />
+                          {isAwaitingReceipt(res) && (
+                            <span className="receipt-badge">📎 Receipt uploaded</span>
                           )}
-                          {res.countdown && (res.displayStatus === 'Pending') && (
-                            <CountdownTimer targetDate={res.reservationDate || res.date} />
-                          )}
-                          {deadline && (
-                            <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
-                              {deadline.label}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
-                            <StatusBadge status={res.displayStatus} />
-                            {isAwaitingReceipt(res) && (
-                              <span className="receipt-badge">📎 Receipt uploaded</span>
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          {balance > 0 ? (
-                            <span className="balance-due-pill">
-                              <DollarSign size={11} /> {formatCurrency(balance)} due
-                            </span>
-                          ) : res.paymentStatus === 'Paid' ? (
-                            <span className="balance-paid-pill">✓ Paid</span>
-                          ) : (
-                            <span className="text-secondary text-sm">—</span>
-                          )}
-                          {res.rentalPrice > 0 && (
-                            <div className="text-xs text-secondary mt-1">{formatCurrency(res.rentalPrice)} total</div>
-                          )}
-                        </td>
-                        <td>
-                          <div className="res-list-actions">
-                            <button className="res-action-btn view" title="View Details" onClick={() => setViewModal(res)}>
-                              <Eye size={14} />
+                        </div>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {balance > 0 ? (
+                          <span className="balance-due-pill">
+                            <DollarSign size={11} /> {formatCurrency(balance)} due
+                          </span>
+                        ) : res.paymentStatus === 'Paid' ? (
+                          <span className="balance-paid-pill">✓ Paid</span>
+                        ) : (
+                          <span className="text-secondary text-sm">—</span>
+                        )}
+                        {res.rentalPrice > 0 && (
+                          <div className="text-xs text-secondary mt-1">{formatCurrency(res.rentalPrice)} total</div>
+                        )}
+                      </td>
+                      <td>
+                        <div className="res-list-actions">
+                          <button className="res-action-btn view" title="View Details" onClick={() => setViewModal(res)}>
+                            <Eye size={14} />
+                          </button>
+                          <button className="res-action-btn msg" title="Message" onClick={() => handleMessageBuyer(res)}>
+                            <MessageSquare size={14} />
+                          </button>
+                          {canManage && primaryAction && (
+                            <button
+                              className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
+                              // Same fix as the board card: this used to fire
+                              // mark_paid immediately, relabeled "Verify
+                              // Receipt" -- staff could mark payment verified
+                              // without ever opening the receipt image. Opens
+                              // the detail modal instead, where the receipt
+                              // renders next to its own Verify Payment button.
+                              onClick={() => (isAwaitingReceipt(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
+                            >
+                              {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                             </button>
-                            <button className="res-action-btn msg" title="Message" onClick={() => handleMessageBuyer(res)}>
-                              <MessageSquare size={14} />
+                          )}
+                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                            <button className="res-action-btn reschedule" title="Reschedule" onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}>
+                              <Calendar size={14} />
                             </button>
-                            {canManage && primaryAction && (
-                              <button
-                                className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
-                                // Same fix as the board card: this used to fire
-                                // mark_paid immediately, relabeled "Verify
-                                // Receipt" -- staff could mark payment verified
-                                // without ever opening the receipt image. Opens
-                                // the detail modal instead, where the receipt
-                                // renders next to its own Verify Payment button.
-                                onClick={() => (isAwaitingReceipt(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
-                              >
-                                {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
-                              </button>
-                            )}
-                            {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
-                              <button className="res-action-btn reschedule" title="Reschedule" onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}>
-                                <Calendar size={14} />
-                              </button>
-                            )}
-                            {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
-                              <button className="res-action-btn reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}>
-                                <XCircle size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                {filteredReservations.length === 0 && (
+                          )}
+                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                            <button className="res-action-btn reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}>
+                              <XCircle size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {pagedReservations.length === 0 && (
                   <tr>
                     <td colSpan="7" className="text-center py-8 text-secondary">
                       No reservations found
@@ -1001,6 +1058,31 @@ const Reservations = () => {
                 )}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="res-pagination" role="navigation" aria-label="Reservation table pagination">
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                  aria-label="Go to previous page"
+                >
+                  &larr; Previous
+                </button>
+                <span className="res-pagination-info text-sm text-secondary">
+                  Page {page + 1} of {totalPages} ({sortedReservations.length} reservation{sortedReservations.length === 1 ? '' : 's'})
+                </span>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                  aria-label="Go to next page"
+                >
+                  Next &rarr;
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <ReservationCalendar
@@ -1017,6 +1099,7 @@ const Reservations = () => {
           className="modal-overlay"
           role="button"
           tabIndex={0}
+          aria-label="Close dialog"
           onClick={(e) => { if (e.target === e.currentTarget) setShowQRModal(false); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1025,10 +1108,16 @@ const Reservations = () => {
             }
           }}
         >
-          <div className="modal-content" style={{ maxWidth: 420 }}>
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="qr-dialog-title"
+            style={{ maxWidth: 420 }}
+          >
             <div className="modal-header">
-              <h2><QrCode size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />Verify Pickup</h2>
-              <button className="close-btn" onClick={() => setShowQRModal(false)}>&times;</button>
+              <h2 id="qr-dialog-title"><QrCode size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />Verify Pickup</h2>
+              <button className="close-btn" onClick={() => setShowQRModal(false)} aria-label="Close dialog">&times;</button>
             </div>
             <div className="modal-body">
               <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
@@ -1100,6 +1189,7 @@ const Reservations = () => {
           className="modal-overlay"
           role="button"
           tabIndex={0}
+          aria-label="Close dialog"
           onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1108,10 +1198,15 @@ const Reservations = () => {
             }
           }}
         >
-          <div className="modal-content">
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-res-dialog-title"
+          >
             <div className="modal-header">
-              <h2>Create New Reservation</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+              <h2 id="create-res-dialog-title">Create New Reservation</h2>
+              <button className="close-btn" onClick={() => setIsModalOpen(false)} aria-label="Close dialog">
                 &times;
               </button>
             </div>
@@ -1189,10 +1284,12 @@ const Reservations = () => {
                   id="reservation-date"
                   type="datetime-local"
                   className="input-field"
+                  min={new Date().toISOString().slice(0, 16)}
                   value={newRes.date}
                   onChange={(e) => setNewRes({ ...newRes, date: e.target.value })}
                   required
                 />
+                <span className="form-hint">Store hours: 9:00 AM – 5:00 PM, Mon – Sat</span>
               </div>
               <div className="form-group checkbox-group">
                 <input
@@ -1222,6 +1319,7 @@ const Reservations = () => {
           className="modal-overlay"
           role="button"
           tabIndex={0}
+          aria-label="Close dialog"
           onClick={(e) => { if (e.target === e.currentTarget) setRescheduleModal(null); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1232,11 +1330,14 @@ const Reservations = () => {
         >
           <div
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reschedule-dialog-title"
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
-              <h2>Reschedule {rescheduleModal.id}</h2>
-              <button className="close-btn" onClick={() => setRescheduleModal(null)}>
+              <h2 id="reschedule-dialog-title">Reschedule {rescheduleModal.id}</h2>
+              <button className="close-btn" onClick={() => setRescheduleModal(null)} aria-label="Close dialog">
                 &times;
               </button>
             </div>
@@ -1253,10 +1354,12 @@ const Reservations = () => {
                   id="reschedule-date"
                   type="datetime-local"
                   className="input-field"
+                  min={new Date().toISOString().slice(0, 16)}
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
                   required
                 />
+                <span className="form-hint">Store hours: 9:00 AM – 5:00 PM, Mon – Sat</span>
               </div>
               <div className="modal-footer">
                 <button
@@ -1281,6 +1384,7 @@ const Reservations = () => {
           className="modal-overlay"
           role="button"
           tabIndex={0}
+          aria-label="Close dialog"
           onClick={(e) => { if (e.target === e.currentTarget) setViewModal(null); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1291,44 +1395,51 @@ const Reservations = () => {
         >
           <div
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="view-res-dialog-title"
             style={{ maxWidth: 640 }}
           >
             <div className="modal-header">
-              <h2>Reservation Details</h2>
-              <button className="close-btn" onClick={() => setViewModal(null)}>
+              <h2 id="view-res-dialog-title">Reservation Details</h2>
+              <button className="close-btn" onClick={() => setViewModal(null)} aria-label="Close dialog">
                 &times;
               </button>
             </div>
             <div className="modal-body">
               {/* Lifecycle Progress Indicator */}
-              <div className="lifecycle-progress">
-                {(() => {
-                  const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
-                  const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
-                  return steps.map((step, i) => {
-                    const current = statusOrder[viewModal.displayStatus] ?? -1;
-                    const stepIdx = statusOrder[step];
-                    const isCancelled = viewModal.displayStatus === 'Cancelled';
-                    const isActive = !isCancelled && stepIdx <= current;
-                    return (
-                      <div
-                        key={step}
-                        className={`lifecycle-step ${isActive ? 'active' : ''} ${isCancelled ? 'cancelled' : ''}`}
-                      >
-                        <div className={`lifecycle-dot ${isActive ? 'filled' : ''}`}>
-                          {isActive ? '✓' : i + 1}
-                        </div>
-                        <span className="lifecycle-label">{step}</span>
-                        {i < steps.length - 1 && (
-                          <div
-                            className={`lifecycle-line ${isActive && stepIdx < current ? 'filled' : ''}`}
-                          />
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
+              <nav aria-label="Reservation progress">
+                <ol className="lifecycle-progress">
+                  {(() => {
+                    const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
+                    const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
+                    return steps.map((step, i) => {
+                      const current = statusOrder[viewModal.displayStatus] ?? -1;
+                      const stepIdx = statusOrder[step];
+                      const isCancelled = viewModal.displayStatus === 'Cancelled';
+                      const isActive = !isCancelled && stepIdx <= current;
+                      const isCurrent = !isCancelled && stepIdx === current;
+                      return (
+                        <li
+                          key={step}
+                          className={`lifecycle-step ${isActive ? 'active' : ''} ${isCancelled ? 'cancelled' : ''}`}
+                          aria-current={isCurrent ? 'step' : undefined}
+                        >
+                          <div className={`lifecycle-dot ${isActive ? 'filled' : ''}`}>
+                            {isActive ? '✓' : i + 1}
+                          </div>
+                          <span className="lifecycle-label">{step}</span>
+                          {i < steps.length - 1 && (
+                            <div
+                              className={`lifecycle-line ${isActive && stepIdx < current ? 'filled' : ''}`}
+                            />
+                          )}
+                        </li>
+                      );
+                    });
+                  })()}
+                </ol>
+              </nav>
               {viewModal.displayStatus === 'Cancelled' && (
                 <div
                   style={{
@@ -1611,6 +1722,7 @@ const Reservations = () => {
           className="modal-overlay"
           role="button"
           tabIndex={0}
+          aria-label="Close dialog"
           onClick={(e) => { if (e.target === e.currentTarget) setReceiptModalUrl(null); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1621,10 +1733,13 @@ const Reservations = () => {
         >
           <div
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receipt-dialog-title"
             style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '1rem' }}
           >
             <div className="modal-header">
-              <h3>Payment Receipt</h3>
+              <h3 id="receipt-dialog-title">Payment Receipt</h3>
               <button className="btn-icon" onClick={() => setReceiptModalUrl(null)} aria-label="Close receipt">
                 <X size={18} />
               </button>
