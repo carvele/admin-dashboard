@@ -639,7 +639,7 @@ const ARAssets = () => {
       {activeTab === 'poses' && (
         <div className="space-y-6 mt-4">
           <div className="card p-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="pose-header-area flex justify-between items-center mb-4 flex-wrap gap-3">
               <div>
                 <h3 className="text-lg font-bold">AR Pose Guides & Calibration Specs</h3>
                 <p className="text-secondary text-sm">
@@ -647,7 +647,7 @@ const ARAssets = () => {
                 </p>
               </div>
               <button
-                className="btn-primary flex-center gap-2"
+                className="btn-primary flex-center gap-2 whitespace-nowrap"
                 onClick={() => {
                   resetPoseForm();
                   setIsPoseModalOpen(true);

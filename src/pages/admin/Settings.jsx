@@ -495,7 +495,7 @@ const Settings = () => {
                 Configure default store opening & closing times. Any day marked as Closed will automatically block appointment booking in Mobile and Admin.
               </p>
 
-              <div className="table-responsive mb-6">
+              <div className="table-container mb-6">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -609,7 +609,7 @@ const Settings = () => {
                 </button>
               </form>
 
-              <div className="table-responsive max-w-xl">
+              <div className="table-container max-w-xl">
                 <table className="data-table">
                   <thead>
                     <tr>

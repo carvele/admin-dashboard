@@ -171,30 +171,34 @@ export const AuthProvider = ({ children }) => {
 
       let visitorId = null;
       try {
-        const fp = await withTimeout(FingerprintJS.load(), 3000);
+        const fp = await withTimeout(FingerprintJS.load(), 6000);
         const result = await fp.get();
         visitorId = result.visitorId;
         const hashed = await hashFP(visitorId);
         localStorage.setItem('_jz_fp_hash', hashed);
       } catch {
-        // FingerprintJS failed — try to reuse a previously stored ID via a
-        // fallback random token (the hash of the old value is lost, but we
-        // generate a new stable one).
+        // FingerprintJS failed/blocked (e.g. ad-blocker or offline) — check for persistent fallback UUID
+        const DEVICE_UUID_KEY = '_jz_device_uuid';
         const legacyStored = localStorage.getItem('_jz_fp_id');
         if (legacyStored) {
           try { visitorId = atob(legacyStored); } catch { /* ignore */ }
-          // Migrate legacy base64 to hashed format
           if (visitorId) {
-            const hashed = await hashFP(visitorId);
-            localStorage.setItem('_jz_fp_hash', hashed);
+            localStorage.setItem(DEVICE_UUID_KEY, visitorId);
             localStorage.removeItem('_jz_fp_id');
           }
         }
         if (!visitorId) {
-          visitorId = 'sb_' + Math.random().toString(36).substr(2, 9);
-          const hashed = await hashFP(visitorId);
-          localStorage.setItem('_jz_fp_hash', hashed);
+          visitorId = localStorage.getItem(DEVICE_UUID_KEY);
         }
+        if (!visitorId) {
+          const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
+            ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+            : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+          visitorId = 'sb_' + randSuffix;
+          localStorage.setItem(DEVICE_UUID_KEY, visitorId);
+        }
+        const hashed = await hashFP(visitorId);
+        localStorage.setItem('_jz_fp_hash', hashed);
       }
       setDeviceFingerprint(visitorId);
 

@@ -288,5 +288,9 @@ model-viewer {
   .pose-grid {
     grid-template-columns: 1fr;
   }
+  .pose-header-area .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
 }
 

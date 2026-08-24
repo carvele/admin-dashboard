@@ -7,6 +7,7 @@ import {
   deleteAnnouncement,
 } from '../../services/announcementService';
 import { Plus, Trash2, Megaphone, Bell } from 'lucide-react';
+import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './Announcements.css';
 
@@ -29,7 +30,7 @@ const Announcements = () => {
       setIsLoading(true);
       const data = await getAnnouncements();
       setAnnouncements(data);
-    } catch {
+    } catch (error) {
       toast.error('Failed to load announcements');
     } finally {
       setIsLoading(false);
@@ -42,7 +43,10 @@ const Announcements = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -57,19 +61,22 @@ const Announcements = () => {
         title: formData.title,
         body: formData.body,
         type: formData.type,
-        created_by: user.uid,
+        created_by: user?.uid || user?.id,
       };
-      
       if (formData.expires_at) {
         payload.expires_at = new Date(formData.expires_at).toISOString();
       }
-
       await createAnnouncement(payload);
       toast.success('Announcement broadcasted successfully');
       setIsModalOpen(false);
-      setFormData({ title: '', body: '', type: 'promo', expires_at: '' });
+      setFormData({
+        title: '',
+        body: '',
+        type: 'promo',
+        expires_at: '',
+      });
       fetchAnnouncements();
-    } catch {
+    } catch (error) {
       toast.error('Failed to create announcement');
     }
   };
@@ -79,23 +86,20 @@ const Announcements = () => {
   };
 
   const executeDelete = async () => {
-    const id = deleteConfirmId;
-    setDeleteConfirmId(null);
+    if (!deleteConfirmId) return;
     try {
-      await deleteAnnouncement(id);
+      await deleteAnnouncement(deleteConfirmId);
       toast.success('Announcement deleted');
+      setDeleteConfirmId(null);
       fetchAnnouncements();
-    } catch {
+    } catch (error) {
       toast.error('Failed to delete announcement');
     }
   };
 
   const getStatusBadge = (announcement) => {
-    if (announcement.expires_at) {
-      const isExpired = new Date(announcement.expires_at) < new Date();
-      if (isExpired) {
-        return <span className="badge expired">Expired</span>;
-      }
+    if (announcement.expires_at && new Date(announcement.expires_at) < new Date()) {
+      return <span className="badge expired">Expired</span>;
     }
     return <span className="badge active">Active</span>;
   };
@@ -110,13 +114,16 @@ const Announcements = () => {
 
   return (
     <div className="announcements-page">
-      <div className="announcements-header">
-        <h1>Broadcast Announcements</h1>
-        <button className="create-btn" onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} />
-          New Broadcast
-        </button>
-      </div>
+      <PageHeader
+        category="MARKETING & COMMUNICATIONS"
+        title="Broadcast Announcements"
+        subtitle="Push broadcast messages, promotional alerts, and system notices to mobile users."
+        actions={
+          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={18} /> New Broadcast
+          </button>
+        }
+      />
 
       {announcements.length === 0 ? (
         <div className="empty-state">
@@ -159,11 +166,11 @@ const Announcements = () => {
       )}
 
       {isModalOpen && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-broadcast-title">
           <div className="modal-content">
             <div className="modal-header">
-              <h2>New Broadcast</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+              <h2 id="modal-broadcast-title">New Broadcast</h2>
+              <button className="close-btn" onClick={() => setIsModalOpen(false)} aria-label="Close modal">
                 &times;
               </button>
             </div>

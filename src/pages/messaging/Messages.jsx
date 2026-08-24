@@ -895,8 +895,10 @@ const Messages = () => {
               )}
 
               <span className="msg-time">
-                {msgTime}
-                {msg.editedAt ? ' · edited' : ''}
+                {isSent && expandedMsgId === (msg.id || msg.docId) && (msg.readAt || msg.deliveredAt)
+                  ? (msg.editedAt ? 'edited' : '')
+                  : `${msgTime}${msg.editedAt ? ' · edited' : ''}`
+                }
               </span>
 
               {/* Edit trigger (own text messages only, visible on hover) */}
@@ -1357,7 +1359,7 @@ const Messages = () => {
             <input
               type="text"
               className="input-field chat-input"
-              placeholder={editingMsg ? 'Edit your message...' : 'Type your message...'}
+              placeholder={editingMsg ? 'Edit message…' : 'Message…'}
               value={newMessage}
               onChange={(e) => handleMessageInputChange(e.target.value)}
             />
