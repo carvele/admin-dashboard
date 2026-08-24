@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Clock3, Laptop, Pencil, RefreshCw, Scissors, ShieldAlert, ShieldCheck, Trash2, X, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
-import PageHeader from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './DeviceManagement.css';
 
@@ -171,7 +171,7 @@ const DeviceManagement = () => {
         title="Device Management"
         subtitle="Review and control which devices can access the admin dashboard."
         actions={
-          <div className="device-header-actions">
+          <div className="device-header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="btn-outline btn-prune" onClick={() => setPruneConfirmOpen(true)} disabled={loading}>
               <Scissors size={16} /> Prune Inactive
             </button>
@@ -284,3 +284,4 @@ const DeviceManagement = () => {
 };
 
 export default DeviceManagement;
+

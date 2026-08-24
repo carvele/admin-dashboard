@@ -248,3 +248,18 @@
   border-radius: 8px;
 }
 
+/* ── Mobile: Stack store hours table ── */
+@media (max-width: 640px) {
+  .data-table th,
+  .data-table td {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.78rem;
+  }
+  .data-table .input-field {
+    min-width: 60px;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.8rem;
+  }
+}
+
+

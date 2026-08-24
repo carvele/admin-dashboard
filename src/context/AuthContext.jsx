@@ -177,28 +177,29 @@ export const AuthProvider = ({ children }) => {
         const hashed = await hashFP(visitorId);
         localStorage.setItem('_jz_fp_hash', hashed);
       } catch {
-        // FingerprintJS failed — try to reuse a previously stored ID via a
-        // fallback random token (the hash of the old value is lost, but we
-        // generate a new stable one).
+        // FingerprintJS failed/blocked (e.g. ad-blocker or offline) — check for persistent fallback UUID
+        const DEVICE_UUID_KEY = '_jz_device_uuid';
         const legacyStored = localStorage.getItem('_jz_fp_id');
         if (legacyStored) {
           try { visitorId = atob(legacyStored); } catch { /* ignore */ }
-          // Migrate legacy base64 to hashed format
           if (visitorId) {
-            const hashed = await hashFP(visitorId);
-            localStorage.setItem('_jz_fp_hash', hashed);
+            localStorage.setItem(DEVICE_UUID_KEY, visitorId);
             localStorage.removeItem('_jz_fp_id');
           }
         }
         // Stable fallback: reuse an existing fallback ID from localStorage or
         // a long-lived cookie before generating a brand-new random one.
         if (!visitorId) {
-          const storedFallback = localStorage.getItem('_jz_fallback_device_id');
+          const storedFallback = localStorage.getItem('_jz_fallback_device_id') || localStorage.getItem(DEVICE_UUID_KEY);
           const cookieFallback = document.cookie.match(/(?:^|; )_jz_fp_cookie=([^;]*)/)?.[1];
           visitorId = storedFallback || cookieFallback || null;
         }
         if (!visitorId) {
-          visitorId = 'sb_' + Math.random().toString(36).substr(2, 9);
+          const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
+            ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+            : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+          visitorId = 'sb_' + randSuffix;
+          localStorage.setItem(DEVICE_UUID_KEY, visitorId);
         }
         // Persist the fallback ID in both localStorage and a long-lived cookie
         // so subsequent sessions always reuse the same device identity.

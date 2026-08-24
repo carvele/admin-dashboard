@@ -95,6 +95,9 @@
   grid-template-columns: 2fr 1fr;
   gap: 1.5rem;
 }
+.charts-grid--single {
+  grid-template-columns: 1fr;
+}
 
 .chart-card {
   display: flex;
@@ -114,13 +117,23 @@
 .small-select {
   padding: 0.4rem 2rem 0.4rem 0.75rem;
   font-size: 0.875rem;
+  border-radius: 6px;
   width: auto;
   min-width: 120px;
 }
 
 .chart-container {
-  flex: 1;
-  min-height: 300px;
+  height: 300px;
+  width: 100%;
+}
+
+.empty-state-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 260px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .pie-container {

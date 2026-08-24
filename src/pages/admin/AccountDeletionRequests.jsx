@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { UserX, Mail, Phone, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
 import { toast } from 'sonner';
@@ -24,10 +25,10 @@ const AccountDeletionRequests = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const rows = await getPendingDeletionRequests();
-      setRequests(rows);
+      const data = await getPendingDeletionRequests();
+      setRequests(data || []);
     } catch (e) {
-      toast.error('Failed to load deletion requests: ' + (e?.message || 'unknown error'));
+      toast.error('Failed to load deletion requests');
     } finally {
       setLoading(false);
     }
@@ -42,10 +43,10 @@ const AccountDeletionRequests = () => {
     setObligations(null);
     setObligationsLoading(true);
     try {
-      const result = await getBlockingObligations(req.userId);
-      setObligations(result);
+      const obl = await getBlockingObligations(req.userId || req.user_id);
+      setObligations(obl);
     } catch (e) {
-      toast.error('Could not check for open reservations/payments: ' + (e?.message || 'unknown error'));
+      toast.error('Could not check active obligations for this customer');
     } finally {
       setObligationsLoading(false);
     }
@@ -82,10 +83,6 @@ const AccountDeletionRequests = () => {
         toast.success(`Account deleted for ${reviewing.customerName}.`);
       }
 
-      // process_account_deletion now logs this itself server-side
-      // (guaranteed, not dependent on this client call succeeding) --
-      // see jezsy-mobile-app's audit_log_hardening migration.
-
       setReviewing(null);
       setObligations(null);
       setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
@@ -108,9 +105,6 @@ const AccountDeletionRequests = () => {
     try {
       await rejectAccountDeletion(reviewing.docId);
       toast.success(`Deletion request declined for ${reviewing.customerName}.`);
-      // reject_account_deletion_request now logs this itself server-side
-      // (guaranteed, not dependent on this client call succeeding) --
-      // see jezsy-mobile-app's audit_log_hardening migration.
       setReviewing(null);
       setObligations(null);
       setRequests((prev) => prev.filter((r) => r.docId !== reviewing.docId));
@@ -124,9 +118,9 @@ const AccountDeletionRequests = () => {
   return (
     <div className="page-container">
       <PageHeader
-        category="PRIVACY"
+        category="PRIVACY & COMPLIANCE"
         title="Account Deletion Requests"
-        subtitle="Review and process user account data erasure requests under privacy compliance."
+        subtitle="Customer-initiated requests to delete their account. Each request is reviewed and processed manually."
       />
 
       <div className="card">

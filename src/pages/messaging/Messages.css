@@ -183,7 +183,7 @@
 
 .chat-history {
   flex: 1;
-  padding: 1.5rem;
+  padding: 1.5rem 1.5rem 2rem;
   overflow-y: auto;
   background-color: var(--cream);
   display: flex;
@@ -281,6 +281,11 @@
   border-radius: 10px;
   margin-bottom: 6px;
   text-transform: uppercase;
+}
+
+[data-theme='dark'] .auto-response-badge {
+  color: #fbcfe8;
+  background-color: rgba(236, 72, 153, 0.25);
 }
 
 .outfit-suggestion-card {
@@ -599,6 +604,17 @@
 }
 .edit-trigger {
   right: 26px;
+}
+
+/* On touch devices, keep reaction triggers visible (semi-transparent & non-intrusive) */
+@media (hover: none) {
+  .reaction-trigger {
+    opacity: 0.6 !important;
+  }
+  .reaction-trigger:active {
+    opacity: 1 !important;
+    transform: scale(1.15);
+  }
 }
 
 /* ── Typing bubble (three-dot wave, mirrors the mobile app's) ── */

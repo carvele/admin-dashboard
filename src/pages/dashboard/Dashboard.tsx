@@ -382,9 +382,7 @@ const Dashboard = () => {
         )}
       </motion.div>
 
-      <div className="charts-grid" style={{
-        gridTemplateColumns: (!widgetPrefs.chartReservationTrends || !widgetPrefs.chartPopularOutfits) ? '1fr' : '2fr 1fr'
-      }}>
+      <div className={`charts-grid${(!widgetPrefs.chartReservationTrends || !widgetPrefs.chartPopularOutfits) ? ' charts-grid--single' : ''}`}>
         {widgetPrefs.chartReservationTrends && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -422,7 +420,7 @@ const Dashboard = () => {
                   tickLine={false}
                   tick={{ fill: '#6B6B6B' }}
                 />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B' }} allowDecimals={false} />
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <Tooltip />
                 <Area
@@ -453,36 +451,44 @@ const Dashboard = () => {
             </button>
           </div>
           <div className="chart-container pie-container">
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={finalPopular}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
-                >
+            {computedPopular.length === 0 ? (
+              <div className="empty-state-placeholder">
+                <p>No outfit data yet</p>
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={finalPopular}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {finalPopular.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pie-legend">
                   {finalPopular.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <div key={index} className="legend-item">
+                      <span
+                        className="legend-dot"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      ></span>
+                      <span className="legend-text">{finalPopular[index].name}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pie-legend">
-              {finalPopular.map((_entry, index) => (
-                <div key={index} className="legend-item">
-                  <span
-                    className="legend-dot"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  ></span>
-                  <span className="legend-text">{finalPopular[index].name}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         </motion.div>
         )}
