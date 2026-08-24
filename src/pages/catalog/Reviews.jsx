@@ -4,7 +4,6 @@ import { getAllReviews, deleteReview } from '../../services/reviewService';
 import { Filter } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ReviewCard from '../../components/ReviewCard';
-import PageHeader from '../../components/PageHeader';
 import './Reviews.css';
 
 const Reviews = () => {
