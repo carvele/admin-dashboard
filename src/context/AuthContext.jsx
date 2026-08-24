@@ -215,51 +215,66 @@ export const AuthProvider = ({ children }) => {
 
       // --- 2. Register device through the server-side function. Staff have
       // read-only RLS access to devices; client-side inserts must not be used.
-      const { error: registrationError } = await supabase.functions.invoke('register-device', {
-        body: {
-          fingerprint: visitorId,
-          user_agent: navigator.userAgent,
-          staff_name: supabaseUser.user_metadata?.full_name || '',
-        },
-      });
-      if (registrationError) throw registrationError;
+      try {
+        const { error: registrationError } = await supabase.functions.invoke('register-device', {
+          body: {
+            fingerprint: visitorId,
+            user_agent: navigator.userAgent,
+            staff_name: supabaseUser.user_metadata?.full_name || '',
+          },
+        });
+        if (registrationError) {
+          console.warn('Device registration function returned an error:', registrationError);
+        }
+      } catch (invokeErr) {
+        console.warn('Device registration network call failed (may be offline or transient network change):', invokeErr);
+      }
 
       // --- 3. Start live device listener ---
       clearDeviceChannel();
-      const channel = supabase
-        .channel(`device:${visitorId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
-          async () => {
-            const { data } = await supabase
-              .from('devices')
-              .select('*')
-              .eq('fingerprint', visitorId)
-              .maybeSingle();
-            if (data) {
-              const row = toCamel(data);
-              setDeviceData(row);
-              setDeviceStatus(row.status);
-            }
-          },
-        )
-        .subscribe();
-      deviceChannelRef.current = channel;
+      try {
+        const channel = supabase
+          .channel(`device:${visitorId}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
+            async () => {
+              const { data } = await supabase
+                .from('devices')
+                .select('*')
+                .eq('fingerprint', visitorId)
+                .maybeSingle();
+              if (data) {
+                const row = toCamel(data);
+                setDeviceData(row);
+                setDeviceStatus(row.status);
+              }
+            },
+          )
+          .subscribe();
+        deviceChannelRef.current = channel;
+      } catch (channelErr) {
+        console.warn('Failed to subscribe to device realtime channel:', channelErr);
+      }
 
       // Initial device status fetch
-      const { data: deviceRow } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('fingerprint', visitorId)
-        .maybeSingle();
-      if (deviceRow) {
-        const row = toCamel(deviceRow);
-        setDeviceData(row);
-        setDeviceStatus(row.status);
-      } else {
-        // Never fail open. A missing device row means registration or lookup
-        // failed and must be reviewed, not silently approved.
+      try {
+        const { data: deviceRow } = await supabase
+          .from('devices')
+          .select('*')
+          .eq('fingerprint', visitorId)
+          .maybeSingle();
+        if (deviceRow) {
+          const row = toCamel(deviceRow);
+          setDeviceData(row);
+          setDeviceStatus(row.status);
+        } else {
+          // Never fail open. A missing device row means registration or lookup
+          // failed and must be reviewed, not silently approved.
+          setDeviceStatus('pending');
+        }
+      } catch (devLookupErr) {
+        console.warn('Device status lookup failed:', devLookupErr);
         setDeviceStatus('pending');
       }
 
