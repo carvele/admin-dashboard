@@ -9,6 +9,7 @@ import {
 import { Plus, Trash2, Megaphone, Bell } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PageHeader from '../../components/PageHeader';
 import './Announcements.css';
 
 const Announcements = () => {

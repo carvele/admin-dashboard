@@ -187,8 +187,12 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('_jz_fp_id');
           }
         }
+        // Stable fallback: reuse an existing fallback ID from localStorage or
+        // a long-lived cookie before generating a brand-new random one.
         if (!visitorId) {
-          visitorId = localStorage.getItem(DEVICE_UUID_KEY);
+          const storedFallback = localStorage.getItem('_jz_fallback_device_id') || localStorage.getItem(DEVICE_UUID_KEY);
+          const cookieFallback = document.cookie.match(/(?:^|; )_jz_fp_cookie=([^;]*)/)?.[1];
+          visitorId = storedFallback || cookieFallback || null;
         }
         if (!visitorId) {
           const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
@@ -197,6 +201,13 @@ export const AuthProvider = ({ children }) => {
           visitorId = 'sb_' + randSuffix;
           localStorage.setItem(DEVICE_UUID_KEY, visitorId);
         }
+        // Persist the fallback ID in both localStorage and a long-lived cookie
+        // so subsequent sessions always reuse the same device identity.
+        localStorage.setItem('_jz_fallback_device_id', visitorId);
+        try {
+          const maxAge = 365 * 24 * 60 * 60; // 1 year
+          document.cookie = `_jz_fp_cookie=${visitorId}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        } catch { /* cookie write failed — localStorage alone is fine */ }
         const hashed = await hashFP(visitorId);
         localStorage.setItem('_jz_fp_hash', hashed);
       }

@@ -217,3 +217,15 @@
   cursor: pointer;
   padding: 0.5rem;
 }
+
+@media (max-width: 640px) {
+  .filters-bar {
+    flex-direction: column;
+  }
+  .filter-select, .filter-input {
+    min-width: 100%;
+  }
+  .reviews-grid {
+    grid-template-columns: 1fr;
+  }
+}

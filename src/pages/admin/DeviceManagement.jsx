@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Clock3, Laptop, Pencil, RefreshCw, ShieldAlert, ShieldCheck, Trash2, X, XCircle } from 'lucide-react';
+import { Check, Clock3, Laptop, Pencil, RefreshCw, Scissors, ShieldAlert, ShieldCheck, Trash2, X, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './DeviceManagement.css';
 
 const STATUS_FILTERS = [
@@ -11,6 +12,8 @@ const STATUS_FILTERS = [
   { key: 'approved', label: 'Approved' },
   { key: 'revoked', label: 'Revoked' },
 ];
+
+const STALE_DAYS = 30;
 
 const formatDate = (value) => {
   if (!value) return 'Never';
@@ -23,8 +26,15 @@ const DeviceManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
+
+  // Inline rename state
+  const [editingFp, setEditingFp] = useState(null);
+  const [editingName, setEditingName] = useState('');
+
+  // Confirm dialogs
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [pruneConfirmOpen, setPruneConfirmOpen] = useState(false);
+  const [pruneLoading, setPruneLoading] = useState(false);
 
   const loadDevices = useCallback(async () => {
     setLoading(true);
@@ -72,62 +82,81 @@ const DeviceManagement = () => {
     await loadDevices();
   };
 
-  const deleteDevice = async (device) => {
-    const displayName = device.name || device.staff_name || device.fingerprint.slice(0, 12);
-    if (!window.confirm(`Are you sure you want to delete "${displayName}"? This device will need to re-register on its next visit.`)) {
-      return;
-    }
-    setBusyId(device.fingerprint);
-    const { error } = await supabase.from('devices').delete().eq('fingerprint', device.fingerprint);
+  // ── Single device deletion ──
+  const deleteDevice = async () => {
+    if (!deleteTarget) return;
+    setBusyId(deleteTarget.fingerprint);
+    const { error } = await supabase
+      .from('devices')
+      .delete()
+      .eq('fingerprint', deleteTarget.fingerprint);
     setBusyId(null);
+    setDeleteTarget(null);
     if (error) {
       toast.error('Device could not be deleted.');
       return;
     }
-    toast.success('Device deleted.');
+    toast.success('Device permanently removed.');
     await loadDevices();
   };
 
-  const pruneRevoked = async () => {
-    if (counts.revoked === 0) return;
-    if (!window.confirm(`Delete all ${counts.revoked} revoked device(s)? This action cannot be undone.`)) {
+  // ── Inline rename ──
+  const startEditing = (device) => {
+    setEditingFp(device.fingerprint);
+    setEditingName(device.name || device.staff_name || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingFp(null);
+    setEditingName('');
+  };
+
+  const saveNickname = async (fingerprint) => {
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      toast.error('Device name cannot be empty.');
       return;
     }
-    setLoading(true);
-    const { error } = await supabase.from('devices').delete().eq('status', 'revoked');
-    if (error) {
-      toast.error('Failed to prune revoked devices.');
-    } else {
-      toast.success(`Pruned ${counts.revoked} revoked device(s).`);
-    }
-    await loadDevices();
-  };
-
-  const handleStartEdit = (device) => {
-    setEditingId(device.fingerprint);
-    setEditName(device.name || '');
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditName('');
-  };
-
-  const handleSaveName = async (device) => {
-    const trimmed = editName.trim();
-    setBusyId(device.fingerprint);
+    setBusyId(fingerprint);
     const { error } = await supabase
       .from('devices')
-      .update({ name: trimmed || null, updated_at: new Date().toISOString() })
-      .eq('fingerprint', device.fingerprint);
+      .update({ name: trimmed, updated_at: new Date().toISOString() })
+      .eq('fingerprint', fingerprint);
     setBusyId(null);
+    cancelEditing();
     if (error) {
-      toast.error('Failed to update device nickname.');
+      toast.error('Failed to update device name.');
       return;
     }
-    toast.success('Device nickname updated.');
-    setEditingId(null);
-    setEditName('');
+    toast.success('Device name updated.');
+    await loadDevices();
+  };
+
+  // ── Prune inactive (revoked OR stale > 30 days) ──
+  const pruneInactive = async () => {
+    setPruneLoading(true);
+    const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    // Delete revoked devices
+    const { error: errRevoked } = await supabase
+      .from('devices')
+      .delete()
+      .eq('status', 'revoked');
+
+    // Delete devices not seen for > 30 days (regardless of status)
+    const { error: errStale } = await supabase
+      .from('devices')
+      .delete()
+      .lt('last_seen', cutoff);
+
+    setPruneLoading(false);
+    setPruneConfirmOpen(false);
+
+    if (errRevoked || errStale) {
+      toast.error('Some devices could not be pruned. Please try again.');
+      return;
+    }
+    toast.success('Inactive and revoked devices pruned.');
     await loadDevices();
   };
 
@@ -142,12 +171,10 @@ const DeviceManagement = () => {
         title="Device Management"
         subtitle="Review and control which devices can access the admin dashboard."
         actions={
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {counts.revoked > 0 && (
-              <button className="btn-outline" onClick={pruneRevoked} disabled={loading} style={{ color: 'var(--stock-low)' }}>
-                <Trash2 size={16} /> Prune Revoked ({counts.revoked})
-              </button>
-            )}
+          <div className="device-header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn-outline btn-prune" onClick={() => setPruneConfirmOpen(true)} disabled={loading}>
+              <Scissors size={16} /> Prune Inactive
+            </button>
             <button className="btn-outline" onClick={loadDevices} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
             </button>
@@ -178,50 +205,31 @@ const DeviceManagement = () => {
                 <div className="device-icon-wrap"><Laptop size={22} /></div>
                 <div className="device-info">
                   <div className="device-name-row">
-                    {editingId === device.fingerprint ? (
+                    {editingFp === device.fingerprint ? (
                       <div className="edit-name-flow">
                         <input
-                          type="text"
                           className="input-field small-input"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          placeholder="Device nickname..."
-                          autoFocus
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveName(device);
-                            if (e.key === 'Escape') handleCancelEdit();
+                            if (e.key === 'Enter') saveNickname(device.fingerprint);
+                            if (e.key === 'Escape') cancelEditing();
                           }}
+                          autoFocus
+                          aria-label="Device nickname"
                         />
-                        <button
-                          type="button"
-                          className="icon-btn-save"
-                          onClick={() => handleSaveName(device)}
-                          title="Save nickname"
-                          aria-label="Save nickname"
-                        >
+                        <button className="icon-btn-save" onClick={() => saveNickname(device.fingerprint)} disabled={busyId === device.fingerprint} aria-label="Save name">
                           <Check size={16} />
                         </button>
-                        <button
-                          type="button"
-                          className="icon-btn-cancel"
-                          onClick={handleCancelEdit}
-                          title="Cancel"
-                          aria-label="Cancel"
-                        >
+                        <button className="icon-btn-cancel" onClick={cancelEditing} aria-label="Cancel editing">
                           <X size={16} />
                         </button>
                       </div>
                     ) : (
                       <>
                         <h4>{device.name || device.staff_name || 'Unnamed device'}</h4>
-                        <button
-                          type="button"
-                          className="edit-icon-btn"
-                          onClick={() => handleStartEdit(device)}
-                          title="Edit nickname"
-                          aria-label="Edit nickname"
-                        >
-                          <Pencil size={13} />
+                        <button className="edit-icon-btn" onClick={() => startEditing(device)} aria-label="Rename device">
+                          <Pencil size={14} />
                         </button>
                       </>
                     )}
@@ -233,23 +241,9 @@ const DeviceManagement = () => {
                 <div className="device-actions">
                   <span className={`device-status status-${device.status || 'pending'}`}>{statusIcon(device.status)} {device.status || 'pending'}</span>
                   <div className="device-btns">
-                    {device.status !== 'approved' && (
-                      <button className="btn-sm btn-approve" disabled={busyId === device.fingerprint} onClick={() => updateStatus(device, 'approved')}>
-                        <Check size={14} /> Approve
-                      </button>
-                    )}
-                    {device.status !== 'revoked' && (
-                      <button className="btn-sm btn-revoke" disabled={busyId === device.fingerprint} onClick={() => updateStatus(device, 'revoked')}>
-                        <XCircle size={14} /> Revoke
-                      </button>
-                    )}
-                    <button
-                      className="btn-sm btn-delete"
-                      disabled={busyId === device.fingerprint}
-                      onClick={() => deleteDevice(device)}
-                      title="Delete device"
-                      aria-label="Delete device"
-                    >
+                    {device.status !== 'approved' && <button className="btn-sm btn-approve" disabled={busyId === device.fingerprint} onClick={() => updateStatus(device, 'approved')}><Check size={14} /> Approve</button>}
+                    {device.status !== 'revoked' && <button className="btn-sm btn-revoke" disabled={busyId === device.fingerprint} onClick={() => updateStatus(device, 'revoked')}><XCircle size={14} /> Revoke</button>}
+                    <button className="btn-sm btn-delete" disabled={busyId === device.fingerprint} onClick={() => setDeleteTarget(device)} aria-label="Delete device">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -259,6 +253,32 @@ const DeviceManagement = () => {
           </div>
         )}
       </section>
+
+      {/* Confirm: delete single device */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Device"
+        message={`Permanently remove "${deleteTarget?.name || deleteTarget?.staff_name || 'this device'}" from the device registry? This cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDestructive={true}
+        isLoading={busyId === deleteTarget?.fingerprint}
+        onConfirm={deleteDevice}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Confirm: prune inactive devices */}
+      <ConfirmDialog
+        isOpen={pruneConfirmOpen}
+        title="Prune Inactive Devices"
+        message={`This will permanently delete all revoked devices and any device not seen in the last ${STALE_DAYS} days. Active and recently seen devices are never affected.`}
+        confirmText="Prune Now"
+        cancelText="Cancel"
+        isDestructive={true}
+        isLoading={pruneLoading}
+        onConfirm={pruneInactive}
+        onCancel={() => setPruneConfirmOpen(false)}
+      />
     </div>
   );
 };

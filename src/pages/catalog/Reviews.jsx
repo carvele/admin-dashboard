@@ -4,6 +4,7 @@ import { getAllReviews, deleteReview } from '../../services/reviewService';
 import { Filter } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ReviewCard from '../../components/ReviewCard';
+import PageHeader from '../../components/PageHeader';
 import './Reviews.css';
 
 const Reviews = () => {
@@ -86,7 +87,7 @@ const Reviews = () => {
         </div>
       </div>
 
-      {isLoading && reviews.length === 0 ? (
+        {isLoading && reviews.length === 0 ? (
         <div className="flex-center-vh">
           <div className="loading-spinner" role="status" aria-label="Loading reviews" />
         </div>
