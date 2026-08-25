@@ -45,6 +45,7 @@ import {
   settleReservationBalance,
   resolveRescheduleRequest,
   getPaymentsForReservation,
+  autoCancelExpiredReservations,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -127,6 +128,19 @@ const Reservations = () => {
 
   useEffect(() => {
     setLoading(true);
+
+    // Initial sweep to auto-cancel any expired reservations whose appointment date/time or payment deadline passed
+    const runAutoCancel = () => {
+      autoCancelExpiredReservations().then((cancelledIds) => {
+        if (cancelledIds && cancelledIds.length > 0) {
+          toast.info(`Auto-cancelled ${cancelledIds.length} expired reservation(s) whose appointment date or payment deadline passed.`);
+        }
+      }).catch(console.warn);
+    };
+
+    runAutoCancel();
+    const sweepTimer = setInterval(runAutoCancel, 60000);
+
     // Real-time Reservations Listener
     const unsubR = subscribeToReservations((data) => {
       // Auto-healing for broken data (Names or Product Names)
@@ -155,6 +169,7 @@ const Reservations = () => {
     });
 
     return () => {
+      clearInterval(sweepTimer);
       unsubR();
       unsubI();
       unsubC();

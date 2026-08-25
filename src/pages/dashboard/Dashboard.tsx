@@ -37,7 +37,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 // @ts-ignore
-import { getReservations } from '../../services/reservationService';
+import { getReservations, autoCancelExpiredReservations } from '../../services/reservationService';
 // @ts-ignore
 import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
 
@@ -86,6 +86,7 @@ const Dashboard = () => {
   
   const loadDashboard = React.useCallback(async () => {
     try {
+      await autoCancelExpiredReservations().catch(console.warn);
       const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
         getReservations(100),
         getCustomers(100),
