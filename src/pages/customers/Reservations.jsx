@@ -195,10 +195,15 @@ const Reservations = () => {
   };
 
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'All');
-  // Board first: the day-to-day job is working the queue, and a flat table
-  // gave no sense of what needs doing next. List view is still there for
-  // scanning history.
-  const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'board');
+  // Board first: the day-to-day job is working the queue. List view (table) is for
+  // scanning history like Cancelled or Completed reservations.
+  const [viewMode, setViewMode] = useState(() => {
+    const paramView = searchParams.get('view');
+    if (paramView) return paramView;
+    const paramStatus = searchParams.get('status');
+    if (paramStatus === 'Cancelled' || paramStatus === 'Completed') return 'table';
+    return 'board';
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
@@ -824,7 +829,13 @@ const Reservations = () => {
               className="input-field"
               style={{ width: 'auto', minWidth: 150 }}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setStatusFilter(val);
+                if ((val === 'Cancelled' || val === 'Completed') && viewMode === 'board') {
+                  setViewMode('table');
+                }
+              }}
               aria-label="Filter by reservation status"
             >
               <option value="All">All Statuses</option>
@@ -837,6 +848,18 @@ const Reservations = () => {
             </select>
           </div>
         </div>
+
+        {viewMode === 'board' && (statusFilter === 'Cancelled' || statusFilter === 'Completed') && (
+          <div className="alert-banner info-banner flex-between p-3 mb-4 rounded-lg" style={{ background: 'var(--accent-light, #f5efe6)', border: '1px solid var(--accent-color, #c9beb4)', color: 'var(--text-primary)', margin: '16px' }}>
+            <div className="flex-center gap-2">
+              <Clock size={16} />
+              <span><strong>{statusFilter}</strong> reservations are historical records. View them in <strong>List View</strong>.</span>
+            </div>
+            <button className="btn-sm btn-primary" onClick={() => setViewMode('table')}>
+              Switch to List View
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="p-4"><SkeletonTable columns={7} rows={5} /></div>
@@ -1462,9 +1485,18 @@ const Reservations = () => {
                     color: 'var(--stock-low)',
                     fontSize: '0.85rem',
                     fontWeight: 600,
+                    marginBottom: '12px',
+                    padding: '8px 12px',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    borderRadius: '6px',
                   }}
                 >
-                  This reservation was cancelled
+                  <div>This reservation was cancelled</div>
+                  {(viewModal.cancellationReason || viewModal.cancellation_reason) && (
+                    <div style={{ fontSize: '0.8rem', fontWeight: 400, marginTop: '4px', opacity: 0.9, color: 'var(--text-secondary)' }}>
+                      Reason: {viewModal.cancellationReason || viewModal.cancellation_reason}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="detail-row">
