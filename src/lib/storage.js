@@ -129,6 +129,30 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
  * Uploads a file to Cloudinary and returns the { secure_url, public_id } object.
  */
 const getEnv = (key) => {
+  if (key === 'VITE_CLOUDINARY_CLOUD_NAME') {
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME) {
+        return import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      }
+    } catch {}
+    if (typeof process !== 'undefined' && process.env?.VITE_CLOUDINARY_CLOUD_NAME) {
+      return process.env.VITE_CLOUDINARY_CLOUD_NAME;
+    }
+    return 'dlrlgp4bq';
+  }
+
+  if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') {
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET) {
+        return import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+      }
+    } catch {}
+    if (typeof process !== 'undefined' && process.env?.VITE_CLOUDINARY_UPLOAD_PRESET) {
+      return process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+    }
+    return 'ml_style_items';
+  }
+
   try {
     const meta = new Function('return import.meta')();
     if (meta && meta.env && meta.env[key]) {
@@ -146,8 +170,8 @@ const getEnv = (key) => {
 export const uploadToCloudinary = async (file, retries = 2) => {
   if (!file) throw new Error('No file provided');
 
-  const cloudName = getEnv('VITE_CLOUDINARY_CLOUD_NAME');
-  const uploadPreset = getEnv('VITE_CLOUDINARY_UPLOAD_PRESET');
+  const cloudName = getEnv('VITE_CLOUDINARY_CLOUD_NAME') || 'dlrlgp4bq';
+  const uploadPreset = getEnv('VITE_CLOUDINARY_UPLOAD_PRESET') || 'ml_style_items';
 
   if (!cloudName || !uploadPreset) {
     const error = new Error('Cloudinary configuration missing. Please check VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your .env file.');
