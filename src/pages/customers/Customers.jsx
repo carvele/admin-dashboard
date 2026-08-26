@@ -788,6 +788,8 @@ const Customers = () => {
                   {isEditing ? (
                     <>
                       <input
+                        id="customer-edit-email"
+                        name="customer-email"
                         type="email"
                         className="input-field"
                         placeholder="Email"
@@ -795,6 +797,8 @@ const Customers = () => {
                         onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                       />
                       <input
+                        id="customer-edit-phone"
+                        name="customer-phone"
                         type="text"
                         className="input-field mt-2"
                         placeholder="Phone"
@@ -908,60 +912,42 @@ const Customers = () => {
                     <div className="measurements-grid">
                       <div className="measure-box">
                         <span>Bust</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.topBust}
+                        <input id="cust-measure-topBust" name="topBust" type="number" className="input-field" value={editForm.topBust || ''}
                           onChange={(e) => setEditForm({ ...editForm, topBust: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Under Bust</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.underBust || ''}
+                        <input id="cust-measure-underBust" name="underBust" type="number" className="input-field" value={editForm.underBust || ''}
                           onChange={(e) => setEditForm({ ...editForm, underBust: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Waist</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.waist}
+                        <input id="cust-measure-waist" name="waist" type="number" className="input-field" value={editForm.waist || ''}
                           onChange={(e) => setEditForm({ ...editForm, waist: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Hips</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.hip}
+                        <input id="cust-measure-hip" name="hip" type="number" className="input-field" value={editForm.hip || ''}
                           onChange={(e) => setEditForm({ ...editForm, hip: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Neck</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.neck || ''}
+                        <input id="cust-measure-neck" name="neck" type="number" className="input-field" value={editForm.neck || ''}
                           onChange={(e) => setEditForm({ ...editForm, neck: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Shoulder</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.shoulderWidth || ''}
+                        <input id="cust-measure-shoulderWidth" name="shoulderWidth" type="number" className="input-field" value={editForm.shoulderWidth || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, shoulderWidth: e.target.value })
                           }
@@ -970,30 +956,21 @@ const Customers = () => {
                       </div>
                       <div className="measure-box">
                         <span>Arm Length</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.armLength || ''}
+                        <input id="cust-measure-armLength" name="armLength" type="number" className="input-field" value={editForm.armLength || ''}
                           onChange={(e) => setEditForm({ ...editForm, armLength: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Back Length</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.backLength || ''}
+                        <input id="cust-measure-backLength" name="backLength" type="number" className="input-field" value={editForm.backLength || ''}
                           onChange={(e) => setEditForm({ ...editForm, backLength: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Inside Leg</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.insideLegLength || ''}
+                        <input id="cust-measure-insideLegLength" name="insideLegLength" type="number" className="input-field" value={editForm.insideLegLength || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, insideLegLength: e.target.value })
                           }
@@ -1002,20 +979,14 @@ const Customers = () => {
                       </div>
                       <div className="measure-box">
                         <span>Height (cm)</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.height}
+                        <input id="cust-measure-height" name="height" type="number" className="input-field" value={editForm.height || ''}
                           onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Weight (kg)</span>
-                        <input
-                          type="number"
-                          className="input-field"
-                          value={editForm.weight || ''}
+                        <input id="cust-measure-weight" name="weight" type="number" className="input-field" value={editForm.weight || ''}
                           onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
                           placeholder="—"
                         />

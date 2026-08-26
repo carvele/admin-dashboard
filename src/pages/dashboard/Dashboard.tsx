@@ -760,14 +760,14 @@ const Dashboard = () => {
                   <div className="pref-item">
                     <span className="pref-label">Reservation Trends</span>
                     <label className="toggle-switch" aria-label="Toggle Reservation Trends">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartReservationTrends} onChange={() => togglePref('chartReservationTrends')} />
+                      <input type="checkbox" id="pref-chart-trends" name="pref-chart-trends" className="toggle-input" checked={widgetPrefs.chartReservationTrends} onChange={() => togglePref('chartReservationTrends')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Popular Outfits</span>
                     <label className="toggle-switch" aria-label="Toggle Popular Outfits">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.chartPopularOutfits} onChange={() => togglePref('chartPopularOutfits')} />
+                      <input type="checkbox" id="pref-chart-popular" name="pref-chart-popular" className="toggle-input" checked={widgetPrefs.chartPopularOutfits} onChange={() => togglePref('chartPopularOutfits')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
@@ -780,35 +780,35 @@ const Dashboard = () => {
                   <div className="pref-item">
                     <span className="pref-label">Low Stock Alerts</span>
                     <label className="toggle-switch" aria-label="Toggle Low Stock Alerts">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLowStock} onChange={() => togglePref('widgetLowStock')} />
+                      <input type="checkbox" id="pref-widget-lowstock" name="pref-widget-lowstock" className="toggle-input" checked={widgetPrefs.widgetLowStock} onChange={() => togglePref('widgetLowStock')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Recent Customers</span>
                     <label className="toggle-switch" aria-label="Toggle Recent Customers">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
+                      <input type="checkbox" id="pref-widget-customers" name="pref-widget-customers" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Logistics Monitor</span>
                     <label className="toggle-switch" aria-label="Toggle Logistics Monitor">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetLogistics} onChange={() => togglePref('widgetLogistics')} />
+                      <input type="checkbox" id="pref-widget-logistics" name="pref-widget-logistics" className="toggle-input" checked={widgetPrefs.widgetLogistics} onChange={() => togglePref('widgetLogistics')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Activity Pulse</span>
                     <label className="toggle-switch" aria-label="Toggle Activity Pulse">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetActivityFeed} onChange={() => togglePref('widgetActivityFeed')} />
+                      <input type="checkbox" id="pref-widget-activity" name="pref-widget-activity" className="toggle-input" checked={widgetPrefs.widgetActivityFeed} onChange={() => togglePref('widgetActivityFeed')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
                     <span className="pref-label">Operational Insights</span>
                     <label className="toggle-switch" aria-label="Toggle Operational Insights">
-                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetWeather} onChange={() => togglePref('widgetWeather')} />
+                      <input type="checkbox" id="pref-widget-weather" name="pref-widget-weather" className="toggle-input" checked={widgetPrefs.widgetWeather} onChange={() => togglePref('widgetWeather')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>

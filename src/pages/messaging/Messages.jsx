@@ -978,6 +978,8 @@ const Messages = () => {
     <div className="messages-layout" data-mobile-view={mobileView}>
       {/* Hidden file input for image upload */}
       <input
+        id="messages-file-upload"
+        name="messages-file-upload"
         type="file"
         accept="image/*"
         ref={imageInputRef}
@@ -1579,6 +1581,8 @@ const Messages = () => {
               <div className="search-box full-width mb-3">
                 <Search size={18} className="search-icon" />
                 <input
+                  id="messages-new-cust-search"
+                  name="messages-new-cust-search"
                   type="text"
                   placeholder="Search customers by name or email..."
                   className="input-field pl-10"

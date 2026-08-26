@@ -58,8 +58,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       <label>{label}</label>
       <div className="slider-row">
         <span>X:</span>
-        <input 
-          type="range" min="-1" max="1" step="0.01" 
+        <input id="ar-pos-x" name="ar-pos-x" type="range" min="-1" max="1" step="0.01" 
           value={p.x} onChange={(e) => handleUpdate('x', e.target.value)}
           aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
         />
@@ -67,8 +66,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       </div>
       <div className="slider-row">
         <span>Y:</span>
-        <input 
-          type="range" min="0" max="2" step="0.01" 
+        <input id="ar-pos-y" name="ar-pos-y" type="range" min="0" max="2" step="0.01" 
           value={p.y} onChange={(e) => handleUpdate('y', e.target.value)}
           aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
         />
@@ -76,8 +74,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       </div>
       <div className="slider-row">
         <span>Z:</span>
-        <input 
-          type="range" min="-1" max="1" step="0.01" 
+        <input id="ar-pos-z" name="ar-pos-z" type="range" min="-1" max="1" step="0.01" 
           value={p.z} onChange={(e) => handleUpdate('z', e.target.value)}
           aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
         />

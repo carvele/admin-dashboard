@@ -888,7 +888,7 @@ const ProductForm = ({ readOnly = false }) => {
                    </label>
                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600">₱</span>
-                      <input type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
+                      <input id="product-saleprice" type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
                    </div>
                 </div>
               )}
@@ -942,7 +942,7 @@ const ProductForm = ({ readOnly = false }) => {
               <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all">
                 <Upload size={24} className="text-gray-400 mb-2" />
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
-                <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
+                <input id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
               </label>
            </div>
 
