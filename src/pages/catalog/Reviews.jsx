@@ -63,8 +63,10 @@ const Reviews = () => {
         </div>
         <div className="filters-bar">
           <input
+            id="search-reviews"
+            name="search-reviews"
             type="text"
-            placeholder="Search by product name…"
+            placeholder="Search by product name."
             className="filter-input"
             value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); setPage(1); }}

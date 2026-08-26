@@ -674,7 +674,7 @@ const Settings = () => {
                   <p>Receive alerts when a customer books a new reservation</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle new reservation alerts">
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" id="setting-alert-new-res" name="setting-alert-new-res" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
               </div>
@@ -685,7 +685,7 @@ const Settings = () => {
                   <p>Receive Daily digests of items running low in stock</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle low stock alerts">
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" id="setting-alert-low-stock" name="setting-alert-low-stock" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
               </div>
@@ -696,7 +696,7 @@ const Settings = () => {
                   <p>Sound alerts for incoming customer messages</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle direct message alerts">
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" id="setting-alert-dm" name="setting-alert-dm" defaultChecked />
                   <span className="toggle-slider"></span>
                 </label>
               </div>
