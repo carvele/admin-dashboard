@@ -368,6 +368,8 @@ const Analytics = () => {
               <div className="search-box">
                 <Calendar size={18} className="search-icon" />
                 <select
+                  id="analytics-date-preset"
+                  name="analyticsDatePreset"
                   aria-label="Date range preset"
                   className="input-field pl-10 bg-transparent border-none font-medium"
                   value={dateRange}
@@ -383,16 +385,22 @@ const Analytics = () => {
               
               <div className="flex-center gap-2 ml-4 date-inputs-row">
                 <input 
+                  id="analytics-start-date"
+                  name="analyticsStartDate"
                   type="date" 
                   aria-label="Start date"
+                  autoComplete="off"
                   className="input-field small-date" 
                   value={startDate} 
                   onChange={(e) => { setStartDate(e.target.value); setDateRange('custom'); }}
                 />
                 <span className="text-secondary">to</span>
                 <input 
+                  id="analytics-end-date"
+                  name="analyticsEndDate"
                   type="date" 
                   aria-label="End date"
+                  autoComplete="off"
                   className="input-field small-date" 
                   value={endDate} 
                   onChange={(e) => { setEndDate(e.target.value); setDateRange('custom'); }}

@@ -239,9 +239,11 @@ const ActivityLog = () => {
             <Search size={16} aria-hidden="true" />
             <input
               id="al-search"
+              name="alSearch"
               type="text"
               className="input-field"
               placeholder="e.g. restock, archived"
+              autoComplete="off"
               value={actionSearch}
               onChange={(e) => setActionSearch(e.target.value)}
             />
@@ -291,8 +293,10 @@ const ActivityLog = () => {
           <label className="al-filter-label" htmlFor="al-from">From</label>
           <input
             id="al-from"
+            name="alFrom"
             type="date"
             className="input-field"
+            autoComplete="off"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
@@ -302,8 +306,10 @@ const ActivityLog = () => {
           <label className="al-filter-label" htmlFor="al-to">To</label>
           <input
             id="al-to"
+            name="alTo"
             type="date"
             className="input-field"
+            autoComplete="off"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />

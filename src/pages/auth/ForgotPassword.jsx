@@ -93,6 +93,8 @@ const ForgotPassword = () => {
                 <input
                   id="forgot-password-email"
                   type="email"
+                  name="email"
+                  autoComplete="email"
                   className="input-field"
                   placeholder="admin@jezsy.com"
                   value={email}

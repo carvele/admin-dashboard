@@ -18,8 +18,17 @@ interface TopNavProps {
   onHamburger: () => void;
 }
 
+const getDisplayRole = (role?: string) => {
+  if (!role) return 'Staff';
+  const r = role.toLowerCase();
+  if (r === 'admin' || r === 'super_admin' || r === 'superadmin') return 'Administrator';
+  if (r === 'owner') return 'Store Owner';
+  if (r === 'staff') return 'Staff';
+  return role.charAt(0).toUpperCase() + role.slice(1);
+};
+
 const TopNav = ({ user, onHamburger }: TopNavProps) => {
-  const { logout, isAdminUnlocked } = useAuth() as any;
+  const { logout } = useAuth() as any;
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -27,11 +36,15 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // ── Refs for click-outside detection ──
+  const searchRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
   // ── Global Search State ──
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const searchRef = useRef(null);
 
   const initials = getInitials((user as any)?.name);
 
@@ -136,11 +149,17 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     return () => unsub();
   }, []);
 
-  // ── Close search on click outside ──
+  // ── Close popovers on click outside ──
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (searchRef.current && !(searchRef.current as any).contains(e.target)) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSearchResults(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserDropdown(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -188,8 +207,12 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
         <div className="topnav-search" ref={searchRef}>
           <Search size={18} className="search-icon" />
           <input
+            id="global-search-input"
+            name="globalSearch"
             type="text"
             placeholder="Search orders, customers, or items..."
+            aria-label="Search orders, customers, or items"
+            autoComplete="off"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.trim() && setShowSearchResults(true)}
@@ -256,8 +279,13 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <div className="notification-wrapper">
-          <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
+        <div className="notification-wrapper" ref={notificationRef}>
+          <button
+            className="icon-btn"
+            onClick={() => setShowNotifications(!showNotifications)}
+            aria-label="Toggle notifications"
+            aria-expanded={showNotifications}
+          >
             <Bell size={20} />
             {unreadCount > 0 && <span className="notification-dot">{unreadCount}</span>}
           </button>
@@ -304,7 +332,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           )}
         </div>
 
-        <div className="user-menu-wrapper" style={{ position: 'relative' }}>
+        <div className="user-menu-wrapper" ref={userMenuRef} style={{ position: 'relative' }}>
           <button 
             className="user-menu-btn" 
             onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -323,11 +351,11 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                 className="user-role-top"
                 style={{
                   fontSize: '0.75rem',
-                  color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)',
+                  color: (user as any)?.role === 'admin' || (user as any)?.role === 'owner' ? 'var(--accent)' : 'var(--text-secondary)',
                   fontWeight: 500,
                 }}
               >
-                {isAdminUnlocked ? 'Owner (Super Admin)' : 'Sales Staff'}
+                {getDisplayRole((user as any)?.role)}
               </span>
             </div>
           </button>
@@ -341,7 +369,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                 <div className="user-info">
                   <span className="user-name">{(user as any)?.name || 'Staff Member'}</span>
                   <span className="user-role-top">
-                    {isAdminUnlocked ? 'Owner (Super Admin)' : 'Sales Staff'}
+                    {getDisplayRole((user as any)?.role)}
                   </span>
                 </div>
               </div>

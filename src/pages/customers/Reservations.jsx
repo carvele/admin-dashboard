@@ -211,7 +211,18 @@ const Reservations = () => {
   const [qrToken, setQrToken] = useState('');
   const [qrResult, setQrResult] = useState(null);
   // List view sort: { key: string, dir: 'asc'|'desc' }
-  const [listSort, setListSort] = useState({ key: 'date', dir: 'asc' });
+  const [listSort, setListSort] = useState(() => {
+    try {
+      const saved = localStorage.getItem('admin_res_sort');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return { key: 'date', dir: 'desc' }; // Default to newest first
+  });
+
+  useEffect(() => {
+    localStorage.setItem('admin_res_sort', JSON.stringify(listSort));
+  }, [listSort]);
+
   const toggleSort = (key) => setListSort(prev => ({
     key,
     dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
@@ -816,9 +827,12 @@ const Reservations = () => {
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
+              id="reservations-search-input"
+              name="reservationsSearch"
               type="text"
               placeholder="Search by ID or customer name..."
               aria-label="Search by reservation ID or customer name"
+              autoComplete="off"
               value={searchInput}
               onChange={handleSearchChange}
               className="input-field pl-10"

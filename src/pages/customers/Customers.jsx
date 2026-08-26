@@ -39,6 +39,8 @@ import {
   getHealthLabel,
 } from '../../utils/helpers';
 import { can } from '../../utils/permissions';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { usePresence } from '../../hooks/usePresence';
 import { useAuth } from '../../context/AuthContext';
 import PageHeader from '../../components/PageHeader';
 import SkeletonTable from '../../components/SkeletonTable';
@@ -49,6 +51,9 @@ import './Customers.css';
 
 const Customers = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastDoc, setLastDoc] = useState(null);
@@ -151,6 +156,28 @@ const Customers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [custHistory, setCustHistory] = useState([]);
   const [custHistoryLoading, setCustHistoryLoading] = useState(false);
+
+  React.useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const id = sp.get('id');
+    const str = sp.get('search');
+    
+    if (str && !searchInput) {
+      setSearchInput(str);
+      setSearchTerm(str);
+    }
+    
+    if (id && customers.length > 0 && !selectedCustomer) {
+      const c = customers.find(x => (x.docId || x.id) === id);
+      if (c) {
+        setSelectedCustomer(c);
+        const newParams = new URLSearchParams(location.search);
+        newParams.delete('id');
+        const newSearch = newParams.toString();
+        navigate(`/customers${newSearch ? '?' + newSearch : ''}`, { replace: true });
+      }
+    }
+  }, [location.search, customers.length, selectedCustomer, searchInput, navigate]);
   // Body metrics live in `user_measurements`, not on the profile row — load them
   // separately whenever a customer profile is opened.
   const [custMeasurements, setCustMeasurements] = useState(null);
@@ -439,8 +466,12 @@ const Customers = () => {
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
+              id="customers-search-input"
+              name="customersSearch"
               type="text"
               placeholder="Search by name or email..."
+              aria-label="Search by name or email"
+              autoComplete="off"
               value={searchInput}
               onChange={handleSearchChange}
               className="input-field pl-10"
@@ -492,15 +523,16 @@ const Customers = () => {
                             )}
                             <span
                               className={`online-dot ${
-                                (cust.lastOnline || cust.lastActivity) &&
-                                Date.now() - new Date(cust.lastOnline || cust.lastActivity).getTime() < 5 * 60 * 1000
+                                onlineUsers[cust.id || cust.docId]
                                   ? 'online'
                                   : 'offline'
                               }`}
                               title={
-                                (cust.lastOnline || cust.lastActivity)
-                                  ? `Last seen ${formatRelativeTime(cust.lastOnline || cust.lastActivity)}`
-                                  : 'Offline'
+                                onlineUsers[cust.id || cust.docId]
+                                  ? 'Online'
+                                  : (cust.lastSeen || cust.lastActivity)
+                                    ? `Last seen ${formatRelativeTime(cust.lastSeen || cust.lastActivity)}`
+                                    : 'Offline'
                               }
                             ></span>
                           </div>
@@ -522,7 +554,11 @@ const Customers = () => {
                       <td>
                         <div className="last-online-cell">
                           <span className="last-online-text">
-                            {(cust.lastOnline || cust.lastActivity) ? formatRelativeTime(cust.lastOnline || cust.lastActivity) : '—'}
+                            {onlineUsers[cust.id || cust.docId]
+                              ? <span style={{color: 'var(--success)'}}>Online now</span>
+                              : (cust.lastSeen || cust.lastActivity) 
+                                ? formatRelativeTime(cust.lastSeen || cust.lastActivity) 
+                                : '-'}
                           </span>
                         </div>
                       </td>

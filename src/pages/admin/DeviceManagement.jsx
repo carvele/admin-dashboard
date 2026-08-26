@@ -208,6 +208,9 @@ const DeviceManagement = () => {
                     {editingFp === device.fingerprint ? (
                       <div className="edit-name-flow">
                         <input
+                          id="device-nickname-input"
+                          name="deviceNickname"
+                          type="text"
                           className="input-field small-input"
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
@@ -216,6 +219,7 @@ const DeviceManagement = () => {
                             if (e.key === 'Escape') cancelEditing();
                           }}
                           autoFocus
+                          autoComplete="off"
                           aria-label="Device nickname"
                         />
                         <button className="icon-btn-save" onClick={() => saveNickname(device.fingerprint)} disabled={busyId === device.fingerprint} aria-label="Save name">

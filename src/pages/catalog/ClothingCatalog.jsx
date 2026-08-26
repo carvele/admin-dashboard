@@ -71,10 +71,17 @@ const ClothingCatalog = () => {
           .forEach(row => {
             const key = row.productDocId || row.product_doc_id;
             if (!key) return;
-            if (!map[key]) map[key] = { available: 0, total: 0, reserved: 0 };
+            if (!map[key]) map[key] = { available: 0, total: 0, reserved: 0, sizes: {} };
             map[key].available += Number(row.available || 0);
             map[key].total     += Number(row.total     || 0);
             map[key].reserved  += Number(row.reserved  || 0);
+            
+            const sz = row.size;
+            if (sz) {
+              if (!map[key].sizes[sz]) map[key].sizes[sz] = { available: 0, total: 0 };
+              map[key].sizes[sz].available += Number(row.available || 0);
+              map[key].sizes[sz].total += Number(row.total || 0);
+            }
           });
         setInventoryMap(map);
 
@@ -116,10 +123,20 @@ const ClothingCatalog = () => {
   const [isArchiving, setIsArchiving] = useState(false);
   const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
   const [activeColor, setActiveColor] = useState('All Colors');
+  const [activeTag, setActiveTag] = useState('All Tags');
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
 
   const categories = ['All', ...dbCategories];
-  const availableTags = ['AR Try-On'];
+    // Dynamically compute all tags used across products + standard presets
+  const availableTags = React.useMemo(() => {
+    const set = new Set(['AR Try-On', 'New Arrival', 'Limited Edition', 'Sale']);
+    (catalog || []).forEach((p) => {
+      (p.tags || []).forEach((t) => {
+        if (t) set.add(t);
+      });
+    });
+    return Array.from(set);
+  }, [catalog]);
 
   // Auto-expire New Arrival after 7 days, or respect manual toggle
   const isNewArrival = (item) => {
@@ -167,7 +184,11 @@ const ClothingCatalog = () => {
       ? String(item.color).split(',').map((c) => c.trim()).filter(Boolean)
       : (item.baseColor ? [item.baseColor] : []);
     const matchesColor = activeColor === 'All Colors' || itemColors.includes(activeColor);
-    return matchesSearch && matchesCat && matchesColor;
+
+    const itemTags = item.tags || [];
+    const matchesTag = activeTag === 'All Tags' || itemTags.includes(activeTag);
+
+    return matchesSearch && matchesCat && matchesColor && matchesTag;
   });
 
   // --- ARCHIVE PRODUCT ---
@@ -283,8 +304,12 @@ const ClothingCatalog = () => {
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
+              id="catalog-search-input"
+              name="catalogSearch"
               type="text"
               placeholder="Search products..."
+              aria-label="Search products"
+              autoComplete="off"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-10"
@@ -312,6 +337,19 @@ const ClothingCatalog = () => {
               <option value="All Colors">All Colors</option>
               {COLOR_CATEGORIES.map(c => (
                 <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="tag-filter">
+            <select
+              className="input-field"
+              value={activeTag}
+              onChange={(e) => setActiveTag(e.target.value)}
+            >
+              <option value="All Tags">All Tags</option>
+              {availableTags.map(t => (
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -407,9 +445,9 @@ const ClothingCatalog = () => {
               </div>
 
               <div className="product-info-area">
-                <div className="flex-between align-start mb-2">
-                  <div>
-                    <h3 className="product-name">{item.name}</h3>
+                <div className="product-card-top-row">
+                  <div className="product-title-group">
+                    <h3 className="product-name" title={item.name}>{item.name}</h3>
                     <p className="product-category">
                       {item.category}
                       {item.subCategory && (
@@ -424,30 +462,28 @@ const ClothingCatalog = () => {
                       )}
                     </p>
                   </div>
-                  <div className="product-price-container" style={{ textAlign: 'right' }}>
+                  <div className="product-price-container">
                     {item.onSale ? (
                       <div className="sale-price-group">
                         <div className="original-price" style={{
                           fontSize: '0.85rem',
                           textDecoration: 'line-through',
                           color: 'var(--text-secondary)',
-                          lineHeight: '1'
+                          lineHeight: 1
                         }}>
                           ₱{(item.price || 0).toLocaleString()}
                         </div>
                         <div className="sale-price" style={{
-                          color: 'var(--color-danger)',
-                          fontWeight: '800',
                           fontSize: '1.25rem',
-                          lineHeight: '1.2'
+                          fontWeight: 'bold',
+                          color: 'var(--color-danger)',
+                          lineHeight: 1.2
                         }}>
                           ₱{(item.salePrice || 0).toLocaleString()}
                         </div>
                       </div>
                     ) : (
-                      <div className="product-price" style={{ fontWeight: '700', fontSize: '1.1rem' }}>
-                        ₱{(item.price || 0).toLocaleString()}
-                      </div>
+                      <span className="product-price">₱{(item.price || 0).toLocaleString()}</span>
                     )}
                   </div>
                 </div>
@@ -466,11 +502,18 @@ const ClothingCatalog = () => {
                 </div>
 
                 <div className="product-sizes mt-3">
-                  {(item.sizes || []).map((size) => (
-                    <span key={size} className="size-badge">
-                      {size}
-                    </span>
-                  ))}
+                  {(item.sizes || []).map((size) => {
+                    let stockTooltip = 'No inventory data';
+                    if (invData && invData.sizes && invData.sizes[size]) {
+                      const sData = invData.sizes[size];
+                      stockTooltip = `In Stock: ${sData.available} / ${sData.total} units`;
+                    }
+                    return (
+                      <span key={size} className="size-badge" title={stockTooltip}>
+                        {size}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Stock Health Badge */}
@@ -487,24 +530,35 @@ const ClothingCatalog = () => {
                   </div>
                 )}
 
-                {/* AR Tag Toggle & Featured Toggle */}
+                {/* Product Tags & Attributes */}
                 <div className="product-tags mt-3">
-                  {availableTags.map((tag) => (
+                  {(item.tags || []).map((tag) => (
                     <button
                       key={tag}
-                      className={`catalog-tag-toggle ${(item.tags || []).includes(tag) ? 'active' : ''}`}
+                      className="catalog-tag-toggle active"
                       onClick={(e) => { e.stopPropagation(); toggleTag(item, tag); }}
+                      title={`Click to remove tag ${tag}`}
                     >
                       <TagIcon size={12} /> {tag}
                     </button>
                   ))}
+                  {!(item.tags && item.tags.includes('AR Try-On')) && (
+                    <button
+                      key="add-ar"
+                      className="catalog-tag-toggle"
+                      onClick={(e) => { e.stopPropagation(); toggleTag(item, 'AR Try-On'); }}
+                      title="Click to enable AR Try-On tag"
+                    >
+                      <TagIcon size={12} /> AR Try-On
+                    </button>
+                  )}
                   <button
                     className={`catalog-tag-toggle ${item.isFeatured ? 'active' : ''}`}
                     onClick={(e) => { e.stopPropagation(); toggleFeature(item); }}
                     style={{
                       borderColor: item.isFeatured ? 'var(--accent)' : 'transparent',
                       color: item.isFeatured ? 'var(--highlight)' : 'var(--text-secondary)',
-                      backgroundColor: item.isFeatured ? 'var(--status-pending-bg)' : 'var(--white)',
+                      backgroundColor: item.isFeatured ? 'var(--status-pending-bg)' : 'var(--surface, #1f1f1f)',
                       boxShadow: item.isFeatured ? '0 0 5px rgba(212, 175, 55, 0.3)' : 'none'
                     }}
                   >

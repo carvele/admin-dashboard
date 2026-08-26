@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import debounce from 'lodash.debounce';
-import { Search, Grid, List as ListIcon, Shirt, ArrowLeft } from 'lucide-react';
+import { Search, Grid, List as ListIcon, Shirt, ArrowLeft, X, ExternalLink } from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -9,10 +10,12 @@ import PageHeader from '../../components/PageHeader';
 import './DigitalWardrobe.css';
 
 const DigitalWardrobe = () => {
+  const navigate = useNavigate();
   const [wardrobeItems, setWardrobeItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeUserId, setActiveUserId] = useState(null);
   const [mobileView, setMobileView] = useState('customers');
+  const [selectedItem, setSelectedItem] = useState(null);
   
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,13 +77,13 @@ const DigitalWardrobe = () => {
     );
 
   const renderItemImage = (imgAsset) => {
-    if (!imgAsset) return <Shirt size={32} className="text-secondary opacity-50" />;
+    if (!imgAsset) return <Shirt size={36} className="text-secondary opacity-50" />;
     if (imgAsset.startsWith('http')) {
       return (
         <img
           src={imgAsset}
           alt="wardrobe-item"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className="dw-item-img"
         />
       );
     }
@@ -153,7 +156,7 @@ const DigitalWardrobe = () => {
               <ArrowLeft size={18} /> Customers
             </button>
             {activeUser ? (
-              <div className="flex-center gap-3">
+              <div className="dw-user-badge">
                 <div
                   className="avatar"
                   style={{ backgroundColor: getAvatarColor(getUserDisplayName(activeUser)) }}
@@ -163,7 +166,7 @@ const DigitalWardrobe = () => {
                     .map((n) => n[0])
                     .join('')}
                 </div>
-                <div>
+                <div className="dw-user-title">
                   <h3 className="font-medium text-lg">
                     {getUserDisplayName(activeUser)}&apos;s Wardrobe
                   </h3>
@@ -173,12 +176,16 @@ const DigitalWardrobe = () => {
               <div>Loading...</div>
             )}
 
-            <div className="flex-center gap-3">
+            <div className="dw-toolbar-actions">
               <div className="search-box">
                 <Search size={18} className="search-icon" />
                 <input
+                  id="dw-search-input"
+                  name="dwSearch"
                   type="text"
                   placeholder="Search items..."
+                  aria-label="Search items"
+                  autoComplete="off"
                   value={searchInput}
                   onChange={handleSearchChange}
                   className="input-field pl-10"
@@ -209,35 +216,30 @@ const DigitalWardrobe = () => {
               const displayImage = item.imageUrl || (matchedProduct?.images?.[0]) || null;
               
               return (
-                <div key={item.id || Math.random()} className="dw-item-card card" style={{ minHeight: '280px', display: 'flex', flexDirection: 'column' }}>
-                  <div
-                    className="dw-img-placeholder"
-                    style={{
-                      overflow: 'hidden',
-                      padding: displayImage?.startsWith && displayImage.startsWith('http') ? '0' : '2rem',
-                      minHeight: '200px',
-                      backgroundColor: 'var(--beige)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '100%'
-                    }}
-                  >
+                <div
+                  key={item.id || Math.random()}
+                  className="dw-item-card card"
+                  onClick={() => setSelectedItem({ item, product: matchedProduct })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedItem({ item, product: matchedProduct });
+                    }
+                  }}
+                  title="Click to view item details"
+                >
+                  <div className="dw-img-placeholder">
                     {renderItemImage(displayImage)}
                   </div>
-                  <div className="dw-item-details" style={{ flex: 1, padding: '1rem', color: 'var(--text-primary)' }}>
-                    <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
-                      <span className="dw-category" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
-                        {item.category || (matchedProduct?.category) || 'Clothing'}
-                      </span>
-                    </div>
-                    <h4 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 0.5rem 0' }}>
+                  <div className="dw-item-details">
+                    <span className="dw-category">
+                      {item.category || (matchedProduct?.category) || 'Clothing'}
+                    </span>
+                    <h4 className="dw-item-name" title={displayName}>
                       {displayName}
                     </h4>
-                    {/* Safe fallback display just in case data structure differs from expected */}
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-danger)', wordBreak: 'break-all' }}>
-                      {!item.productId && !item.imageUrl && JSON.stringify(item)}
-                    </div>
                   </div>
                 </div>
               );
@@ -248,6 +250,105 @@ const DigitalWardrobe = () => {
           </div>
         </div>
       </div>
+
+      {/* ===== ITEM DETAILS MODAL ===== */}
+      {selectedItem && (
+        <div className="modal-backdrop" onClick={() => setSelectedItem(null)}>
+          <div className="modal-content dw-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex align-center gap-2">
+                <Shirt size={20} className="text-primary" />
+                <h3>Wardrobe Item Details</h3>
+              </div>
+              <button
+                className="icon-btn-close"
+                onClick={() => setSelectedItem(null)}
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body dw-modal-body">
+              <div className="dw-modal-preview">
+                {selectedItem.item.imageUrl || selectedItem.product?.images?.[0] ? (
+                  <img
+                    src={selectedItem.item.imageUrl || selectedItem.product?.images?.[0]}
+                    alt={selectedItem.product?.name || selectedItem.item.productId || 'Wardrobe Item'}
+                    className="dw-modal-img"
+                  />
+                ) : (
+                  <div className="dw-modal-empty-img">
+                    <Shirt size={64} className="text-secondary opacity-40" />
+                  </div>
+                )}
+              </div>
+
+              <div className="dw-modal-info">
+                <div className="mb-3">
+                  <span className="dw-category font-bold">
+                    {selectedItem.item.category || selectedItem.product?.category || 'Clothing'}
+                  </span>
+                  <h2 className="dw-modal-title">
+                    {selectedItem.product?.name || selectedItem.item.productId || 'Uploaded Item'}
+                  </h2>
+                </div>
+
+                <div className="dw-modal-meta-grid">
+                  <div className="dw-meta-item">
+                    <span className="dw-meta-label">Customer</span>
+                    <span className="dw-meta-val">{getUserDisplayName(activeUser)}</span>
+                  </div>
+
+                  <div className="dw-meta-item">
+                    <span className="dw-meta-label">Item Origin</span>
+                    <span className="dw-meta-val">
+                      {selectedItem.product ? 'Catalog Product' : 'Uploaded by Customer'}
+                    </span>
+                  </div>
+
+                  {selectedItem.product?.price && (
+                    <div className="dw-meta-item">
+                      <span className="dw-meta-label">Catalog Price</span>
+                      <span className="dw-meta-val font-bold text-accent">
+                        ₱{(selectedItem.product.price || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedItem.item.createdAt && (
+                    <div className="dw-meta-item">
+                      <span className="dw-meta-label">Saved On</span>
+                      <span className="dw-meta-val">
+                        {new Date(selectedItem.item.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer dw-modal-footer">
+              {selectedItem.product && (
+                <button
+                  className="btn-primary flex align-center gap-2"
+                  onClick={() => {
+                    navigate('/catalog/view/' + (selectedItem.product.docId || selectedItem.product.id));
+                  }}
+                >
+                  <ExternalLink size={16} /> View in Catalog
+                </button>
+              )}
+              <button
+                className="btn-outline"
+                onClick={() => setSelectedItem(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

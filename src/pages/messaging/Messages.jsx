@@ -40,7 +40,7 @@ import { usePresence } from '../../hooks/usePresence';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
-import { getAvatarColor, getInitials, formatSmartDateTime } from '../../utils/helpers';
+import { getAvatarColor, getInitials, formatSmartDateTime, formatRelativeTime } from '../../utils/helpers';
 import debounce from 'lodash.debounce';
 import 'react-loading-skeleton/dist/skeleton.css';
 import './Messages.css';
@@ -992,8 +992,12 @@ const Messages = () => {
           <div className="search-box full-width mt-3">
             <Search size={18} className="search-icon" />
             <input
+              id="messages-search-input"
+              name="messagesSearch"
               type="text"
               placeholder="Search conversations..."
+              aria-label="Search conversations"
+              autoComplete="off"
               className="input-field pl-10"
               value={convSearchInput}
               onChange={(e) => {
@@ -1139,7 +1143,7 @@ const Messages = () => {
                   ) : onlineUsers[activeChat.customerId] ? (
                     <p className="status-text online">● Online</p>
                   ) : (
-                    <p className="status-text offline">Offline</p>
+                    <p className="status-text offline">{(() => { const c = customersById[activeChat.customerId]; if (c && (c.lastSeen || c.lastActivity)) return `Offline (Last seen ${formatRelativeTime(c.lastSeen || c.lastActivity)})`; return 'Offline'; })()}</p>
                   )}
                 </div>
               </div>
@@ -1155,7 +1159,7 @@ const Messages = () => {
                 <button
                   className="btn-outline small flex-center gap-2"
                   onClick={() =>
-                    navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                    navigate(`/customers?id=${activeChat.customerId}`)
                   }
                 >
                   <User size={14} /> View Profile
@@ -1357,9 +1361,13 @@ const Messages = () => {
             </div>
 
             <input
+              id="chat-message-input"
+              name="chatMessage"
               type="text"
               className="input-field chat-input"
               placeholder={editingMsg ? 'Edit message…' : 'Message…'}
+              aria-label="Message"
+              autoComplete="off"
               value={newMessage}
               onChange={(e) => handleMessageInputChange(e.target.value)}
             />
@@ -1404,7 +1412,7 @@ const Messages = () => {
               <button
                 className="btn-outline small full-width flex-center gap-2 mt-2"
                 onClick={() =>
-                  navigate(`/customers?search=${encodeURIComponent(getConvName(activeChat))}`)
+                  navigate(`/customers?id=${activeChat.customerId}`)
                 }
               >
                 <User size={14} /> View Profile
