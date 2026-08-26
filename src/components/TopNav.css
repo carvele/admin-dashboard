@@ -6,12 +6,18 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 2rem;
+  overflow: visible; /* allow dropdowns to escape the header */
+  /* Prevent any child from forcing the bar to grow taller */
+  min-width: 0;
 }
 
 .topnav-left {
   display: flex;
   align-items: center;
   gap: 1rem;
+  /* Let this side shrink so the right-side actions are always reachable */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .hamburger-btn {
@@ -46,6 +52,9 @@
 .topnav-search {
   position: relative;
   width: 300px;
+  /* Shrink when the viewport narrows, but keep a usable minimum */
+  flex-shrink: 1;
+  min-width: 80px;
 }
 .topnav-search .search-icon {
   position: absolute;
@@ -176,6 +185,9 @@
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  /* Never let the right-side actions shrink below their natural size.
+     Without this, the search bar can push the avatar/logout off-screen. */
+  flex-shrink: 0;
 }
 
 /* ── Sync Status Indicator ── */
