@@ -684,7 +684,16 @@ const ProductForm = ({ readOnly = false }) => {
       setSaving(false);
       if (success) navigate('/catalog');
     }
-  };  if (loading) return <div className="p-8">Loading product data...</div>;
+  };
+
+  // Merge colors from settings color_list with any colors currently saved on this product
+  const allAvailableColors = React.useMemo(() => {
+    const listNames = colorList.map((c) => (typeof c === 'string' ? c : c.name));
+    const merged = [...new Set([...listNames, ...(formData.colors || [])])].filter(Boolean);
+    return merged;
+  }, [colorList, formData.colors]);
+
+  if (loading) return <div className="p-8">Loading product data...</div>;
 
   return (
     <div className="p-6">
@@ -964,22 +973,23 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                  <span className="label">Product Color *</span>
-                 {colorList.length === 0 ? (
+                 {allAvailableColors.length === 0 ? (
                     <p className="text-sm text-secondary mt-2">
                        No colors defined yet. Add colors in Settings to enable selection.
                     </p>
                  ) : (
                     <div className="flex flex-wrap gap-2 mt-2">
-                       {colorList.map((c) => {
-                          const isSelected = (formData.colors || []).includes(c.name);
+                       {allAvailableColors.map((colorName) => {
+                          const isSelected = (formData.colors || []).includes(colorName);
                           return (
                              <button
-                                key={c.id}
+                                key={colorName}
                                 type="button"
-                                onClick={() => toggleColor(c.name)}
+                                onClick={() => !readOnly && toggleColor(colorName)}
                                 className={`color-chip ${isSelected ? 'active' : ''}`}
+                                disabled={readOnly}
                              >
-                                {c.name}
+                                {colorName}
                              </button>
                           );
                        })}
@@ -1062,9 +1072,9 @@ const ProductForm = ({ readOnly = false }) => {
             (which color variants to stock per size)
         ══════════════════════════════════════════════ */}
         {variantColumnsReady && formData.sizes.length > 0 && (formData.colors || []).length > 0 && (
-        <section className="card p-6" style={{ border: '2px solid #e0e7ff' }}>
+        <section className="card p-6" style={{ border: '2px solid var(--category-indigo-bg)' }}>
            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: '#4f46e5' }}>
+              <h2 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--category-indigo-text)' }}>
                  <Grid3X3 size={14} /> Stock Variant Selector
               </h2>
               <div className="flex items-center gap-2">
@@ -1073,14 +1083,14 @@ const ProductForm = ({ readOnly = false }) => {
                  </span>
                  <button
                    type="button"
-                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#e0e7ff', color: '#4f46e5', border: 'none', cursor: 'pointer' }}
+                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'var(--category-indigo-bg)', color: 'var(--category-indigo-text)', border: 'none', cursor: 'pointer' }}
                    onClick={selectAllVariants}
                  >
                    Select All
                  </button>
                  <button
                    type="button"
-                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#6b7280', border: 'none', cursor: 'pointer' }}
+                   style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'var(--stock-none-bg)', color: 'var(--stock-none)', border: 'none', cursor: 'pointer' }}
                    onClick={clearAllVariants}
                  >
                    Reset
@@ -1105,8 +1115,8 @@ const ProductForm = ({ readOnly = false }) => {
                      gap: 12,
                      padding: '10px 14px',
                      borderRadius: 10,
-                     background: someSelected ? '#f0f4ff' : '#fafafa',
-                     border: `1.5px solid ${someSelected ? '#c7d2fe' : '#e5e7eb'}`,
+                     background: someSelected ? 'var(--category-indigo-bg)' : 'var(--surface)',
+                     border: `1.5px solid ${someSelected ? 'var(--category-indigo-text)' : 'var(--border-color)'}`,
                      transition: 'all 0.15s',
                    }}
                  >
@@ -1116,7 +1126,7 @@ const ProductForm = ({ readOnly = false }) => {
                      <button
                        type="button"
                        onClick={() => toggleAllVariantsForSize(size)}
-                       style={{ fontSize: '9px', fontWeight: 700, color: '#4f46e5', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                       style={{ fontSize: '9px', fontWeight: 700, color: 'var(--category-indigo-text)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
                      >
                        {allSelected ? 'Deselect all' : 'Select all'}
                      </button>
@@ -1140,9 +1150,9 @@ const ProductForm = ({ readOnly = false }) => {
                              fontSize: 12,
                              fontWeight: 600,
                              cursor: 'pointer',
-                             border: `2px solid ${checked ? '#4f46e5' : '#d1d5db'}`,
-                             background: checked ? '#4f46e5' : '#fff',
-                             color: checked ? '#fff' : '#6b7280',
+                             border: `2px solid ${checked ? 'var(--category-indigo-text)' : 'var(--border-color)'}`,
+                             background: checked ? 'var(--category-indigo-text)' : 'var(--surface)',
+                             color: checked ? 'var(--on-accent)' : 'var(--text-secondary)',
                              transition: 'all 0.15s',
                              position: 'relative',
                            }}
@@ -1230,8 +1240,8 @@ const ProductForm = ({ readOnly = false }) => {
                              }}
                              className={`px-4 py-2 rounded-lg border-2 text-xs font-bold transition-all flex items-center gap-2 ${
                                 isChecked
-                                   ? 'bg-primary text-white border-primary shadow-sm'
-                                   : 'bg-white text-secondary border-gray-200 hover:border-gray-300'
+                                   ? 'bg-[var(--accent)] text-[var(--on-accent,#1f1c18)] border-[var(--accent)] shadow-sm'
+                                   : 'bg-[var(--surface)] text-secondary border-[var(--border-color)] hover:border-[var(--accent)]'
                              }`}
                           >
                              <span>{isChecked ? '✓' : '+'}</span>
@@ -1307,7 +1317,14 @@ const ProductForm = ({ readOnly = false }) => {
         </fieldset>
 
         {/* Actions */}
-        <div className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 bg-white/80 backdrop-blur-sm p-4 border-t z-20">
+        <div
+          className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 p-4 border-t z-20"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border-color)',
+            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.1)',
+          }}
+        >
            <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">
               {readOnly ? 'Back to Catalog' : 'Cancel'}
            </button>

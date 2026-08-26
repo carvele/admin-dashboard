@@ -589,7 +589,15 @@ const Settings = () => {
                 Close the boutique for a specific holiday or date (e.g. Christmas Day or staff event). This immediately blocks mobile appointments on that date.
               </p>
 
-              <form onSubmit={handleAddClosure} className="flex gap-3 align-center mb-6 max-w-xl">
+              <div
+                className="flex gap-3 align-center mb-6 max-w-xl"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddClosure(e);
+                  }
+                }}
+              >
                 <input
                   type="date"
                   className="input-field flex-1"
@@ -604,10 +612,15 @@ const Settings = () => {
                   value={newClosure.reason}
                   onChange={(e) => setNewClosure({ ...newClosure, reason: e.target.value })}
                 />
-                <button type="submit" className="btn-primary" disabled={isLoading}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleAddClosure}
+                  disabled={isLoading}
+                >
                   <Plus size={16} /> Add Closure
                 </button>
-              </form>
+              </div>
 
               <div className="table-container max-w-xl">
                 <table className="data-table">
@@ -939,19 +952,21 @@ const Settings = () => {
             </div>
           )}
 
-          <div className="settings-footer max-w-lg">
-            <button type="submit" className="btn-primary" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 size={16} className="mr-2 inline animate-spin" /> Saving...
-                </>
-              ) : (
-                <>
-                  <Save size={16} className="mr-2 inline" /> Save Changes
-                </>
-              )}
-            </button>
-          </div>
+          {['boutique', 'reservation', 'ar', 'messaging'].includes(activeTab) && (
+            <div className="settings-footer max-w-lg">
+              <button type="submit" className="btn-primary" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 inline animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} className="mr-2 inline" /> Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

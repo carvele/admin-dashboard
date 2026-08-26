@@ -222,9 +222,11 @@ const ARAssets = () => {
     setIsUploading(true);
     try {
       console.log('[Storage] Uploading asset to Storage...');
-      const downloadURL = await routeAndUploadFile(selectedFile, selectedFile.name.endsWith('.glb') ? 'catalog-assets/models' : 'catalog-assets/masks');
+      const fileName = selectedFile.name.toLowerCase();
+      const is3D = fileName.endsWith('.glb') || fileName.endsWith('.gltf') || fileName.endsWith('.obj');
+      const downloadURL = await routeAndUploadFile(selectedFile, is3D ? 'catalog-assets/models' : 'catalog-assets/masks');
       
-      const assetType = selectedFile.name.endsWith('.glb') ? '3D Model' : 'Segmentation Mask';
+      const assetType = is3D ? '3D Model' : 'Segmentation Mask';
 
       // 1. Register in Global Library. public.ar_assets only has
       // id/product_id/model_url/created_at/updated_at -- no name/type/
@@ -481,7 +483,7 @@ const ARAssets = () => {
                 <tr>
                   <th>Asset ID</th>
                   <th>Associated Item</th>
-                  <th>File Type</th>
+                  <th>File Name</th>
                   <th>Alignment Config</th>
                   <th>AR Status</th>
                   <th>Actions</th>
@@ -491,12 +493,17 @@ const ARAssets = () => {
                 {assets.map((asset) => {
                   const status = asset.arData?.status || 'Active';
                   const alignments = asset.arData?.alignments || 'Pending';
+                  const fileName = asset.model_3dUrl?.split('/').pop() || 'Unknown File';
 
                   return (
                     <tr key={asset.docId}>
                       <td className="font-mono text-sm">{asset.docId.substring(0, 8)}...</td>
                       <td className="font-medium">{asset.name}</td>
-                      <td className="text-secondary">3D Model (.glb)</td>
+                      <td className="text-secondary" title={fileName}>
+                        <div style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {fileName}
+                        </div>
+                      </td>
                       <td>
                         <span className={`align-status ${alignments.toLowerCase()}`}>
                           {alignments === 'Verified' && <Check size={14} />}
@@ -898,7 +905,9 @@ const ARAssets = () => {
                   <label className="label" htmlFor="pose-name">Pose Name *</label>
                   <input
                     id="pose-name"
+                    name="poseName"
                     type="text"
+                    autoComplete="off"
                     className="input-field"
                     placeholder="e.g., Gala Red Carpet Pose"
                     value={poseForm.name}

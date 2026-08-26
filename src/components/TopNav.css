@@ -496,13 +496,31 @@
   }
 }
 
+@media (max-width: 900px) {
+  .topnav {
+    padding: 0 1rem;
+  }
+  .topnav-actions {
+    gap: 0.75rem;
+  }
+  .user-menu-wrapper {
+    padding-left: 0.75rem;
+  }
+  .user-role-top {
+    display: none;
+  }
+  .topnav-search {
+    width: 180px;
+  }
+}
+
 /* ========================================================= */
 /* MOBILE SPECIFIC OVERRIDES (Mobiles & Small Phones) */
 /* ========================================================= */
-@media (max-width: 480px) {
+@media (max-width: 600px) {
   .topnav {
     padding: 0 0.75rem;
-    overflow: hidden;
+    overflow: visible; /* CRITICAL: Never clip floating popovers and dropdowns */
   }
 
   /* Hide the text name next to avatar to save horizontal space */
@@ -525,13 +543,14 @@
     gap: 0.5rem;
   }
 
-  /* Shrink search bar even further, let placeholder cut off if needed */
+  /* Shrink search bar */
   .topnav-search {
-    width: 110px;
+    width: 120px;
   }
   .topnav-search input {
     font-size: 0.8rem;
-    padding-left: 1.75rem; /* Reduce left padding for search icon */
+    padding-left: 2rem;
+    padding-right: 1.5rem;
   }
   .topnav-search .search-icon {
     left: 0.5rem;
@@ -539,10 +558,14 @@
     height: 14px;
   }
 
-  /* Ensure dropdowns don't bleed off screen */
+  /* Ensure dropdowns fit on screen */
   .notifications-dropdown {
-    width: 280px;
-    right: -40px;
+    width: min(300px, 90vw);
+    right: -20px;
+  }
+  .user-dropdown {
+    width: min(220px, 85vw);
+    right: 0;
   }
   .search-dropdown {
     width: calc(100vw - 2rem);

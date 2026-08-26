@@ -71,12 +71,59 @@
 }
 
 .dw-toolbar {
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
   background-color: var(--white);
+  min-height: 72px;
+}
+
+.dw-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dw-user-badge .avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+}
+
+.dw-user-title {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dw-user-title h3 {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+
+.dw-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.dw-toolbar-actions .search-box {
+  max-width: 260px;
+  min-width: 140px;
 }
 
 .text-lg {
@@ -92,8 +139,8 @@
 
 .dw-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1.25rem;
 }
 
 .dw-list {
@@ -107,9 +154,13 @@
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  border-radius: 12px;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
   transition:
     transform 0.2s,
     box-shadow 0.2s;
+  height: 100%;
 }
 .dw-item-card:hover {
   transform: translateY(-4px);
@@ -119,19 +170,33 @@
 .dw-list .dw-item-card {
   flex-direction: row;
   align-items: center;
+  height: auto;
 }
 
 .dw-img-placeholder {
-  background-color: var(--cream);
-  height: 200px;
+  width: 100%;
+  height: 180px;
+  min-height: 180px;
+  flex-shrink: 0;
+  position: relative;
+  background-color: var(--beige);
   display: flex;
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+}
+.dw-img-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.5rem;
+  display: block;
 }
 .dw-list .dw-img-placeholder {
   width: 120px;
   height: 120px;
+  min-height: 120px;
   border-bottom: none;
   border-right: 1px solid var(--border-color);
 }
@@ -143,8 +208,11 @@
 }
 
 .dw-item-details {
-  padding: 1.25rem;
+  padding: 0.85rem 1rem;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .flex-between {
@@ -159,17 +227,23 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
 }
 .dw-price {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--accent);
 }
-.dw-item-details h4 {
-  font-size: 1.125rem;
+.dw-item-name {
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--charcoal);
-  margin-bottom: 0.75rem;
+  margin: 0;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dw-tags {
@@ -242,5 +316,93 @@
   .dw-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Digital Wardrobe Item Details Modal ── */
+.dw-modal-card {
+  max-width: 580px;
+  width: 90%;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.dw-modal-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dw-modal-preview {
+  width: 100%;
+  height: 280px;
+  background-color: var(--beige);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+}
+
+.dw-modal-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 1rem;
+}
+
+.dw-modal-empty-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.dw-modal-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--charcoal);
+  margin-top: 0.25rem;
+  line-height: 1.25;
+}
+
+.dw-modal-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background-color: var(--cream);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.dw-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.dw-meta-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dw-meta-val {
+  font-size: 0.95rem;
+  color: var(--charcoal);
+  font-weight: 500;
+}
+
+.dw-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
 }
 

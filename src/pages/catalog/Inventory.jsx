@@ -992,9 +992,12 @@ const Inventory = () => {
                 <div className="search-box">
                   <Search size={18} className="search-icon" />
                   <input
+                    id="inventory-search-input"
+                    name="inventorySearch"
                     type="text"
                     placeholder="Search Variant SKU, Name, Color..."
                     aria-label="Search variant SKU, product name, or color"
+                    autoComplete="off"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="input-field pl-10"

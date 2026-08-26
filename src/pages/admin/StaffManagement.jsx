@@ -533,8 +533,12 @@ const StaffManagement = () => {
           <div className="search-box">
             <Search size={18} className="search-icon" />
             <input
+              id="staff-search-input"
+              name="staffSearch"
               type="text"
               placeholder="Search by name or email..."
+              aria-label="Search staff by name or email"
+              autoComplete="off"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-10"
@@ -603,7 +607,9 @@ const StaffManagement = () => {
                 <label className="label" htmlFor="create-staff-email">Email Address</label>
                 <input
                   id="create-staff-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   className="input-field"
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}

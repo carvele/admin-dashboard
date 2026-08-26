@@ -1,17 +1,18 @@
 .messages-layout {
   display: grid;
-  grid-template-columns: 320px 1fr 280px;
-  gap: 1.5rem;
+  grid-template-columns: 320px minmax(320px, 1fr) 280px;
+  gap: 1.25rem;
   height: calc(100vh - 120px);
   min-height: 500px;
 }
 
 .messages-sidebar {
-  width: 320px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  min-width: 0;
 }
 
 .ms-header {
@@ -257,11 +258,14 @@
   border-bottom-left-radius: 2px;
 }
 .bubbles-auto-reply {
-  background: linear-gradient(135deg, var(--pink-soft) 0%, #fce7f3 100%);
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
   color: #831843;
-  border: 1px solid var(--pink-border);
+  border: 1px solid #fbcfe8;
   border-bottom-right-radius: 2px;
   box-shadow: 0 2px 8px rgba(236, 72, 153, 0.08);
+}
+.bubbles-auto-reply p {
+  color: #831843;
 }
 .bubbles-auto-reply .msg-time {
   color: #9d174d;
@@ -276,16 +280,34 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #be185d;
-  background-color: var(--pink-border);
+  background-color: #fbcfe8;
   padding: 2px 8px;
   border-radius: 10px;
   margin-bottom: 6px;
   text-transform: uppercase;
 }
 
-[data-theme='dark'] .auto-response-badge {
+/* Auto reply in Dark Mode: crisp, high contrast readable rose-white */
+:root.dark .bubbles-auto-reply {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.16) 0%, rgba(157, 23, 77, 0.28) 100%);
+  color: #fdf2f8;
+  border: 1px solid rgba(244, 114, 182, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+:root.dark .bubbles-auto-reply p {
+  color: #fdf2f8 !important;
+}
+
+:root.dark .bubbles-auto-reply .msg-time {
+  color: #f472b6;
+  opacity: 0.9;
+}
+
+:root.dark .auto-response-badge {
   color: #fbcfe8;
-  background-color: rgba(236, 72, 153, 0.25);
+  background-color: rgba(236, 72, 153, 0.3);
+  border: 1px solid rgba(244, 114, 182, 0.4);
 }
 
 .outfit-suggestion-card {
@@ -301,18 +323,46 @@
 
 /* Input Area */
 .chat-input-area {
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
   background-color: var(--white);
   border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 .chat-form {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 .attach-wrapper {
   position: relative;
+  flex-shrink: 0;
 }
+.quick-reply-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+.chat-form .icon-btn,
+.chat-form .qr-icon-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--charcoal);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.chat-form .icon-btn:hover,
+.chat-form .qr-icon-btn:hover {
+  background-color: var(--beige);
+}
+
 .attach-menu {
   position: absolute;
   bottom: 50px;
@@ -322,6 +372,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  z-index: 50;
 }
 .attach-item {
   display: flex;
@@ -339,15 +390,19 @@
 }
 
 .chat-input {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 80px;
   border-radius: 24px;
-  padding: 0.75rem 1.25rem;
+  padding: 0.65rem 1.1rem;
   background-color: var(--beige);
+  color: var(--charcoal);
+  font-size: 0.875rem;
 }
 
 .send-btn {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
   border-radius: 50%;
   background-color: var(--accent);
   color: white;
@@ -355,6 +410,9 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  flex-shrink: 0;
+  border: none;
+  cursor: pointer;
 }
 .send-btn:hover:not(:disabled) {
   background-color: var(--highlight);
@@ -366,9 +424,16 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 1200px) {
+/* Responsive Navigation & Breakpoints */
+@media (max-width: 1280px) {
   .messages-layout {
-    grid-template-columns: 300px 1fr 260px;
+    grid-template-columns: 300px 1fr;
+  }
+  .messages-layout:not([data-mobile-view='context']) .context-panel {
+    display: none;
+  }
+  .chat-info-btn {
+    display: inline-flex;
   }
 }
 
@@ -380,8 +445,8 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
   border-radius: 50%;
@@ -395,23 +460,16 @@
   background-color: var(--cream);
 }
 .chat-info-btn.btn-outline {
-  width: 40px;
+  width: 36px;
   padding: 0;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 960px) {
   .messages-layout {
     grid-template-columns: 1fr;
   }
   /* Only one panel shows at a time on mobile, switched via mobileView state
-     (see Messages.jsx) since there's no room for all three side by side --
-     the panels are full features (conversation list, chat, customer
-     context), not something to just squeeze or scroll past.
-     Scoped to .messages-layout (not bare .messages-sidebar etc.) so these
-     rules outrank the unconditional display:flex each panel sets elsewhere
-     in this file regardless of where in the file that rule appears --
-     equal-specificity selectors fall back to source order, which a plain
-     class selector here would lose to whichever rule happens to come later. */
+     (see Messages.jsx) since there's no room for all three side by side */
   .messages-layout .messages-sidebar,
   .messages-layout .chat-area,
   .messages-layout .context-panel {
@@ -1070,6 +1128,7 @@
 .bubbles-sent .msg-context-chip {
   background: rgba(255, 255, 255, 0.15);
 }
+
 
 
 

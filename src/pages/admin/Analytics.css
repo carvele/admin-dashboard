@@ -1,6 +1,6 @@
 .analytics-grid-4 {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.5rem;
 }
 
@@ -53,13 +53,30 @@
   gap: 1.5rem;
 }
 
+.analytics-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .date-picker-group {
   display: flex;
   align-items: center;
   background: var(--white);
-  padding: 0.25rem 1rem;
+  padding: 0.25rem 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.date-inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .small-date {
@@ -68,6 +85,7 @@
   padding: 0.25rem;
   width: 125px;
   color: var(--text-secondary);
+  background: transparent;
 }
 
 .small-date:focus {
@@ -76,6 +94,7 @@
 
 .dropdown-container {
   position: relative;
+  flex-shrink: 0;
 }
 
 .dropdown-menu {

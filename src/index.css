@@ -121,6 +121,7 @@
 }
 
 :root.dark {
+  color-scheme: dark;
   --cream: #121212;
   --beige: #262626;
   --warm-gray: #2d2d2d;
