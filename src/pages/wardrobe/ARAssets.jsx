@@ -32,6 +32,8 @@ import {
 import { routeAndUploadFile } from '../../lib/storage';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
+import GarmentIngestionModal from '../../components/AR/GarmentIngestionModal';
+import { supabase } from '../../lib/supabaseClient';
 import '@google/model-viewer';
 import './ARAssets.css';
 
@@ -96,6 +98,7 @@ const ARAssets = () => {
   const [loading, setLoading] = useState(true);
   const [poses, setPoses] = useState([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [ingestionData, setIngestionData] = useState(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [productToLink, setProductToLink] = useState(null);
   const [isPoseModalOpen, setIsPoseModalOpen] = useState(false);
@@ -248,9 +251,21 @@ const ARAssets = () => {
       // round-trips to them (matches how this file already reads
       // p.model_3dUrl elsewhere, per the toCamel-quirk comment above).
       if (window._targetProduct) {
-        const updateData = assetType === '3D Model'
-          ? { model_3dUrl: downloadURL, arData: { ...(window._targetProduct.arData || {}), status: 'Active' } }
-          : { maskUrl: downloadURL };
+        if (assetType === '3D Model') {
+          // Trigger the Phase 5B ingestion modal instead of saving immediately
+          setIngestionData({
+            productId: window._targetProduct.docId,
+            category: window._targetProduct.category || 'shirt',
+            glbUrl: downloadURL,
+            productName: window._targetProduct.name
+          });
+          setIsUploadModalOpen(false);
+          setSelectedFile(null);
+          setIsUploading(false);
+          return;
+        }
+
+        const updateData = { maskUrl: downloadURL };
 
         await updateProduct(window._targetProduct.docId, updateData);
         toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
@@ -291,6 +306,28 @@ const ARAssets = () => {
     setPoseFile(null);
     setIsPoseModalOpen(true);
   };
+
+  const handleIngestionComplete = async (metadata) => {
+    try {
+      await updateProduct(ingestionData.productId, { model_3dUrl: ingestionData.glbUrl });
+      const { error } = await supabase.from('products').update({ garment_metadata: metadata }).eq('id', ingestionData.productId);
+      if (error) throw error;
+
+      toast.success(`Successfully calibrated ${ingestionData.productName}`);
+      setIngestionData(null);
+      window._targetProduct = null;
+    } catch (e) {
+      toast.error('Failed to save metadata');
+      console.error(e);
+    }
+  };
+
+  const handleSaveAlignment = async () => {
+    if (!poseForm.name.trim()) {
+      toast.error('Enter a pose name');
+      return;
+    }
+    setIsUploading(true);
 
   const handleAddPose = async () => {
     if (!poseForm.name.trim()) {
@@ -1249,6 +1286,16 @@ const ARAssets = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {ingestionData && (
+        <GarmentIngestionModal
+          productId={ingestionData.productId}
+          category={ingestionData.category}
+          glbUrl={ingestionData.glbUrl}
+          onComplete={handleIngestionComplete}
+          onCancel={() => setIngestionData(null)}
+        />
       )}
     </div>
   );
