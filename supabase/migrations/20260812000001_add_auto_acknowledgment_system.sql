@@ -35,10 +35,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Exit if the message was sent by a staff, admin, or owner
+  -- Exit if the message was sent by a staff, owner, or owner
   IF NEW.sender_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM public.profiles 
-    WHERE id = NEW.sender_id AND role IN ('staff', 'admin', 'owner') AND deleted IS DISTINCT FROM true
+    WHERE id = NEW.sender_id AND role IN ('staff', 'owner') AND deleted IS DISTINCT FROM true
   ) THEN
     RETURN NEW;
   END IF;
@@ -51,7 +51,7 @@ BEGIN
 
   IF FOUND THEN
     IF setting_row.enabled IS FALSE THEN
-      RETURN NEW; -- Feature disabled by admin
+      RETURN NEW; -- Feature disabled by owner
     END IF;
     IF setting_row.message IS NOT NULL AND TRIM(setting_row.message) <> '' THEN
       setting_message := setting_row.message;
@@ -65,7 +65,7 @@ BEGIN
     AND sender_id IS NOT NULL
     AND EXISTS (
       SELECT 1 FROM public.profiles 
-      WHERE id = messages.sender_id AND role IN ('staff', 'admin', 'owner') AND deleted IS DISTINCT FROM true
+      WHERE id = messages.sender_id AND role IN ('staff', 'owner') AND deleted IS DISTINCT FROM true
     );
 
   -- Check if an auto-acknowledgment message has ALREADY been sent in this conversation

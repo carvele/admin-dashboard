@@ -8,10 +8,10 @@ describe('Role-Based Access Control (RBAC) Permissions', () => {
     expect(can('owner', 'manage_settings')).toBe(true);
   });
 
-  test('grants admin permissions while guarding owner-only actions', () => {
-    expect(can('admin', 'archive_catalog')).toBe(true);
-    expect(can('admin', 'delete_customer')).toBe(true);
-    expect(can('admin', 'manage_settings')).toBe(false);
+  test('grants owner permissions while guarding owner-only actions', () => {
+    expect(can('owner', 'archive_catalog')).toBe(true);
+    expect(can('owner', 'delete_customer')).toBe(true);
+    expect(can('owner', 'manage_settings')).toBe(false);
   });
 
   test('restricts staff permissions from administrative actions', () => {

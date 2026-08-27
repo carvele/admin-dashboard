@@ -49,7 +49,7 @@ function json(req: Request, body: unknown, status: number) {
   });
 }
 
-const ALLOWED_ROLES = ['staff', 'admin'];
+const ALLOWED_ROLES = ['staff', 'owner'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

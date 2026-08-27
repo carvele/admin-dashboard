@@ -26,7 +26,7 @@ const SetPassword = () => {
       // without it is not a pending staff invite.
       const invitedRole = currentSession?.user?.app_metadata?.staff_role;
 
-      if (!currentSession || !['staff', 'admin'].includes(invitedRole)) {
+      if (!currentSession || !['staff', 'owner'].includes(invitedRole)) {
         setChecking(false);
         return;
       }
@@ -162,7 +162,7 @@ const SetPassword = () => {
             <h2>Set your password</h2>
             <p>
               Welcome to JezSy, {session.user.email}. Choose a password to activate your{' '}
-              {session.user.app_metadata?.staff_role === 'admin' ? 'Admin (Full Access)' : 'Sales Staff'} account.
+              {session.user.app_metadata?.staff_role === 'owner' ? 'Owner (Full Access)' : 'Sales Staff'} account.
             </p>
           </div>
 

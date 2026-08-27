@@ -472,7 +472,7 @@ const Messages = () => {
     setReactionPopover(null);
     if (!msg.docId) return;
     try {
-      await addReaction(msg.docId, user?.uid || 'admin', emoji);
+      await addReaction(msg.docId, user?.uid || 'staff', emoji);
     } catch (err) {
       console.error('Reaction failed:', err);
     }

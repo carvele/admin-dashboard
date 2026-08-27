@@ -182,7 +182,7 @@ const StaffManagement = () => {
   const confirmRoleToggle = async () => {
     if (!roleToggleConfirm) return;
     const member = roleToggleConfirm;
-    const newRole = member.role === 'admin' ? 'staff' : 'admin';
+    const newRole = member.role === 'owner' ? 'staff' : 'owner';
     const name = getDisplayName(member);
     try {
       const { error } = await supabase.rpc('update_staff_role', {
@@ -349,7 +349,6 @@ const StaffManagement = () => {
             title={member.role === 'owner' ? 'Role locked' : 'Click to toggle role'}
           >
             {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
-            {member.role === 'admin' && <ShieldCheck size={14} className="text-success" />}
             {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
             <span style={{ fontWeight: member.role === 'owner' ? 700 : 500 }}>
               {getDisplayRole(member.role)}
@@ -441,7 +440,6 @@ const StaffManagement = () => {
         <td>
           <div className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}>
             {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
-            {member.role === 'admin' && <ShieldCheck size={14} className="text-secondary" />}
             {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
             <span>{getDisplayRole(member.role)}</span>
           </div>
@@ -552,7 +550,6 @@ const StaffManagement = () => {
           >
             <option value="all">All Roles</option>
             <option value="owner">Owner</option>
-            <option value="admin">Admin</option>
             <option value="staff">Staff</option>
           </select>
         </div>
@@ -625,7 +622,7 @@ const StaffManagement = () => {
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                 >
                   <option value="staff">Sales Staff</option>
-                  <option value="admin">Admin (Full Access)</option>
+                  <option value="owner">Owner (Full Access)</option>
                 </select>
               </div>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
@@ -703,7 +700,7 @@ const StaffManagement = () => {
       <ConfirmDialog
         isOpen={!!roleToggleConfirm}
         title="Change Role?"
-        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'admin' ? 'Staff' : 'Admin'}?`}
+        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'owner' ? 'Staff' : 'Owner'}?`}
         confirmText="Change Role"
         onConfirm={confirmRoleToggle}
         onCancel={() => setRoleToggleConfirm(null)}

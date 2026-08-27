@@ -1,8 +1,8 @@
 /**
  * Centralized permission matrix for the JezSy Collection Admin.
  *
- * Roles (as stored in profiles.role): 'owner', 'admin', 'staff'.
- *   owner / admin = full access  ("super admin")
+ * Roles (as stored in profiles.role): 'owner', 'staff'.
+ *   owner         = full access  ("super admin")
  *   staff         = limited, view-only monitoring + full messaging
  *
  * IMPORTANT: authorization keys off the lowercase DB role. can() normalizes
@@ -17,11 +17,10 @@
  */
 
 const OWNER = 'owner';
-const ADMIN = 'admin';
 const STAFF = 'staff';
 
-const FULL = [OWNER, ADMIN];          // full-access tier
-const ALL = [OWNER, ADMIN, STAFF];    // everyone who can reach the dashboard
+const FULL = [OWNER];          // full-access tier
+const ALL = [OWNER, STAFF];    // everyone who can reach the dashboard
 
 const PERMISSIONS = {
   // ── Dashboard ──────────────────────────────────────────────
