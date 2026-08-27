@@ -252,7 +252,6 @@ const ARAssets = () => {
       // p.model_3dUrl elsewhere, per the toCamel-quirk comment above).
       if (window._targetProduct) {
         if (assetType === '3D Model') {
-          // Trigger the Phase 5B ingestion modal instead of saving immediately
           setIngestionData({
             productId: window._targetProduct.docId,
             category: window._targetProduct.category || 'shirt',
@@ -266,7 +265,6 @@ const ARAssets = () => {
         }
 
         const updateData = { maskUrl: downloadURL };
-
         await updateProduct(window._targetProduct.docId, updateData);
         toast.success(`Successfully uploaded and linked ${assetType} to ${window._targetProduct.name}`);
         window._targetProduct = null;
@@ -306,28 +304,6 @@ const ARAssets = () => {
     setPoseFile(null);
     setIsPoseModalOpen(true);
   };
-
-  const handleIngestionComplete = async (metadata) => {
-    try {
-      await updateProduct(ingestionData.productId, { model_3dUrl: ingestionData.glbUrl });
-      const { error } = await supabase.from('products').update({ garment_metadata: metadata }).eq('id', ingestionData.productId);
-      if (error) throw error;
-
-      toast.success(`Successfully calibrated ${ingestionData.productName}`);
-      setIngestionData(null);
-      window._targetProduct = null;
-    } catch (e) {
-      toast.error('Failed to save metadata');
-      console.error(e);
-    }
-  };
-
-  const handleSaveAlignment = async () => {
-    if (!poseForm.name.trim()) {
-      toast.error('Enter a pose name');
-      return;
-    }
-    setIsUploading(true);
 
   const handleAddPose = async () => {
     if (!poseForm.name.trim()) {
@@ -1300,5 +1276,4 @@ const ARAssets = () => {
     </div>
   );
 };
-
 export default ARAssets;
