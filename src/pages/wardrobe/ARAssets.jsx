@@ -136,6 +136,12 @@ const ARAssets = () => {
   };
   const [poseForm, setPoseForm] = useState(initialPoseForm);
 
+  const handleIngestionComplete = () => {
+    setIngestionData(null);
+    toast.success('Garment metadata generated and saved successfully!');
+  };
+
+
   useEffect(() => {
     const unsub = subscribeToProducts((data) => {
       setAllCatalogProducts(data);
