@@ -165,7 +165,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
                   <p className="font-bold text-yellow-800">Calibration Required</p>
                   <p className="text-sm text-yellow-700">
                     We couldn't automatically match all required bones. 
-                    Map at least <strong>Spine</strong>, <strong>LeftArm</strong>, and <strong>RightArm</strong> to continue.
+                    Map at least <strong>Spine</strong>, <strong>LeftArm</strong>, <strong>RightArm</strong>, <strong>LeftForeArm</strong>, and <strong>RightForeArm</strong> to continue.
                   </p>
                 </div>
               </div>
@@ -229,11 +229,11 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
 
               <div className="mt-4 pt-4 border-t flex justify-between items-center">
                 <p className="text-sm text-gray-500">
-                  {requiredMapped}/3 required bones mapped · {mappedCount}/{STANDARD_BONES.length} total
+                  {requiredMapped}/5 required bones mapped — {mappedCount}/{STANDARD_BONES.length} total
                 </p>
                 <button
                   onClick={handleContinueFromMapping}
-                  disabled={requiredMapped < 3}
+                  disabled={requiredMapped < 5}
                   className="bg-primary text-white px-6 py-2 rounded flex items-center disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Continue <ArrowRight size={16} className="ml-2" />
@@ -424,6 +424,26 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
                     <button onClick={() => setStep(4)} className="bg-primary text-white px-6 py-2 rounded flex items-center text-sm font-bold">Next: Validate AR Fit <ArrowRight size={16} className="ml-2" /></button>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : step === 4 ? (
+            <div className="flex flex-col h-full">
+              <div className="flex items-center gap-3 mb-4 border-b pb-4">
+                <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">4</div>
+                <div>
+                  <h2 className="font-bold text-gray-800">Validate AR Deformation</h2>
+                  <p className="text-sm text-gray-500">Ensure the garment deforms correctly before enabling it.</p>
+                </div>
+              </div>
+              <div className="flex-1 min-h-[500px]">
+                <CalibrationValidator 
+                  glbUrl={glbUrl} 
+                  metadata={metadata} 
+                  onPass={handleSave} 
+                  onFail={() => {
+                     setStep(3);
+                  }}
+                />
               </div>
             </div>
           ) : null}
