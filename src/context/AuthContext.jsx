@@ -321,14 +321,15 @@ export const AuthProvider = ({ children }) => {
         console.warn('Profile role lookup timed out or failed.', err);
       }
 
-      // Only admin/staff/owner may access the dashboard
-      if (!resolvedRole || resolvedRole === 'customer') {
+      // Only staff/owner may access the dashboard
+      const allowedRoles = ['staff', 'owner'];
+      if (!resolvedRole || !allowedRoles.includes(resolvedRole.toLowerCase())) {
         // Pending invite: the invite-email link already established a session for
         // this user, but they haven't finished Set Password yet (no staff profile
         // row). Leave the session alone so SetPassword.jsx can use it — rather
         // than signing them out before they ever reach that page. Detected via
         // app_metadata.staff_role, which is service-role-only and unforgeable.
-        const isPendingInvite = ['staff', 'admin'].includes(supabaseUser.app_metadata?.staff_role);
+        const isPendingInvite = ['staff', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
         if (!isPendingInvite) {
           await supabase.auth.signOut();
           toast.error('Access denied. Admin portal is for staff only.');
@@ -487,14 +488,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Role normalization: Supabase stores lowercase ('admin', 'owner', 'staff')
-  // The UI historically checks for 'Admin' or 'Owner' (capitalized).
+  // Role normalization: Supabase stores lowercase ('owner', 'staff')
+  // The UI historically checks for 'Owner' (capitalized).
   // We surface a normalized role to satisfy both old (capital) and new (lower) checks.
   const normalizedRole = user?.role
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()
     : null;
 
-  const isAdminUnlocked = normalizedRole === 'Admin' || normalizedRole === 'Owner';
+  const isAdminUnlocked = normalizedRole === 'Owner';
 
   if (isLoading) {
     return (

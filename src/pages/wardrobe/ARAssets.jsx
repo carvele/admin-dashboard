@@ -24,6 +24,7 @@ import {
   deletePoseGuide,
   subscribeToARAssets,
   createARAsset,
+  deleteARAsset,
   linkProductToPose,
   unlinkProductFromPose,
   getPoseGuideProducts,
@@ -106,6 +107,9 @@ const ARAssets = () => {
   const [editingPoseId, setEditingPoseId] = useState(null);
   const [poseProductsMap, setPoseProductsMap] = useState({});
   const [deletePoseConfirm, setDeletePoseConfirm] = useState(null);
+  
+  const [previewAssetUrl, setPreviewAssetUrl] = useState(null);
+  const [deleteAssetConfirm, setDeleteAssetConfirm] = useState(null);
 
   // Alignment form state
   const [alignPoints, setAlignPoints] = useState({
@@ -357,6 +361,18 @@ const ARAssets = () => {
     }
   };
 
+  const executeDeleteAsset = async () => {
+    const asset = deleteAssetConfirm;
+    setDeleteAssetConfirm(null);
+    if (!asset) return;
+    try {
+      await deleteARAsset(asset.id || asset.docId);
+      toast.success('Asset deleted from library');
+    } catch {
+      toast.error('Failed to delete asset');
+    }
+  };
+
   // Default poses if none in DB
   const displayPoses =
     poses.length > 0
@@ -524,7 +540,22 @@ const ARAssets = () => {
                           <button className="btn-outline small" onClick={() => openConfig(asset)}>
                             Configure Points
                           </button>
-                          <button className="btn-outline small">Preview</button>
+                          <button className="btn-outline small" onClick={() => setPreviewAssetUrl(asset.model_3dUrl)}>
+                            Preview
+                          </button>
+                          <button 
+                            className="btn-outline small text-danger" 
+                            onClick={async () => {
+                              try {
+                                await updateProduct(asset.docId, { model_3dUrl: null });
+                                toast.success('Asset unlinked from product');
+                              } catch (e) {
+                                toast.error('Failed to unlink asset');
+                              }
+                            }}
+                          >
+                            Unlink
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -619,9 +650,19 @@ const ARAssets = () => {
                               Link to Product
                             </button>
                           ) : (
-                            <button className="btn-outline small">Preview</button>
+                            <button className="btn-outline small" onClick={() => setPreviewAssetUrl(item.modelUrl)}>
+                              Preview
+                            </button>
                           )}
-                          <button className="btn-outline small text-danger">Delete</button>
+                          <button className="btn-outline small text-danger" onClick={() => {
+                            if (usage > 0) {
+                              toast.error('Cannot delete this asset. You must unlink it from all products first.');
+                            } else {
+                              setDeleteAssetConfirm(item);
+                            }
+                          }}>
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1171,6 +1212,44 @@ const ARAssets = () => {
         onConfirm={executeDeletePose}
         onCancel={() => setDeletePoseConfirm(null)}
       />
+
+      <ConfirmDialog
+        isOpen={!!deleteAssetConfirm}
+        title="Delete AR Asset"
+        message={`Are you sure you want to delete this asset from the global library? This cannot be undone and will break any products linked to it.`}
+        confirmText="Delete Asset"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={executeDeleteAsset}
+        onCancel={() => setDeleteAssetConfirm(null)}
+      />
+
+      {/* Preview Asset Modal */}
+      {previewAssetUrl && (
+        <div className="modal-overlay" role="presentation" onClick={() => setPreviewAssetUrl(null)}>
+          <div className="modal-content modal-lg" role="presentation" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Preview AR Asset</h2>
+              <button className="close-btn" onClick={() => setPreviewAssetUrl(null)}>
+                &times;
+              </button>
+            </div>
+            <div className="modal-body" style={{ height: '60vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5', borderRadius: '8px' }}>
+              {previewAssetUrl.toLowerCase().endsWith('.glb') || previewAssetUrl.toLowerCase().endsWith('.gltf') ? (
+                <model-viewer
+                  src={previewAssetUrl}
+                  auto-rotate
+                  camera-controls
+                  ar
+                  style={{ width: '100%', height: '100%' }}
+                ></model-viewer>
+              ) : (
+                <img src={previewAssetUrl} alt="Asset Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

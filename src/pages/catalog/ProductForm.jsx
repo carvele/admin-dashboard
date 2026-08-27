@@ -552,7 +552,7 @@ const ProductForm = ({ readOnly = false }) => {
                 item: payload.name,
                 category: payload.category,
                 sku: payload.styleCode,
-                price: payload.price,
+                // price: payload.price, // PGRST204 fix: price column does not exist on inventory
               });
             }
             Logger.info(`Created ${toCreate.length} new variant rows for product ${id}`);
@@ -641,7 +641,7 @@ const ProductForm = ({ readOnly = false }) => {
               item: payload.name,
               category: payload.category,
               sku: payload.styleCode,
-              price: payload.price,
+              // price: payload.price, // PGRST204 fix: price column does not exist on inventory
             });
           }
           await syncProductAttributesFromVariants(newDocId);

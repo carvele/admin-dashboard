@@ -20,9 +20,8 @@ interface TopNavProps {
 
 const getDisplayRole = (role?: string) => {
   if (!role) return 'Staff';
-  const r = role.toLowerCase();
-  if (r === 'admin' || r === 'super_admin' || r === 'superadmin') return 'Administrator';
-  if (r === 'owner') return 'Store Owner';
+  const r = (role || '').toLowerCase().trim();
+  if (r === 'owner') return 'Owner';
   if (r === 'staff') return 'Staff';
   return role.charAt(0).toUpperCase() + role.slice(1);
 };
@@ -351,7 +350,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                 className="user-role-top"
                 style={{
                   fontSize: '0.75rem',
-                  color: (user as any)?.role === 'admin' || (user as any)?.role === 'owner' ? 'var(--accent)' : 'var(--text-secondary)',
+                  color: (user as any)?.role === 'owner' ? 'var(--accent)' : 'var(--text-secondary)',
                   fontWeight: 500,
                 }}
               >

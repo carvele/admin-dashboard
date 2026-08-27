@@ -2,7 +2,7 @@
  * staffService.js  (Supabase)
  * All profile reads/writes, device management, and HR status management.
  *
- * Staff     = public.profiles rows with role IN ('admin','staff','owner').
+ * Staff     = public.profiles rows with role IN ('staff','owner').
  * History   = public.staff_status_history (write via RPC only).
  * Devices   = public.devices.  Logs = public.logs.
  */

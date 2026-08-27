@@ -45,7 +45,7 @@ function json(req: Request, body: unknown, status: number) {
   });
 }
 
-const ALLOWED_INVITE_ROLES = ['staff', 'admin'];
+const ALLOWED_INVITE_ROLES = ['staff', 'owner'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       !callerProfile ||
       callerProfile.deleted ||
       callerProfile.is_blocked ||
-      !['admin', 'owner'].includes(callerProfile.role)
+      callerProfile.role !== 'owner'
     ) {
       return json(req, { error: 'You do not have permission to invite staff.' }, 403);
     }
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       return json(req, { error: 'A valid email address is required.' }, 400);
     }
     if (!ALLOWED_INVITE_ROLES.includes(role)) {
-      return json(req, { error: 'Role must be "staff" or "admin".' }, 400);
+      return json(req, { error: 'Role must be "staff" or "owner".' }, 400);
     }
 
     const siteUrl = Deno.env.get('SITE_URL') ?? new URL(req.url).origin;

@@ -90,7 +90,7 @@ const syncProductUpdateToInventory = async (productDocId, newData) => {
   const updates = {};
   if (name !== undefined) updates.item = name;
   if (category !== undefined) updates.category = category;
-  if (price !== undefined) updates.price = price;
+  // if (price !== undefined) updates.price = price; // PGRST204 fix: price column does not exist on inventory
   if (sku !== undefined) updates.sku = sku;
   if (!Object.keys(updates).length) return;
 
