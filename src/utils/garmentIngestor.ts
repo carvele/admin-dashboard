@@ -122,10 +122,15 @@ export class GarmentIngestor {
     }
 
     // 5. Ingestion Status
-    // MVP Rule: MUST have Spine + LeftArm + RightArm. MUST have 'detected' anchor.
-    const hasRequiredBones = boneMap['Spine'] && boneMap['LeftArm'] && boneMap['RightArm'];
+    // Phase 5B Rule: MUST have Spine + LeftArm + RightArm + Forearms. MUST have 'detected' anchor.
+    const hasRequiredBones = boneMap['Spine'] && boneMap['LeftArm'] && boneMap['RightArm'] && boneMap['LeftForeArm'] && boneMap['RightForeArm'];
     const ingestionStatus: IngestionStatus =
       (hasRequiredBones && anchorConfidence === 'detected') ? 'AR_READY' : 'NEEDS_MERCHANT_MAPPING';
+
+    let anchorType: 'NECK' | 'SHOULDER_CENTER' | 'CHEST' | 'WAIST' | 'HIP' | 'CUSTOM' = 'SHOULDER_CENTER';
+    if (category === 'pants' || category === 'skirt') {
+      anchorType = 'WAIST';
+    }
 
     return {
       id,
@@ -134,6 +139,7 @@ export class GarmentIngestor {
       ingestionStatus,
       anatomicalAnchorOffset: anchorOffset,
       anchorConfidence,
+      anchorType,
       restPoseMetricWidth,
       boneMap,
       restPose: 'T_POSE' // Can be heuristically detected by arm angles
@@ -152,6 +158,7 @@ export class GarmentIngestor {
       ingestionStatus: status,
       anatomicalAnchorOffset: { x: 0, y: 0, z: 0 },
       anchorConfidence: 'inferred',
+      anchorType: 'CUSTOM',
       restPoseMetricWidth: 0.5,
       boneMap: {},
       restPose: 'CUSTOM'

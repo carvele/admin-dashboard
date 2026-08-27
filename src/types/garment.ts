@@ -41,6 +41,7 @@ export interface GarmentMetadata {
   // Predictable offset from the garment's origin to the anatomical anchor (e.g. neck)
   anatomicalAnchorOffset: Vec3;
   anchorConfidence: 'detected' | 'inferred' | 'merchant_confirmed';
+  anchorType: 'NECK' | 'SHOULDER_CENTER' | 'CHEST' | 'WAIST' | 'HIP' | 'CUSTOM';
   
   // Baseline metric width in meters (e.g. shoulder-to-shoulder in rest pose)
   restPoseMetricWidth: number;

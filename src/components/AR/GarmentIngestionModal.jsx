@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, AlertTriangle, ArrowRight, Info, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { GarmentIngestor } from '../../utils/garmentIngestor';
+import CalibrationValidator from './CalibrationValidator';
 import '@google/model-viewer';
 
 const STANDARD_BONES = [
@@ -9,7 +10,7 @@ const STANDARD_BONES = [
   'RightShoulder', 'RightArm', 'RightForeArm',
 ];
 
-const REQUIRED_BONES = ['Spine', 'LeftArm', 'RightArm'];
+const REQUIRED_BONES = ['Spine', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm'];
 
 const ANCHOR_CONFIDENCE_LABELS = {
   detected: { label: 'Auto-detected', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
@@ -89,7 +90,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
   const handleContinueFromMapping = () => {
     const hasRequired = REQUIRED_BONES.every(b => metadata.boneMap[b]);
     if (!hasRequired) {
-      alert('Spine, LeftArm, and RightArm are required.');
+      alert('Spine, LeftArm, RightArm, LeftForeArm, and RightForeArm are required.');
       return;
     }
     setStep(3);
@@ -386,8 +387,28 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
                           anchorConfidence: 'merchant_confirmed'
                         })}
                       >
-                        <option value="T_POSE">T-Pose — Arms horizontal</option>
-                        <option value="A_POSE">A-Pose — Arms ~35° below horizontal</option>
+                        <option value="T_POSE">T-Pose - Arms horizontal</option>
+                        <option value="A_POSE">A-Pose - Arms ~35° below horizontal</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold mb-1">Anchor Type</label>
+                      <select
+                        className="w-full border rounded p-2 text-sm"
+                        value={metadata.anchorType}
+                        onChange={(e) => setMetadata({
+                          ...metadata,
+                          anchorType: e.target.value,
+                          anchorConfidence: 'merchant_confirmed'
+                        })}
+                      >
+                        <option value="NECK">Neck</option>
+                        <option value="SHOULDER_CENTER">Shoulder Center</option>
+                        <option value="CHEST">Chest</option>
+                        <option value="WAIST">Waist</option>
+                        <option value="HIP">Hip</option>
+                        <option value="CUSTOM">Custom</option>
                       </select>
                     </div>
                   </div>
@@ -400,12 +421,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
                     >
                       Cancel
                     </button>
-                    <button
-                      onClick={handleSave}
-                      className="bg-primary text-white px-6 py-2 rounded flex items-center text-sm font-bold"
-                    >
-                      <Check size={16} className="mr-2" /> Save &amp; Enable AR
-                    </button>
+                    <button onClick={() => setStep(4)} className="bg-primary text-white px-6 py-2 rounded flex items-center text-sm font-bold">Next: Validate AR Fit <ArrowRight size={16} className="ml-2" /></button>
                   </div>
                 </div>
               </div>
