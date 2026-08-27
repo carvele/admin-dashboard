@@ -874,7 +874,7 @@ const ARAssets = () => {
                 Upload a 3D model file (.glb, .gltf) for AR Try-On. After uploading, tag a product
                 with &quot;AR Try-On&quot; in the Catalog to associate this asset.
               </p>
-              <div className="upload-dropzone">
+              <div className="upload-dropzone" onClick={() => document.getElementById("ar-upload")?.click()} style={{ cursor: "pointer" }}>
                 <input
                   type="file"
                   id="ar-upload"
