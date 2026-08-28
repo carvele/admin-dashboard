@@ -1,8 +1,0 @@
-
-> jezsy-admin-dashboard@0.0.0 build
-> tsc && vite build
-
-[36mvite v8.0.2 [32mbuilding client environment for production...[36m[39m
-[2K
-transforming...Γ£ô 2823 modules transformed.
-rendering chunks...
