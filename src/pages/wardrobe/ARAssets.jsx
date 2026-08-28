@@ -200,14 +200,17 @@ const ARAssets = () => {
   };
 
   const openConfig = (asset) => {
-    setConfigAsset(asset);
-    setAlignPoints({
-      shoulderL: asset.arData?.alignPoints?.shoulderL || '-0.25, 1.45, 0',
-      shoulderR: asset.arData?.alignPoints?.shoulderR || '0.25, 1.45, 0',
-      waist: asset.arData?.alignPoints?.waist || '0, 1.05, 0',
-      hips: asset.arData?.alignPoints?.hips || '0, 0.90, 0',
-    });
-    setIsConfigModalOpen(true);
+    // Phase 5B: Launch the new GarmentIngestionModal instead of legacy alignment-point modal
+    if (asset.model_3dUrl) {
+      setIngestionData({
+        productId: asset.docId,
+        category: asset.category || 'shirt',
+        glbUrl: asset.model_3dUrl,
+        productName: asset.name,
+      });
+    } else {
+      toast.error('No 3D model linked to this product. Upload a GLB first.');
+    }
   };
 
   const saveAlignmentPoints = async () => {
