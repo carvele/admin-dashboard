@@ -36,9 +36,19 @@ const Login = () => {
     setError('');
     try {
       await login(form.email.trim(), form.password);
-      // Removed immediate navigate() to prevent race conditions with AuthContext's async fetching
-    } catch {
-      setError('Invalid credentials. Please try again.');
+    } catch (err) {
+      const errMsg = err?.message || '';
+      if (errMsg.includes('Invalid credentials') || errMsg.includes('invalid_credentials') || errMsg.includes('Invalid login')) {
+        setError('Invalid email or password. Please check your credentials.');
+      } else if (errMsg.includes('deactivated') || errMsg.includes('no longer has access')) {
+        setError('This account has been deactivated. Please contact the store owner.');
+      } else if (errMsg.includes('Email not confirmed')) {
+        setError('Please confirm your email address first.');
+      } else if (errMsg.includes('restricted') || errMsg.includes('customer')) {
+        setError('This portal is for Staff and Administrators only. Customers must sign in via the mobile app.');
+      } else {
+        setError(errMsg || 'Sign in failed. Please check your credentials and connection.');
+      }
     } finally {
       setIsLoadingUI(false);
     }

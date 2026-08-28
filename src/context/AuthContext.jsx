@@ -134,6 +134,8 @@ export const AuthProvider = ({ children }) => {
   const [deviceData, setDeviceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const deviceChannelRef = useRef(null);
+  const userRef = useRef(null);
+  const isIntentionalSignOutRef = useRef(false);
 
   // Unsubscribe from old device channel before starting a new one
   const clearDeviceChannel = React.useCallback(() => {
@@ -278,61 +280,104 @@ export const AuthProvider = ({ children }) => {
         setDeviceStatus('pending');
       }
 
-      // --- 4. Staff role lookup from public.profiles ---
+      // --- 4. Staff / Admin / Owner role lookup from public.profiles ---
       let resolvedRole = null;
       let staffName = '';
-      try {
-        const { data: profile } = await withTimeout(
-          supabase
-            .from('profiles')
-            // Fetch the full status fields — we decide access, not the query filter
-            .select('role, first_name, last_name, deleted, is_blocked, employment_status')
-            .eq('id', supabaseUser.id)
-            .maybeSingle(),
-          5000,
-        );
+      let profile = null;
+      let profileFetchAttempt = 0;
 
-        if (profile) {
-          // ── Lockout guard ──────────────────────────────────────
-          // DENY-LIST logic: only block on explicit bad states.
-          // NULL / 'active' / 'on_leave' / 'resigned' employment_status
-          // are all ALLOWED — only 'terminated' is denied.
-          // Accounts created outside the app (e.g. via Supabase Dashboard)
-          // may have employment_status = NULL; that is valid and must not block login.
-          if (
-            profile.deleted === true ||
-            profile.is_blocked === true ||
-            profile.employment_status === 'terminated'
-          ) {
-            await supabase.auth.signOut();
-            setUser(null);
-            setIsLoading(false);
-            toast.error(
-              'This account no longer has access. Please contact the store owner.',
-              { duration: 6000 },
-            );
-            return;
+      // Retry up to 3 times to prevent kicking out valid users during transient wake/network lag
+      while (profileFetchAttempt < 3 && !profile) {
+        profileFetchAttempt++;
+        try {
+          const { data, error: profileErr } = await withTimeout(
+            supabase
+              .from('profiles')
+              // Fetch the full status fields — we decide access, not the query filter
+              .select('role, first_name, last_name, deleted, is_blocked, employment_status')
+              .eq('id', supabaseUser.id)
+              .maybeSingle(),
+            5000,
+          );
+
+          if (profileErr) {
+            console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile fetch error:`, profileErr.message);
+          } else {
+            profile = data;
+            break;
           }
-
-          resolvedRole = profile.role;
-          staffName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+        } catch (err) {
+          console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile lookup timed out or failed:`, err);
         }
-      } catch (err) {
-        console.warn('Profile role lookup timed out or failed.', err);
+
+        if (profileFetchAttempt < 3 && !profile) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * profileFetchAttempt));
+        }
       }
 
-      // Only staff/owner may access the dashboard
-      const allowedRoles = ['staff', 'owner'];
-      if (!resolvedRole || !allowedRoles.includes(resolvedRole.toLowerCase())) {
+      if (profile) {
+        // ── Lockout guard ──────────────────────────────────────
+        // DENY-LIST logic: only block on explicit bad states.
+        // NULL / 'active' / 'on_leave' / 'resigned' employment_status
+        // are all ALLOWED — only 'terminated' is denied.
+        if (
+          profile.deleted === true ||
+          profile.is_blocked === true ||
+          profile.employment_status === 'terminated'
+        ) {
+          isIntentionalSignOutRef.current = true;
+          await supabase.auth.signOut();
+          setUser(null);
+          setIsLoading(false);
+          toast.error(
+            'This account no longer has access. Please contact the store owner.',
+            { duration: 6000 },
+          );
+          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+          return;
+        }
+
+        resolvedRole = profile.role;
+        staffName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+      }
+
+      // Customer accounts attempting web dashboard access
+      if (resolvedRole === 'customer') {
+        isIntentionalSignOutRef.current = true;
+        await supabase.auth.signOut();
+        toast.error('Access restricted: This portal is for store staff and administrators only. Customer accounts must use the mobile application.', { duration: 6000 });
+        setUser(null);
+        setIsLoading(false);
+        setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+        return;
+      }
+
+      // If no profile was resolved after retries:
+      if (!resolvedRole) {
         // Pending invite: the invite-email link already established a session for
         // this user, but they haven't finished Set Password yet (no staff profile
         // row). Leave the session alone so SetPassword.jsx can use it — rather
         // than signing them out before they ever reach that page. Detected via
         // app_metadata.staff_role, which is service-role-only and unforgeable.
-        const isPendingInvite = ['staff', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
-        if (!isPendingInvite) {
+        const isPendingInvite = ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
+        if (isPendingInvite) {
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // If user already had a confirmed active session and this is just a background network blip, do not kick them out
+        if (userRef.current && userRef.current.uid === supabaseUser.id) {
+          console.warn('[handleDeviceCheck] Transient network blip during session refresh; retaining active session.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!isIntentionalSignOutRef.current) {
+          isIntentionalSignOutRef.current = true;
           await supabase.auth.signOut();
-          toast.error('Access denied. Admin portal is for staff only.');
+          toast.error('Access restricted: No staff profile found for this account.');
+          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
         }
         setUser(null);
         setIsLoading(false);
@@ -340,12 +385,14 @@ export const AuthProvider = ({ children }) => {
       }
 
       // --- 5. Set user state ---
-      setUser({
+      const nextUser = {
         uid: supabaseUser.id,
         name: staffName || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Staff',
         email: supabaseUser.email,
         role: resolvedRole,
-      });
+      };
+      userRef.current = nextUser;
+      setUser(nextUser);
     } catch (err) {
       console.error('Auth check failed:', err);
       setDeviceStatus('error');
@@ -380,63 +427,107 @@ export const AuthProvider = ({ children }) => {
   }, [handleDeviceCheck, clearDeviceChannel]);
 
   const logout = React.useCallback(async () => {
+    isIntentionalSignOutRef.current = true;
     const savedFPHash = localStorage.getItem('_jz_fp_hash');
     clearDeviceChannel();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+    userRef.current = null;
     setUser(null);
     setDeviceStatus('checking');
     localStorage.clear();
     sessionStorage.clear();
     if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
     toast.info('Logged out successfully');
+    setTimeout(() => {
+      isIntentionalSignOutRef.current = false;
+    }, 1000);
   }, [clearDeviceChannel]);
 
-  // Auto-logout idle timer (30 minutes)
+  const handleIdleLogout = React.useCallback(async () => {
+    isIntentionalSignOutRef.current = true;
+    const savedFPHash = localStorage.getItem('_jz_fp_hash');
+    clearDeviceChannel();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+    userRef.current = null;
+    setUser(null);
+    setDeviceStatus('checking');
+    localStorage.clear();
+    sessionStorage.clear();
+    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
+    toast.info('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 });
+    setTimeout(() => {
+      isIntentionalSignOutRef.current = false;
+    }, 1000);
+  }, [clearDeviceChannel]);
+
+  // Auto-logout idle timer (30 minutes of inactivity)
   useEffect(() => {
     let timeoutId;
+    let lastActivityTime = Date.now();
+    const IDLE_LIMIT_MS = 30 * 60 * 1000;
 
     const resetTimer = () => {
+      lastActivityTime = Date.now();
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(
-        () => {
-          if (user) {
-            toast.error('Session expired due to inactivity. Logging out.');
-            logout();
-          }
-        },
-        30 * 60 * 1000,
-      );
+      timeoutId = setTimeout(() => {
+        if (user) {
+          handleIdleLogout();
+        }
+      }, IDLE_LIMIT_MS);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        const elapsed = Date.now() - lastActivityTime;
+        if (elapsed >= IDLE_LIMIT_MS) {
+          handleIdleLogout();
+        } else {
+          resetTimer();
+        }
+      }
     };
 
     if (user && deviceStatus === 'approved') {
-      window.addEventListener('mousemove', resetTimer);
-      window.addEventListener('keydown', resetTimer);
-      window.addEventListener('scroll', resetTimer);
-      window.addEventListener('click', resetTimer);
+      const activityEvents = ['mousemove', 'mousedown', 'pointerdown', 'keydown', 'scroll', 'touchstart', 'focus'];
+      activityEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+      document.addEventListener('visibilitychange', handleVisibilityChange);
       resetTimer();
+
+      return () => {
+        clearTimeout(timeoutId);
+        activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
 
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('keydown', resetTimer);
-      window.removeEventListener('scroll', resetTimer);
-      window.removeEventListener('click', resetTimer);
     };
-  }, [user, deviceStatus, logout]);
+  }, [user, deviceStatus, handleIdleLogout]);
 
   const login = async (email, password) => {
     try {
-      setIsLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       await handleDeviceCheck(data.user);
       toast.success('Welcome back!');
     } catch (error) {
-      setIsLoading(false);
       let message = 'Login failed. Please check your credentials.';
-      if (error.message?.includes('Invalid login credentials')) message = 'Invalid credentials. Please try again.';
-      if (error.message?.includes('Email not confirmed')) message = 'Please confirm your email first.';
+      if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
+        message = 'Invalid email or password. Please try again.';
+      } else if (error.message?.includes('Email not confirmed')) {
+        message = 'Please confirm your email first.';
+      } else if (error.message?.includes('restricted') || error.message?.includes('portal is for')) {
+        message = error.message;
+      }
       toast.error(message);
       throw error;
     }
