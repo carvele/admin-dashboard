@@ -203,8 +203,39 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
           </div>
 
           <div className="pt-4 border-t mt-4 flex flex-col gap-2">
-            <button onClick={onPass} className="bg-green-600 text-white font-bold py-2 rounded text-center">Looks Good ? Approve</button>
-            <button onClick={onFail} className="bg-red-100 text-red-700 font-bold py-2 rounded text-center">Deformation Failed ? Reject</button>
+            <h4 className="font-bold text-gray-800 text-sm">Automated Quality Check</h4>
+            {metadata.validationErrors && metadata.validationErrors.length > 0 ? (
+              <div className="bg-red-50 text-red-700 p-2 rounded text-xs border border-red-200">
+                <strong>Failed:</strong>
+                <ul className="list-disc pl-4 mt-1">
+                  {metadata.validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <div className="bg-green-50 text-green-700 p-2 rounded text-xs border border-green-200">
+                ✓ Passed all technical checks.
+              </div>
+            )}
+            
+            {metadata.validationWarnings && metadata.validationWarnings.length > 0 && (
+              <div className="bg-yellow-50 text-yellow-700 p-2 rounded text-xs border border-yellow-200 mt-1">
+                <strong>Warnings:</strong>
+                <ul className="list-disc pl-4 mt-1">
+                  {metadata.validationWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+            
+            <button 
+              onClick={onPass} 
+              className="mt-2 bg-green-600 text-white font-bold py-2 rounded text-center disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={metadata.validationErrors?.length > 0}
+            >
+              Confirm AR Ready
+            </button>
+            <button onClick={onFail} className="bg-gray-100 text-gray-700 font-bold py-2 rounded text-center hover:bg-gray-200">
+              Reject / Go Back
+            </button>
           </div>
         </div>
       </div>

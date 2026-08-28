@@ -13,6 +13,11 @@ const STANDARD_BONES = [
 const REQUIRED_BONES = ['Spine', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm'];
 
 const ANCHOR_CONFIDENCE_LABELS = {
+  HIGH: { label: 'High Confidence', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
+  MEDIUM: { label: 'Medium Confidence', color: 'bg-yellow-100 text-yellow-800', icon: HelpCircle },
+  LOW: { label: 'Low Confidence (Please check)', color: 'bg-red-100 text-red-800', icon: AlertTriangle },
+  MERCHANT_CONFIRMED: { label: 'Merchant confirmed', color: 'bg-blue-100 text-blue-800', icon: CheckCircle2 },
+  // Legacy
   detected: { label: 'Auto-detected', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
   inferred: { label: 'Inferred (needs confirmation)', color: 'bg-yellow-100 text-yellow-800', icon: HelpCircle },
   merchant_confirmed: { label: 'Merchant confirmed', color: 'bg-blue-100 text-blue-800', icon: CheckCircle2 },
@@ -20,8 +25,9 @@ const ANCHOR_CONFIDENCE_LABELS = {
 
 const STATUS_LABELS = {
   AR_READY: { label: 'AR Ready', desc: 'No action required. This garment is ready for AR try-on.', color: 'bg-green-50 border-green-200 text-green-800', icon: CheckCircle2 },
-  NEEDS_MERCHANT_MAPPING: { label: 'Calibration Required', desc: 'Please select/map the missing bones and confirm the garment anchor.', color: 'bg-yellow-50 border-yellow-200 text-yellow-800', icon: AlertTriangle },
-  NOT_AR_COMPATIBLE: { label: 'Not AR Compatible', desc: 'This GLB does not contain the required structure for skeletal try-on.', color: 'bg-red-50 border-red-200 text-red-800', icon: XCircle },
+  NEEDS_MERCHANT_MAPPING: { label: 'Bone Mapping Required', desc: 'Please select/map the missing bones.', color: 'bg-yellow-50 border-yellow-200 text-yellow-800', icon: AlertTriangle },
+  NEEDS_CALIBRATION: { label: 'Calibration Required', desc: 'Auto-rigging successful. Please confirm calibration.', color: 'bg-blue-50 border-blue-200 text-blue-800', icon: Info },
+  NOT_AR_COMPATIBLE: { label: 'Not AR Compatible', desc: 'This GLB does not meet geometry requirements.', color: 'bg-red-50 border-red-200 text-red-800', icon: XCircle },
 };
 
 export default function GarmentIngestionModal({ productId, category, glbUrl, onComplete, onCancel }) {
@@ -31,26 +37,36 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
   const [metadata, setMetadata] = useState(null);
   const [availableBones, setAvailableBones] = useState([]);
   const [totalBoneCount, setTotalBoneCount] = useState(0);
+  const [riggedBlob, setRiggedBlob] = useState(null);
+  const [riggedUrl, setRiggedUrl] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
     GarmentIngestor.analyzeGLBFromUrl(productId, category, glbUrl)
       .then((result) => {
         if (!isMounted) return;
-        setMetadata(result);
+        const { metadata: md, riggedGlbUrl, riggedGlbBlob } = result;
+        setMetadata(md);
+        if (riggedGlbUrl) setRiggedUrl(riggedGlbUrl);
+        if (riggedGlbBlob) setRiggedBlob(riggedGlbBlob);
         
         fetchBones(glbUrl).then(bones => {
           if (!isMounted) return;
+          // If auto-rigged, fetchBones will return the old unrigged bones.
+          // But that's okay, because mapping is skipped for auto-rigged.
           setAvailableBones(bones);
           setTotalBoneCount(bones.length);
         });
 
-        if (result.ingestionStatus === 'NOT_AR_COMPATIBLE') {
-          setError('Model is not AR compatible. It must be a rigged/skinned mesh.');
+        if (md.ingestionStatus === 'NOT_AR_COMPATIBLE') {
+          setError('Model is not AR compatible. It must meet minimal geometry requirements.');
           setLoading(false);
-        } else if (result.ingestionStatus === 'NEEDS_MERCHANT_MAPPING') {
-          const hasRequired = REQUIRED_BONES.every(b => result.boneMap[b]);
+        } else if (md.ingestionStatus === 'NEEDS_MERCHANT_MAPPING') {
+          const hasRequired = REQUIRED_BONES.every(b => md.boneMap[b]);
           setStep(hasRequired ? 3 : 2);
+          setLoading(false);
+        } else if (md.ingestionStatus === 'NEEDS_CALIBRATION') {
+          setStep(3);
           setLoading(false);
         } else {
           setStep(3);
@@ -97,12 +113,17 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
   };
 
   const handleSave = () => {
+    let finalStatus = 'AR_READY';
+    if (metadata.autoRigged) {
+      finalStatus = 'NEEDS_CALIBRATION'; // Phase 6A strict state until skinning is implemented
+    }
+
     const finalMetadata = {
       ...metadata,
-      ingestionStatus: 'AR_READY',
-      anchorConfidence: metadata.anchorConfidence === 'inferred' ? 'merchant_confirmed' : metadata.anchorConfidence
+      ingestionStatus: finalStatus,
+      anchorConfidence: metadata.anchorConfidence === 'inferred' ? 'MERCHANT_CONFIRMED' : metadata.anchorConfidence
     };
-    onComplete(finalMetadata);
+    onComplete({ metadata: finalMetadata, riggedBlob });
   };
 
   const mappedCount = metadata ? Object.keys(metadata.boneMap).length : 0;
@@ -149,8 +170,8 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
               <h3 className="text-xl font-bold mb-2">Not AR Compatible</h3>
               <p className="text-gray-600 mb-2">{error}</p>
               <p className="text-sm text-gray-400 mb-6">
-                This GLB does not contain a skinned mesh with bones. 
-                Skeletal try-on requires a rigged garment in T-pose or A-pose.
+                This GLB must contain recognizable 3D geometry for a garment, 
+                such as a shirt, dress, or pants.
               </p>
               <button onClick={onCancel} className="bg-gray-200 px-6 py-2 rounded hover:bg-gray-300">Close</button>
             </div>
@@ -437,7 +458,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
               </div>
               <div className="flex-1 min-h-[500px]">
                 <CalibrationValidator 
-                  glbUrl={glbUrl} 
+                  glbUrl={riggedUrl || glbUrl} 
                   metadata={metadata} 
                   onPass={handleSave} 
                   onFail={() => {

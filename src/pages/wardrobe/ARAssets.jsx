@@ -2,16 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload,
-  Camera,
-  View,
   Settings,
   Check,
   Crosshair,
   Shirt,
-  Trash2,
   Plus,
-  Star,
-  Edit3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -19,15 +14,9 @@ import {
   updateProduct,
 } from '../../services/productService';
 import {
-  subscribeToPoseGuides,
-  createPoseGuide,
-  deletePoseGuide,
   subscribeToARAssets,
   createARAsset,
   deleteARAsset,
-  linkProductToPose,
-  unlinkProductFromPose,
-  getPoseGuideProducts,
 } from '../../services/wardrobeService';
 import { routeAndUploadFile } from '../../lib/storage';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -96,20 +85,14 @@ const ARAssets = () => {
   const [pendingProducts, setPendingProducts] = useState([]);
   const [globalLibrary, setGlobalLibrary] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [poses, setPoses] = useState([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [ingestionData, setIngestionData] = useState(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [productToLink, setProductToLink] = useState(null);
-  const [isPoseModalOpen, setIsPoseModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [allCatalogProducts, setAllCatalogProducts] = useState([]);
-  const [poseFile, setPoseFile] = useState(null);
-  const [editingPoseId, setEditingPoseId] = useState(null);
-  const [poseProductsMap, setPoseProductsMap] = useState({});
-  const [deletePoseConfirm, setDeletePoseConfirm] = useState(null);
   
   const [previewAssetUrl, setPreviewAssetUrl] = useState(null);
   const [deleteAssetConfirm, setDeleteAssetConfirm] = useState(null);
@@ -122,23 +105,28 @@ const ARAssets = () => {
     hips: '0, 0.90, 0',
   });
 
-  // Pose form state
-  const initialPoseForm = {
-    name: '',
-    category: 'Style Hint',
-    image_url: '',
-    description: '',
-    occasion: 'Casual',
-    difficulty: 'easy',
-    is_featured: true,
-    base_pose_type: 'front',
-    linkedProductIds: [],
-  };
-  const [poseForm, setPoseForm] = useState(initialPoseForm);
 
-  const handleIngestionComplete = () => {
-    setIngestionData(null);
-    toast.success('Garment metadata generated and saved successfully!');
+  const handleIngestionComplete = async ({ metadata, riggedBlob }) => {
+    try {
+      let finalModelUrl = ingestionData.glbUrl;
+      
+      if (riggedBlob) {
+        // Upload the new rigged GLB
+        const file = new File([riggedBlob], `${ingestionData.productId}_rigged.glb`, { type: 'model/gltf-binary' });
+        finalModelUrl = await routeAndUploadFile(file, 'catalog-assets/models');
+      }
+
+      await updateProduct(ingestionData.productId, { 
+        garment_metadata: metadata,
+        model_3d_url: finalModelUrl 
+      });
+      
+      setIngestionData(null);
+      toast.success('Garment metadata generated and saved successfully!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save garment metadata to database.');
+    }
   };
 
 
@@ -155,26 +143,9 @@ const ARAssets = () => {
       setPendingProducts(arTagged.filter(p => !p.model_3dUrl));
       setLoading(false);
     });
-    const unsubPoses = subscribeToPoseGuides(async (poseData) => {
-      setPoses(poseData);
-      // Fetch linked products for each pose
-      const map = {};
-      for (const pose of poseData) {
-        if (pose.id) {
-          try {
-            const linked = await getPoseGuideProducts(pose.id);
-            map[pose.id] = linked;
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      }
-      setPoseProductsMap(map);
-    });
     const unsubLibrary = subscribeToARAssets(setGlobalLibrary);
     return () => {
       unsub();
-      unsubPoses();
       unsubLibrary();
     };
   }, []);
@@ -290,98 +261,10 @@ const ARAssets = () => {
     }
   };
 
-  const resetPoseForm = () => {
-    setPoseForm(initialPoseForm);
-    setPoseFile(null);
-    setEditingPoseId(null);
-  };
 
-  const handleOpenEditPose = async (pose) => {
-    setEditingPoseId(pose.id);
-    const linked = poseProductsMap[pose.id] || [];
-    setPoseForm({
-      name: pose.name || '',
-      category: pose.category || 'Style Hint',
-      image_url: pose.image_url || '',
-      description: pose.description || '',
-      occasion: pose.occasion || 'Casual',
-      difficulty: pose.difficulty || 'easy',
-      is_featured: pose.is_featured ?? true,
-      base_pose_type: pose.base_pose_type || 'front',
-      linkedProductIds: linked.map(l => l.product_id),
-    });
-    setPoseFile(null);
-    setIsPoseModalOpen(true);
-  };
 
-  const handleAddPose = async () => {
-    if (!poseForm.name.trim()) {
-      toast.error('Enter a pose name');
-      return;
-    }
-    setIsUploading(true);
-    try {
-      let imageUrl = poseForm.image_url;
-      if (poseFile) {
-        imageUrl = await routeAndUploadFile(poseFile, 'pose-images');
-      }
 
-      const poseId = editingPoseId || `P-${String(poses.length + 1).padStart(3, '0')}`;
-      await createPoseGuide({
-        id: poseId,
-        name: poseForm.name,
-        category: poseForm.category,
-        image_url: imageUrl,
-        description: poseForm.description,
-        occasion: poseForm.occasion,
-        difficulty: poseForm.difficulty,
-        is_featured: poseForm.is_featured,
-        base_pose_type: poseForm.base_pose_type,
-      });
 
-      // Handle product linking
-      const existingLinked = poseProductsMap[poseId] || [];
-      const existingIds = existingLinked.map(l => l.product_id);
-      
-      // Unlink removed products
-      for (const oldId of existingIds) {
-        if (!poseForm.linkedProductIds.includes(oldId)) {
-          await unlinkProductFromPose(poseId, oldId);
-        }
-      }
-      // Link new products
-      for (const newId of poseForm.linkedProductIds) {
-        if (!existingIds.includes(newId)) {
-          await linkProductToPose(poseId, newId);
-        }
-      }
-
-      toast.success(editingPoseId ? 'Style pose updated!' : 'Style pose added!');
-      setIsPoseModalOpen(false);
-      resetPoseForm();
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to save pose guide: ' + e.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleDeletePose = (pose) => {
-    setDeletePoseConfirm(pose);
-  };
-
-  const executeDeletePose = async () => {
-    const pose = deletePoseConfirm;
-    setDeletePoseConfirm(null);
-    if (!pose) return;
-    try {
-      await deletePoseGuide(pose.docId || pose.id);
-      toast.success('Pose deleted');
-    } catch {
-      toast.error('Failed to delete pose');
-    }
-  };
 
   const executeDeleteAsset = async () => {
     const asset = deleteAssetConfirm;
@@ -395,23 +278,13 @@ const ARAssets = () => {
     }
   };
 
-  // Default poses if none in DB
-  const displayPoses =
-    poses.length > 0
-      ? poses
-      : [
-          { id: 'P-001', name: 'Front T-Pose', category: 'Calibration', docId: null },
-          { id: 'P-002', name: 'Side Profile', category: 'Preview', docId: null },
-          { id: 'P-003', name: 'Walking Stride', category: 'Dynamic', docId: null },
-          { id: 'P-004', name: 'Over-the-shoulder', category: 'Turn', docId: null },
-        ];
 
   return (
     <div className="ar-container">
       <PageHeader
         category="OPERATIONS"
         title="AR Try-On Management"
-        subtitle="Configure 3D assets, alignment points, and pose guides"
+        subtitle="Configure 3D assets and alignment points"
         actions={
           <div className="tab-switcher card p-1">
             <button
@@ -434,12 +307,6 @@ const ARAssets = () => {
               onClick={() => setActiveTab('library')}
             >
               <Shirt size={16} /> Global Library
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'poses' ? 'active' : ''}`}
-              onClick={() => setActiveTab('poses')}
-            >
-              <Camera size={16} /> Pose Guides
             </button>
           </div>
         }
@@ -703,538 +570,6 @@ const ARAssets = () => {
         </div>
       )}
 
-      {activeTab === 'poses' && (
-        <div className="space-y-6 mt-4">
-          <div className="card p-6">
-            <div className="pose-header-area flex justify-between items-center mb-4 flex-wrap gap-3">
-              <div>
-                <h3 className="text-lg font-bold">AR Pose Guides & Calibration Specs</h3>
-                <p className="text-secondary text-sm">
-                  Pose reference guides used by the mobile app&apos;s MediaPipe Pose Detection engine for calibration and virtual fitting overlays.
-                </p>
-              </div>
-              <button
-                className="btn-primary flex-center gap-2 whitespace-nowrap"
-                onClick={() => {
-                  resetPoseForm();
-                  setIsPoseModalOpen(true);
-                }}
-              >
-                <Plus size={16} /> Add Style Pose Guide
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
-              {displayPoses.map((pose) => {
-                const linkedCount = (poseProductsMap[pose.id] || []).length;
-                return (
-                  <div key={pose.id} className="border rounded-xl p-4 bg-gray-50/50 hover:shadow-md transition-all relative group flex flex-col justify-between">
-                    <div>
-                      <div className="h-44 bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden mb-3">
-                        {pose.image_url ? (
-                          <img src={pose.image_url} alt={pose.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Camera size={36} className="text-indigo-400 opacity-60" />
-                        )}
-                        <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-0.5 rounded flex items-center gap-1">
-                          {pose.id}
-                          {pose.is_featured && <Star size={10} className="text-amber-400 fill-amber-400" />}
-                        </div>
-                        <div className="absolute bottom-2 right-2 bg-indigo-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-                          {pose.category || 'Style Hint'}
-                        </div>
-                        {pose.occasion && (
-                          <div className="absolute bottom-2 left-2 bg-black/70 text-amber-300 text-[10px] font-medium px-2 py-0.5 rounded">
-                            {pose.occasion}
-                          </div>
-                        )}
-                      </div>
-                      <h4 className="font-bold text-sm text-gray-900">{pose.name}</h4>
-                      {pose.description && (
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{pose.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2">
-                        {pose.difficulty && (
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${
-                            pose.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
-                            pose.difficulty === 'intermediate' ? 'bg-amber-100 text-amber-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {pose.difficulty}
-                          </span>
-                        )}
-                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
-                          <Shirt size={10} /> {linkedCount} linked
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t">
-                      <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
-                        <Check size={12} /> Mobile Active
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="text-indigo-600 hover:text-indigo-800 p-1 text-xs font-bold"
-                          onClick={() => handleOpenEditPose(pose)}
-                          title="Edit Style Pose"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
-                          onClick={() => handleDeletePose(pose)}
-                          title="Delete Pose"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="card p-6 border-2 border-indigo-100 bg-indigo-50/10">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-2 flex items-center gap-2">
-              <View size={16} /> Mobile AR Pose Detection Integration Status
-            </h3>
-            <p className="text-xs text-indigo-700 mb-4">
-              Side-by-side verification between Admin Pose Specifications and Mobile App Runtime (MediaPipe 33 Landmarks).
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-4 rounded-xl border border-indigo-200">
-                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Admin Specification</h4>
-                <ul className="text-xs text-gray-600 space-y-1.5">
-                  <li>• Keypoints: 33 body landmarks (Shoulders, Hips, Elbows, Knees)</li>
-                  <li>• Tracking Model: MediaPipe Full Body Heavy</li>
-                  <li>• Calibration Threshold: 85% confidence score</li>
-                </ul>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-indigo-200">
-                <h4 className="font-bold text-xs text-indigo-900 uppercase mb-2">Mobile App Compatibility</h4>
-                <ul className="text-xs text-gray-600 space-y-1.5">
-                  <li>• Package: react-native-mediapipe-posedetection</li>
-                  <li>• Background Removal: @six33/react-native-bg-removal</li>
-                  <li>• Real-time FPS: 30 FPS camera feed overlay</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Link Assets Modal */}
-      {isLinkModalOpen && productToLink && (
-        <div className="modal-overlay" role="presentation" onClick={() => setIsLinkModalOpen(false)}>
-          <div className="modal-content" role="presentation" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <h2>Setup AR: {productToLink.name}</h2>
-              <button type="button" className="close-btn" onClick={() => setIsLinkModalOpen(false)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <div className="flex flex-col gap-6">
-                <div>
-                  <h4 className="text-sm font-semibold mb-3">Quick Actions</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      className="btn-outline flex-col py-8 gap-3 h-auto"
-                      onClick={() => {
-                        setIsLinkModalOpen(false);
-                        setIsUploadModalOpen(true);
-                        window._targetProduct = productToLink;
-                      }}
-                    >
-                      <Upload size={32} />
-                      <div className="text-center">
-                        <p className="font-semibold">Upload Asset</p>
-                        <p className="text-xs text-secondary">New .glb or mask</p>
-                      </div>
-                    </button>
-                    <button 
-                      className="btn-outline flex-col py-8 gap-3 h-auto"
-                      onClick={() => {
-                        setActiveTab('library');
-                        setIsLinkModalOpen(false);
-                        toast.info(`Select an asset for ${productToLink.name}`);
-                        window._targetProduct = productToLink;
-                      }}
-                    >
-                      <Shirt size={32} />
-                      <div className="text-center">
-                        <p className="font-semibold">Pick from Library</p>
-                        <p className="text-xs text-secondary">Reuse existing</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload AR Asset Modal */}
-      {isUploadModalOpen && (
-        <div className="modal-overlay" role="presentation" onClick={() => setIsUploadModalOpen(false)}>
-          <div
-            className="modal-content"
-            role="presentation"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 420 }}
-          >
-            <div className="modal-header">
-              <h2>Upload AR Asset</h2>
-              <button className="close-btn" onClick={() => setIsUploadModalOpen(false)}>
-                &times;
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="text-secondary text-sm mb-3">
-                Upload a 3D model file (.glb, .gltf) for AR Try-On. After uploading, tag a product
-                with &quot;AR Try-On&quot; in the Catalog to associate this asset.
-              </p>
-              <div className="upload-dropzone" onClick={() => document.getElementById("ar-upload")?.click()} style={{ cursor: "pointer" }}>
-                <input
-                  type="file"
-                  id="ar-upload"
-                  accept=".glb,.gltf,image/*"
-                  className="file-input-hidden"
-                  onChange={(e) => setSelectedFile(e.target.files[0])}
-                />
-                <label htmlFor="ar-upload" className="upload-label-content">
-                  {selectedFile ? (
-                    <div className="flex-center gap-2 text-success">
-                      <Check size={20} />
-                      <span className="font-medium">{selectedFile.name}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload size={32} className="text-secondary mb-2" />
-                      <p className="text-sm font-medium">Click to upload 3D model or image</p>
-                      <span className="text-xs text-secondary mt-1">
-                        Supports .glb, .gltf, .png, .jpg
-                      </span>
-                    </>
-                  )}
-                </label>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn-outline"
-                onClick={() => {
-                  setIsUploadModalOpen(false);
-                  setSelectedFile(null);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleUploadARAsset}
-                disabled={isUploading || !selectedFile}
-              >
-                {isUploading ? 'Uploading...' : 'Upload Asset'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add / Edit Style Pose Reference Modal */}
-      {isPoseModalOpen && (
-        <div className="modal-overlay" role="presentation" onClick={() => setIsPoseModalOpen(false)}>
-          <div
-            className="modal-content modal-lg"
-            role="presentation"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 650, maxHeight: '90vh', overflowY: 'auto' }}
-          >
-            <div className="modal-header">
-              <h2>{editingPoseId ? `Edit Style Pose — ${editingPoseId}` : 'Add Style Pose Guide'}</h2>
-              <button className="close-btn" onClick={() => setIsPoseModalOpen(false)}>
-                &times;
-              </button>
-            </div>
-            <div className="modal-body space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="label" htmlFor="pose-name">Pose Name *</label>
-                  <input
-                    id="pose-name"
-                    name="poseName"
-                    type="text"
-                    autoComplete="off"
-                    className="input-field"
-                    placeholder="e.g., Gala Red Carpet Pose"
-                    value={poseForm.name}
-                    onChange={(e) => setPoseForm({ ...poseForm, name: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label" htmlFor="pose-category">Category</label>
-                  <select
-                    id="pose-category"
-                    className="input-field"
-                    value={poseForm.category}
-                    onChange={(e) => setPoseForm({ ...poseForm, category: e.target.value })}
-                  >
-                    <option>Style Hint</option>
-                    <option>Calibration</option>
-                    <option>Preview</option>
-                    <option>Dynamic</option>
-                    <option>Turn</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="form-group">
-                  <label className="label" htmlFor="pose-occasion">Occasion</label>
-                  <select
-                    id="pose-occasion"
-                    className="input-field"
-                    value={poseForm.occasion}
-                    onChange={(e) => setPoseForm({ ...poseForm, occasion: e.target.value })}
-                  >
-                    <option>Casual</option>
-                    <option>Party</option>
-                    <option>Formal</option>
-                    <option>Wedding</option>
-                    <option>Date Night</option>
-                    <option>Business</option>
-                    <option>Festival</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="label" htmlFor="pose-difficulty">Difficulty</label>
-                  <select
-                    id="pose-difficulty"
-                    className="input-field"
-                    value={poseForm.difficulty}
-                    onChange={(e) => setPoseForm({ ...poseForm, difficulty: e.target.value })}
-                  >
-                    <option value="easy">Easy (Standing / Simple)</option>
-                    <option value="intermediate">Intermediate (Side / Angled)</option>
-                    <option value="advanced">Advanced (Dynamic / Turn)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="label" htmlFor="pose-base-matcher">Base AR Matcher</label>
-                  <select
-                    id="pose-base-matcher"
-                    className="input-field"
-                    value={poseForm.base_pose_type}
-                    onChange={(e) => setPoseForm({ ...poseForm, base_pose_type: e.target.value })}
-                  >
-                    <option value="front">Front Facing</option>
-                    <option value="side">Side Profile</option>
-                    <option value="walking">Walking / Stride</option>
-                    <option value="turn">Turn / Over Shoulder</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="label" htmlFor="pose-image">Styled Reference Image</label>
-                <div className="flex items-center gap-4">
-                  {(poseFile || poseForm.image_url) && (
-                    <div className="w-20 h-24 rounded border overflow-hidden bg-slate-900 flex-shrink-0">
-                      <img
-                        src={poseFile ? URL.createObjectURL(poseFile) : poseForm.image_url}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                  <input
-                    id="pose-image"
-                    type="file"
-                    accept="image/*"
-                    className="input-field"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setPoseFile(e.target.files[0]);
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="label" htmlFor="pose-description">Description / Styling Tip</label>
-                <textarea
-                  id="pose-description"
-                  className="input-field"
-                  rows={2}
-                  placeholder="e.g., Stand with one leg slightly forward to highlight full dress silhouette..."
-                  value={poseForm.description}
-                  onChange={(e) => setPoseForm({ ...poseForm, description: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="label flex items-center justify-between">
-                  <span>Linked Catalog Products ({poseForm.linkedProductIds.length})</span>
-                  <span className="text-xs text-secondary font-normal">Select garments featured in this look</span>
-                </label>
-                <div className="border rounded-lg p-3 max-h-44 overflow-y-auto space-y-2 bg-gray-50">
-                  {allCatalogProducts.map((p) => {
-                    const isChecked = poseForm.linkedProductIds.includes(p.id || p.docId);
-                    return (
-                      <label key={p.id || p.docId} className="flex items-center gap-3 p-1.5 hover:bg-white rounded cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            const pid = p.id || p.docId;
-                            if (e.target.checked) {
-                              setPoseForm({ ...poseForm, linkedProductIds: [...poseForm.linkedProductIds, pid] });
-                            } else {
-                              setPoseForm({
-                                ...poseForm,
-                                linkedProductIds: poseForm.linkedProductIds.filter(id => id !== pid),
-                              });
-                            }
-                          }}
-                        />
-                        {p.image_url ? (
-                          <img src={p.image_url} alt={p.name} className="w-8 h-8 object-cover rounded" />
-                        ) : (
-                          <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center text-xs">👔</div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold truncate">{p.name}</p>
-                          <p className="text-[10px] text-gray-500">{p.category} · ₱{p.rental_price || p.price}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                  {allCatalogProducts.length === 0 && (
-                    <p className="text-xs text-gray-400 text-center py-2">No catalog products found.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="is_featured_cb"
-                  checked={poseForm.is_featured}
-                  onChange={(e) => setPoseForm({ ...poseForm, is_featured: e.target.checked })}
-                />
-                <label htmlFor="is_featured_cb" className="text-xs font-bold text-gray-700 cursor-pointer">
-                  Feature on Mobile Home Style Inspiration Feed
-                </label>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn-outline"
-                onClick={() => {
-                  setIsPoseModalOpen(false);
-                  resetPoseForm();
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleAddPose}
-                disabled={isUploading}
-              >
-                {isUploading ? 'Saving Pose...' : editingPoseId ? 'Update Style Pose' : 'Create Style Pose'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Alignment Config Modal */}
-      {isConfigModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content modal-lg">
-            <div className="modal-header">
-              <h2>Configure Alignment Points {configAsset && `— ${configAsset.name}`}</h2>
-              <button className="close-btn" onClick={() => setIsConfigModalOpen(false)}>
-                &times;
-              </button>
-            </div>
-            <div className="modal-body align-modal-body">
-              <div className="align-workspace">
-                <div className="align-preview-area">
-                  {configAsset && configAsset.model_3dUrl ? (
-                    <model-viewer
-                      src={configAsset.model_3dUrl}
-                      alt={configAsset.name}
-                      auto-rotate
-                      camera-controls
-                      ar
-                    >
-                      <button className="Hotspot" slot="hotspot-shoulder-l" data-position={toSpaceString(alignPoints.shoulderL)} data-normal="0 0 1"></button>
-                      <button className="Hotspot" slot="hotspot-shoulder-r" data-position={toSpaceString(alignPoints.shoulderR)} data-normal="0 0 1"></button>
-                      <button className="Hotspot" slot="hotspot-waist" data-position={toSpaceString(alignPoints.waist)} data-normal="0 0 1"></button>
-                      <button className="Hotspot" slot="hotspot-hips-l" data-position={toSpaceStringOffset(alignPoints.hips, -0.15)} data-normal="0 0 1"></button>
-                      <button className="Hotspot" slot="hotspot-hips-r" data-position={toSpaceStringOffset(alignPoints.hips, 0.15)} data-normal="0 0 1"></button>
-                    </model-viewer>
-                  ) : (
-                    <div className="dummy-3d-model">
-                      <Shirt size={100} className="text-secondary opacity-50" />
-                      <div className="align-point shoulder-l"></div>
-                      <div className="align-point shoulder-r"></div>
-                      <div className="align-point waist-c"></div>
-                      <div className="align-point hips-l"></div>
-                      <div className="align-point hips-r"></div>
-                    </div>
-                  )}
-                </div>
-                <div className="align-controls line-height-2">
-                  <h4 className="mb-3">Point Coordinates</h4>
-                  <PointSlider
-                    label="Left Shoulder"
-                    pointStr={alignPoints.shoulderL}
-                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderL: val })}
-                  />
-                  <PointSlider
-                    label="Right Shoulder"
-                    pointStr={alignPoints.shoulderR}
-                    onChange={(val) => setAlignPoints({ ...alignPoints, shoulderR: val })}
-                  />
-                  <PointSlider
-                    label="Waist Center"
-                    pointStr={alignPoints.waist}
-                    onChange={(val) => setAlignPoints({ ...alignPoints, waist: val })}
-                  />
-                  <PointSlider
-                    label="Hips"
-                    pointStr={alignPoints.hips}
-                    onChange={(val) => setAlignPoints({ ...alignPoints, hips: val })}
-                  />
-
-                  <button className="btn-primary full-width mt-4" onClick={saveAlignmentPoints}>
-                    Save & Verify Points
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        isOpen={!!deletePoseConfirm}
-        title="Delete Pose Guide"
-        message={`Delete pose "${deletePoseConfirm?.name}"? This cannot be undone.`}
-        confirmText="Delete Pose"
-        cancelText="Cancel"
-        isDestructive={true}
-        onConfirm={executeDeletePose}
-        onCancel={() => setDeletePoseConfirm(null)}
-      />
-
       <ConfirmDialog
         isOpen={!!deleteAssetConfirm}
         title="Delete AR Asset"
@@ -1247,6 +582,74 @@ const ARAssets = () => {
       />
 
       {/* Preview Asset Modal */}
+      
+      {/* Upload AR Asset Modal */}
+      {isUploadModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsUploadModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 420}}>
+            <div className="modal-header">
+              <h2>Upload AR Asset</h2>
+              <button className="close-btn" onClick={() => setIsUploadModalOpen(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="text-secondary text-sm mb-3">Upload a 3D model file (.glb, .gltf) for AR Try-On.</p>
+              <div className="upload-dropzone" style={{border: '2px dashed #ccc', padding: '30px', textAlign: 'center', borderRadius: '8px', cursor: 'pointer', background: '#fafafa', position: 'relative'}}>
+                <input type="file" id="ar-upload" accept=".glb,.gltf,image/*" style={{opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', cursor: 'pointer'}} onChange={e => setSelectedFile(e.target.files[0])} />
+                <div style={{pointerEvents: 'none'}}>
+                  {selectedFile ? (
+                    <div className="flex-center gap-2 text-success" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+                      <span className="font-medium">{selectedFile.name}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium">Click to upload 3D model or image</p>
+                      <span className="text-xs text-secondary mt-1">Supports .glb, .gltf, .png, .jpg</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-outline" onClick={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}>Cancel</button>
+              <button className="btn-primary" onClick={handleUploadARAsset} disabled={isUploading || !selectedFile}>
+                {isUploading ? 'Uploading...' : 'Upload Asset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup AR Link Modal */}
+      {isLinkModalOpen && (
+        <div className="modal-overlay" onClick={() => { setIsLinkModalOpen(false); setProductToLink(null); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Setup AR for {productToLink?.name}</h2>
+              <button className="close-btn" onClick={() => { setIsLinkModalOpen(false); setProductToLink(null); }}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="mb-4">Select an existing asset from the Global Library, or upload a new one specifically for this product.</p>
+              <div className="flex gap-2">
+                <button className="btn-primary flex-1" onClick={() => {
+                  window._targetProduct = productToLink;
+                  setIsLinkModalOpen(false);
+                  setIsUploadModalOpen(true);
+                }}>
+                  Upload New Asset
+                </button>
+                <button className="btn-outline flex-1" onClick={() => {
+                  window._targetProduct = productToLink;
+                  setIsLinkModalOpen(false);
+                  setActiveTab('library');
+                }}>
+                  Pick from Library
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewAssetUrl && (
         <div className="modal-overlay" role="presentation" onClick={() => setPreviewAssetUrl(null)}>
           <div className="modal-content modal-lg" role="presentation" onClick={(e) => e.stopPropagation()}>

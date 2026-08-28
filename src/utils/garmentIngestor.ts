@@ -1,8 +1,12 @@
+import { GarmentAnalyzer } from './garmentAnalyzer';
+import { GarmentAnatomyDetector } from './garmentAnatomyDetector';
+import { GarmentAutoRigger } from './garmentAutoRigger';
+import { GarmentValidator } from './garmentValidator';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import type { GarmentMetadata, IngestionStatus, GarmentCategory } from '../types/garment';
 
-const STANDARD_BONES = [
+export const STANDARD_BONES = [
   'Spine',
   'Spine1',
   'Spine2',
@@ -15,25 +19,35 @@ const STANDARD_BONES = [
 ];
 
 export class GarmentIngestor {
-  /**
-   * Analyzes an uploaded GLTF scene and generates a canonical GarmentMetadata contract.
-   */
-  /**
-   * Fetches and parses a GLB from a URL into a Three.js scene, then analyzes it.
-   */
   public static async analyzeGLBFromUrl(
     id: string,
     category: GarmentCategory,
     glbUrl: string
-  ): Promise<GarmentMetadata> {
+  ): Promise<{ metadata: GarmentMetadata, riggedGlbUrl?: string, riggedGlbBlob?: Blob }> {
     return new Promise((resolve, reject) => {
       const loader = new GLTFLoader();
       loader.load(
         glbUrl,
-        (gltf) => {
+        async (gltf) => {
           try {
             const metadata = this.analyzeGLB(id, category, gltf.scene);
-            resolve(metadata);
+            
+            if (metadata.autoRigged) {
+              const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+              const exporter = new GLTFExporter();
+              exporter.parse(
+                gltf.scene,
+                (gltfResult) => {
+                  const blob = new Blob([gltfResult as ArrayBuffer], { type: 'model/gltf-binary' });
+                  const riggedGlbUrl = URL.createObjectURL(blob);
+                  resolve({ metadata, riggedGlbUrl, riggedGlbBlob: blob });
+                },
+                (err) => reject(err),
+                { binary: true }
+              );
+            } else {
+              resolve({ metadata });
+            }
           } catch (e) {
             reject(e);
           }
@@ -51,98 +65,109 @@ export class GarmentIngestor {
     category: GarmentCategory,
     scene: any // THREE.Object3D
   ): GarmentMetadata {
-    let hasSkinnedMesh = false;
-    const bones: Record<string, any> = {};
-    const boneMap: Record<string, string> = {};
-
-    // 1. Traverse and Validate Skeleton
-    scene.traverse((child: any) => {
-      if (child.isSkinnedMesh) {
-        hasSkinnedMesh = true;
-      }
-      if (child.isBone) {
-        bones[child.name] = child;
-      }
-    });
-
-    if (!hasSkinnedMesh || Object.keys(bones).length === 0) {
+    
+    // 1. Analyze Geometry and Skeleton
+    const analysis = GarmentAnalyzer.analyze(scene);
+    
+    if (analysis.route === 'UNSUPPORTED') {
       return this.createFailureResult(id, category, 'NOT_AR_COMPATIBLE');
     }
-
-    // 2. Auto-map bones (heuristic matching)
-    for (const stdBone of STANDARD_BONES) {
-      if (bones[stdBone]) {
-        boneMap[stdBone] = stdBone;
-      } else if (bones['mixamorig' + stdBone]) {
-        boneMap[stdBone] = 'mixamorig' + stdBone;
-      }
+    
+    if (analysis.route === 'ALREADY_RIGGED') {
+      return this.buildMetadataFromRigged(id, category, scene, analysis);
+    }
+    
+    if (analysis.route === 'NEEDS_AUTO_RIG') {
+      // 2. Anatomy Detection
+      const anatomy = GarmentAnatomyDetector.detect(scene);
+      
+      // 3. Auto Rigging & Skinning
+      const rigResult = GarmentAutoRigger.rig(scene, anatomy);
+      
+      // 4. Validate output
+      const validation = GarmentValidator.validate(scene, rigResult.skeleton);
+      
+      return {
+        id,
+        category,
+        calibrationVersion: '2.0.0',
+        ingestionStatus: 'NEEDS_CALIBRATION',
+        anatomicalAnchorOffset: anatomy.neck 
+          ? { x: anatomy.neck.position.x, y: anatomy.neck.position.y, z: anatomy.neck.position.z }
+          : { x: 0, y: 0.5, z: 0 },
+        anchorConfidence: anatomy.neck && anatomy.neck.confidence > 0.8 ? 'HIGH' : 'MEDIUM',
+        anchorType: (category === 'pants' || category === 'skirt') ? 'WAIST' : 'SHOULDER_CENTER',
+        restPoseMetricWidth: (anatomy.rightShoulder && anatomy.leftShoulder) 
+          ? Math.abs(anatomy.rightShoulder.position.x - anatomy.leftShoulder.position.x)
+          : 0.5,
+        boneMap: rigResult.boneMap,
+        restPose: rigResult.restPose,
+        autoRigged: true,
+        sleeveType: anatomy.sleeveType,
+        validationErrors: validation.errors,
+        validationWarnings: validation.warnings
+      };
     }
 
-    // 3. Metric Scale Calibration
+    return this.createFailureResult(id, category, 'NOT_AR_COMPATIBLE');
+  }
+
+  private static buildMetadataFromRigged(
+    id: string,
+    category: GarmentCategory,
+    scene: any,
+    analysis: any
+  ): GarmentMetadata {
+    const bones: Record<string, any> = {};
+    scene.traverse((child: any) => {
+      if (child.isBone) bones[child.name] = child;
+    });
+
+    const boneMap = analysis.canonicalMapping;
     let restPoseMetricWidth = 0.5;
     
-    if (THREE) {
-      const leftShoulder = bones[boneMap['LeftShoulder']] || bones[boneMap['LeftArm']];
-      const rightShoulder = bones[boneMap['RightShoulder']] || bones[boneMap['RightArm']];
-      if (leftShoulder && rightShoulder) {
-        const lPos = new THREE.Vector3();
-        const rPos = new THREE.Vector3();
-        leftShoulder.getWorldPosition(lPos);
-        rightShoulder.getWorldPosition(rPos);
-        restPoseMetricWidth = lPos.distanceTo(rPos);
-      } else {
-        // Fallback to bounding box width if shoulders missing
-        const box = new THREE.Box3().setFromObject(scene);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        restPoseMetricWidth = size.x;
-      }
+    const leftShoulder = bones[boneMap['LeftShoulder']] || bones[boneMap['LeftArm']];
+    const rightShoulder = bones[boneMap['RightShoulder']] || bones[boneMap['RightArm']];
+    if (leftShoulder && rightShoulder) {
+      const lPos = new THREE.Vector3();
+      const rPos = new THREE.Vector3();
+      leftShoulder.getWorldPosition(lPos);
+      rightShoulder.getWorldPosition(rPos);
+      restPoseMetricWidth = lPos.distanceTo(rPos);
+    } else {
+      restPoseMetricWidth = analysis.boundingSize.x;
     }
 
-    // 4. Anatomical Anchoring
     const anchorOffset = { x: 0, y: 0.5, z: 0 };
-    let anchorConfidence: 'detected' | 'inferred' | 'merchant_confirmed' = 'inferred';
+    let anchorConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
     
-    if (THREE && boneMap['Spine2'] && bones[boneMap['Spine2']]) {
+    if (boneMap['Spine2'] && bones[boneMap['Spine2']]) {
       const spine2 = bones[boneMap['Spine2']];
       const pos = new THREE.Vector3();
       spine2.getWorldPosition(pos);
       anchorOffset.x = pos.x;
       anchorOffset.y = pos.y;
       anchorOffset.z = pos.z;
-      anchorConfidence = 'detected';
-    } else if (THREE) {
-      // Inferred from bounding box top-center
-      const box = new THREE.Box3().setFromObject(scene);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      anchorOffset.x = center.x;
-      anchorOffset.y = box.max.y; // Top of the mesh
-      anchorOffset.z = center.z;
-    }
-
-    // 5. Ingestion Status
-    // Phase 5B Rule: MUST have Spine + LeftArm + RightArm + Forearms. MUST have 'detected' anchor.
-    const hasRequiredBones = boneMap['Spine'] && boneMap['LeftArm'] && boneMap['RightArm'] && boneMap['LeftForeArm'] && boneMap['RightForeArm'];
-    const ingestionStatus: IngestionStatus =
-      (hasRequiredBones && anchorConfidence === 'detected') ? 'AR_READY' : 'NEEDS_MERCHANT_MAPPING';
-
-    let anchorType: 'NECK' | 'SHOULDER_CENTER' | 'CHEST' | 'WAIST' | 'HIP' | 'CUSTOM' = 'SHOULDER_CENTER';
-    if (category === 'pants' || category === 'skirt') {
-      anchorType = 'WAIST';
+      anchorConfidence = 'HIGH';
+    } else {
+      anchorOffset.x = analysis.center.x;
+      anchorOffset.y = analysis.boundingBox.max.y;
+      anchorOffset.z = analysis.center.z;
     }
 
     return {
       id,
       category,
-      calibrationVersion: '1.0.0',
-      ingestionStatus,
+      calibrationVersion: '2.0.0',
+      ingestionStatus: 'AR_READY',
       anatomicalAnchorOffset: anchorOffset,
       anchorConfidence,
-      anchorType,
+      anchorType: (category === 'pants' || category === 'skirt') ? 'WAIST' : 'SHOULDER_CENTER',
       restPoseMetricWidth,
       boneMap,
-      restPose: 'T_POSE' // Can be heuristically detected by arm angles
+      restPose: 'T_POSE',
+      autoRigged: false,
+      sleeveType: 'UNKNOWN'
     };
   }
 
@@ -154,14 +179,16 @@ export class GarmentIngestor {
     return {
       id,
       category,
-      calibrationVersion: '1.0.0',
+      calibrationVersion: '2.0.0',
       ingestionStatus: status,
       anatomicalAnchorOffset: { x: 0, y: 0, z: 0 },
-      anchorConfidence: 'inferred',
+      anchorConfidence: 'LOW',
       anchorType: 'CUSTOM',
       restPoseMetricWidth: 0.5,
       boneMap: {},
-      restPose: 'CUSTOM'
+      restPose: 'CUSTOM',
+      autoRigged: false,
+      sleeveType: 'UNKNOWN'
     };
   }
 }
