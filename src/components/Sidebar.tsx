@@ -212,7 +212,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
           <Link
             to={`/staff/${(user as any)?.uid}`}
             className="profile-badge"
-            title={(user as any)?.name ? `${(user as any)?.name} (${isAdminUnlocked ? 'Owner' : 'Sales Staff'})` : 'View my profile'}
+            title={(user as any)?.name ? `${(user as any)?.name} (${(user as any)?.role || (isAdminUnlocked ? 'Admin' : 'Staff')})` : 'View my profile'}
             style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: isCollapsed ? '0' : '10px', justifyContent: isCollapsed ? 'center' : 'flex-start', cursor: 'pointer' }}
           >
             <div className="profile-avatar">
@@ -225,7 +225,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
                   className="profile-role"
                   style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
                 >
-                  {isAdminUnlocked ? '👑 Owner Access' : '👤 Sales Staff'}
+                  {(user as any)?.role === 'Owner'
+                    ? '👑 Owner Access'
+                    : (user as any)?.role === 'Admin'
+                    ? '🛡️ Admin Access'
+                    : '👤 Staff Member'}
                 </span>
               </div>
             )}

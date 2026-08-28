@@ -373,6 +373,17 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                 </div>
               </div>
               <div className="user-dropdown-actions">
+                {(user as any)?.uid && (
+                  <button
+                    className="user-dropdown-item"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      navigate(`/staff/${(user as any)?.uid}`);
+                    }}
+                  >
+                    <span>My Profile</span>
+                  </button>
+                )}
                 <button className="user-dropdown-item destructive" onClick={() => {
                   setShowUserDropdown(false);
                   logout();

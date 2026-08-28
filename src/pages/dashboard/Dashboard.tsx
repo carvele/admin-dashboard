@@ -447,7 +447,7 @@ const Dashboard = () => {
         >
           <div className="card-header">
             <h3>Popular Outfit Combinations</h3>
-            <button className="text-btn" onClick={() => navigate('/outfits')}>
+            <button className="text-btn" onClick={() => navigate('/wardrobe')}>
               View All
             </button>
           </div>
