@@ -14,8 +14,10 @@ const Login = () => {
 
   // Admin creation modal state removed per security audit
 
-  // Auto-redirect if somehow already logged in
+  // Auto-redirect if somehow already logged in & ensure form state is clean
   React.useEffect(() => {
+    setForm({ email: '', password: '' });
+    setError('');
     if (user) {
       navigate('/dashboard', { replace: true });
     }
@@ -36,6 +38,7 @@ const Login = () => {
     setError('');
     try {
       await login(form.email.trim(), form.password);
+      setForm({ email: '', password: '' });
     } catch (err) {
       const errMsg = err?.message || '';
       if (errMsg.includes('Invalid credentials') || errMsg.includes('invalid_credentials') || errMsg.includes('Invalid login')) {
@@ -82,7 +85,7 @@ const Login = () => {
             <p>Sign in to your dashboard</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="login-form">
+          <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
             <div className="form-group">
               <label className="label" htmlFor="login-email">Email Address</label>
               <input
@@ -90,7 +93,8 @@ const Login = () => {
                 type="email"
                 className="input-field"
                 name="email"
-                autoComplete="username"
+                autoComplete="off"
+                data-lpignore="true"
                 placeholder="Enter email address"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -120,7 +124,8 @@ const Login = () => {
                   type={showPassword ? 'text' : 'password'}
                   className="input-field"
                   name="password"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
                   placeholder="Enter password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}

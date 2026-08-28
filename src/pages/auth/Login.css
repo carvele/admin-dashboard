@@ -161,6 +161,15 @@
   padding-right: 3rem;
   width: 100%;
 }
+
+.login-form .input-field:-webkit-autofill,
+.login-form .input-field:-webkit-autofill:hover,
+.login-form .input-field:-webkit-autofill:focus,
+.login-form .input-field:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px var(--input-bg, #fff) inset !important;
+  -webkit-text-fill-color: var(--charcoal, #1f1c18) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
 .password-toggle {
   position: absolute;
   right: 1rem;
