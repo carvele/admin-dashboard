@@ -136,9 +136,27 @@ const ARAssets = () => {
   };
   const [poseForm, setPoseForm] = useState(initialPoseForm);
 
-  const handleIngestionComplete = () => {
-    setIngestionData(null);
-    toast.success('Garment metadata generated and saved successfully!');
+  const handleIngestionComplete = async ({ metadata, riggedBlob }) => {
+    try {
+      let finalModelUrl = ingestionData.glbUrl;
+      
+      if (riggedBlob) {
+        // Upload the new rigged GLB
+        const file = new File([riggedBlob], `${ingestionData.productId}_rigged.glb`, { type: 'model/gltf-binary' });
+        finalModelUrl = await routeAndUploadFile(file, 'catalog-assets/models');
+      }
+
+      await updateProduct(ingestionData.productId, { 
+        garment_metadata: metadata,
+        model_3d_url: finalModelUrl 
+      });
+      
+      setIngestionData(null);
+      toast.success('Garment metadata generated and saved successfully!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save garment metadata to database.');
+    }
   };
 
 

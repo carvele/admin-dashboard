@@ -40,7 +40,7 @@ export interface GarmentMetadata {
   
   // Predictable offset from the garment's origin to the anatomical anchor (e.g. neck)
   anatomicalAnchorOffset: Vec3;
-  anchorConfidence: 'detected' | 'inferred' | 'merchant_confirmed';
+  anchorConfidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'MERCHANT_CONFIRMED' | 'detected' | 'inferred' | 'merchant_confirmed';
   anchorType: 'NECK' | 'SHOULDER_CENTER' | 'CHEST' | 'WAIST' | 'HIP' | 'CUSTOM';
   
   // Baseline metric width in meters (e.g. shoulder-to-shoulder in rest pose)
@@ -51,4 +51,12 @@ export interface GarmentMetadata {
   
   // Whether this garment is modeled in T-pose or A-pose
   restPose: 'T_POSE' | 'A_POSE' | 'CUSTOM';
+
+  // Phase 6 Additions
+  autoRigged?: boolean;
+  skinningVersion?: string;
+  calibrationQuality?: number;
+  sleeveType?: 'LONG' | 'SHORT' | 'SLEEVELESS' | 'UNKNOWN';
+  validationErrors?: string[];
+  validationWarnings?: string[];
 }
