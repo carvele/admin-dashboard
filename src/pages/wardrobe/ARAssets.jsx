@@ -1256,14 +1256,15 @@ const ARAssets = () => {
                 &times;
               </button>
             </div>
-            <div className="modal-body" style={{ height: '60vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5', borderRadius: '8px' }}>
+            <div className="modal-body" style={{ height: '60vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#e8e8e8', borderRadius: '8px', position: 'relative' }}>
               {previewAssetUrl.toLowerCase().endsWith('.glb') || previewAssetUrl.toLowerCase().endsWith('.gltf') ? (
                 <model-viewer
                   src={previewAssetUrl}
                   auto-rotate
                   camera-controls
-                  ar
-                  style={{ width: '100%', height: '100%' }}
+                  style={{ width: '100%', height: '100%', minHeight: '400px' }}
+                  environment-image="neutral"
+                  shadow-intensity="1"
                 ></model-viewer>
               ) : (
                 <img src={previewAssetUrl} alt="Asset Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
