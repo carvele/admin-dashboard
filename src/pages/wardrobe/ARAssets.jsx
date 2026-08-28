@@ -582,6 +582,74 @@ const ARAssets = () => {
       />
 
       {/* Preview Asset Modal */}
+      
+      {/* Upload AR Asset Modal */}
+      {isUploadModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsUploadModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: 420}}>
+            <div className="modal-header">
+              <h2>Upload AR Asset</h2>
+              <button className="close-btn" onClick={() => setIsUploadModalOpen(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="text-secondary text-sm mb-3">Upload a 3D model file (.glb, .gltf) for AR Try-On.</p>
+              <div className="upload-dropzone" style={{border: '2px dashed #ccc', padding: '30px', textAlign: 'center', borderRadius: '8px', cursor: 'pointer', background: '#fafafa', position: 'relative'}}>
+                <input type="file" id="ar-upload" accept=".glb,.gltf,image/*" style={{opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', cursor: 'pointer'}} onChange={e => setSelectedFile(e.target.files[0])} />
+                <div style={{pointerEvents: 'none'}}>
+                  {selectedFile ? (
+                    <div className="flex-center gap-2 text-success" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+                      <span className="font-medium">{selectedFile.name}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium">Click to upload 3D model or image</p>
+                      <span className="text-xs text-secondary mt-1">Supports .glb, .gltf, .png, .jpg</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-outline" onClick={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}>Cancel</button>
+              <button className="btn-primary" onClick={handleUploadARAsset} disabled={isUploading || !selectedFile}>
+                {isUploading ? 'Uploading...' : 'Upload Asset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup AR Link Modal */}
+      {isLinkModalOpen && (
+        <div className="modal-overlay" onClick={() => { setIsLinkModalOpen(false); setProductToLink(null); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Setup AR for {productToLink?.name}</h2>
+              <button className="close-btn" onClick={() => { setIsLinkModalOpen(false); setProductToLink(null); }}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="mb-4">Select an existing asset from the Global Library, or upload a new one specifically for this product.</p>
+              <div className="flex gap-2">
+                <button className="btn-primary flex-1" onClick={() => {
+                  window._targetProduct = productToLink;
+                  setIsLinkModalOpen(false);
+                  setIsUploadModalOpen(true);
+                }}>
+                  Upload New Asset
+                </button>
+                <button className="btn-outline flex-1" onClick={() => {
+                  window._targetProduct = productToLink;
+                  setIsLinkModalOpen(false);
+                  setActiveTab('library');
+                }}>
+                  Pick from Library
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewAssetUrl && (
         <div className="modal-overlay" role="presentation" onClick={() => setPreviewAssetUrl(null)}>
           <div className="modal-content modal-lg" role="presentation" onClick={(e) => e.stopPropagation()}>
