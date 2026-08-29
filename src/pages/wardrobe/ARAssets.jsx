@@ -183,6 +183,7 @@ const ARAssets = () => {
         category: asset.category || 'shirt',
         glbUrl: asset.model_3dUrl,
         productName: asset.name,
+        existingMetadata: asset.garment_metadata || null,
       });
     } else {
       toast.error('No 3D model linked to this product. Upload a GLB first.');
@@ -687,6 +688,7 @@ const ARAssets = () => {
           productId={ingestionData.productId}
           category={ingestionData.category}
           glbUrl={ingestionData.glbUrl}
+          existingMetadata={ingestionData.existingMetadata}
           onComplete={handleIngestionComplete}
           onCancel={() => setIngestionData(null)}
         />

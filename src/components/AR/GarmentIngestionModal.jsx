@@ -30,7 +30,7 @@ const STATUS_LABELS = {
   NOT_AR_COMPATIBLE: { label: 'Not AR Compatible', desc: 'This GLB does not meet geometry requirements.', color: 'bg-red-50 border-red-200 text-red-800', icon: XCircle },
 };
 
-export default function GarmentIngestionModal({ productId, category, glbUrl, onComplete, onCancel }) {
+export default function GarmentIngestionModal({ productId, category, glbUrl, existingMetadata, onComplete, onCancel }) {
   const [step, setStep] = useState(1); // 1=loading, 2=bone mapping, 3=calibration preview
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,7 +45,13 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, onC
     GarmentIngestor.analyzeGLBFromUrl(productId, category, glbUrl)
       .then((result) => {
         if (!isMounted) return;
-        const { metadata: md, riggedGlbUrl, riggedGlbBlob } = result;
+        let { metadata: md, riggedGlbUrl, riggedGlbBlob } = result;
+        
+        // Merge with existing metadata to prevent resetting manual configurations (e.g. restPoseMetricWidth)
+        if (existingMetadata) {
+          md = { ...md, ...existingMetadata, ingestionStatus: existingMetadata.ingestionStatus || md.ingestionStatus };
+        }
+
         setMetadata(md);
         if (riggedGlbUrl) setRiggedUrl(riggedGlbUrl);
         if (riggedGlbBlob) setRiggedBlob(riggedGlbBlob);
