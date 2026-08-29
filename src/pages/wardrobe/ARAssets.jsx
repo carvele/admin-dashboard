@@ -116,9 +116,14 @@ const ARAssets = () => {
         finalModelUrl = await routeAndUploadFile(file, 'catalog-assets/models');
       }
 
+      // Fetch the asset's current arData from local state so we can merge it
+      const targetAsset = allCatalogProducts.find(p => p.docId === ingestionData.productId);
+      const currentArData = targetAsset?.arData || {};
+
       await updateProduct(ingestionData.productId, { 
         garment_metadata: metadata,
-        model_3d_url: finalModelUrl 
+        model_3d_url: finalModelUrl,
+        arData: { ...currentArData, alignments: 'Verified' }
       });
       
       setIngestionData(null);

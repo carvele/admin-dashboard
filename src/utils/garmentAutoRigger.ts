@@ -53,85 +53,102 @@ export class GarmentAutoRigger {
     rShoulder.add(rArm);
     rArm.add(rForeArm);
 
-    // 3. Position Bones from Anatomy
+
+    // 3. Position Bones from Anatomy using True Coordinate Spaces (P0 Fix)
+    // We construct world positions first, then convert to local space.
+    
+    // Add to scene early so matrix updates work correctly
+    scene.add(spine);
+
+    // Spine (Waist)
     if (anatomy.waist) {
       spine.position.set(anatomy.waist.position.x, anatomy.waist.position.y, anatomy.waist.position.z);
     } else {
       spine.position.set(0, 0, 0);
       warnings.push("Missing waist landmark, placing Spine at origin.");
     }
+    spine.updateMatrixWorld(true);
 
-    if (anatomy.neck) {
-      // Local position relative to spine
-      spine2.position.set(
-        anatomy.neck.position.x - spine.position.x,
-        anatomy.neck.position.y - spine.position.y - 0.1, // slightly below neck
-        anatomy.neck.position.z - spine.position.z
-      );
-    }
-
-    // Spine1 is midpoint between Spine and Spine2
-    spine1.position.set(
-      spine2.position.x * 0.5,
-      spine2.position.y * 0.5,
-      spine2.position.z * 0.5
-    );
+    const neckWorld = anatomy.neck ? new THREE.Vector3(anatomy.neck.position.x, anatomy.neck.position.y - 0.1, anatomy.neck.position.z) : new THREE.Vector3(0, spine.position.y + 0.5, 0);
+    const spineWorld = new THREE.Vector3().copy(spine.position);
+    
+    // Spine2 (Neck)
+    const spine2World = neckWorld.clone();
+    
+    // Spine1 (Midpoint)
+    const spine1World = new THREE.Vector3().lerpVectors(spineWorld, spine2World, 0.5);
+    
+    // Set Spine1 local
+    spine1.position.copy(spine.worldToLocal(spine1World.clone()));
+    spine.updateMatrixWorld(true);
+    
+    // Set Spine2 local
+    spine2.position.copy(spine1.worldToLocal(spine2World.clone()));
+    spine.updateMatrixWorld(true);
 
     // Shoulders
-    const neckPos = anatomy.neck ? anatomy.neck.position : { x: 0, y: spine.position.y + 0.5, z: 0 };
     if (anatomy.leftShoulder) {
-      lShoulder.position.set(
-        anatomy.leftShoulder.position.x - neckPos.x,
-        anatomy.leftShoulder.position.y - neckPos.y,
-        anatomy.leftShoulder.position.z - neckPos.z
-      );
+      const lShoulderWorld = new THREE.Vector3(anatomy.leftShoulder.position.x, anatomy.leftShoulder.position.y, anatomy.leftShoulder.position.z);
+      lShoulder.position.copy(spine2.worldToLocal(lShoulderWorld.clone()));
     }
     if (anatomy.rightShoulder) {
-      rShoulder.position.set(
-        anatomy.rightShoulder.position.x - neckPos.x,
-        anatomy.rightShoulder.position.y - neckPos.y,
-        anatomy.rightShoulder.position.z - neckPos.z
-      );
+      const rShoulderWorld = new THREE.Vector3(anatomy.rightShoulder.position.x, anatomy.rightShoulder.position.y, anatomy.rightShoulder.position.z);
+      rShoulder.position.copy(spine2.worldToLocal(rShoulderWorld.clone()));
     }
+    spine.updateMatrixWorld(true);
 
     // Arms
     let restPose: 'T_POSE' | 'A_POSE' = 'A_POSE'; // default to A_POSE for unrigged
     
-    // Left Arm setup
-    lArm.position.set(0.05, 0, 0); // slightly outward from shoulder
+    // Left Arm (Start of arm)
+    // We assume the arm bone starts slightly outward from the shoulder joint
+    const lArmWorld = lShoulder.getWorldPosition(new THREE.Vector3());
+    lArmWorld.x += 0.05; // slightly outward
+    lArm.position.copy(lShoulder.worldToLocal(lArmWorld.clone()));
+    spine.updateMatrixWorld(true);
+    
     if (anatomy.sleeveType === 'SLEEVELESS') {
-      // Stubs
-      lForeArm.position.set(0.05, 0, 0);
-    } else if (anatomy.leftSleeveEnd) {
-      const dx = anatomy.leftSleeveEnd.position.x - anatomy.leftShoulder!.position.x;
-      const dy = anatomy.leftSleeveEnd.position.y - anatomy.leftShoulder!.position.y;
+      const lForeArmWorld = lArm.getWorldPosition(new THREE.Vector3());
+      lForeArmWorld.x += 0.05;
+      lForeArm.position.copy(lArm.worldToLocal(lForeArmWorld.clone()));
+    } else if (anatomy.leftSleeveEnd && anatomy.leftShoulder) {
+      const lSleeveEndWorld = new THREE.Vector3(anatomy.leftSleeveEnd.position.x, anatomy.leftSleeveEnd.position.y, anatomy.leftSleeveEnd.position.z);
+      const lShoulderWorld = new THREE.Vector3(anatomy.leftShoulder.position.x, anatomy.leftShoulder.position.y, anatomy.leftShoulder.position.z);
       
+      const dx = lSleeveEndWorld.x - lShoulderWorld.x;
+      const dy = lSleeveEndWorld.y - lShoulderWorld.y;
       if (Math.abs(dy) < Math.abs(dx) * 0.3) {
         restPose = 'T_POSE';
       }
       
       // Forearm is midpoint of sleeve
-      lForeArm.position.set(dx * 0.5, dy * 0.5, 0);
+      const lForeArmWorld = new THREE.Vector3().lerpVectors(lShoulderWorld, lSleeveEndWorld, 0.5);
+      lForeArm.position.copy(lArm.worldToLocal(lForeArmWorld.clone()));
     }
+    spine.updateMatrixWorld(true);
 
-    // Right Arm setup
-    rArm.position.set(-0.05, 0, 0);
+    // Right Arm
+    const rArmWorld = rShoulder.getWorldPosition(new THREE.Vector3());
+    rArmWorld.x -= 0.05;
+    rArm.position.copy(rShoulder.worldToLocal(rArmWorld.clone()));
+    spine.updateMatrixWorld(true);
+    
     if (anatomy.sleeveType === 'SLEEVELESS') {
-      rForeArm.position.set(-0.05, 0, 0);
-    } else if (anatomy.rightSleeveEnd) {
-      const dx = anatomy.rightSleeveEnd.position.x - anatomy.rightShoulder!.position.x;
-      const dy = anatomy.rightSleeveEnd.position.y - anatomy.rightShoulder!.position.y;
-      rForeArm.position.set(dx * 0.5, dy * 0.5, 0);
+      const rForeArmWorld = rArm.getWorldPosition(new THREE.Vector3());
+      rForeArmWorld.x -= 0.05;
+      rForeArm.position.copy(rArm.worldToLocal(rForeArmWorld.clone()));
+    } else if (anatomy.rightSleeveEnd && anatomy.rightShoulder) {
+      const rSleeveEndWorld = new THREE.Vector3(anatomy.rightSleeveEnd.position.x, anatomy.rightSleeveEnd.position.y, anatomy.rightSleeveEnd.position.z);
+      const rShoulderWorld = new THREE.Vector3(anatomy.rightShoulder.position.x, anatomy.rightShoulder.position.y, anatomy.rightShoulder.position.z);
+      const rForeArmWorld = new THREE.Vector3().lerpVectors(rShoulderWorld, rSleeveEndWorld, 0.5);
+      rForeArm.position.copy(rArm.worldToLocal(rForeArmWorld.clone()));
     }
-
-    // Update global matrices
     spine.updateMatrixWorld(true);
 
     const bones = [spine, spine1, spine2, lShoulder, lArm, lForeArm, rShoulder, rArm, rForeArm];
     const skeleton = new THREE.Skeleton(bones);
 
     // 4. Attach to scene and convert Meshes to SkinnedMeshes
-    scene.add(spine);
     
     const meshesToReplace: { old: THREE.Mesh, new: THREE.SkinnedMesh }[] = [];
     const skinnedMeshes: THREE.SkinnedMesh[] = [];

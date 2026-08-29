@@ -112,13 +112,18 @@ export class GarmentIngestor {
     return this.createFailureResult(id, category, 'NOT_AR_COMPATIBLE');
   }
 
+
   private static buildMetadataFromRigged(
     id: string,
     category: GarmentCategory,
     scene: any,
     analysis: any
   ): GarmentMetadata {
+    // CRITICAL FIX: Ensure matrices are updated before measuring bone world positions!
+    scene.updateMatrixWorld(true);
+    
     const bones: Record<string, any> = {};
+
     scene.traverse((child: any) => {
       if (child.isBone) bones[child.name] = child;
     });
