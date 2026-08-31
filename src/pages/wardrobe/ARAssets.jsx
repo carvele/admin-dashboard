@@ -136,9 +136,53 @@ const ARAssets = () => {
   };
   const [poseForm, setPoseForm] = useState(initialPoseForm);
 
-  const handleIngestionComplete = () => {
-    setIngestionData(null);
-    toast.success('Garment metadata generated and saved successfully!');
+  const handleIngestionComplete = async (finalMetadata) => {
+    // Was previously discarding finalMetadata entirely and showing a false
+    // "saved successfully" toast -- nothing ever reached Supabase, so every
+    // calibration change had to be done by hand via direct SQL. Writes
+    // directly via the raw client rather than updateProduct()/toSnake(),
+    // because toSnake() recurses into nested object keys too: it would
+    // mangle boneMap's GLB bone-name keys (e.g. "mixamorigLeftArm" ->
+    // "mixamorig_left_arm"), which must reach the database byte-for-byte
+    // unchanged since the mobile app looks them up against the live GLB.
+    //
+    // boneMap here is keyed canonical -> GLB name (e.g. {"LeftArm":
+    // "mixamorigLeftArm"}, see garmentIngestor.ts), but the garment_metadata
+    // column -- and the mobile app's read-side inversion in
+    // app/ar-tryon/[id].tsx -- expect the opposite direction, GLB name ->
+    // canonical. Flip it here, once, at the write boundary.
+    const invertedBoneMap = {};
+    for (const [canonicalName, glbBoneName] of Object.entries(finalMetadata.boneMap || {})) {
+      if (glbBoneName) invertedBoneMap[glbBoneName] = canonicalName;
+    }
+
+    const payload = {
+      id: finalMetadata.id,
+      category: finalMetadata.category,
+      calibration_version: finalMetadata.calibrationVersion,
+      ingestion_status: finalMetadata.ingestionStatus,
+      anatomical_anchor_offset: finalMetadata.anatomicalAnchorOffset,
+      anchor_confidence: finalMetadata.anchorConfidence,
+      anchor_type: finalMetadata.anchorType,
+      rest_pose_metric_width: finalMetadata.restPoseMetricWidth,
+      bone_map: invertedBoneMap,
+      rest_pose: finalMetadata.restPose,
+    };
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ garment_metadata: payload })
+        .eq('id', ingestionData.productId);
+      if (error) throw error;
+      setIngestionData(null);
+      toast.success('Garment metadata generated and saved successfully!');
+    } catch (err) {
+      console.error('[GarmentIngestion] Failed to save garment_metadata:', err);
+      toast.error(`Failed to save calibration: ${err.message || 'unknown error'}`);
+      // Deliberately leave the modal open and ingestionData set so the admin
+      // doesn't lose the just-computed metadata and can retry Save.
+    }
   };
 
 
