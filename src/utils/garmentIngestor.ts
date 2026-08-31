@@ -194,10 +194,19 @@ export class GarmentIngestor {
   }
 
   // Un-baked FBX/Mixamo root scale is common in third-party GLBs and silently
-  // propagates into every downstream measurement. Vertex extent is measured
-  // manually (not via Box3().setFromObject(), which is unreliable for a
-  // SkinnedMesh) and rescaled to a plausible real-world garment height if it
-  // falls well outside human scale.
+  // propagates into every downstream measurement. Rescaled to a plausible
+  // real-world garment height if it falls well outside human scale.
+  //
+  // Measurement source depends on whether the scene has a skeleton: raw mesh
+  // vertex positions are unreliable for a SkinnedMesh (confirmed live -- one
+  // real rigged asset read as 0.0028m from vertices while its own bones read
+  // a correct, plausible 1.74m; trusting the vertex reading here previously
+  // caused this function to "fix" an already-correct asset by scaling it up
+  // ~232x). Box3().setFromObject() has the same unreliability, independently
+  // confirmed elsewhere in this codebase and in the mobile renderer. Bone
+  // world positions are reliable and used whenever any exist; mesh vertices
+  // are the only signal available for a genuinely unrigged scene (nothing to
+  // fall back to before auto-rigging has run) and are used only then.
   private static normalizeSceneScale(scene: any): void {
     const MIN_PLAUSIBLE_HEIGHT = 0.15;
     const MAX_PLAUSIBLE_HEIGHT = 2.2;
@@ -206,7 +215,31 @@ export class GarmentIngestor {
     scene.updateMatrixWorld(true);
 
     let minY = Infinity, maxY = -Infinity;
+    let hasBones = false;
     const v = new THREE.Vector3();
+    scene.traverse((child: any) => {
+      if (child.isBone) {
+        hasBones = true;
+        child.getWorldPosition(v);
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
+      }
+    });
+
+    if (hasBones) {
+      if (!isFinite(minY) || !isFinite(maxY)) return;
+      const boneHeight = maxY - minY;
+      if (boneHeight <= 0) return;
+      if (boneHeight < MIN_PLAUSIBLE_HEIGHT || boneHeight > MAX_PLAUSIBLE_HEIGHT) {
+        const factor = TARGET_HEIGHT / boneHeight;
+        scene.scale.multiplyScalar(factor);
+        scene.updateMatrixWorld(true);
+      }
+      return;
+    }
+
+    minY = Infinity;
+    maxY = -Infinity;
     scene.traverse((child: any) => {
       const position = child.geometry?.attributes?.position;
       if (!child.isMesh || !position) return;
