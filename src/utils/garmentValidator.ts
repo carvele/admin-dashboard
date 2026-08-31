@@ -91,6 +91,9 @@ export class GarmentValidator {
     if (nanCount > 0) {
       errors.push(`${nanCount} vertices have invalid or un-normalized weights.`);
     }
+    if (overInfluencedCount > 0) {
+      errors.push(`${overInfluencedCount} vertices have more than 4 bone influences.`);
+    }
 
     // Check Weight Continuity
     const index = mesh.geometry.getIndex();
@@ -113,7 +116,7 @@ export class GarmentValidator {
     }
   }
 
-  private static isDiscontinuous(weights: THREE.BufferAttribute, indices: THREE.BufferAttribute, v1: number, v2: number): boolean {
+  private static isDiscontinuous(weights: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, indices: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, v1: number, v2: number): boolean {
     // Collect effective weights mapped by bone index
     const w1 = new Map<number, number>();
     const w2 = new Map<number, number>();
@@ -144,7 +147,7 @@ export class GarmentValidator {
     return false;
   }
 
-  private static runDeformationStressTest(mesh: THREE.SkinnedMesh, skeleton: THREE.Skeleton, errors: string[], warnings: string[]) {
+  private static runDeformationStressTest(mesh: THREE.SkinnedMesh, skeleton: THREE.Skeleton, errors: string[], _warnings: string[]) {
     const bindMatrix = mesh.bindMatrix;
     const bindMatrixInverse = mesh.bindMatrixInverse;
     const geometry = mesh.geometry;
@@ -215,7 +218,7 @@ export class GarmentValidator {
 
   private static getMaxDisplacement(
     mesh: THREE.SkinnedMesh,
-    pos: THREE.BufferAttribute,
+    pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
     skeleton: THREE.Skeleton,
     bindMatrix: THREE.Matrix4,
     bindMatrixInverse: THREE.Matrix4

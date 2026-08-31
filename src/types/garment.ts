@@ -28,7 +28,7 @@ export interface GarmentFitProfile {
   };
 }
 
-export type IngestionStatus = 'AR_READY' | 'NEEDS_MERCHANT_MAPPING' | 'NOT_AR_COMPATIBLE';
+export type IngestionStatus = 'AR_READY' | 'NEEDS_MERCHANT_MAPPING' | 'NOT_AR_COMPATIBLE' | 'NEEDS_CALIBRATION';
 
 export interface GarmentMetadata {
   id: string;
