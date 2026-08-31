@@ -8,5 +8,8 @@ module.exports = {
   },
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json' }]
-  }
+  },
+  // three/examples/jsm ships raw ESM and needs transforming like our own
+  // source -- garmentIngestor.ts imports GLTFLoader from there.
+  transformIgnorePatterns: ['/node_modules/(?!three/examples/)']
 };

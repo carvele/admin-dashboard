@@ -180,7 +180,7 @@ export class GarmentAnatomyDetector {
     // 5. Sleeve Analysis
     // Are the overall bounds much wider than the waist?
     const totalWidth = maxX - minX;
-    let sleeveType: 'LONG' | 'SHORT' | 'SLEEVELESS' = 'UNKNOWN';
+    let sleeveType: 'LONG' | 'SHORT' | 'SLEEVELESS' | 'UNKNOWN' = 'UNKNOWN';
     let leftSleeveEnd: Landmark | undefined;
     let rightSleeveEnd: Landmark | undefined;
     
