@@ -65,7 +65,13 @@ export class GarmentIngestor {
     category: GarmentCategory,
     scene: any // THREE.Object3D
   ): GarmentMetadata {
-    
+
+    // 0. Normalize scale. Source GLBs (esp. FBX/Mixamo exports with an
+    // un-baked root scale) routinely land many multiples of real-world size --
+    // THREE.Box3().setFromObject() is also unreliable for a SkinnedMesh, so we
+    // measure world-space vertex extent directly rather than trust either.
+    this.normalizeSceneScale(scene);
+
     // 1. Analyze Geometry and Skeleton
     const analysis = GarmentAnalyzer.analyze(scene);
     
@@ -129,19 +135,30 @@ export class GarmentIngestor {
     });
 
     const boneMap = analysis.canonicalMapping;
-    let restPoseMetricWidth = 0.5;
-    
-    const leftShoulder = bones[boneMap['LeftShoulder']] || bones[boneMap['LeftArm']];
-    const rightShoulder = bones[boneMap['RightShoulder']] || bones[boneMap['RightArm']];
-    if (leftShoulder && rightShoulder) {
-      const lPos = new THREE.Vector3();
-      const rPos = new THREE.Vector3();
-      leftShoulder.getWorldPosition(lPos);
-      rightShoulder.getWorldPosition(rPos);
-      restPoseMetricWidth = lPos.distanceTo(rPos);
-    } else {
-      restPoseMetricWidth = analysis.boundingSize.x;
-    }
+
+    // Shoulder (clavicle) bones commonly sit on the spine centerline in many
+    // rig conventions -- including this one, where LeftShoulder/RightShoulder
+    // are both at x=0 and only LeftArm/RightArm carry the real lateral offset.
+    // Try Arm bones first since they reliably carry span; fall back to
+    // Shoulder bones, then the (Box3-derived, less reliable for a SkinnedMesh)
+    // bounding size. A near-zero result from a bone pair is treated as
+    // unusable rather than accepted at face value.
+    const pairWidth = (aKey: string, bKey: string): number | null => {
+      const a = bones[boneMap[aKey]];
+      const b = bones[boneMap[bKey]];
+      if (!a || !b) return null;
+      const aPos = new THREE.Vector3();
+      const bPos = new THREE.Vector3();
+      a.getWorldPosition(aPos);
+      b.getWorldPosition(bPos);
+      const d = aPos.distanceTo(bPos);
+      return d > 0.01 ? d : null;
+    };
+
+    const restPoseMetricWidth =
+      pairWidth('LeftArm', 'RightArm') ??
+      pairWidth('LeftShoulder', 'RightShoulder') ??
+      analysis.boundingSize.x;
 
     const anchorOffset = { x: 0, y: 0.5, z: 0 };
     let anchorConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
@@ -174,6 +191,43 @@ export class GarmentIngestor {
       autoRigged: false,
       sleeveType: 'UNKNOWN'
     };
+  }
+
+  // Un-baked FBX/Mixamo root scale is common in third-party GLBs and silently
+  // propagates into every downstream measurement. Vertex extent is measured
+  // manually (not via Box3().setFromObject(), which is unreliable for a
+  // SkinnedMesh) and rescaled to a plausible real-world garment height if it
+  // falls well outside human scale.
+  private static normalizeSceneScale(scene: any): void {
+    const MIN_PLAUSIBLE_HEIGHT = 0.15;
+    const MAX_PLAUSIBLE_HEIGHT = 2.2;
+    const TARGET_HEIGHT = 0.65;
+
+    scene.updateMatrixWorld(true);
+
+    let minY = Infinity, maxY = -Infinity;
+    const v = new THREE.Vector3();
+    scene.traverse((child: any) => {
+      const position = child.geometry?.attributes?.position;
+      if (!child.isMesh || !position) return;
+      child.updateMatrixWorld();
+      for (let i = 0; i < position.count; i++) {
+        v.fromBufferAttribute(position, i);
+        v.applyMatrix4(child.matrixWorld);
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
+      }
+    });
+
+    if (!isFinite(minY) || !isFinite(maxY)) return;
+    const height = maxY - minY;
+    if (height <= 0) return;
+
+    if (height < MIN_PLAUSIBLE_HEIGHT || height > MAX_PLAUSIBLE_HEIGHT) {
+      const factor = TARGET_HEIGHT / height;
+      scene.scale.multiplyScalar(factor);
+      scene.updateMatrixWorld(true);
+    }
   }
 
   private static createFailureResult(

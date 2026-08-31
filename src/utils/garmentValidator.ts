@@ -238,7 +238,8 @@ export class GarmentValidator {
 
         const boneIndex = indices.getComponent(i, j);
         const bone = skeleton.bones[boneIndex];
-        
+        if (!bone) continue;
+
         temp.copy(v);
         temp.applyMatrix4(bindMatrix);
         temp.applyMatrix4(skeleton.boneInverses[boneIndex]);

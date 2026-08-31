@@ -154,7 +154,11 @@ export class GarmentAutoRigger {
     const skinnedMeshes: THREE.SkinnedMesh[] = [];
     
     scene.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh && !(child as THREE.SkinnedMesh).isSkinnedMesh) {
+      // Convert every mesh reaching this point, including ones that are already
+      // a SkinnedMesh -- GarmentAnalyzer already decided the scene needs auto-rigging,
+      // so a pre-existing but unrecognized rig must be replaced, not left bound to a
+      // skeleton the validator (and mobile renderer) know nothing about.
+      if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const skinned = new THREE.SkinnedMesh(mesh.geometry.clone(), mesh.material); // Clone geometry so we can add attributes safely
         skinned.position.copy(mesh.position);
