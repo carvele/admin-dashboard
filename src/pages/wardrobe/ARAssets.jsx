@@ -109,7 +109,7 @@ const ARAssets = () => {
   const handleIngestionComplete = async ({ metadata, riggedBlob }) => {
     try {
       let finalModelUrl = ingestionData.glbUrl;
-      
+
       if (riggedBlob) {
         // Upload the new rigged GLB
         const file = new File([riggedBlob], `${ingestionData.productId}_rigged.glb`, { type: 'model/gltf-binary' });
@@ -120,12 +120,44 @@ const ARAssets = () => {
       const targetAsset = allCatalogProducts.find(p => p.docId === ingestionData.productId);
       const currentArData = targetAsset?.arData || {};
 
-      await updateProduct(ingestionData.productId, { 
-        garment_metadata: metadata,
+      // garment_metadata is written via a raw call rather than through
+      // updateProduct()/toSnake() below. toSnake() recurses into every
+      // nested object key, including boneMap's -- which are literal GLB
+      // bone-name strings (e.g. "mixamorigLeftArm"), not semantic field
+      // names, and must reach the database byte-for-byte unchanged. Running
+      // them through camelCase->snake_case would silently mangle them (->
+      // "mixamorig_left_arm"), breaking every future bone lookup.
+      //
+      // boneMap itself is built canonical -> GLB name (see
+      // garmentIngestor.ts's `bones[boneMap['LeftShoulder']]` lookups), but
+      // the mobile app's read-side inversion (app/ar-tryon/[id].tsx) expects
+      // the opposite direction, GLB name -> canonical. Flip it here, once,
+      // at the write boundary -- this is the one place both sides meet.
+      const invertedBoneMap = {};
+      for (const [canonicalName, glbBoneName] of Object.entries(metadata.boneMap || {})) {
+        if (glbBoneName) invertedBoneMap[glbBoneName] = canonicalName;
+      }
+      // Snake-case metadata's own top-level field names by hand (not
+      // recursively -- same reasoning as above) so every field GarmentIngestor
+      // produces reaches the column, including ones added after this was
+      // written (autoRigged, sleeveType, validationErrors, ...).
+      const toSnakeCase = (s) => s.replace(/([A-Z])/g, '_$1').toLowerCase();
+      const garmentMetadataPayload = {};
+      for (const [key, value] of Object.entries(metadata)) {
+        garmentMetadataPayload[toSnakeCase(key)] = key === 'boneMap' ? invertedBoneMap : value;
+      }
+
+      const { error: metaError } = await supabase
+        .from('products')
+        .update({ garment_metadata: garmentMetadataPayload })
+        .eq('id', ingestionData.productId);
+      if (metaError) throw metaError;
+
+      await updateProduct(ingestionData.productId, {
         model_3d_url: finalModelUrl,
         arData: { ...currentArData, alignments: 'Verified' }
       });
-      
+
       setIngestionData(null);
       toast.success('Garment metadata generated and saved successfully!');
     } catch (error) {
