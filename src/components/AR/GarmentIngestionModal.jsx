@@ -384,6 +384,13 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                   </div>
 
                   {/* ── Editable fields ── */}
+                  {/* Only Shoulder Width sets anchorConfidence: 'merchant_confirmed' below.
+                      Rest Pose and Anchor Type used to set it too, which was wrong -- this
+                      modal has no editable field for anatomicalAnchorOffset at all (it's
+                      display-only above), so picking a rest pose or anchor type was
+                      silently stamping the anchor position as human-reviewed when nobody
+                      had looked at it. Confirmed live: two catalog products ended up with
+                      merchant_confirmed anchor data that was actually never reviewed. */}
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-bold mb-1">Shoulder Width (m)</label>
@@ -410,8 +417,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                         value={metadata.restPose}
                         onChange={(e) => setMetadata({
                           ...metadata,
-                          restPose: e.target.value,
-                          anchorConfidence: 'merchant_confirmed'
+                          restPose: e.target.value
                         })}
                       >
                         <option value="T_POSE">T-Pose - Arms horizontal</option>
@@ -426,8 +432,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                         value={metadata.anchorType}
                         onChange={(e) => setMetadata({
                           ...metadata,
-                          anchorType: e.target.value,
-                          anchorConfidence: 'merchant_confirmed'
+                          anchorType: e.target.value
                         })}
                       >
                         <option value="NECK">Neck</option>
