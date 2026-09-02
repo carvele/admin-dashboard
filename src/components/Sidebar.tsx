@@ -81,15 +81,42 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
   }, []);
 
   useEffect(() => {
-    const unsub = subscribeToCollection('conversations', (data: any[]) => {
-      const count = data.reduce(
+    let convUnread = 0;
+    let msgUnread = 0;
+
+    const updateCount = (cUnread: number, mUnread: number) => {
+      setUnreadMessages(Math.max(cUnread, mUnread));
+    };
+
+    const unsubConv = subscribeToCollection('conversations', (convs: any[]) => {
+      convUnread = convs.reduce(
         (sum: number, conv: any) => sum + (conv.unreadCount || conv.unread_count || conv.unread || 0),
         0,
       );
-      setUnreadMessages(count);
+      updateCount(convUnread, msgUnread);
     });
-    return () => unsub();
-  }, []);
+
+    const unsubMsgs = subscribeToCollection('messages', (msgs: any[]) => {
+      const staffIds = new Set([user?.uid, (user as any)?.id, (user as any)?.docId].filter(Boolean));
+      let count = 0;
+      for (const m of msgs) {
+        if (m.deleted === true) continue;
+        const isRead = Boolean(m.readAt || m.read_at);
+        const sender = m.senderId || m.sender_id;
+        const isStaff = m.isStaff || m.is_staff || (sender && staffIds.has(sender));
+        if (!isRead && !isStaff && sender) {
+          count++;
+        }
+      }
+      msgUnread = count;
+      updateCount(convUnread, msgUnread);
+    });
+
+    return () => {
+      unsubConv();
+      unsubMsgs();
+    };
+  }, [user]);
 
   useEffect(() => {
     const unsub = subscribeToCollection('reservations', (data: any[]) => {
@@ -97,12 +124,14 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
       for (const r of data) {
         if (r.deleted === true) continue;
         const status = (r.status || '').trim();
+        const rescheduleStatus = (r.rescheduleStatus || r.reschedule_status || '').trim();
+        const paymentStatus = (r.paymentStatus || r.payment_status || '').trim();
         if (
           status === 'Pending' ||
           status === 'Request Approval' ||
           status === 'To Pay' ||
-          r.rescheduleStatus === 'requested' ||
-          r.paymentStatus === 'Awaiting Verification'
+          rescheduleStatus === 'requested' ||
+          paymentStatus === 'Awaiting Verification'
         ) {
           count++;
         }
