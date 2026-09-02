@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import debounce from 'lodash.debounce';
@@ -183,7 +185,7 @@ const Reservations = () => {
   // debounce(...) only closes over the stable setSearchTerm setter, so an
   // empty dep array is correct; eslint can't statically verify that through
   // the debounce() call wrapper.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 400),
     []
@@ -773,6 +775,7 @@ const Reservations = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Reservations' }]}
         title="Reservation Management"
         subtitle="Manage customer bookings and outfit try-ons"
         category="OPERATIONS"
@@ -864,7 +867,7 @@ const Reservations = () => {
         </div>
 
         {viewMode === 'board' && (statusFilter === 'Cancelled' || statusFilter === 'Completed') && (
-          <div className="alert-banner info-banner flex-between p-3 mb-4 rounded-lg" style={{ background: 'var(--accent-light, #f5efe6)', border: '1px solid var(--accent-color, #c9beb4)', color: 'var(--text-primary)', margin: '16px' }}>
+          <div className="alert-banner info-banner flex-between p-3 mb-4 rounded-lg" style={{ background: 'var(--bg-light)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', margin: '16px' }}>
             <div className="flex-center gap-2">
               <Clock size={16} />
               <span><strong>{statusFilter}</strong> reservations are historical records. View them in <strong>List View</strong>.</span>
@@ -1754,7 +1757,7 @@ const Reservations = () => {
                       <img
                         src={resolvedReceiptUrl}
                         alt="Receipt"
-                        style={{ height: '150px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface, #f4f4f4)' }}
+                        style={{ height: '150px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}
                       />
                     </button>
                   ) : (

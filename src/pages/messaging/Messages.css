@@ -67,7 +67,7 @@
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background-color: var(--stock-high, #10b981);
+  background-color: var(--stock-high, var(--color-success));
   border: 2px solid var(--white);
 }
 
@@ -113,7 +113,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.75rem;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -214,7 +214,7 @@
 
 .message-bubble {
   padding: 0.875rem 1rem;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   position: relative;
 }
 .message-bubble p {
@@ -262,7 +262,7 @@
   color: #831843;
   border: 1px solid #fbcfe8;
   border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.08);
+  box-shadow: 0 2px var(--spacing-sm) rgba(236, 72, 153, 0.08);
 }
 .bubbles-auto-reply p {
   color: #831843;
@@ -275,13 +275,13 @@
 .auto-response-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #be185d;
   background-color: #fbcfe8;
-  padding: 2px 8px;
+  padding: 2px var(--spacing-sm);
   border-radius: 10px;
   margin-bottom: 6px;
   text-transform: uppercase;
@@ -292,7 +292,7 @@
   background: linear-gradient(135deg, rgba(236, 72, 153, 0.16) 0%, rgba(157, 23, 77, 0.28) 100%);
   color: #fdf2f8;
   border: 1px solid rgba(244, 114, 182, 0.35);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 var(--spacing-xs) 14px rgba(0, 0, 0, 0.3);
 }
 
 :root.dark .bubbles-auto-reply p {
@@ -318,7 +318,7 @@
 .os-icon {
   background-color: rgba(255, 255, 255, 0.2);
   padding: 0.75rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
 }
 
 /* Input Area */
@@ -392,7 +392,7 @@
 .chat-input {
   flex: 1 1 auto;
   min-width: 80px;
-  border-radius: 24px;
+  border-radius: var(--spacing-xl);
   padding: 0.65rem 1.1rem;
   background-color: var(--beige);
   color: var(--charcoal);
@@ -526,17 +526,17 @@
   font-size: 0.65rem;
   font-weight: 700;
   padding: 0.2rem 0.5rem;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   text-transform: uppercase;
 }
 
 /* Reservation Card */
 .reservation-card {
   background-color: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   overflow: hidden;
   min-width: 260px;
-  box-shadow: 0 4px 12px rgba(31, 28, 24, 0.05);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(31, 28, 24, 0.05);
   border: 1px solid var(--border-color);
   color: var(--charcoal);
   text-align: left;
@@ -587,12 +587,12 @@
   font-weight: 600;
   padding: 0.5rem;
   background-color: var(--beige);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   margin-top: 0.5rem;
 }
 .res-status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
   border-radius: 50%;
   background-color: var(--accent);
 }
@@ -613,7 +613,7 @@
 .bubble-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
   position: relative;
 }
 
@@ -679,7 +679,7 @@
 .typing-bubble {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
   padding: 0.75rem 0.9rem;
 }
 .typing-dot {
@@ -704,7 +704,7 @@
   padding: 0.4rem 0.75rem;
   margin-bottom: 0.5rem;
   background: var(--cream);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   font-size: 0.8rem;
   color: var(--charcoal);
 }
@@ -713,8 +713,8 @@
   font-weight: 500;
 }
 .editing-banner .icon-btn {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
 }
 
 /* ── Emoji popover ── */
@@ -722,10 +722,10 @@
   position: absolute;
   top: -52px;
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-xs);
   background: var(--white);
   border: 1px solid var(--border-color);
-  border-radius: 24px;
+  border-radius: var(--spacing-xl);
   padding: 6px 10px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.12);
   z-index: var(--z-base);
@@ -746,7 +746,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px var(--spacing-xs);
   border-radius: 6px;
   transition: transform 0.12s, background 0.12s;
 }
@@ -759,7 +759,7 @@
 .reaction-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 .reaction-chips.chips-sent {
   justify-content: flex-end;
@@ -768,11 +768,11 @@
   justify-content: flex-start;
 }
 .reaction-chip {
-  font-size: 12px;
+  font-size: var(--spacing-md);
   background: var(--white);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 2px 8px;
+  border-radius: var(--spacing-md);
+  padding: 2px var(--spacing-sm);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
@@ -786,11 +786,11 @@
 /* ── Upload progress ── */
 .upload-progress {
   background: var(--cream);
-  border-radius: 8px;
-  padding: 6px 12px;
+  border-radius: var(--spacing-sm);
+  padding: 6px var(--spacing-md);
   font-size: 0.8125rem;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
   text-align: center;
   animation: pulse 1.2s infinite;
 }
@@ -807,7 +807,7 @@
   padding: 1.25rem;
   background-color: var(--white);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   min-width: 0;
 }
 
@@ -959,7 +959,7 @@
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0.5rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) rgba(0, 0, 0, 0.12);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -1050,7 +1050,7 @@
 .msg-product-img {
   width: 46px;
   height: 46px;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   object-fit: cover;
   flex-shrink: 0;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -1058,7 +1058,7 @@
 .msg-product-img-placeholder {
   width: 46px;
   height: 46px;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   background: rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
@@ -1092,7 +1092,7 @@
 }
 
 .msg-price-sale {
-  color: var(--stock-high, #10b981);
+  color: var(--stock-high, var(--color-success));
 }
 .msg-price-original {
   text-decoration: line-through;

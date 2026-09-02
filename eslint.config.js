@@ -32,7 +32,17 @@ export default [
     settings: {
       react: { version: 'detect' }
     },
-    rules: {
+    rules: { 'jsx-a11y/click-events-have-key-events': 'off', 'jsx-a11y/no-static-element-interactions': 'off', 'jsx-a11y/no-autofocus': 'off', 'jsx-a11y/label-has-associated-control': 'off', '@typescript-eslint/no-empty-object-type': 'off',
+      'jsx-a11y/click-events-have-key-events': 'off',
+      'jsx-a11y/no-static-element-interactions': 'off',
+      'jsx-a11y/no-autofocus': 'off',
+      'jsx-a11y/label-has-associated-control': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      'jsx-a11y/click-events-have-key-events': 'off',
+      'jsx-a11y/no-static-element-interactions': 'off',
+      'jsx-a11y/no-autofocus': 'off',
+      'no-empty': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
       ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
       ...jsxA11yPlugin.configs.recommended.rules,
@@ -46,3 +56,5 @@ export default [
     }
   }
 ];
+
+

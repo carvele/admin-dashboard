@@ -234,7 +234,7 @@
 .bg-primary { background-color: var(--charcoal); }
 .text-white { color: var(--on-accent); }
 .shadow-sm { box-shadow: 0 1px 2px 0 rgba(31, 28, 24, 0.05); }
-.shadow-md { box-shadow: 0 4px 6px -1px rgba(31, 28, 24, 0.1); }
+.shadow-md { box-shadow: 0 var(--spacing-xs) 6px -1px rgba(31, 28, 24, 0.1); }
 .cursor-pointer { cursor: pointer; }
 .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 .bg-gray-50 { background-color: var(--beige); }
@@ -275,7 +275,7 @@
 
 .size-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(0,0,0,0.08);
   border-color: var(--text-secondary);
 }
 
@@ -306,7 +306,7 @@
 }
 .color-chip:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(0, 0, 0, 0.08);
   border-color: var(--text-secondary);
 }
 .color-chip.active {

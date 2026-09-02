@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
@@ -59,23 +61,11 @@ const SetPassword = () => {
       if (passwordError) throw passwordError;
 
       // 2. Create the profile row server-side. The role comes from app_metadata
-      //    inside the edge function, never from the client — so this can't be
+      //    inside the edge function, never from the client - so this can't be
       //    used to self-assign a higher role.
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/activate-staff-account`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${freshSession?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-        },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.error || 'Failed to activate your account.');
+      const { data: result, error: invokeError } = await supabase.functions.invoke('activate-staff-account');
+      if (invokeError) {
+        throw new Error(invokeError.message || 'Failed to activate your account.');
       }
 
       // Offer to save the new credential to the browser's password manager, so

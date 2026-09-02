@@ -11,7 +11,7 @@
   /* Fixed dark gradient -- a permanently-dark brand panel by design, same
      treatment as Sidebar.css, not a themed surface. var(--charcoal) used to
      anchor this but flips near-white in dark mode. */
-  background: linear-gradient(160deg, #1f1c18 0%, #2d2522 100%);
+  background: linear-gradient(160deg, var(--charcoal) 0%, #2d2522 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -40,7 +40,7 @@
   align-items: center;
   justify-content: center;
   margin-bottom: 0.75rem;
-  box-shadow: 0 0 12px rgba(236, 72, 153, 0.4); /* Pink soft glow */
+  box-shadow: 0 0 var(--spacing-md) rgba(236, 72, 153, 0.4); /* Pink soft glow */
 }
 .login-brand h1 {
   font-size: 2rem;
@@ -141,7 +141,7 @@
   gap: 0.75rem;
   background-color: var(--beige);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   padding: 0.75rem 1rem;
   font-size: 0.8125rem;
   color: var(--charcoal);
@@ -166,8 +166,8 @@
 .login-form .input-field:-webkit-autofill:hover,
 .login-form .input-field:-webkit-autofill:focus,
 .login-form .input-field:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 30px var(--input-bg, #fff) inset !important;
-  -webkit-text-fill-color: var(--charcoal, #1f1c18) !important;
+  -webkit-box-shadow: 0 0 0 30px var(--input-bg, var(--white)) inset !important;
+  -webkit-text-fill-color: var(--charcoal, var(--charcoal)) !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 .password-toggle {
@@ -186,7 +186,7 @@
   padding: 0.75rem 1rem;
   background-color: var(--status-cancelled-bg);
   color: var(--status-cancelled-text);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   font-size: 0.875rem;
   animation: shake 0.3s ease-out;
 }
@@ -219,7 +219,7 @@
 }
 .login-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 var(--spacing-sm) 20px rgba(0, 0, 0, 0.15);
 }
 .login-btn:disabled {
   opacity: 0.7;

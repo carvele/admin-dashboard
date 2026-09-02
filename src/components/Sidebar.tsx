@@ -223,7 +223,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
                 <span className="profile-name">{(user as any)?.name || 'Staff Member'}</span>
                 <span
                   className="profile-role"
-                  style={{ color: isAdminUnlocked ? 'var(--accent)' : 'var(--text-secondary)' }}
+                  style={{ color: isAdminUnlocked ? 'var(--accent)' : 'rgba(255, 255, 255, 0.65)' }}
                 >
                   {(user as any)?.role === 'Owner'
                     ? '👑 Owner Access'

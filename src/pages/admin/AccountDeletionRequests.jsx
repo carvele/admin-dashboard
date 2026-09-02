@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useEffect, useState } from 'react';
+import { Modal } from '../../components/common/Modal';
 import { UserX, Mail, Phone, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -186,21 +189,13 @@ const AccountDeletionRequests = () => {
         </div>
       </div>
 
-      {reviewing && (
-        <div
-          className="modal-overlay"
-          onClick={closeReview}
-          onKeyDown={(e) => e.key === 'Escape' && closeReview()}
-          role="button"
-          tabIndex={0}
-          aria-label="Close dialog"
-        >
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} role="presentation" style={{ maxWidth: 560 }}>
-            <div className="modal-header">
-              <h2>Delete {reviewing.customerName}?</h2>
-              <button className="close-btn" onClick={closeReview}>&times;</button>
-            </div>
-
+      <Modal
+        isOpen={!!reviewing}
+        onClose={closeReview}
+        title={`Delete ${reviewing?.customerName}?`}
+        maxWidth={560}
+      >
+        {reviewing && (
             <div className="p-4">
               <div className="profile-contact mb-4">
                 <div className="contact-item">
@@ -223,15 +218,15 @@ const AccountDeletionRequests = () => {
                 <div
                   className="mb-4"
                   style={{
-                    border: '1px solid var(--stock-low, #EF4444)',
-                    borderRadius: 8,
+                    border: '1px solid var(--stock-low, var(--color-danger))',
+                    borderRadius: 'var(--spacing-sm)',
                     padding: '0.75rem 1rem',
                     display: 'flex',
                     gap: 10,
                     alignItems: 'flex-start',
                   }}
                 >
-                  <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2, color: 'var(--stock-low, #EF4444)' }} />
+                  <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2, color: 'var(--stock-low, var(--color-danger))' }} />
                   <div>
                     <p style={{ fontWeight: 600, marginBottom: 4 }}>Cannot delete yet</p>
                     <p className="text-secondary text-sm">
@@ -250,7 +245,7 @@ const AccountDeletionRequests = () => {
                   className="mb-4"
                   style={{
                     border: '1px solid var(--border-color)',
-                    borderRadius: 8,
+                    borderRadius: 'var(--spacing-sm)',
                     padding: '0.75rem 1rem',
                     display: 'flex',
                     gap: 10,
@@ -283,9 +278,8 @@ const AccountDeletionRequests = () => {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       <ConfirmDialog
         isOpen={rejectConfirmOpen}

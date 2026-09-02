@@ -8,7 +8,7 @@ import '@testing-library/jest-dom';
 // Mock Services
 jest.mock('../../services/reservationService', () => ({
   subscribeToReservations: jest.fn(() => jest.fn()),
-  getReservations: jest.fn(() => Promise.resolve([])),
+  autoCancelExpiredReservations: jest.fn().mockResolvedValue(undefined), getReservations: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../services/customerService', () => ({
   subscribeToCustomers: jest.fn(() => jest.fn()),

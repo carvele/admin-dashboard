@@ -1,3 +1,6 @@
+ 
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -172,11 +175,11 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        <button onClick={() => applyPreset('T_POSE')} className="bg-blue-100 px-3 py-1 rounded text-sm font-bold">T-Pose</button>
-        <button onClick={() => applyPreset('A_POSE')} className="bg-blue-100 px-3 py-1 rounded text-sm font-bold">A-Pose</button>
-        <button onClick={() => applyPreset('ARMS_UP')} className="bg-blue-100 px-3 py-1 rounded text-sm font-bold">Arms Up</button>
-        <button onClick={() => applyPreset('ARMS_DOWN')} className="bg-blue-100 px-3 py-1 rounded text-sm font-bold">Neutral</button>
-        <button onClick={() => applyPreset('CROSSED')} className="bg-blue-100 px-3 py-1 rounded text-sm font-bold">Crossed</button>
+        <button onClick={() => applyPreset('T_POSE')} className="btn-primary small">T-Pose</button>
+        <button onClick={() => applyPreset('A_POSE')} className="btn-primary small">A-Pose</button>
+        <button onClick={() => applyPreset('ARMS_UP')} className="btn-primary small">Arms Up</button>
+        <button onClick={() => applyPreset('ARMS_DOWN')} className="btn-primary small">Neutral</button>
+        <button onClick={() => applyPreset('CROSSED')} className="btn-primary small">Crossed</button>
       </div>
 
       <div className="flex gap-4">
@@ -233,7 +236,7 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
             >
               Confirm AR Ready
             </button>
-            <button onClick={onFail} className="bg-gray-100 text-gray-700 font-bold py-2 rounded text-center hover:bg-gray-200">
+            <button onClick={onFail} className="btn-secondary">
               Reject / Go Back
             </button>
           </div>

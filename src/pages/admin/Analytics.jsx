@@ -216,7 +216,7 @@ const Analytics = () => {
       .sort((a,b) => b.value - a.value);
   }, [earnedReservations, catalog]);
 
-  const COLORS = ['#1F2937', '#D97706', '#92400E', '#4B5563', '#9CA3AF'];
+  const COLORS = ['var(--accent)', 'var(--highlight)', 'var(--color-warning)', 'var(--text-secondary)', 'var(--border-color)'];
 
   // Status Funnel
   const funnelData = useMemo(() => {
@@ -359,6 +359,7 @@ const Analytics = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Analytics' }]}
         category="ANALYTICS"
         title="Analytics Dashboard"
         subtitle="Comprehensive performance metrics for JezSy Collection"
@@ -420,7 +421,7 @@ const Analytics = () => {
                 <div className="dropdown-menu">
                   <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
                   <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
-                  <hr style={{ margin: '4px 0', borderColor: 'var(--border-color, #333)' }} />
+                  <hr style={{ margin: '4px 0', borderColor: 'var(--border-color)' }} />
                   <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
                     👗 Garment Performance (CSV)
                   </button>
@@ -486,15 +487,15 @@ const Analytics = () => {
                 >
                   <defs>
                     <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1F2937" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#1F2937" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--charcoal)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--charcoal)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                   <RechartsTooltip />
-                  <Area type="monotone" dataKey="reservations" stroke="#1F2937" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRes)" />
+                  <Area type="monotone" dataKey="reservations" stroke="var(--charcoal)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRes)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -626,11 +627,11 @@ const Analytics = () => {
             <div className="chart-container" style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dynamicConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
                   <RechartsTooltip cursor={{ fill: 'transparent' }} />
-                  <Bar dataKey="tryOn" name="AR Try-Ons" fill="#1F2937" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="tryOn" name="AR Try-Ons" fill="var(--charcoal)" radius={[4, 4, 0, 0]} maxBarSize={40} />
                   <Bar dataKey="reserved" name="Reservations" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>

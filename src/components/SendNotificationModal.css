@@ -1,14 +1,14 @@
 .notification-modal {
   max-width: 480px;
   width: 90%;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   background: var(--white);
   color: var(--text-primary);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
 .notification-modal .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .notification-modal .form-label {
@@ -24,7 +24,7 @@
   padding: 10px 14px;
   background: var(--beige);
   border: 1px solid var(--border-color, #2d2d38);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   color: var(--text-primary);
   font-size: 0.9rem;
   box-sizing: border-box;

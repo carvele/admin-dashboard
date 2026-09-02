@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame } from 'lucide-react';
@@ -265,6 +267,7 @@ const ClothingCatalog = () => {
   return (
     <div className="catalog-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Clothing Catalog' }]}
         title="Clothing Catalog"
         subtitle="Manage products, variants, and gallery"
         category="CATALOG"

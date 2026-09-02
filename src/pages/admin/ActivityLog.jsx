@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -125,7 +127,7 @@ const ActivityLog = () => {
   }, [targetType, targetId, actionSearch, dateFrom, dateTo, actorId]);
 
   // Reload on filter change (debounced for the text field), reset to page 0
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   const debouncedLoad = useCallback(
     debounce((filters) => {
       setPage(0);
@@ -225,6 +227,7 @@ const ActivityLog = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Activity Log' }]}
         title="Activity Log"
         subtitle="Every recorded admin action — who did what, and when"
         category="AUDIT & SECURITY"

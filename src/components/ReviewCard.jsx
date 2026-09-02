@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPHDate } from '../utils/dateFormatter';
 import { Star, CheckCircle, Trash2 } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import ReviewImageLightbox from './ReviewImageLightbox';
@@ -32,7 +33,7 @@ const ReviewCard = ({ review, onDelete, showProductName = false }) => {
       key={idx}
       size={15}
       fill={idx < review.rating ? 'currentColor' : 'none'}
-      color={idx < review.rating ? 'var(--warning, #f59e0b)' : 'var(--text-secondary, #9ca3af)'}
+      color={idx < review.rating ? 'var(--warning, var(--color-warning))' : 'var(--text-secondary, #9ca3af)'}
     />
   ));
 
@@ -64,12 +65,12 @@ const ReviewCard = ({ review, onDelete, showProductName = false }) => {
         </div>
 
         {/* ── Rating value + date ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', margin: '4px 0 8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary, inherit)' }}>
             {review.rating?.toFixed(1)}
           </span>
           <span>·</span>
-          <span>{review.date ? new Date(review.date).toLocaleDateString() : ''}</span>
+          <span>{review.date ? formatPHDate(review.date) : ''}</span>
         </div>
 
         {/* ── Review text ── */}

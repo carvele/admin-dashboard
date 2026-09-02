@@ -9,8 +9,8 @@
 
 .device-stat-card {
   background: var(--white);
-  border: 1px solid var(--border-color, #e5e5e5);
-  border-radius: 12px;
+  border: 1px solid var(--border-color, var(--border-light));
+  border-radius: var(--spacing-md);
   padding: 1.25rem;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -19,7 +19,7 @@
 .device-stat-card:hover,
 .device-stat-card.active {
   border-color: var(--color-gold, #c49a00);
-  box-shadow: 0 4px 16px rgba(196, 154, 0, 0.12);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) rgba(196, 154, 0, 0.12);
   transform: translateY(-2px);
 }
 
@@ -33,7 +33,7 @@
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  border-bottom: 1px solid var(--border-color, var(--border-light));
   transition: background 0.2s;
 }
 
@@ -71,17 +71,17 @@
 .device-name-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   margin-bottom: 2px;
 }
 
 .edit-icon-btn {
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-xs);
   color: var(--text-secondary, #888);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -102,26 +102,26 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-xs);
 }
 
 .small-input {
   max-width: 200px;
   min-height: 28px !important;
   font-size: 0.85rem !important;
-  padding: 2px 8px !important;
+  padding: 2px var(--spacing-sm) !important;
 }
 
 .icon-btn-save,
 .icon-btn-cancel {
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--spacing-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   transition: all 0.2s;
 }
 
@@ -155,7 +155,7 @@
 .device-fp code {
   background: var(--beige);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   font-size: 0.7rem;
 }
 
@@ -169,10 +169,10 @@
 .device-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
   font-size: 0.78rem;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: var(--spacing-xs) 10px;
   border-radius: 20px;
   white-space: nowrap;
 }
@@ -200,10 +200,10 @@
 .btn-sm {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  gap: var(--spacing-xs);
+  padding: 6px var(--spacing-md);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -231,7 +231,7 @@
 .btn-delete {
   background: rgba(239, 68, 68, 0.1);
   color: var(--stock-low);
-  padding: 6px 8px;
+  padding: 6px var(--spacing-sm);
 }
 
 .btn-delete:hover {

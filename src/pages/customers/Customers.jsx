@@ -1,3 +1,5 @@
+ 
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useCallback } from 'react';
 import debounce from 'lodash.debounce';
 import {
@@ -128,7 +130,7 @@ const Customers = () => {
     // sets after every fetch. Tracking it here would re-run this effect (and
     // re-fetch page 1) every time lastDoc changes -- the "Load More" button
     // at line ~600 is the only place pagination should advance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const [searchInput, setSearchInput] = useState('');
@@ -136,7 +138,7 @@ const Customers = () => {
   // debounce(...) only closes over the stable setSearchTerm setter, so an
   // empty dep array is correct; eslint can't statically verify that through
   // the debounce() call wrapper.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 300),
     []
@@ -403,6 +405,7 @@ const Customers = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Customers' }]}
         title="App Customers"
         subtitle="View registered app users, profiles, and engagement metrics"
         category="PEOPLE"

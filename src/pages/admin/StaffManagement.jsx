@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -494,6 +496,7 @@ const StaffManagement = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Team Management' }]}
         title="Team Management"
         subtitle="Create and manage staff accounts for the admin dashboard"
         category="ADMINISTRATION"

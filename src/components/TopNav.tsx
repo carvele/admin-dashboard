@@ -189,7 +189,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
       case 'Customer':
         return '#6366F1';
       case 'Product':
-        return '#10B981';
+        return 'var(--color-success)';
       case 'Page':
         return '#6B7280';
       default:
@@ -360,7 +360,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           </button>
 
           {showUserDropdown && (
-            <div className="user-dropdown card">
+            <div className="user-dropdown">
               <div className="user-dropdown-header">
                 <div className="avatar" style={{ backgroundColor: getAvatarColor((user as any)?.name || 'A') }}>
                   {initials}

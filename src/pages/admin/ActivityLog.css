@@ -74,7 +74,7 @@
   color: var(--text-secondary);
   display: flex;
   padding: 0.2rem;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
 }
 .al-search-clear:hover { color: var(--charcoal); background: var(--beige); }
 
@@ -159,13 +159,13 @@
   margin-top: 0.1rem;
 }
 
-.al-kind-create   { background: #e6f7ec; color: #1a7d3a; }
-.al-kind-update   { background: #e8f0fe; color: #1a56b0; }
-.al-kind-delete   { background: #fde8e8; color: #c0392b; }
-.al-kind-restore  { background: #e6f7ec; color: #1a7d3a; }
-.al-kind-stock    { background: #fdf6e3; color: #9a7b1f; }
-.al-kind-auth     { background: #f3e8fd; color: #7a1ab0; }
-.al-kind-message  { background: #fdf2f8; color: #be185d; }
+.al-kind-create   { background: var(--status-completed-bg); color: var(--status-completed-text); }
+.al-kind-update   { background: var(--status-approved-bg); color: var(--status-approved-text); }
+.al-kind-delete   { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+.al-kind-restore  { background: var(--status-completed-bg); color: var(--status-completed-text); }
+.al-kind-stock    { background: var(--status-pending-bg); color: var(--status-pending-text); }
+.al-kind-auth     { background: var(--status-fitting-bg); color: var(--status-fitting-text); }
+.al-kind-message  { background: var(--pink-soft); color: var(--pink-accent); }
 .al-kind-neutral  { background: var(--beige); color: var(--text-secondary); }
 
 .al-avatar {
@@ -208,7 +208,7 @@
 }
 .al-delta-to { font-weight: 700; color: var(--charcoal); }
 
-.al-amount { font-weight: 700; color: #1a7d3a; }
+.al-amount { font-weight: 700; color: var(--status-completed-text); }
 
 .al-meta {
   display: flex;
@@ -227,7 +227,7 @@
   display: inline-block;
   font-size: 0.72rem;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 0.15rem 0.6rem;
   text-transform: capitalize;
   background: var(--beige);
@@ -259,7 +259,7 @@
 .al-details code {
   background: var(--white);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   padding: 0.1rem 0.4rem;
   font-size: 0.78rem;
 }
@@ -267,7 +267,7 @@
   margin: 0;
   background: var(--white);
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   padding: 0.75rem;
   font-size: 0.76rem;
   overflow-x: auto;
@@ -373,7 +373,7 @@
 .al-drawer-summary-card {
   background: var(--cream);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   padding: 0.875rem 1rem;
 }
 
@@ -392,7 +392,7 @@
   font-weight: 600;
   color: var(--accent);
   text-decoration: none;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 0.15rem 0.6rem;
   background: rgba(184, 134, 11, 0.08);
   white-space: nowrap;
@@ -471,7 +471,7 @@
 .al-code {
   background: var(--cream);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   padding: 0.1rem 0.4rem;
   font-size: 0.75rem;
 }
@@ -537,7 +537,7 @@
   margin: 0.6rem 0 0;
   background: var(--cream);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   padding: 0.75rem;
   font-size: 0.74rem;
   overflow-x: auto;

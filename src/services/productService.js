@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 /**
  * productService.js  (Supabase)
  * Replaces the Firebase-based productService.

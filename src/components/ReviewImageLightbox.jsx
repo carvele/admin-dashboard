@@ -66,7 +66,7 @@ const ReviewImageLightbox = ({ src, onClose }) => {
         <img
           src={src}
           alt="Full resolution review attachment"
-          style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: '8px' }}
+          style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 'var(--spacing-sm)' }}
         />
       </div>
     </div>

@@ -21,6 +21,7 @@
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.1.0",
     "@google/model-viewer": "^4.3.1",
+    "@imgly/background-removal": "^1.7.0",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/pose": "^0.5.1675469404",
     "@sentry/react": "^10.46.0",

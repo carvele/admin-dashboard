@@ -10,7 +10,7 @@
 .nav-tab {
   background: none;
   border: none;
-  padding: 0 0 12px 0;
+  padding: 0 0 var(--spacing-md) 0;
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -91,14 +91,14 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--border-color);
   margin-bottom: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   overflow: hidden;
   background-color: var(--white);
 }
 
 .category-node:hover {
   border-color: var(--warm-gray);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(0,0,0,0.05);
 }
 
 .subcat-row {
@@ -118,8 +118,8 @@
 
 
 .image-upload-wrapper {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
   border-radius: 6px;
   overflow: hidden;
   background-color: var(--cream);
@@ -174,25 +174,25 @@
 .auto-reply-preview-container {
   background: var(--pink-soft);
   border: 1px solid var(--pink-border);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 1.25rem;
 }
 
 .mock-chat-window {
-  background: #ffffff;
+  background: var(--white);
   border: 1px solid #f472b6;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.06);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(236, 72, 153, 0.06);
 }
 
 .mock-chat-bubble {
   max-width: 85%;
   padding: 0.75rem 1rem;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   position: relative;
   font-size: 0.88rem;
   line-height: 1.45;
@@ -216,12 +216,12 @@
 .mock-bot-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
   font-size: 0.7rem;
   font-weight: 600;
   color: #be185d;
   background-color: var(--pink-border);
-  padding: 2px 8px;
+  padding: 2px var(--spacing-sm);
   border-radius: 10px;
   margin-bottom: 6px;
 }
@@ -230,7 +230,7 @@
   display: block;
   font-size: 0.68rem;
   color: #9ca3af;
-  margin-top: 4px;
+  margin-top: var(--spacing-xs);
   text-align: right;
 }
 
@@ -245,7 +245,7 @@
   border: 1px dashed var(--color-warning);
   color: var(--status-pending-text);
   font-size: 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
 }
 
 /* ── Mobile: Stack store hours table ── */

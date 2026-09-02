@@ -167,6 +167,7 @@ const DeviceManagement = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Device Management' }]}
         category="SECURITY"
         title="Device Management"
         subtitle="Review and control which devices can access the admin dashboard."
@@ -218,7 +219,7 @@ const DeviceManagement = () => {
                             if (e.key === 'Enter') saveNickname(device.fingerprint);
                             if (e.key === 'Escape') cancelEditing();
                           }}
-                          autoFocus
+                          
                           autoComplete="off"
                           aria-label="Device nickname"
                         />

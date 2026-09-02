@@ -1,5 +1,8 @@
 import React from 'react';
 import './PageHeader.css';
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
+
 
 /**
  * Standardized PageHeader component used across all dashboard screens.
@@ -20,11 +23,28 @@ export const PageHeader = ({
   category,
   actions,
   badge,
+  breadcrumbs,
   className = '',
 }) => {
   return (
     <div className={`page-header-container ${className}`.trim()}>
       <div className="page-header-text">
+
+      {breadcrumbs && breadcrumbs.length > 0 && (
+        <nav className="page-breadcrumbs">
+          {breadcrumbs.map((bc, idx) => (
+            <React.Fragment key={idx}>
+              {bc.to ? (
+                <Link to={bc.to} className="breadcrumb-link">{bc.label}</Link>
+              ) : (
+                <span className="breadcrumb-current">{bc.label}</span>
+              )}
+              {idx < breadcrumbs.length - 1 && <ChevronRight size={14} className="breadcrumb-separator" />}
+            </React.Fragment>
+          ))}
+        </nav>
+      )}
+
         {category && <span className="page-header-category">{category}</span>}
         <div className="page-title-row">
           <h1 className="page-title font-serif">{title}</h1>

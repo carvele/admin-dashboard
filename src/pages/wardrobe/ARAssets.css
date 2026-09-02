@@ -9,7 +9,7 @@
   flex-wrap: wrap;
   background-color: var(--cream);
   padding: 0.25rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
 }
 .tab-switcher .tab-btn {
   display: flex;
@@ -67,7 +67,7 @@
 .avatar {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   overflow: hidden;
   background-color: var(--cream);
   display: flex;
@@ -121,7 +121,7 @@
 .align-preview-area {
   flex: 2;
   background-color: var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   height: 480px;
   display: flex;
   align-items: center;
@@ -133,7 +133,7 @@
   flex: 1;
   background-color: var(--cream);
   padding: 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   border: 1px solid var(--border-color);
 }
 .line-height-2 {
@@ -170,7 +170,7 @@
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
-  width: 12px;
+  width: var(--spacing-md);
 }
 .slider-row input[type="range"] {
   flex: 1;
@@ -178,7 +178,7 @@
   cursor: pointer;
 }
 .slider-row .val {
-  width: 32px;
+  width: var(--spacing-2xl);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -191,13 +191,13 @@ model-viewer {
 }
 .Hotspot {
   background: var(--accent);
-  border-radius: 32px;
+  border-radius: var(--spacing-2xl);
   border: 2px solid var(--on-accent);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px var(--spacing-xs) rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   cursor: pointer;
-  height: 16px;
-  width: 16px;
+  height: var(--spacing-lg);
+  width: var(--spacing-lg);
   transition: opacity 0.3s;
 }
 .Hotspot:not([data-visible]) {
@@ -208,12 +208,12 @@ model-viewer {
 }
 .align-point {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-md);
+  height: var(--spacing-md);
   background-color: var(--accent);
   border: 2px solid var(--on-accent);
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px var(--spacing-xs) rgba(0, 0, 0, 0.2);
   cursor: crosshair;
 }
 .shoulder-l {
@@ -240,7 +240,7 @@ model-viewer {
 
 .upload-dropzone {
   border: 2px dashed var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 2.5rem;
   text-align: center;
   background-color: var(--beige);

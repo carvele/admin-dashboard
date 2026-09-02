@@ -3,14 +3,14 @@
 .member-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
 .role-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: var(--spacing-xs) 10px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 20px;
@@ -37,10 +37,10 @@
 
 .status-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: var(--spacing-sm);
 }
 
 .status-dot.invited {
@@ -90,7 +90,7 @@
   display: flex;
   background-color: var(--cream);
   padding: 0.25rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   width: fit-content;
   border: 1px solid var(--border-color);
   gap: 0.25rem;
@@ -119,5 +119,5 @@
 .archive-toggle-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.08);
+  box-shadow: 0 2px var(--spacing-xs) rgba(31, 28, 24, 0.08);
 }
