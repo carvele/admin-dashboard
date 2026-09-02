@@ -40,7 +40,6 @@
 }
 
 .settings-content-area {
-  min-height: calc(100vh - 220px);
   padding: 2rem;
   background-color: var(--white);
 }
