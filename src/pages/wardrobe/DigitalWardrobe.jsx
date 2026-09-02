@@ -1,7 +1,19 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import debounce from 'lodash.debounce';
-import { Search, Grid, List as ListIcon, Shirt, ArrowLeft, X, ExternalLink } from 'lucide-react';
+import {
+  Search,
+  Grid,
+  List as ListIcon,
+  Shirt,
+  ArrowLeft,
+  X,
+  ExternalLink,
+  ShieldCheck,
+  Lock,
+  Unlock,
+  ShieldAlert,
+} from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -19,10 +31,7 @@ const DigitalWardrobe = () => {
   
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  // debounce(...) only closes over the stable setSearchTerm setter, so an
-  // empty dep array is correct; eslint can't statically verify that through
-  // the debounce() call wrapper.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  
   const debouncedSearch = useCallback(
     debounce((val) => setSearchTerm(val), 300),
     []
@@ -34,7 +43,6 @@ const DigitalWardrobe = () => {
   };
 
   const [viewMode, setViewMode] = useState('grid');
-
   const [products, setProducts] = useState([]);
   
   // Subscribe to wardrobeItems (normalized top-level collection)
@@ -60,6 +68,11 @@ const DigitalWardrobe = () => {
 
   // Get the active user's details
   const activeUser = users.find((u) => u.id === activeUserId);
+  const isActiveUserShared = Boolean(
+    activeUser?.isWardrobeShared ||
+    activeUser?.is_wardrobe_shared ||
+    activeUser?.shareWardrobeWithStylists
+  );
 
   // Group wardrobe items by userId for sidebar counts
   const itemCountByUser = wardrobeItems.reduce((acc, item) => {
@@ -98,6 +111,14 @@ const DigitalWardrobe = () => {
         subtitle="View items saved by customers from the app"
       />
 
+      {/* Privacy Shield Banner */}
+      <div className="dw-privacy-banner">
+        <ShieldCheck size={18} className="dw-privacy-banner-icon" />
+        <span>
+          <strong>Privacy Shield Active:</strong> Personal digital wardrobes are private by default. Only customer wardrobes explicitly shared with JezSy Stylists are accessible.
+        </span>
+      </div>
+
       <div className="card dw-layout" data-mobile-view={mobileView}>
         {/* Customer List Sidebar */}
         <div className="dw-sidebar">
@@ -107,6 +128,9 @@ const DigitalWardrobe = () => {
           <div className="dw-customer-list">
             {users.map((user) => {
               const displayName = getUserDisplayName(user);
+              const isShared = Boolean(
+                user.isWardrobeShared || user.is_wardrobe_shared || user.shareWardrobeWithStylists
+              );
               return (
                 <div
                   key={user.id}
@@ -135,8 +159,19 @@ const DigitalWardrobe = () => {
                       .join('')}
                   </div>
                   <div className="dw-customer-info">
-                    <h4>{displayName}</h4>
-                    <p>{itemCountByUser[user.id] || 0} saved items</p>
+                    <div className="dw-customer-name-row">
+                      <h4>{displayName}</h4>
+                      {isShared ? (
+                        <span className="dw-consent-tag granted" title="Customer shared wardrobe with JezSy Stylists">
+                          <ShieldCheck size={10} /> Shared
+                        </span>
+                      ) : (
+                        <span className="dw-consent-tag private" title="Private Wardrobe (Consent Not Granted)">
+                          <Lock size={10} /> Private
+                        </span>
+                      )}
+                    </div>
+                    <p>{isShared ? `${itemCountByUser[user.id] || 0} saved items` : 'Wardrobe Locked'}</p>
                   </div>
                 </div>
               );
@@ -167,8 +202,17 @@ const DigitalWardrobe = () => {
                     .join('')}
                 </div>
                 <div className="dw-user-title">
-                  <h3 className="font-medium text-lg">
+                  <h3 className="font-medium text-lg flex-center gap-2 justify-start">
                     {getUserDisplayName(activeUser)}&apos;s Wardrobe
+                    {isActiveUserShared ? (
+                      <span className="dw-consent-status-badge granted">
+                        <ShieldCheck size={13} /> Stylist Access Granted
+                      </span>
+                    ) : (
+                      <span className="dw-consent-status-badge private">
+                        <Lock size={13} /> Private Wardrobe
+                      </span>
+                    )}
                   </h3>
                 </div>
               </div>
@@ -189,18 +233,21 @@ const DigitalWardrobe = () => {
                   value={searchInput}
                   onChange={handleSearchChange}
                   className="input-field pl-10"
+                  disabled={!isActiveUserShared}
                 />
               </div>
               <div className="view-toggle">
                 <button
                   className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                   onClick={() => setViewMode('grid')}
+                  disabled={!isActiveUserShared}
                 >
                   <Grid size={16} />
                 </button>
                 <button
                   className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
                   onClick={() => setViewMode('list')}
+                  disabled={!isActiveUserShared}
                 >
                   <ListIcon size={16} />
                 </button>
@@ -208,46 +255,63 @@ const DigitalWardrobe = () => {
             </div>
           </div>
 
-          <div className={`dw-items ${viewMode === 'grid' ? 'dw-grid' : 'dw-list'}`}>
-            {userItems.map((item) => {
-              const matchedProduct = products.find(p => p.id === item.productId);
-              const displayName = matchedProduct ? matchedProduct.name : (item.productId || 'Uploaded Item');
-              // Use matched product image if available and item doesn't have its own image URL
-              const displayImage = item.imageUrl || (matchedProduct?.images?.[0]) || null;
-              
-              return (
-                <div
-                  key={item.id || Math.random()}
-                  className="dw-item-card card"
-                  onClick={() => setSelectedItem({ item, product: matchedProduct })}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setSelectedItem({ item, product: matchedProduct });
-                    }
-                  }}
-                  title="Click to view item details"
-                >
-                  <div className="dw-img-placeholder">
-                    {renderItemImage(displayImage)}
-                  </div>
-                  <div className="dw-item-details">
-                    <span className="dw-category">
-                      {item.category || (matchedProduct?.category) || 'Clothing'}
-                    </span>
-                    <h4 className="dw-item-name" title={displayName}>
-                      {displayName}
-                    </h4>
-                  </div>
+          {!isActiveUserShared ? (
+            <div className="dw-privacy-locked-container">
+              <div className="dw-privacy-card card">
+                <div className="dw-privacy-lock-icon">
+                  <Lock size={36} />
                 </div>
-              );
-            })}
-            {userItems.length === 0 && (
-              <div className="empty-state full-width mt-4">No items found in wardrobe.</div>
-            )}
-          </div>
+                <h3>Private Digital Wardrobe</h3>
+                <p className="dw-privacy-desc">
+                  <strong>{getUserDisplayName(activeUser)}</strong> has not enabled <strong>&quot;Share Wardrobe with Stylists&quot;</strong> in their mobile app settings.
+                </p>
+                <div className="dw-privacy-notice-box">
+                  <ShieldCheck size={16} />
+                  <span>Personal closet items are private by default under Data Privacy regulations until explicit consent is granted by the customer.</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={`dw-items ${viewMode === 'grid' ? 'dw-grid' : 'dw-list'}`}>
+              {userItems.map((item) => {
+                const matchedProduct = products.find(p => p.id === item.productId);
+                const displayName = matchedProduct ? matchedProduct.name : (item.productId || 'Uploaded Item');
+                const displayImage = item.imageUrl || (matchedProduct?.images?.[0]) || null;
+                
+                return (
+                  <div
+                    key={item.id || Math.random()}
+                    className="dw-item-card card"
+                    onClick={() => setSelectedItem({ item, product: matchedProduct })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedItem({ item, product: matchedProduct });
+                      }
+                    }}
+                    title="Click to view item details"
+                  >
+                    <div className="dw-img-placeholder">
+                      {renderItemImage(displayImage)}
+                    </div>
+                    <div className="dw-item-details">
+                      <span className="dw-category">
+                        {item.category || (matchedProduct?.category) || 'Clothing'}
+                      </span>
+                      <h4 className="dw-item-name" title={displayName}>
+                        {displayName}
+                      </h4>
+                    </div>
+                  </div>
+                );
+              })}
+              {userItems.length === 0 && (
+                <div className="empty-state full-width mt-4">No items found in wardrobe.</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

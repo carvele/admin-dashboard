@@ -52,6 +52,133 @@
   border-left: 3px solid var(--accent);
 }
 
+.dw-privacy-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  background-color: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 12px;
+  font-size: 0.825rem;
+  color: var(--text-primary);
+}
+.dw-privacy-banner-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.dw-customer-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dw-consent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.dw-consent-tag.granted {
+  background-color: var(--stock-healthy-bg, #d1fae5);
+  color: var(--stock-healthy, #065f46);
+}
+.dw-consent-tag.private {
+  background-color: var(--beige);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.dw-consent-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.725rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  margin-left: 0.5rem;
+}
+.dw-consent-status-badge.granted {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.dw-consent-status-badge.private {
+  background-color: var(--beige);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.dw-privacy-locked-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  background-color: var(--cream);
+}
+
+.dw-privacy-card {
+  max-width: 480px;
+  text-align: center;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.dw-privacy-lock-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--beige) 0%, rgba(212, 175, 55, 0.15) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.dw-privacy-card h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--charcoal);
+}
+
+.dw-privacy-desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.dw-privacy-notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background-color: var(--beige);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  text-align: left;
+  line-height: 1.45;
+  margin-top: 0.5rem;
+}
+
 .dw-customer-info h4 {
   font-size: 0.875rem;
   font-weight: 600;
