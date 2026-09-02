@@ -2,8 +2,8 @@
   display: grid;
   grid-template-columns: 320px minmax(320px, 1fr) 280px;
   gap: 1.25rem;
-  height: calc(100vh - 120px);
-  min-height: 500px;
+  flex: 1;
+  min-height: 0;
 }
 
 .messages-sidebar {
