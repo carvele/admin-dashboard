@@ -61,28 +61,34 @@ export const markMessagesDelivered = async (messageIds) => {
  * @param {string} customerId - only the customer's own messages get marked
  */
 export const markMessagesRead = async (conversationId, customerId) => {
+  if (!conversationId) return;
   const nowIso = new Date().toISOString();
 
-  // Reading implies delivery -- catches a message read_at is about to be set
-  // on without delivered_at ever having been stamped (e.g. a customer sent
-  // it while no staff browser tab was open, so no realtime INSERT could
-  // mark it delivered). is('delivered_at', null) never overwrites an
-  // earlier, real delivery time.
-  const { error: deliveredError } = await supabase
+  // Reading implies delivery
+  let delQuery = supabase
     .from('messages')
     .update({ delivered_at: nowIso })
     .eq('conversation_id', conversationId)
-    .eq('sender_id', customerId)
     .is('delivered_at', null);
-  if (deliveredError) console.error('[Supabase] markMessagesRead (delivered_at) failed:', deliveredError.message);
+  if (customerId) delQuery = delQuery.eq('sender_id', customerId);
+  await delQuery;
 
-  const { error } = await supabase
+  // Mark messages as read
+  let readQuery = supabase
     .from('messages')
     .update({ read_at: nowIso })
     .eq('conversation_id', conversationId)
-    .eq('sender_id', customerId)
     .is('read_at', null);
+  if (customerId) readQuery = readQuery.eq('sender_id', customerId);
+  const { error } = await readQuery;
   if (error) console.error('[Supabase] markMessagesRead failed:', error.message);
+
+  // Clear unread count on conversation table
+  const { error: convErr } = await supabase
+    .from('conversations')
+    .update({ unread_count: 0 })
+    .eq('id', conversationId);
+  if (convErr) console.error('[Supabase] markMessagesRead conversation update failed:', convErr.message);
 };
 
 /**

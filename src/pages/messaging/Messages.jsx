@@ -1024,54 +1024,56 @@ const Messages = () => {
             .filter((conv) =>
               getConvName(conv).toLowerCase().includes(convSearchTerm.toLowerCase()),
             )
-            .map((conv) => (
-              <div
-                key={conv.id}
-                className={`conversation-item ${activeChat?.id === conv.id ? 'active' : ''} ${conv.unreadCount > 0 ? 'unread' : ''}`}
-                onClick={() => {
-                  setActiveChat(conv);
-                  setMobileView('chat');
-                  if (conv.unreadCount > 0) {
-                    updateConversation(conv.docId, { unreadCount: 0 });
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter' && e.key !== ' ') return;
-                  e.preventDefault();
-                  setActiveChat(conv);
-                  setMobileView('chat');
-                  if (conv.unreadCount > 0) {
-                    updateConversation(conv.docId, { unreadCount: 0 });
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div className="avatar-wrap">
-                  <div
-                    className="avatar"
-                    style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
-                  >
-                    {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+            .map((conv) => {
+              const convKey = conv.id || conv.customId;
+              const isSelected = (activeChat?.id || activeChat?.customId) === convKey;
+              const unreadNum = isSelected ? 0 : (conv.unreadCount || conv.unread_count || 0);
+
+              return (
+                <div
+                  key={conv.id || convKey}
+                  className={`conversation-item ${isSelected ? 'active' : ''} ${unreadNum > 0 ? 'unread' : ''}`}
+                  onClick={() => {
+                    setActiveChat(conv);
+                    setMobileView('chat');
+                    markMessagesRead(convKey, conv.customerId);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    setActiveChat(conv);
+                    setMobileView('chat');
+                    markMessagesRead(convKey, conv.customerId);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="avatar-wrap">
+                    <div
+                      className="avatar"
+                      style={{ backgroundColor: getAvatarColor(getConvName(conv)) }}
+                    >
+                      {getConvName(conv).split(' ').map((n) => n[0]).join('')}
+                    </div>
+                    {onlineUsers[conv.customerId] && <span className="presence-dot" />}
                   </div>
-                  {onlineUsers[conv.customerId] && <span className="presence-dot" />}
+                  <div className="conv-details">
+                    <div className="conv-header">
+                      <h4>{getConvName(conv)}</h4>
+                      <span className="time">
+                        {conv.lastMessageTime
+                          ? formatSmartDateTime(conv.lastMessageTime, { short: true })
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="conv-preview">
+                      <p>{conv.lastMessage}</p>
+                      {unreadNum > 0 && <span className="unread-badge">{unreadNum}</span>}
+                    </div>
+                  </div>
                 </div>
-                <div className="conv-details">
-                  <div className="conv-header">
-                    <h4>{getConvName(conv)}</h4>
-                    <span className="time">
-                      {conv.lastMessageTime
-                        ? formatSmartDateTime(conv.lastMessageTime, { short: true })
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="conv-preview">
-                    <p>{conv.lastMessage}</p>
-                    {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
         </div>
       </div>
 
