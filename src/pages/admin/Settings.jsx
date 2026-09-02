@@ -342,7 +342,7 @@ const Settings = () => {
         </button>
       </div>
 
-      <div className="settings-content-area card">
+      <div className="settings-content-area">
         <form onSubmit={handleSave} className="settings-form">
 
           {activeTab === 'boutique' && (
