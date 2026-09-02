@@ -23,7 +23,7 @@
 .hamburger-btn {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,8 +111,8 @@
   z-index: var(--z-sticky);
   padding: 0;
   overflow: hidden;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: var(--spacing-md);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) rgba(0, 0, 0, 0.12);
   animation: searchDropIn 0.15s ease-out;
 }
 @keyframes searchDropIn {
@@ -198,7 +198,7 @@
   padding: 0.4rem 0.75rem;
   background-color: var(--status-completed-bg);
   border: 1px solid var(--stock-healthy);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   cursor: help;
   transition: all 0.3s ease;
 }
@@ -209,8 +209,8 @@
 }
 
 .sync-indicator {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
   background-color: var(--stock-high); /* Success green */
   border-radius: 50%;
   position: relative;
@@ -282,9 +282,9 @@
   right: 0;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 var(--spacing-xs);
   background-color: var(--color-danger);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   border: 2px solid var(--cream);
   font-size: 0.65rem;
   font-weight: 700;
@@ -294,7 +294,7 @@
   justify-content: center;
   line-height: 1;
   transform: translate(15%, -15%);
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 2px var(--spacing-xs) rgba(239, 68, 68, 0.3);
   animation: noti-pulse 2s infinite ease-in-out;
 }
 
@@ -312,8 +312,8 @@
   z-index: var(--z-dropdown);
   padding: 0;
   overflow: hidden;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: var(--spacing-md);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) rgba(0, 0, 0, 0.12);
   animation: searchDropIn 0.15s ease-out;
 }
 .dropdown-header {
@@ -404,7 +404,7 @@
   border: none;
   cursor: pointer;
   padding: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   transition: background-color 0.2s;
   text-align: left;
 }
@@ -441,13 +441,15 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 8px;
+  margin-top: var(--spacing-sm);
   width: 240px;
   z-index: var(--z-dropdown);
   padding: 0;
   overflow: hidden;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--spacing-md);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) rgba(0, 0, 0, 0.12);
   animation: searchDropIn 0.15s ease-out;
 }
 .user-dropdown-header {
@@ -469,7 +471,7 @@
   padding: 0.75rem 1rem;
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;

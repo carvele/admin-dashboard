@@ -5,5 +5,5 @@ export interface Landmark {
   visibility: number;
 }
 
-export interface WorldLandmark extends Landmark {}
-export interface StageLandmark extends Landmark {}
+export type WorldLandmark = Landmark;
+export type StageLandmark = Landmark;

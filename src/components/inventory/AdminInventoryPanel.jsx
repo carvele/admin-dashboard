@@ -40,7 +40,7 @@ const ErrorDialog = ({ message, onClose }) => (
     <div
       style={{
         background: 'var(--white)',
-        borderRadius: '12px',
+        borderRadius: 'var(--spacing-md)',
         padding: '2rem',
         maxWidth: '420px',
         width: '90%',

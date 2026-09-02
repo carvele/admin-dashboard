@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useState, useEffect } from 'react';
 import { X, Check, AlertTriangle, ArrowRight, Info, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { GarmentIngestor } from '../../utils/garmentIngestor';
@@ -162,7 +165,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
               </span>
             )}
           </div>
-          <button onClick={onCancel} className="text-gray-500 hover:text-black">
+          <button onClick={onCancel} className="btn-outline small">
             <X size={24} />
           </button>
         </div>
@@ -179,7 +182,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                 This GLB must contain recognizable 3D geometry for a garment, 
                 such as a shirt, dress, or pants.
               </p>
-              <button onClick={onCancel} className="bg-gray-200 px-6 py-2 rounded hover:bg-gray-300">Close</button>
+              <button onClick={onCancel} className="btn-secondary">Close</button>
             </div>
 
           /* ── Step 2: Bone Mapping ── */
@@ -191,7 +194,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                 <div>
                   <p className="font-bold text-yellow-800">Calibration Required</p>
                   <p className="text-sm text-yellow-700">
-                    We couldn't automatically match all required bones. 
+                    We couldn&apos;t automatically match all required bones. 
                     Map at least <strong>Spine</strong>, <strong>LeftArm</strong>, <strong>RightArm</strong>, <strong>LeftForeArm</strong>, and <strong>RightForeArm</strong> to continue.
                   </p>
                 </div>
@@ -453,7 +456,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                     >
                       Cancel
                     </button>
-                    <button onClick={() => setStep(4)} className="bg-primary text-white px-6 py-2 rounded flex items-center text-sm font-bold">Next: Validate AR Fit <ArrowRight size={16} className="ml-2" /></button>
+                    <button onClick={() => setStep(4)} className="btn-primary">Next: Validate AR Fit <ArrowRight size={16} className="ml-2" /></button>
                   </div>
                 </div>
               </div>

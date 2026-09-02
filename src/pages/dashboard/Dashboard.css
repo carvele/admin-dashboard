@@ -21,13 +21,13 @@
 
 .stat-card {
   background-color: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 1.5rem;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
   border: 1px solid var(--border-color);
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 2px var(--spacing-xs) -1px rgba(0, 0, 0, 0.02);
   transition: transform 0.2s;
 }
 .stat-card:hover {
@@ -35,9 +35,9 @@
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  border-radius: var(--spacing-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,8 +154,8 @@
   color: var(--text-secondary);
 }
 .legend-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
   border-radius: 50%;
 }
 
@@ -169,7 +169,7 @@
   background-color: var(--status-cancelled-bg);
   color: var(--stock-low);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -185,7 +185,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   transition: background-color 0.2s;
 }
 .widget-item:hover {
@@ -285,7 +285,7 @@
 .timeline-dot {
   position: absolute;
   left: -1px;
-  top: 4px;
+  top: var(--spacing-xs);
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -378,7 +378,7 @@
 
 .preferences-modal {
   background-color: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   width: 90%;
   max-width: 500px;
   max-height: 85vh;
@@ -441,7 +441,7 @@
   position: relative;
   display: inline-block;
   width: 44px;
-  height: 24px;
+  height: var(--spacing-xl);
 }
 
 .toggle-input {
@@ -459,7 +459,7 @@
   bottom: 0;
   background-color: var(--border-color);
   transition: .4s;
-  border-radius: 24px;
+  border-radius: var(--spacing-xl);
 }
 
 .toggle-slider:before {
@@ -492,14 +492,14 @@
 }
 
 .quick-actions-bar:hover {
-  box-shadow: 0 8px 16px -4px rgba(139, 111, 92, 0.15);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-lg) -4px rgba(139, 111, 92, 0.15);
   transform: translateY(-2px);
 }
 
 .weather-icon-large {
   background: var(--cream);
   padding: 1rem;
-  border-radius: 16px;
+  border-radius: var(--spacing-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -517,7 +517,7 @@
 /* Custom scrollbar for a premium look */
 .logistics-timeline::-webkit-scrollbar,
 .activity-pulse-list::-webkit-scrollbar {
-  width: 4px;
+  width: var(--spacing-xs);
 }
 .logistics-timeline::-webkit-scrollbar-thumb,
 .activity-pulse-list::-webkit-scrollbar-thumb {
@@ -531,7 +531,7 @@
   gap: 1rem;
   padding: 1rem;
   background: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   border: 1px solid var(--border-color);
   transition: all 0.2s;
 }
@@ -550,8 +550,8 @@
 }
 
 .logistics-point {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
   border-radius: 50%;
   background: var(--border-color);
   flex-shrink: 0;
@@ -559,12 +559,12 @@
 
 .logistics-row.pickup .logistics-point {
   background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(139, 111, 92, 0.1);
+  box-shadow: 0 0 0 var(--spacing-xs) rgba(139, 111, 92, 0.1);
 }
 
 .logistics-row.return .logistics-point {
   background: var(--stock-high);
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
+  box-shadow: 0 0 0 var(--spacing-xs) rgba(34, 197, 94, 0.1);
 }
 
 .logistics-info {
@@ -587,7 +587,7 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
 }
 
 .logistics-badge.pickup {
@@ -623,9 +623,9 @@
 }
 
 .activity-icon-sm {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  border-radius: var(--spacing-sm);
   display: flex;
   align-items: center;
   justify-content: center;

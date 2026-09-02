@@ -1,5 +1,5 @@
 .res-calendar {
-  padding: 16px;
+  padding: var(--spacing-lg);
 }
 
 .res-calendar-toolbar {
@@ -28,17 +28,17 @@
 .res-calendar-today {
   margin-left: auto;
   font-size: 0.8rem;
-  padding: 6px 12px;
+  padding: 6px var(--spacing-md);
 }
 
 .res-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .res-calendar-weekdays {
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-xs);
 }
 
 .res-calendar-weekday {
@@ -48,7 +48,7 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 4px 0;
+  padding: var(--spacing-xs) 0;
 }
 
 .res-calendar-cell {
@@ -56,7 +56,7 @@
   aspect-ratio: 1 / 0.85;
   min-height: 56px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   background: var(--white);
   display: flex;
   flex-direction: column;
@@ -89,10 +89,10 @@
 
 .res-calendar-count {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  min-width: var(--spacing-lg);
+  height: var(--spacing-lg);
   padding: 0 3px;
   border-radius: 999px;
   background: var(--status-confirmed-bg);
@@ -153,16 +153,16 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .res-calendar-agenda-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: var(--spacing-sm);
+  padding: var(--spacing-sm) 10px;
 }
 
 .res-calendar-agenda-item-urgent {

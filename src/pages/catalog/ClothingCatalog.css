@@ -135,7 +135,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 6px rgba(31, 28, 24, 0.1);
+  box-shadow: 0 var(--spacing-xs) 6px rgba(31, 28, 24, 0.1);
 }
 .icon-btn-light:hover {
   transform: scale(1.05);
@@ -150,7 +150,7 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.1);
+  box-shadow: 0 2px var(--spacing-xs) rgba(31, 28, 24, 0.1);
   backdrop-filter: blur(4px);
   z-index: var(--z-base);
 }
@@ -178,7 +178,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px var(--spacing-xs) rgba(0, 0, 0, 0.15);
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
@@ -264,7 +264,7 @@
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
   color: var(--charcoal);
 }
 
@@ -281,7 +281,7 @@
   color: var(--accent);
   background-color: var(--cream);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--spacing-xs);
 }
 
 .form-row {
@@ -291,7 +291,7 @@
 
 .upload-dropzone {
   border: 2px dashed var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   padding: 2rem;
   text-align: center;
   background-color: var(--cream);
@@ -437,7 +437,7 @@
   display: flex;
   background-color: var(--cream);
   padding: 0.25rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   width: fit-content;
   border: 1px solid var(--border-color);
   gap: 0.25rem;
@@ -466,7 +466,7 @@
 .archive-toggle-btn.active {
   background-color: var(--white);
   color: var(--charcoal);
-  box-shadow: 0 2px 4px rgba(31, 28, 24, 0.08);
+  box-shadow: 0 2px var(--spacing-xs) rgba(31, 28, 24, 0.08);
 }
 
 /* Archived Card Styles */

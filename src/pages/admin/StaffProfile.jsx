@@ -279,10 +279,19 @@ const StaffProfile = () => {
     <div className="page-container sp-page">
       {/* ── Page Header ── */}
       <div className="sp-page-header">
-        <button className="sp-back-btn" onClick={() => navigate(-1)}>
+        <button className="sp-back-btn" onClick={() => isAdminUnlocked ? navigate('/staff') : navigate('/dashboard')}>
           <ArrowLeft size={18} /> Back
         </button>
-        <div className="sp-page-title">
+        
+          <div className="sp-page-title">
+            <nav className="flex items-center gap-2 mb-1 text-sm font-medium text-gray-500" style={{ fontSize: '0.8rem', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
+              <span role="button" tabIndex={0} onKeyDown={(e) => { if(e.key==='Enter') e.target.click(); }} onClick={() => isAdminUnlocked ? navigate('/staff') : navigate('/dashboard')} style={{ cursor: 'pointer', transition: 'color 0.2s' }} className="hover:text-accent">
+                {isAdminUnlocked ? 'Team Management' : 'Dashboard'}
+              </span>
+              <span style={{ opacity: 0.5 }}>/</span>
+              <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>Profile Details</span>
+            </nav>
+
           <div className="sp-hero-avatar">
             {displayName[0]?.toUpperCase() ?? 'S'}
           </div>

@@ -14,24 +14,24 @@
 
 .confirm-dialog-content {
   background: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   width: 90%;
   max-width: 400px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  padding: 24px;
+  padding: var(--spacing-xl);
   position: relative;
   animation: slideUp 0.2s ease-out;
 }
 
 .dialog-close-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
   background: none;
   border: none;
   color: var(--text-secondary, #64748b);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--spacing-xs);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -54,17 +54,17 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .dialog-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
   border-radius: 50%;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .dialog-icon.destructive {
@@ -81,7 +81,7 @@
 
 .dialog-body {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-xl);
 }
 
 .dialog-body p {
@@ -93,14 +93,14 @@
 
 .dialog-footer {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
 .dialog-btn-cancel,
 .dialog-btn-confirm {
   flex: 1;
-  padding: 10px 16px;
-  border-radius: 8px;
+  padding: 10px var(--spacing-lg);
+  border-radius: var(--spacing-sm);
   font-weight: 500;
   font-size: 0.95rem;
   cursor: pointer;

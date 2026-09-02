@@ -5,8 +5,8 @@
      silently wrapped onto its own row under column 1 instead of sitting
      alongside the others. */
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
   align-items: start;
 }
 
@@ -29,8 +29,8 @@
 .res-board-col-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
+  gap: var(--spacing-sm);
+  margin: 0 0 var(--spacing-md);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -42,7 +42,7 @@
   margin-left: auto;
   background: var(--beige);
   border-radius: 999px;
-  padding: 1px 8px;
+  padding: 1px var(--spacing-sm);
   font-size: 0.75rem;
 }
 
@@ -50,8 +50,8 @@
   font-size: 0.8rem;
   color: var(--text-secondary);
   border: 1px dashed var(--border-color);
-  border-radius: 12px;
-  padding: 20px 12px;
+  border-radius: var(--spacing-md);
+  padding: 20px var(--spacing-md);
   text-align: center;
   margin: 0;
 }
@@ -59,9 +59,9 @@
 .res-card {
   background: var(--white);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 14px;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
 }
 
 /* Only the genuinely time-critical cards get the red edge; if everything is
@@ -74,7 +74,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-sm);
   margin-bottom: 10px;
 }
 
@@ -87,8 +87,8 @@
 
 .res-card-avatar {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -117,7 +117,7 @@
 .res-chip {
   flex-shrink: 0;
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px var(--spacing-sm);
   font-size: 0.7rem;
   font-weight: 600;
   white-space: nowrap;
@@ -141,18 +141,18 @@
 .res-card-lines {
   list-style: none;
   margin: 0 0 10px;
-  padding: 8px 0;
+  padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .res-card-lines li {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-sm);
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
@@ -171,10 +171,10 @@
 .res-card-meta {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-sm);
   font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
 }
 
 .res-card-total {
@@ -215,7 +215,7 @@
 }
 
 .res-card-reschedule-text {
-  margin: 0 0 8px;
+  margin: 0 0 var(--spacing-sm);
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -228,5 +228,5 @@
 .res-card-reschedule-btn {
   flex: 1;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--spacing-md);
 }

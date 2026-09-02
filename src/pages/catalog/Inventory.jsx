@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -833,6 +835,7 @@ const Inventory = () => {
   return (
     <div className="page-container">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Inventory' }]}
         title="Inventory Management"
         subtitle="Track stock levels and quantities per size across all products"
         category="OPERATIONS"

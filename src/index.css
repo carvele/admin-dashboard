@@ -1,4 +1,14 @@
 :root {
+
+  /* ===== Global Spacing Scale ===== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
   /* Elegant Gold & Off-white Palette */
   --cream: #fdfbf7;
   --beige: #f5eedc;
@@ -133,7 +143,7 @@
   --black: #000000;
 
   --text-primary: #e5e5e5;
-  --text-secondary: #a0a0a0;
+  --text-secondary: #b3b3b3;
 
   --border-color: #333333;
   --border-light: #3a3a3a;
@@ -801,7 +811,7 @@ input:checked + .toggle-slider:before {
 .badge-danger { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
 .badge-success { background: var(--status-approved-bg); color: var(--status-approved-text); }
 .badge-secondary { background: var(--beige); color: var(--text-secondary); }
-.badge.accent { background: rgba(212, 175, 55, 0.15); color: var(--accent); }
+.badge.accent { background: rgba(212, 175, 55, 0.15); color: var(--charcoal); }
 .badge.secondary { background: var(--beige); color: var(--text-secondary); }
 .flex-row { flex-direction: row; }
 .flex-column { flex-direction: column; }
@@ -1047,11 +1057,11 @@ input:checked + .toggle-slider:before {
   background: transparent;
 }
 .modal-content::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: var(--border-color);
   border-radius: 10px;
 }
 .modal-content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: var(--text-secondary);
 }
 @keyframes modalSlideUp {
   from {

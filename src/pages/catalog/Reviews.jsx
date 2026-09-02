@@ -51,6 +51,7 @@ const Reviews = () => {
   return (
     <div className="reviews-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Review Moderation' }]}
         category="CATALOG & REVIEWS"
         title="Review Moderation Center"
         subtitle="Filter, moderate, and inspect customer reviews across catalog items."

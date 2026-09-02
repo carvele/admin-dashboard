@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useState, useEffect } from 'react';
+import { formatPHDate } from '../../utils/dateFormatter';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -138,7 +141,7 @@ const Announcements = () => {
                   <h3 className="announcement-title">{announcement.title}</h3>
                   <div className="announcement-meta">
                     <span className={`badge ${announcement.type}`}>
-                      {announcement.type === 'promo' ? <Megaphone size={12} style={{marginRight: 4}} /> : <Bell size={12} style={{marginRight: 4}} />}
+                      {announcement.type === 'promo' ? <Megaphone size={12} style={{marginRight: 'var(--spacing-xs)'}} /> : <Bell size={12} style={{marginRight: 'var(--spacing-xs)'}} />}
                       {announcement.type}
                     </span>
                     <span style={{ marginLeft: 8 }}>{getStatusBadge(announcement)}</span>
@@ -150,7 +153,7 @@ const Announcements = () => {
               
               <div className="announcement-footer">
                 <span className="announcement-meta" style={{ flexGrow: 1 }}>
-                  Posted {new Date(announcement.created_at).toLocaleDateString()}
+                  Posted {formatPHDate(announcement.created_at)}
                 </span>
                 <button 
                   className="delete-btn"

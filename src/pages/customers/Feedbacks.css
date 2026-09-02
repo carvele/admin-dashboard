@@ -28,19 +28,19 @@
 .feedback-card {
   background: var(--white);
   border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 6px rgba(31, 28, 24, 0.05);
+  box-shadow: 0 var(--spacing-xs) 6px rgba(31, 28, 24, 0.05);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   position: relative;
 }
 
 .feedback-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(31, 28, 24, 0.1);
-  border-color: var(--accent, #D4AF37);
+  box-shadow: 0 var(--spacing-sm) 15px rgba(31, 28, 24, 0.1);
+  border-color: var(--accent, var(--accent));
 }
 
 .feedback-header {
@@ -69,9 +69,9 @@
 
 .feedback-category-badge {
   background-color: rgba(212, 175, 55, 0.15); /* light champagne */
-  color: var(--accent, #D4AF37);
+  color: var(--accent, var(--accent));
   padding: 0.3rem 0.6rem;
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -90,7 +90,7 @@
   flex-grow: 1;
   background-color: var(--cream);
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: var(--spacing-sm);
   border: 1px solid var(--border-color, #eee);
   margin-bottom: 1rem;
   word-wrap: break-word;
@@ -136,7 +136,7 @@
   padding: 4rem 2rem;
   text-align: center;
   background: var(--white);
-  border-radius: 12px;
+  border-radius: var(--spacing-md);
   border: 1px dashed var(--border-color, #ccc);
   color: var(--text-secondary, #666);
 }

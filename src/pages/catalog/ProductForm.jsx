@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles, Edit2, Grid3X3, CheckSquare, Square } from 'lucide-react';
@@ -30,6 +32,8 @@ import {
 } from '../../services/variantService';
 import { Logger } from '../../utils/Logger';
 import { supabase } from '../../lib/supabaseClient';
+import { formatPHDate } from '../../utils/dateFormatter';
+import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
 import './ProductForm.css';
 
@@ -56,6 +60,7 @@ const ProductForm = ({ readOnly = false }) => {
     price: '',
     description: '',
     material: '',
+    fabric_stretch: 'Moderate',
     color: '', // Derived on save from `colors` (comma-joined; mobile app splits on ',')
     colors: [], // Multi-select available colours the customer can choose from
     baseColor: '', // Primary colour (colors[0]) — used for admin catalog filtering
@@ -97,7 +102,7 @@ const ProductForm = ({ readOnly = false }) => {
   // just what existed when this effect first ran.
   useEffect(() => {
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+       
       previewUrlsRef.current.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
@@ -162,6 +167,7 @@ const ProductForm = ({ readOnly = false }) => {
                 price: docParams.price ?? '',
                 description: docParams.description || '',
                 material: docParams.material || '',
+                fabric_stretch: docParams.garment_metadata?.fabric_stretch || 'Moderate',
                 color: docParams.color || '',
                 baseColor: docParams.baseColor || '',
                 pattern: docParams.pattern || 'Solid',
@@ -280,7 +286,7 @@ const ProductForm = ({ readOnly = false }) => {
   useEffect(() => {
     if (!variantColumnsReady) return;
     rebuildMatrix(formData.sizes, formData.colors || []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [formData.sizes, formData.colors, variantColumnsReady]);
 
   // When editing: fetch live variants to pre-tick existing combos
@@ -291,7 +297,7 @@ const ProductForm = ({ readOnly = false }) => {
         rebuildMatrix(formData.sizes, formData.colors || [], existing);
       }).catch(() => {});
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isEditing, id, variantColumnsReady]);
 
 
@@ -478,13 +484,22 @@ const ProductForm = ({ readOnly = false }) => {
       let uploadedImages = [];
 
       if (selectedFiles.length > 0) {
+        // Dynamically import to avoid blocking the main thread on load
+        const imglyRemoveBackground = (await import('@imgly/background-removal')).default;
         for (let i = 0; i < selectedFiles.length; i++) {
           setUploadProgress({ current: i + 1, total: selectedFiles.length });
-          console.log(`[Storage] Uploading gallery image ${i + 1}...`);
-          const url = await routeAndUploadFile(selectedFiles[i]);
+          console.log(`[Storage] Processing and uploading gallery image ${i + 1}...`);
+          
+          // Strip background using WASM model before uploading to storage
+          const imageBlob = await imglyRemoveBackground(selectedFiles[i]);
+          // routeAndUploadFile expects a File object
+          const transparentFile = new File([imageBlob], selectedFiles[i].name.replace(/\.[^/.]+$/, "") + ".png", { type: 'image/png' });
+          
+          const url = await routeAndUploadFile(transparentFile);
           if (url) uploadedImages.push(url);
         }
-      }      const finalImages = [...formData.images, ...uploadedImages];
+      }
+      const finalImages = [...formData.images, ...uploadedImages];
 
       const payload = {
         name: sanitizeText(formData.name),
@@ -494,6 +509,7 @@ const ProductForm = ({ readOnly = false }) => {
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
         material: sanitizeText(formData.material),
+        garment_metadata: { fabric_stretch: formData.fabric_stretch },
         // Persist the selected colours comma-joined; the mobile product page
         // splits `color` on ',' to render its colour picker.
         color: (formData.colors || []).join(', '),
@@ -702,7 +718,14 @@ const ProductForm = ({ readOnly = false }) => {
         <button onClick={() => navigate('/catalog')} className="btn-secondary p-2">
           <ArrowLeft size={20} />
         </button>
-        <div className="flex-1">
+        
+          <div className="flex-1">
+            <nav className="flex items-center gap-2 mb-1 text-sm font-medium text-gray-500">
+              <span role="button" tabIndex={0} onKeyDown={(e) => { if(e.key==='Enter') e.target.click(); }} onClick={() => navigate('/catalog')} className="cursor-pointer hover:text-gray-900 transition-colors">Catalog</span>
+              <ChevronRight size={14} className="opacity-50" />
+              <span className="text-gray-900">{readOnly ? 'View Product' : isEditing ? 'Edit Product' : 'New Product'}</span>
+            </nav>
+
           <div className="flex items-center gap-3">
              <h1 className="text-2xl font-bold">
                 {readOnly ? 'Product Details' : isEditing ? 'Edit Product' : 'Add New Product'}
@@ -1002,10 +1025,21 @@ const ProductForm = ({ readOnly = false }) => {
                   )}
               </div>
 
-              <div>
-                 <label className="label" htmlFor="product-material">Material / Fabric</label>
-                 <input id="product-material" type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
-              </div>
+                              <div className="flex flex-col gap-4">
+                  <div>
+                     <label className="label" htmlFor="product-material">Material / Fabric</label>
+                     <input id="product-material" type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
+                  </div>
+                  <div>
+                     <label className="label" htmlFor="product-stretch">Fabric Stretch (Sizing AI)</label>
+                     <select id="product-stretch" name="fabric_stretch" className="input-field" value={formData.fabric_stretch || ''} onChange={handleChange}>
+                        <option value="Rigid">Rigid (Denim, Canvas) - Needs more ease</option>
+                        <option value="Moderate">Moderate (Standard Cotton/Polyester)</option>
+                        <option value="High">High (Spandex, Activewear) - Can stretch to fit</option>
+                     </select>
+                     <p className="text-[10px] text-gray-500 mt-1">Used by the mobile AR Try-On to calculate correct fit recommendations.</p>
+                  </div>
+                </div>
            </div>
         </section>
 
@@ -1112,7 +1146,7 @@ const ProductForm = ({ readOnly = false }) => {
                    style={{
                      display: 'flex',
                      alignItems: 'center',
-                     gap: 12,
+                     gap: 'var(--spacing-md)',
                      padding: '10px 14px',
                      borderRadius: 10,
                      background: someSelected ? 'var(--category-indigo-bg)' : 'var(--surface)',
@@ -1147,7 +1181,7 @@ const ProductForm = ({ readOnly = false }) => {
                              gap: 5,
                              padding: '5px 12px',
                              borderRadius: 20,
-                             fontSize: 12,
+                             fontSize: 'var(--font-caption)',
                              fontWeight: 600,
                              cursor: 'pointer',
                              border: `2px solid ${checked ? 'var(--category-indigo-text)' : 'var(--border-color)'}`,
@@ -1165,7 +1199,7 @@ const ProductForm = ({ readOnly = false }) => {
                                style={{
                                  width: 6, height: 6,
                                  borderRadius: '50%',
-                                 background: '#10b981',
+                                 background: 'var(--color-success)',
                                  display: 'inline-block',
                                  marginLeft: 2,
                                }}
@@ -1180,8 +1214,8 @@ const ProductForm = ({ readOnly = false }) => {
              })}
            </div>
 
-           <p style={{ fontSize: 10, color: '#9ca3af', marginTop: 10 }}>
-             <span style={{ color: '#10b981', fontWeight: 700 }}>●</span> Already stocked — deselecting a stocked variant with existing units will NOT delete it.
+           <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 10 }}>
+             <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>●</span> Already stocked — deselecting a stocked variant with existing units will NOT delete it.
            </p>
         </section>
         )}
@@ -1240,7 +1274,7 @@ const ProductForm = ({ readOnly = false }) => {
                              }}
                              className={`px-4 py-2 rounded-lg border-2 text-xs font-bold transition-all flex items-center gap-2 ${
                                 isChecked
-                                   ? 'bg-[var(--accent)] text-[var(--on-accent,#1f1c18)] border-[var(--accent)] shadow-sm'
+                                   ? 'bg-[var(--accent)] text-[var(--on-accent,var(--charcoal))] border-[var(--accent)] shadow-sm'
                                    : 'bg-[var(--surface)] text-secondary border-[var(--border-color)] hover:border-[var(--accent)]'
                              }`}
                           >
@@ -1282,7 +1316,7 @@ const ProductForm = ({ readOnly = false }) => {
                            <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-4 py-3 font-mono text-xs">{order.id}</td>
                               <td className="px-4 py-3 font-medium">{order.customerName || order.customer || 'Guest'}</td>
-                              <td className="px-4 py-3 text-secondary">{orderDate.toLocaleDateString()}</td>
+                              <td className="px-4 py-3 text-secondary">{formatPHDate(orderDate)}</td>
                               <td className="px-4 py-3">
                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                                   order.status === 'Completed' ? 'bg-green-100 text-green-700' :
@@ -1349,3 +1383,6 @@ const ProductForm = ({ readOnly = false }) => {
 };
 
 export default ProductForm;
+
+
+

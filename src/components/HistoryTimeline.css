@@ -40,8 +40,8 @@
 }
 
 .ht-dot {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-lg);
+  height: var(--spacing-lg);
   border-radius: 50%;
   flex-shrink: 0;
   margin-top: 3px;
@@ -92,7 +92,7 @@
   background: var(--bg-light, #f9f9f9);
   border-left: 3px solid var(--border-light, #ddd);
   padding: 0.3rem 0.6rem;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--spacing-xs) var(--spacing-xs) 0;
 }
 
 .ht-actor {

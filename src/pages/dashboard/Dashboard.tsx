@@ -293,7 +293,7 @@ const Dashboard = () => {
         className="quick-actions-bar card flex-between align-center px-6 py-4"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ borderRadius: '16px', background: 'var(--glass-bg)', backdropFilter: 'blur(10px)', border: '1px solid var(--glass-border)' }}
+        style={{ borderRadius: 'var(--spacing-lg)', background: 'var(--glass-bg)', backdropFilter: 'blur(10px)', border: '1px solid var(--glass-border)' }}
       >
         <div className="flex align-center gap-3">
           <Zap size={20} className="text-accent" />
