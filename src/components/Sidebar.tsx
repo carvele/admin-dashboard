@@ -97,7 +97,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
     });
 
     const unsubMsgs = subscribeToCollection('messages', (msgs: any[]) => {
-      const staffIds = new Set([user?.uid, (user as any)?.id, (user as any)?.docId].filter(Boolean));
+      const staffIds = new Set([(user as any)?.uid, (user as any)?.id, (user as any)?.docId].filter(Boolean));
       let count = 0;
       for (const m of msgs) {
         if (m.deleted === true) continue;
