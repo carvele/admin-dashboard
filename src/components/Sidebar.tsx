@@ -42,6 +42,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
   const { user, isAdminUnlocked } = useAuth();
 
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
   const [stockAlert, setStockAlert] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,8 +82,32 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
 
   useEffect(() => {
     const unsub = subscribeToCollection('conversations', (data: any[]) => {
-      const count = data.reduce((sum: number, conv: any) => sum + (conv.unreadCount || conv.unread || 0), 0);
+      const count = data.reduce(
+        (sum: number, conv: any) => sum + (conv.unreadCount || conv.unread_count || conv.unread || 0),
+        0,
+      );
       setUnreadMessages(count);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeToCollection('reservations', (data: any[]) => {
+      let count = 0;
+      for (const r of data) {
+        if (r.deleted === true) continue;
+        const status = (r.status || '').trim();
+        if (
+          status === 'Pending' ||
+          status === 'Request Approval' ||
+          status === 'To Pay' ||
+          r.rescheduleStatus === 'requested' ||
+          r.paymentStatus === 'Awaiting Verification'
+        ) {
+          count++;
+        }
+      }
+      setPendingReservationsCount(count);
     });
     return () => unsub();
   }, []);
@@ -102,7 +127,14 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
     { to: '/catalog', icon: Grid, label: 'Clothing Catalog', admin: false },
     { to: '/reviews', icon: Star, label: 'Review Moderation', admin: false },
     { to: '/inventory', icon: PackageSearch, label: 'Inventory', admin: false, alertType: stockAlert },
-    { to: '/reservations', icon: CalendarCheck, label: 'Reservations', admin: false },
+    {
+      to: '/reservations',
+      icon: CalendarCheck,
+      label: 'Reservations',
+      admin: false,
+      badge: pendingReservationsCount > 0 ? pendingReservationsCount : null,
+      badgeColor: 'gold',
+    },
     { to: '/customers', icon: Users, label: 'Customers', admin: false },
     {
       to: '/messages',
@@ -110,6 +142,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
       label: 'Messages',
       admin: false,
       badge: unreadMessages > 0 ? unreadMessages : null,
+      badgeColor: 'pink',
     },
     { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
@@ -192,7 +225,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
                     <Icon size={20} className="nav-icon" />
                     {!isCollapsed && <span className="nav-label">{link.label}</span>}
                     {link.badge && (
-                      <span className={`badge-unread ${isCollapsed ? 'collapsed-dot' : ''}`}>
+                      <span className={`badge-unread ${(link as any).badgeColor ? `badge-${(link as any).badgeColor}` : ''} ${isCollapsed ? 'collapsed-dot' : ''}`}>
                         {isCollapsed ? '' : link.badge}
                       </span>
                     )}
