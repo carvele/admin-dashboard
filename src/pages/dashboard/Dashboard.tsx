@@ -81,7 +81,7 @@ const parseDate = (d: any) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth() as { user: any };
+  const { user, isAdminUnlocked } = useAuth() as { user: any, isAdminUnlocked: boolean };
   const canCustomize = can(user?.role, 'customize_dashboard');
   
   const loadDashboard = React.useCallback(async () => {
@@ -310,9 +310,11 @@ const Dashboard = () => {
               <PlusCircle size={16} /> Add Product
             </button>
           )}
-          <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/messages')}>
-            <MessageSquare size={16} /> Broadcast
-          </button>
+          {isAdminUnlocked && (
+            <button className="btn-outline small flex-center gap-2" onClick={() => navigate('/announcements')}>
+              <MessageSquare size={16} /> Broadcast
+            </button>
+          )}
         </div>
       </motion.div>
 
