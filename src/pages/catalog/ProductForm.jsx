@@ -484,18 +484,10 @@ const ProductForm = ({ readOnly = false }) => {
       let uploadedImages = [];
 
       if (selectedFiles.length > 0) {
-        // Dynamically import to avoid blocking the main thread on load
-        const imglyRemoveBackground = (await import('@imgly/background-removal')).default;
         for (let i = 0; i < selectedFiles.length; i++) {
           setUploadProgress({ current: i + 1, total: selectedFiles.length });
-          console.log(`[Storage] Processing and uploading gallery image ${i + 1}...`);
-          
-          // Strip background using WASM model before uploading to storage
-          const imageBlob = await imglyRemoveBackground(selectedFiles[i]);
-          // routeAndUploadFile expects a File object
-          const transparentFile = new File([imageBlob], selectedFiles[i].name.replace(/\.[^/.]+$/, "") + ".png", { type: 'image/png' });
-          
-          const url = await routeAndUploadFile(transparentFile);
+          console.log(`[Storage] Uploading gallery image ${i + 1}...`);
+          const url = await routeAndUploadFile(selectedFiles[i]);
           if (url) uploadedImages.push(url);
         }
       }
