@@ -977,7 +977,7 @@ const Messages = () => {
   return (
     <div className="messages-layout" data-mobile-view={mobileView}>
       {/* Hidden file input for image upload */}
-      <input
+      <input autoComplete="off"
         id="messages-file-upload"
         name="messages-file-upload"
         type="file"
@@ -1582,7 +1582,7 @@ const Messages = () => {
             <div className="modal-body">
               <div className="search-box full-width mb-3">
                 <Search size={18} className="search-icon" />
-                <input
+                <input autoComplete="off"
                   id="messages-new-cust-search"
                   name="messages-new-cust-search"
                   type="text"

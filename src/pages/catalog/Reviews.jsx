@@ -63,7 +63,7 @@ const Reviews = () => {
           <span>Filter Controls</span>
         </div>
         <div className="filters-bar">
-          <input
+          <input autoComplete="off"
             id="search-reviews"
             name="search-reviews"
             type="text"
@@ -73,7 +73,7 @@ const Reviews = () => {
             onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
             aria-label="Search reviews by product name"
           />
-          <select
+          <select autoComplete="off" id="field_le6bem1" name="field_le6bem1"
             className="filter-select"
             value={ratingFilter}
             onChange={e => { setRatingFilter(e.target.value); setPage(1); }}

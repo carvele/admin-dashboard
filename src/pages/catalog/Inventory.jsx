@@ -1006,7 +1006,7 @@ const Inventory = () => {
                     className="input-field pl-10"
                   />
                 </div>
-                <select
+                <select autoComplete="off" id="field_l7bea6x" name="field_l7bea6x"
                   className="input-field category-filter"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
@@ -1019,7 +1019,7 @@ const Inventory = () => {
                   ))}
                 </select>
                 {uniqueColors.length > 1 && (
-                  <select
+                  <select autoComplete="off" id="field_fjj2yfc" name="field_fjj2yfc"
                     className="input-field category-filter"
                     value={colorFilter}
                     onChange={(e) => setColorFilter(e.target.value)}
@@ -1341,7 +1341,7 @@ const Inventory = () => {
               </p>
               <div className="form-group">
                 <label className="label" htmlFor="restock-qty">Quantity to Add</label>
-                <input
+                <input autoComplete="off"
                   id="restock-qty"
                   type="number"
                   className="input-field"
@@ -1425,7 +1425,7 @@ const Inventory = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="label" htmlFor="sell-unit-price">Actual Unit Price (₱)</label>
-                  <input
+                  <input autoComplete="off"
                     id="sell-unit-price"
                     type="number"
                     className="input-field"
@@ -1437,7 +1437,7 @@ const Inventory = () => {
                 </div>
                 <div className="form-group">
                   <label className="label" htmlFor="sell-qty">Quantity Sold</label>
-                  <input
+                  <input autoComplete="off"
                     id="sell-qty"
                     type="number"
                     className="input-field"

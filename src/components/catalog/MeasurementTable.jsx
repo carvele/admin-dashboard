@@ -158,7 +158,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
         <div className="flex gap-2 flex-1 max-w-sm">
           <div className="relative flex-1">
             <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
-            <input
+            <input autoComplete="off" id="field_eqfu3ce" name="field_eqfu3ce"
               type="text"
               className="input-field pl-10"
               placeholder="Add metric (e.g. Chest Width)"
@@ -261,7 +261,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
                 {metrics.map(metric => (
                   <td key={`${size}-${metric}`} className="px-2 py-0 border-b">
                     <div className="relative">
-                      <input
+                      <input autoComplete="off" id="field_uf2eudj" name="field_uf2eudj"
                         type="text"
                         inputMode="decimal"
                         className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center"

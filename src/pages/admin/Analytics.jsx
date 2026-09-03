@@ -368,7 +368,7 @@ const Analytics = () => {
             <div className="date-picker-group">
               <div className="search-box">
                 <Calendar size={18} className="search-icon" />
-                <select
+                <select autoComplete="off"
                   id="analytics-date-preset"
                   name="analyticsDatePreset"
                   aria-label="Date range preset"

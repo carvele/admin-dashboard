@@ -842,7 +842,7 @@ const Reservations = () => {
             />
           </div>
           <div className="flex-center gap-2">
-            <select
+            <select autoComplete="off" id="field_015bxhd" name="field_015bxhd"
               className="input-field"
               style={{ width: 'auto', minWidth: 150 }}
               value={statusFilter}
@@ -1178,7 +1178,7 @@ const Reservations = () => {
               <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
               <div className="form-group">
                 <label className="label" htmlFor="qr-token">Pickup Token / Reservation ID</label>
-                <input
+                <input autoComplete="off"
                   id="qr-token"
                   type="text"
                   className="input-field font-mono"
@@ -1268,7 +1268,7 @@ const Reservations = () => {
             <form className="modal-body" onSubmit={handleCreateReservation}>
               <div className="form-group">
                 <label className="label" htmlFor="reservation-customer">Customer</label>
-                <input
+                <input autoComplete="off"
                   id="reservation-customer"
                   type="text"
                   className="input-field"
@@ -1297,7 +1297,7 @@ const Reservations = () => {
               <div className="form-row">
                 <div className="form-group flex-1">
                   <label className="label" htmlFor="reservation-outfit">Selected Outfit</label>
-                  <select
+                  <select autoComplete="off"
                     id="reservation-outfit"
                     className="input-field"
                     value={newRes.outfit}
@@ -1315,7 +1315,7 @@ const Reservations = () => {
                 </div>
                 <div className="form-group flex-1">
                   <label className="label" htmlFor="reservation-size">Size</label>
-                  <select
+                  <select autoComplete="off"
                     id="reservation-size"
                     className="input-field"
                     value={newRes.size}
@@ -1335,7 +1335,7 @@ const Reservations = () => {
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="reservation-date">Reservation Date & Time</label>
-                <input
+                <input autoComplete="off"
                   id="reservation-date"
                   type="datetime-local"
                   className="input-field"
@@ -1405,7 +1405,7 @@ const Reservations = () => {
               </p>
               <div className="form-group">
                 <label className="label" htmlFor="reschedule-date">New Date & Time</label>
-                <input
+                <input autoComplete="off"
                   id="reschedule-date"
                   type="datetime-local"
                   className="input-field"

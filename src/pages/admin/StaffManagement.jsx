@@ -545,7 +545,7 @@ const StaffManagement = () => {
               className="input-field pl-10"
             />
           </div>
-          <select 
+          <select autoComplete="off" id="field_nieasx2" name="field_nieasx2" 
             className="input-field" 
             value={roleFilter} 
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -618,7 +618,7 @@ const StaffManagement = () => {
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="create-staff-role">Access Role</label>
-                <select
+                <select autoComplete="off"
                   id="create-staff-role"
                   className="input-field"
                   value={createForm.role}
@@ -668,7 +668,7 @@ const StaffManagement = () => {
                 <label className="label" htmlFor="reactivate-note">
                   Reactivation Note <span style={{ color: 'var(--color-danger)' }}>*</span>
                 </label>
-                <textarea
+                <textarea autoComplete="off"
                   id="reactivate-note"
                   className="input-field"
                   rows={3}

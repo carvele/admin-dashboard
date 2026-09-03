@@ -355,7 +355,7 @@ const Settings = () => {
 
               <div className="form-group max-w-lg mt-4">
                 <label className="label" htmlFor="storeName">Store Name</label>
-                <input
+                <input autoComplete="off"
                   type="text"
                   id="storeName"
                   name="storeName"
@@ -368,7 +368,7 @@ const Settings = () => {
               <div className="form-row max-w-lg mt-3">
                 <div className="form-group flex-1">
                   <label className="label" htmlFor="email">Email Address</label>
-                  <input
+                  <input autoComplete="off"
                     type="email"
                     id="email"
                     name="email"
@@ -379,7 +379,7 @@ const Settings = () => {
                 </div>
                 <div className="form-group flex-1">
                   <label className="label" htmlFor="phone">Phone Number</label>
-                  <input
+                  <input autoComplete="off"
                     type="text"
                     id="phone"
                     name="phone"
@@ -392,7 +392,7 @@ const Settings = () => {
 
               <div className="form-group max-w-lg mt-3">
                 <label className="label" htmlFor="address">Store Address</label>
-                <input
+                <input autoComplete="off"
                   type="text"
                   id="address"
                   name="address"
@@ -410,7 +410,7 @@ const Settings = () => {
                 <div className="form-row">
                   <div className="form-group flex-1">
                     <label className="label" htmlFor="gcashName">GCash Name</label>
-                    <input
+                    <input autoComplete="off"
                       type="text"
                       id="gcashName"
                       name="gcashName"
@@ -422,7 +422,7 @@ const Settings = () => {
                   </div>
                   <div className="form-group flex-1">
                     <label className="label" htmlFor="gcashNumber">GCash Number</label>
-                    <input
+                    <input autoComplete="off"
                       type="text"
                       id="gcashNumber"
                       name="gcashNumber"
@@ -466,7 +466,7 @@ const Settings = () => {
                     <div>
                       <label className="btn-outline flex-center gap-2" style={{ cursor: 'pointer', display: 'inline-flex' }}>
                         <Upload size={16} /> Upload QR Image
-                        <input 
+                        <input autoComplete="off" id="field_dt2j7ws" name="field_dt2j7ws" 
                           type="file" 
                           accept="image/*" 
                           style={{ display: 'none' }} 
@@ -530,7 +530,7 @@ const Settings = () => {
                           </div>
                         </td>
                         <td>
-                          <input
+                          <input autoComplete="off" id="field_ugpewqn" name="field_ugpewqn"
                             type="time"
                             className="hours-time-input"
                             disabled={item.is_closed}
@@ -542,7 +542,7 @@ const Settings = () => {
                           />
                         </td>
                         <td>
-                          <input
+                          <input autoComplete="off" id="field_y5euq22" name="field_y5euq22"
                             type="time"
                             className="hours-time-input"
                             disabled={item.is_closed}
@@ -554,7 +554,7 @@ const Settings = () => {
                           />
                         </td>
                         <td>
-                          <input
+                          <input autoComplete="off" id="field_1pripnp" name="field_1pripnp"
                             type="number"
                             className="hours-slot-input"
                             min="1"
@@ -606,7 +606,7 @@ const Settings = () => {
                 <div className="closures-form-grid">
                   <div className="form-group mb-0">
                     <label className="label" htmlFor="closure-date">Closure Date</label>
-                    <input
+                    <input autoComplete="off"
                       id="closure-date"
                       type="date"
                       className="input-field"
@@ -617,7 +617,7 @@ const Settings = () => {
                   </div>
                   <div className="form-group mb-0">
                     <label className="label" htmlFor="closure-reason">Reason or Occasion</label>
-                    <input
+                    <input autoComplete="off"
                       id="closure-reason"
                       type="text"
                       className="input-field"
@@ -732,7 +732,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="maxBookingDays">Max Booking Days in Advance</label>
-                <input
+                <input autoComplete="off"
                   type="number"
                   id="maxBookingDays"
                   name="maxBookingDays"
@@ -744,7 +744,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="depositRequired">Deposit Required (%)</label>
-                <input
+                <input autoComplete="off"
                   type="number"
                   id="depositRequired"
                   name="depositRequired"
@@ -758,7 +758,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="cancellationWindow">Free Cancellation Window (Hours)</label>
-                <input
+                <input autoComplete="off"
                   type="number"
                   id="cancellationWindow"
                   name="cancellationWindow"
@@ -813,7 +813,7 @@ const Settings = () => {
 
               <div className="form-group mt-5">
                 <label className="label" htmlFor="maxFileSize">Max Assets File Size (MB)</label>
-                <input
+                <input autoComplete="off"
                   type="number"
                   id="maxFileSize"
                   name="maxFileSize"
@@ -868,7 +868,7 @@ const Settings = () => {
                     <RotateCcw size={12} /> Reset to Default
                   </button>
                 </div>
-                <textarea
+                <textarea autoComplete="off"
                   id="autoReplyMessage"
                   name="autoReplyMessage"
                   className="input-field textarea-field"
@@ -921,7 +921,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="displayName">Display Name</label>
-                <input
+                <input autoComplete="off"
                   type="text"
                   id="displayName"
                   name="displayName"
@@ -937,7 +937,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="staffEmail">Staff Email Address</label>
-                <input
+                <input autoComplete="off"
                   type="email"
                   id="staffEmail"
                   className="input-field"
@@ -949,7 +949,7 @@ const Settings = () => {
 
               <div className="form-group mt-4">
                 <label className="label" htmlFor="roleLevel">Role Level</label>
-                <input
+                <input autoComplete="off"
                   type="text"
                   id="roleLevel"
                   className="input-field"

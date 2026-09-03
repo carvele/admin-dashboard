@@ -181,7 +181,7 @@ const Announcements = () => {
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-group">
                 <label className="label" htmlFor="announcement-title">Title *</label>
-                <input
+                <input autoComplete="off"
                   id="announcement-title"
                   type="text"
                   name="title"
@@ -195,7 +195,7 @@ const Announcements = () => {
 
               <div className="form-group">
                 <label className="label" htmlFor="announcement-type">Type</label>
-                <select
+                <select autoComplete="off"
                   id="announcement-type"
                   name="type"
                   value={formData.type}
@@ -209,7 +209,7 @@ const Announcements = () => {
 
               <div className="form-group">
                 <label className="label" htmlFor="announcement-body">Message *</label>
-                <textarea
+                <textarea autoComplete="off"
                   id="announcement-body"
                   name="body"
                   value={formData.body}
@@ -223,7 +223,7 @@ const Announcements = () => {
 
               <div className="form-group">
                 <label className="label" htmlFor="announcement-expires-at">Expires At (Optional)</label>
-                <input
+                <input autoComplete="off"
                   id="announcement-expires-at"
                   type="datetime-local"
                   name="expires_at"

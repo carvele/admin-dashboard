@@ -89,7 +89,7 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
           <label className="sp-label" htmlFor="sp-change-note">
             Change Note <span className="sp-required">*</span>
           </label>
-          <textarea
+          <textarea autoComplete="off"
             id="sp-change-note"
             className="sp-textarea"
             rows={3}
@@ -321,7 +321,7 @@ const StaffProfile = () => {
             <div className="sp-form-grid">
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-first-name">First Name</label>
-                <input
+                <input autoComplete="off"
                   id="sp-first-name"
                   className="input-field"
                   value={form.first_name}
@@ -331,7 +331,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-last-name">Last Name</label>
-                <input
+                <input autoComplete="off"
                   id="sp-last-name"
                   className="input-field"
                   value={form.last_name}
@@ -341,11 +341,11 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-email"><Mail size={14} /> Email</label>
-                <input id="sp-email" className="input-field" value={profile.email ?? ''} disabled readOnly />
+                <input autoComplete="off" id="sp-email" className="input-field" value={profile.email ?? ''} disabled readOnly />
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-phone"><Phone size={14} /> Phone</label>
-                <input
+                <input autoComplete="off"
                   id="sp-phone"
                   className="input-field"
                   value={form.phone}
@@ -356,7 +356,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-gender">Gender</label>
-                <select
+                <select autoComplete="off"
                   id="sp-gender"
                   className="input-field"
                   value={form.gender}
@@ -373,7 +373,7 @@ const StaffProfile = () => {
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-dob"><Calendar size={14} /> Date of Birth</label>
                 <div className="sp-dob-row">
-                  <input
+                  <input autoComplete="off"
                     id="sp-dob"
                     type="date"
                     className="input-field"
@@ -395,7 +395,7 @@ const StaffProfile = () => {
             <div className="sp-form-grid">
               <div className="sp-field sp-field-full">
                 <label className="sp-label" htmlFor="sp-address-line">Address Line</label>
-                <input
+                <input autoComplete="off"
                   id="sp-address-line"
                   className="input-field"
                   value={form.address_line}
@@ -406,7 +406,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-barangay">Barangay</label>
-                <input
+                <input autoComplete="off"
                   id="sp-barangay"
                   className="input-field"
                   value={form.barangay}
@@ -416,7 +416,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-city">City / Municipality</label>
-                <input
+                <input autoComplete="off"
                   id="sp-city"
                   className="input-field"
                   value={form.city}
@@ -426,7 +426,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-province">Province</label>
-                <input
+                <input autoComplete="off"
                   id="sp-province"
                   className="input-field"
                   value={form.province}
@@ -436,7 +436,7 @@ const StaffProfile = () => {
               </div>
               <div className="sp-field">
                 <label className="sp-label" htmlFor="sp-zip">ZIP Code</label>
-                <input
+                <input autoComplete="off"
                   id="sp-zip"
                   className="input-field"
                   value={form.zip_code}

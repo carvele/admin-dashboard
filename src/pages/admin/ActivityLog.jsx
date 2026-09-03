@@ -265,7 +265,7 @@ const ActivityLog = () => {
 
         <div className="al-filter-field">
           <label className="al-filter-label" htmlFor="al-target">Target</label>
-          <select
+          <select autoComplete="off"
             id="al-target"
             className="input-field"
             value={targetType}
@@ -279,7 +279,7 @@ const ActivityLog = () => {
 
         <div className="al-filter-field">
           <label className="al-filter-label" htmlFor="al-actor">Performed by</label>
-          <select
+          <select autoComplete="off"
             id="al-actor"
             className="input-field"
             value={actorId}

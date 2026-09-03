@@ -320,7 +320,7 @@ const ClothingCatalog = () => {
           </div>
           
           <div className="category-filter">
-            <select
+            <select autoComplete="off" id="field_4tpd2un" name="field_4tpd2un"
               className="input-field"
               value={activeCategory}
               onChange={(e) => setActiveCategory(e.target.value)}
@@ -332,7 +332,7 @@ const ClothingCatalog = () => {
           </div>
 
           <div className="color-filter">
-            <select
+            <select autoComplete="off" id="field_bn95249" name="field_bn95249"
               className="input-field"
               value={activeColor}
               onChange={(e) => setActiveColor(e.target.value)}
@@ -345,7 +345,7 @@ const ClothingCatalog = () => {
           </div>
 
           <div className="tag-filter">
-            <select
+            <select autoComplete="off" id="field_yihdvkv" name="field_yihdvkv"
               className="input-field"
               value={activeTag}
               onChange={(e) => setActiveTag(e.target.value)}

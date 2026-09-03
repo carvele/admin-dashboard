@@ -190,19 +190,19 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
         <div className="w-64 space-y-4 bg-gray-50 p-4 rounded-lg">
           <div>
             <label className="text-xs font-bold block">Left Arm (Pitch)</label>
-            <input type="range" min="0" max="180" value={angles.leftArm} onChange={e => setAngles(a => ({...a, leftArm: Number(e.target.value)}))} className="w-full" />
+            <input autoComplete="off" id="field_p8ptwn2" name="field_p8ptwn2" type="range" min="0" max="180" value={angles.leftArm} onChange={e => setAngles(a => ({...a, leftArm: Number(e.target.value)}))} className="w-full" />
           </div>
           <div>
             <label className="text-xs font-bold block">Right Arm (Pitch)</label>
-            <input type="range" min="0" max="180" value={angles.rightArm} onChange={e => setAngles(a => ({...a, rightArm: Number(e.target.value)}))} className="w-full" />
+            <input autoComplete="off" id="field_uetcj6r" name="field_uetcj6r" type="range" min="0" max="180" value={angles.rightArm} onChange={e => setAngles(a => ({...a, rightArm: Number(e.target.value)}))} className="w-full" />
           </div>
           <div>
             <label className="text-xs font-bold block">Left Forearm (Bend)</label>
-            <input type="range" min="0" max="140" value={angles.leftForearm} onChange={e => setAngles(a => ({...a, leftForearm: Number(e.target.value)}))} className="w-full" />
+            <input autoComplete="off" id="field_bnwitvk" name="field_bnwitvk" type="range" min="0" max="140" value={angles.leftForearm} onChange={e => setAngles(a => ({...a, leftForearm: Number(e.target.value)}))} className="w-full" />
           </div>
           <div>
             <label className="text-xs font-bold block">Right Forearm (Bend)</label>
-            <input type="range" min="0" max="140" value={angles.rightForearm} onChange={e => setAngles(a => ({...a, rightForearm: Number(e.target.value)}))} className="w-full" />
+            <input autoComplete="off" id="field_068mtvm" name="field_068mtvm" type="range" min="0" max="140" value={angles.rightForearm} onChange={e => setAngles(a => ({...a, rightForearm: Number(e.target.value)}))} className="w-full" />
           </div>
 
           <div className="pt-4 border-t mt-4 flex flex-col gap-2">

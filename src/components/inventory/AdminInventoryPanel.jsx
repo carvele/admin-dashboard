@@ -165,7 +165,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
           }}
           className="aip-add-form"
         >
-          <input
+          <input autoComplete="off"
             id={inputId}
             name="name"
             className="input-field"
@@ -180,7 +180,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
           ) : (
             items.map((item) => (
               <li key={item.id} className="aip-item">
-                <input
+                <input autoComplete="off" id="field_lku8lyj" name="field_lku8lyj"
                   defaultValue={item.name}
                   className="input-field aip-item-name"
                   aria-label={`${singular} name`}
@@ -284,7 +284,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
       <label title="Upload image" className="aip-upload">
         <Upload size={14} />
         <span className="aip-sr-only">Upload image for {cat.name}</span>
-        <input
+        <input autoComplete="off" id="field_s4hcmz8" name="field_s4hcmz8"
           type="file"
           accept="image/*"
           style={{ display: 'none' }}
@@ -339,7 +339,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
             <form onSubmit={save} className="aip-baseline-row">
               <div className="aip-field">
                 <label className="label" htmlFor="baseline-product-select">Select Product</label>
-                <select
+                <select autoComplete="off"
                   id="baseline-product-select"
                   className="input-field"
                   value={productId}
@@ -356,7 +356,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               </div>
               <div className="aip-field">
                 <label className="label" htmlFor="baseline-qty-input">Baseline Quantity</label>
-                <input
+                <input autoComplete="off"
                   id="baseline-qty-input"
                   type="number"
                   min="0"
@@ -406,7 +406,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               <div className="aip-field">
                 <span className="aip-col-title">Top-Level Categories</span>
                 <form onSubmit={handleAddTopCategory} className="aip-add-form">
-                  <input
+                  <input autoComplete="off"
                     name="catName"
                     className="input-field"
                     placeholder="e.g. Gowns"
@@ -422,7 +422,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                     categoryTree.map((cat) => (
                       <li key={cat.id} className="aip-item">
                         {renderImageControl(cat)}
-                        <input
+                        <input autoComplete="off" id="field_xoj0xbn" name="field_xoj0xbn"
                           defaultValue={cat.name}
                           className="input-field aip-item-name aip-item-name-bold"
                           aria-label="Category name"
@@ -446,7 +446,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               <div className="aip-field">
                 <span className="aip-col-title">Sub-Categories</span>
                 <form onSubmit={handleAddSubCategory} className="aip-add-form-stacked">
-                  <select
+                  <select autoComplete="off" id="field_mmntiqy" name="field_mmntiqy"
                     className="input-field"
                     value={newSubParentId}
                     onChange={(e) => setNewSubParentId(e.target.value)}
@@ -458,7 +458,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                     ))}
                   </select>
                   <div className="aip-add-form-row">
-                    <input
+                    <input autoComplete="off" id="field_pri0jpv" name="field_pri0jpv"
                       className="input-field"
                       placeholder="Sub-category name..."
                       value={newSubName}
@@ -482,7 +482,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                         ...cat.subcategories.map((sub) => (
                           <li key={sub.id} className="aip-item aip-item-indent">
                             {renderImageControl(sub)}
-                            <input
+                            <input autoComplete="off" id="field_gen7n1d" name="field_gen7n1d"
                               defaultValue={sub.name}
                               className="input-field aip-item-name"
                               aria-label="Sub-category name"

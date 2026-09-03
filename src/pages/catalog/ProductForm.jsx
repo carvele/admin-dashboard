@@ -761,7 +761,7 @@ const ProductForm = ({ readOnly = false }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="label" htmlFor="product-name">Product Name *</label>
-                    <input
+                    <input autoComplete="off"
                       id="product-name"
                       type="text"
                       name="name"
@@ -774,7 +774,7 @@ const ProductForm = ({ readOnly = false }) => {
                   </div>
                   <div>
                     <label className="label" htmlFor="product-category">Category *</label>
-                    <select id="product-category" name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
+                    <select autoComplete="off" id="product-category" name="category" className="input-field" value={formData.category || ''} onChange={handleChange}>
                       {categories.map((c) => (
                         <option key={c.name} value={c.name}>{c.name}</option>
                       ))}
@@ -782,7 +782,7 @@ const ProductForm = ({ readOnly = false }) => {
                   </div>
                   <div>
                     <label className="label" htmlFor="product-subcategory">Sub-Category</label>
-                    <select
+                    <select autoComplete="off"
                       id="product-subcategory"
                       name="subCategory"
                       className="input-field"
@@ -805,7 +805,7 @@ const ProductForm = ({ readOnly = false }) => {
                 <div className="md:hidden space-y-4 pt-4 border-t border-dashed">
                    <div className="flex items-center justify-between">
                       <label className="label mb-0" htmlFor="product-visibility-mobile">Visibility</label>
-                      <select id="product-visibility-mobile" name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
+                      <select autoComplete="off" id="product-visibility-mobile" name="visibility" className="input-field py-1 text-sm w-32" value={formData.visibility} onChange={handleChange}>
                         <option value="draft">Draft</option>
                         <option value="public">Published</option>
                       </select>
@@ -831,7 +831,7 @@ const ProductForm = ({ readOnly = false }) => {
                 <div className="space-y-3">
                    <div>
                       <label className="label" htmlFor="product-visibility-desktop">Visibility</label>
-                      <select id="product-visibility-desktop" name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
+                      <select autoComplete="off" id="product-visibility-desktop" name="visibility" className="input-field py-1 text-sm" value={formData.visibility} onChange={handleChange}>
                         <option value="draft">Draft</option>
                         <option value="public">Published</option>
                       </select>
@@ -887,7 +887,7 @@ const ProductForm = ({ readOnly = false }) => {
                  <label className="label" htmlFor="product-price">Regular Rental Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
-                    <input id="product-price" type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
+                    <input autoComplete="off" id="product-price" type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
                  </div>
               </div>
 
@@ -903,7 +903,7 @@ const ProductForm = ({ readOnly = false }) => {
                    </label>
                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600">₱</span>
-                      <input id="product-saleprice" type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
+                      <input autoComplete="off" id="product-saleprice" type="number" name="salePrice" className="input-field pl-8 border-red-400 text-red-700 font-bold bg-white" value={formData.salePrice} onChange={handleChange} placeholder="0.00" min="0" step="0.01" />
                    </div>
                 </div>
               )}
@@ -957,7 +957,7 @@ const ProductForm = ({ readOnly = false }) => {
               <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all">
                 <Upload size={24} className="text-gray-400 mb-2" />
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
-                <input id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
+                <input autoComplete="off" id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
               </label>
            </div>
 
@@ -1020,11 +1020,11 @@ const ProductForm = ({ readOnly = false }) => {
                               <div className="flex flex-col gap-4">
                   <div>
                      <label className="label" htmlFor="product-material">Material / Fabric</label>
-                     <input id="product-material" type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
+                     <input autoComplete="off" id="product-material" type="text" name="material" className="input-field" placeholder="e.g. 100% Organic Silk" value={formData.material || ''} onChange={handleChange} />
                   </div>
                   <div>
                      <label className="label" htmlFor="product-stretch">Fabric Stretch (Sizing AI)</label>
-                     <select id="product-stretch" name="fabric_stretch" className="input-field" value={formData.fabric_stretch || ''} onChange={handleChange}>
+                     <select autoComplete="off" id="product-stretch" name="fabric_stretch" className="input-field" value={formData.fabric_stretch || ''} onChange={handleChange}>
                         <option value="Rigid">Rigid (Denim, Canvas) - Needs more ease</option>
                         <option value="Moderate">Moderate (Standard Cotton/Polyester)</option>
                         <option value="High">High (Spandex, Activewear) - Can stretch to fit</option>
@@ -1075,7 +1075,7 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="border-t pt-6">
               <div className="mb-4" style={{ maxWidth: '20rem' }}>
                  <label className="label" htmlFor="product-fit-type">Fit Type</label>
-                 <select id="product-fit-type" name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
+                 <select autoComplete="off" id="product-fit-type" name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
                     <option value="">Standard Fit</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
@@ -1222,11 +1222,11 @@ const ProductForm = ({ readOnly = false }) => {
            <div className="space-y-4">
               <div>
                  <label className="label" htmlFor="product-description">Full Description</label>
-                 <textarea id="product-description" name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
+                 <textarea autoComplete="off" id="product-description" name="description" className="input-field" rows="4" placeholder="Tell the item's story..." value={formData.description || ''} onChange={handleChange} />
               </div>
               <div>
                  <label className="label" htmlFor="product-care-instructions">Care Instructions</label>
-                 <input id="product-care-instructions" type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
+                 <input autoComplete="off" id="product-care-instructions" type="text" name="careInstructions" className="input-field" placeholder="e.g. Professional Dry Clean Only" value={formData.careInstructions || ''} onChange={handleChange} />
               </div>
               <div>
                  <span className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</span>

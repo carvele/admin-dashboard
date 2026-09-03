@@ -52,7 +52,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       <label>{label}</label>
       <div className="slider-row">
         <span>X:</span>
-        <input id="ar-pos-x" name="ar-pos-x" type="range" min="-1" max="1" step="0.01" 
+        <input autoComplete="off" id="ar-pos-x" name="ar-pos-x" type="range" min="-1" max="1" step="0.01" 
           value={p.x} onChange={(e) => handleUpdate('x', e.target.value)}
           aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
         />
@@ -60,7 +60,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       </div>
       <div className="slider-row">
         <span>Y:</span>
-        <input id="ar-pos-y" name="ar-pos-y" type="range" min="0" max="2" step="0.01" 
+        <input autoComplete="off" id="ar-pos-y" name="ar-pos-y" type="range" min="0" max="2" step="0.01" 
           value={p.y} onChange={(e) => handleUpdate('y', e.target.value)}
           aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
         />
@@ -68,7 +68,7 @@ const PointSlider = ({ label, pointStr, onChange }) => {
       </div>
       <div className="slider-row">
         <span>Z:</span>
-        <input id="ar-pos-z" name="ar-pos-z" type="range" min="-1" max="1" step="0.01" 
+        <input autoComplete="off" id="ar-pos-z" name="ar-pos-z" type="range" min="-1" max="1" step="0.01" 
           value={p.z} onChange={(e) => handleUpdate('z', e.target.value)}
           aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
         />
@@ -635,7 +635,7 @@ const ARAssets = () => {
             <div className="modal-body">
               <p className="text-secondary text-sm mb-3">Upload a 3D model file (.glb, .gltf) for AR Try-On.</p>
               <div className="upload-dropzone" style={{border: '2px dashed var(--border-color)', padding: '30px', textAlign: 'center', borderRadius: '8px', cursor: 'pointer', background: 'var(--bg-hover)', position: 'relative'}}>
-                <input type="file" id="ar-upload" accept=".glb,.gltf,image/*" style={{opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', cursor: 'pointer'}} onChange={e => setSelectedFile(e.target.files[0])} />
+                <input autoComplete="off" type="file" id="ar-upload" accept=".glb,.gltf,image/*" style={{opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', cursor: 'pointer'}} onChange={e => setSelectedFile(e.target.files[0])} />
                 <div style={{pointerEvents: 'none'}}>
                   {selectedFile ? (
                     <div className="flex-center gap-2 text-success" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>

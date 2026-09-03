@@ -223,7 +223,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                             {stdBone}
                             {isRequired && <span className="text-red-500 ml-1">*</span>}
                           </label>
-                          <select
+                          <select autoComplete="off" id="field_e2fl178" name="field_e2fl178"
                             className="flex-1 border rounded p-1.5 text-sm"
                             value={metadata.boneMap[stdBone] || ''}
                             onChange={(e) => handleBoneMapChange(stdBone, e.target.value)}
@@ -397,7 +397,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-bold mb-1">Shoulder Width (m)</label>
-                      <input
+                      <input autoComplete="off" id="field_qsptygk" name="field_qsptygk"
                         type="number"
                         step="0.01"
                         min="0.1"
@@ -415,7 +415,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
 
                     <div>
                       <label className="block text-sm font-bold mb-1">Rest Pose</label>
-                      <select
+                      <select autoComplete="off" id="field_vhrqvae" name="field_vhrqvae"
                         className="w-full border rounded p-2 text-sm"
                         value={metadata.restPose}
                         onChange={(e) => setMetadata({
@@ -430,7 +430,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
 
                     <div>
                       <label className="block text-sm font-bold mb-1">Anchor Type</label>
-                      <select
+                      <select autoComplete="off" id="field_ee37b70" name="field_ee37b70"
                         className="w-full border rounded p-2 text-sm"
                         value={metadata.anchorType}
                         onChange={(e) => setMetadata({

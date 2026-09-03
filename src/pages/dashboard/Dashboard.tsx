@@ -394,7 +394,7 @@ const Dashboard = () => {
         >
           <div className="card-header">
             <h3>Reservation Trends</h3>
-            <select
+            <select autoComplete="off" id="field_p8j7mw2" name="field_p8j7mw2"
               className="input-field small-select"
               value={trendFilter}
               onChange={(e) => setTrendFilter(e.target.value)}

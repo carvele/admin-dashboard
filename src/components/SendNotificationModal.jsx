@@ -56,7 +56,7 @@ export default function SendNotificationModal({ customer, onClose }) {
         <form onSubmit={handleSend} className="modal-body">
           <div className="form-group">
             <label className="form-label" htmlFor="notification-recipient">Recipient</label>
-            <input
+            <input autoComplete="off"
               id="notification-recipient"
               type="text"
               className="form-input"
@@ -67,7 +67,7 @@ export default function SendNotificationModal({ customer, onClose }) {
 
           <div className="form-group">
             <label className="form-label" htmlFor="notification-title">Notification Title</label>
-            <input
+            <input autoComplete="off"
               id="notification-title"
               type="text"
               className="form-input"
@@ -80,7 +80,7 @@ export default function SendNotificationModal({ customer, onClose }) {
 
           <div className="form-group">
             <label className="form-label" htmlFor="notification-body">Message Body</label>
-            <textarea
+            <textarea autoComplete="off"
               id="notification-body"
               className="form-input textarea"
               rows={4}

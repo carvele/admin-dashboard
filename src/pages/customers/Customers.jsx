@@ -737,13 +737,13 @@ const Customers = () => {
                 )}
                 {isEditing ? (
                   <>
-                    <input
+                    <input autoComplete="off" id="field_jtcus83" name="field_jtcus83"
                       type="text"
                       className="input-field mt-3"
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                     />
-                    <select
+                    <select autoComplete="off" id="field_3rsf05m" name="field_3rsf05m"
                       className="input-field mt-2"
                       value={editForm.status}
                       onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
@@ -790,7 +790,7 @@ const Customers = () => {
                 <div className="profile-contact">
                   {isEditing ? (
                     <>
-                      <input
+                      <input autoComplete="off"
                         id="customer-edit-email"
                         name="customer-email"
                         type="email"
@@ -799,7 +799,7 @@ const Customers = () => {
                         value={editForm.email}
                         onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                       />
-                      <input
+                      <input autoComplete="off"
                         id="customer-edit-phone"
                         name="customer-phone"
                         type="text"
@@ -915,42 +915,42 @@ const Customers = () => {
                     <div className="measurements-grid">
                       <div className="measure-box">
                         <span>Bust</span>
-                        <input id="cust-measure-topBust" name="topBust" type="number" className="input-field" value={editForm.topBust || ''}
+                        <input autoComplete="off" id="cust-measure-topBust" name="topBust" type="number" className="input-field" value={editForm.topBust || ''}
                           onChange={(e) => setEditForm({ ...editForm, topBust: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Under Bust</span>
-                        <input id="cust-measure-underBust" name="underBust" type="number" className="input-field" value={editForm.underBust || ''}
+                        <input autoComplete="off" id="cust-measure-underBust" name="underBust" type="number" className="input-field" value={editForm.underBust || ''}
                           onChange={(e) => setEditForm({ ...editForm, underBust: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Waist</span>
-                        <input id="cust-measure-waist" name="waist" type="number" className="input-field" value={editForm.waist || ''}
+                        <input autoComplete="off" id="cust-measure-waist" name="waist" type="number" className="input-field" value={editForm.waist || ''}
                           onChange={(e) => setEditForm({ ...editForm, waist: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Hips</span>
-                        <input id="cust-measure-hip" name="hip" type="number" className="input-field" value={editForm.hip || ''}
+                        <input autoComplete="off" id="cust-measure-hip" name="hip" type="number" className="input-field" value={editForm.hip || ''}
                           onChange={(e) => setEditForm({ ...editForm, hip: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Neck</span>
-                        <input id="cust-measure-neck" name="neck" type="number" className="input-field" value={editForm.neck || ''}
+                        <input autoComplete="off" id="cust-measure-neck" name="neck" type="number" className="input-field" value={editForm.neck || ''}
                           onChange={(e) => setEditForm({ ...editForm, neck: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Shoulder</span>
-                        <input id="cust-measure-shoulderWidth" name="shoulderWidth" type="number" className="input-field" value={editForm.shoulderWidth || ''}
+                        <input autoComplete="off" id="cust-measure-shoulderWidth" name="shoulderWidth" type="number" className="input-field" value={editForm.shoulderWidth || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, shoulderWidth: e.target.value })
                           }
@@ -959,21 +959,21 @@ const Customers = () => {
                       </div>
                       <div className="measure-box">
                         <span>Arm Length</span>
-                        <input id="cust-measure-armLength" name="armLength" type="number" className="input-field" value={editForm.armLength || ''}
+                        <input autoComplete="off" id="cust-measure-armLength" name="armLength" type="number" className="input-field" value={editForm.armLength || ''}
                           onChange={(e) => setEditForm({ ...editForm, armLength: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Back Length</span>
-                        <input id="cust-measure-backLength" name="backLength" type="number" className="input-field" value={editForm.backLength || ''}
+                        <input autoComplete="off" id="cust-measure-backLength" name="backLength" type="number" className="input-field" value={editForm.backLength || ''}
                           onChange={(e) => setEditForm({ ...editForm, backLength: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Inside Leg</span>
-                        <input id="cust-measure-insideLegLength" name="insideLegLength" type="number" className="input-field" value={editForm.insideLegLength || ''}
+                        <input autoComplete="off" id="cust-measure-insideLegLength" name="insideLegLength" type="number" className="input-field" value={editForm.insideLegLength || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, insideLegLength: e.target.value })
                           }
@@ -982,14 +982,14 @@ const Customers = () => {
                       </div>
                       <div className="measure-box">
                         <span>Height (cm)</span>
-                        <input id="cust-measure-height" name="height" type="number" className="input-field" value={editForm.height || ''}
+                        <input autoComplete="off" id="cust-measure-height" name="height" type="number" className="input-field" value={editForm.height || ''}
                           onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
                           placeholder="—"
                         />
                       </div>
                       <div className="measure-box">
                         <span>Weight (kg)</span>
-                        <input id="cust-measure-weight" name="weight" type="number" className="input-field" value={editForm.weight || ''}
+                        <input autoComplete="off" id="cust-measure-weight" name="weight" type="number" className="input-field" value={editForm.weight || ''}
                           onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
                           placeholder="—"
                         />
@@ -1088,7 +1088,7 @@ const Customers = () => {
               <p className="text-secondary text-sm mb-4">
                 This message will appear in the customer&apos;s mobile app inbox.
               </p>
-              <textarea
+              <textarea autoComplete="off" id="field_kztk09z" name="field_kztk09z"
                 className="input-field w-full"
                 style={{ minHeight: 120, resize: 'vertical' }}
                 placeholder="Type your message here..."
