@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import { Logger } from '../utils/Logger';
+import { getEnv } from '../utils/env';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -128,45 +129,6 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
 /**
  * Uploads a file to Cloudinary and returns the { secure_url, public_id } object.
  */
-const getEnv = (key) => {
-  if (key === 'VITE_CLOUDINARY_CLOUD_NAME') {
-    try {
-      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME) {
-        return import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-      }
-    } catch {}
-    if (typeof process !== 'undefined' && process.env?.VITE_CLOUDINARY_CLOUD_NAME) {
-      return process.env.VITE_CLOUDINARY_CLOUD_NAME;
-    }
-    return 'dlrlgp4bq';
-  }
-
-  if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') {
-    try {
-      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET) {
-        return import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-      }
-    } catch {}
-    if (typeof process !== 'undefined' && process.env?.VITE_CLOUDINARY_UPLOAD_PRESET) {
-      return process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-    }
-    return 'ml_style_items';
-  }
-
-  try {
-    const meta = new Function('return import.meta')();
-    if (meta && meta.env && meta.env[key]) {
-      return meta.env[key];
-    }
-  } catch {
-    // fallback for environments without import.meta
-  }
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  return '';
-};
-
 export const uploadToCloudinary = async (file, retries = 2) => {
   if (!file) throw new Error('No file provided');
 

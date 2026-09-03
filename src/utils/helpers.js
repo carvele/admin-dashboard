@@ -190,3 +190,13 @@ export const sanitizeForRichText = (str) => {
     ALLOWED_ATTR: [],
   });
 };
+
+/**
+ * Escapes PostgREST's ilike/like wildcard characters (% and _) in
+ * user-supplied search text before interpolating it into a pattern, so a
+ * search term can't be crafted into an expensive/unintended wildcard match.
+ */
+export const escapeLikePattern = (str) => {
+  if (!str) return '';
+  return String(str).replace(/[%_]/g, '\\$&');
+};

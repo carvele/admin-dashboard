@@ -19,6 +19,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
+import { escapeLikePattern } from '../utils/helpers';
 
 /** Normalize a raw Supabase review row into the canonical shape. */
 function normalizeRow(row, productName) {
@@ -102,7 +103,7 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
         profiles (first_name, last_name, email),
         products!inner (name)
       `, { count: 'exact' })
-      .ilike('products.name', `%${search}%`);
+      .ilike('products.name', `%${escapeLikePattern(search)}%`);
   } else {
     query = supabase
       .from('reviews')

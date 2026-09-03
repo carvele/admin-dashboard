@@ -9,6 +9,7 @@
  */
 
 import { supabase } from './supabaseClient';
+import { escapeLikePattern } from '../utils/helpers';
 
 // ── Realtime channel naming ─────────────────────────────────
 
@@ -275,7 +276,7 @@ export const getPaginatedLogs = async (page = 0, pageSize = 25, filters = {}) =>
   if (filters.targetType) q = q.eq('target_type', filters.targetType);
   if (filters.targetId) q = q.eq('target_id', String(filters.targetId));
   if (filters.userId) q = q.eq('user_id', filters.userId);
-  if (filters.actionSearch) q = q.ilike('action', `%${filters.actionSearch}%`);
+  if (filters.actionSearch) q = q.ilike('action', `%${escapeLikePattern(filters.actionSearch)}%`);
   if (filters.from) q = q.gte('timestamp', filters.from);
   if (filters.to) q = q.lte('timestamp', filters.to);
   q = q.order('timestamp', { ascending: false }).range(page * pageSize, page * pageSize + pageSize - 1);

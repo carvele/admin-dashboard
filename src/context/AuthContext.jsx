@@ -426,7 +426,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [handleDeviceCheck, clearDeviceChannel]);
 
-  const logout = React.useCallback(async () => {
+  const doSignOut = React.useCallback(async (message, toastOptions) => {
     isIntentionalSignOutRef.current = true;
     const savedFPHash = localStorage.getItem('_jz_fp_hash');
     clearDeviceChannel();
@@ -441,32 +441,21 @@ export const AuthProvider = ({ children }) => {
     localStorage.clear();
     sessionStorage.clear();
     if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
-    toast.info('Logged out successfully');
+    toast.info(message, toastOptions);
     setTimeout(() => {
       isIntentionalSignOutRef.current = false;
     }, 1000);
   }, [clearDeviceChannel]);
 
-  const handleIdleLogout = React.useCallback(async () => {
-    isIntentionalSignOutRef.current = true;
-    const savedFPHash = localStorage.getItem('_jz_fp_hash');
-    clearDeviceChannel();
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      /* ignore */
-    }
-    userRef.current = null;
-    setUser(null);
-    setDeviceStatus('checking');
-    localStorage.clear();
-    sessionStorage.clear();
-    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
-    toast.info('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 });
-    setTimeout(() => {
-      isIntentionalSignOutRef.current = false;
-    }, 1000);
-  }, [clearDeviceChannel]);
+  const logout = React.useCallback(
+    () => doSignOut('Logged out successfully'),
+    [doSignOut]
+  );
+
+  const handleIdleLogout = React.useCallback(
+    () => doSignOut('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 }),
+    [doSignOut]
+  );
 
   // Auto-logout idle timer (30 minutes of inactivity)
   useEffect(() => {
