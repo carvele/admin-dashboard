@@ -9,9 +9,9 @@
   width: 420px;
   min-width: 420px;
   /* Fixed dark gradient -- a permanently-dark brand panel by design, same
-     treatment as Sidebar.css, not a themed surface. var(--charcoal) used to
-     anchor this but flips near-white in dark mode. */
-  background: linear-gradient(160deg, var(--charcoal) 0%, #2d2522 100%);
+     treatment as Sidebar.css, not a themed surface. #1f1c18 used to
+     anchor this since var(--charcoal) flips near-white in dark mode. */
+  background: linear-gradient(160deg, #1f1c18 0%, #2d2522 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;

@@ -106,17 +106,6 @@ const Login = () => {
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <label className="label" style={{ marginBottom: 0 }} htmlFor="login-password">Password</label>
-                <Link
-                  to="/forgot-password"
-                  style={{
-                    color: 'var(--gold)',
-                    textDecoration: 'none',
-                    fontSize: '0.85rem',
-                    fontWeight: 500,
-                  }}
-                >
-                  Forgot Password?
-                </Link>
               </div>
               <div className="password-wrapper">
                 <input
