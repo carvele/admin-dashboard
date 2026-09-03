@@ -6,6 +6,7 @@ import {
   updateStaffProfile,
   updateStaffStatus,
   getStaffStatusHistory,
+  sendPasswordResetEmail,
 } from '../../services/staffService';
 import { toast } from 'sonner';
 import {
@@ -165,6 +166,7 @@ const StaffProfile = () => {
 
   // Status change modal
   const [pendingChange, setPendingChange] = useState(null); // { type, value }
+  const [resetSending, setResetSending] = useState(false);
 
   // ── Load data ────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
@@ -510,9 +512,40 @@ const StaffProfile = () => {
                   </button>
                 )}
               </div>
+              {/* 🔒 Security Actions */}
+              <div className="sp-status-block" style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
+                <div className="sp-status-label">Security Actions</div>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <button
+                    className="sp-btn-outline"
+                    disabled={resetSending}
+                    onClick={async () => {
+                      if (!window.confirm(`Send a password reset link to ${profile.email}?`)) return;
+                      try {
+                        setResetSending(true);
+                        await sendPasswordResetEmail(profile.email);
+                        toast.success(`Password reset link sent to ${profile.email}`);
+                      } catch (err) {
+                        toast.error(err.message || 'Failed to send password reset link');
+                      } finally {
+                        setResetSending(false);
+                      }
+                    }}
+                  >
+                    {resetSending ? (
+                      <><Loader size={16} className="spin" style={{ marginRight: '8px' }} /> Sending...</>
+                    ) : (
+                      <><Mail size={16} style={{ marginRight: '8px' }} /> Send Password Reset Link</>
+                    )}
+                  </button>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    Sends an email with a secure link to choose a new password.
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* ── History Timeline ── */}
+            {/* 🕒 History Timeline 🕒 */}
             <div className="sp-history-section">
               <div className="sp-history-title">
                 <Clock size={16} /> Status Change History

@@ -84,6 +84,16 @@ export const updateStaffProfile = async (id, profileData) => {
 };
 
 /**
+ * Sends a password reset email to the specified staff member.
+ */
+export const sendPasswordResetEmail = async (email) => {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/login`,
+  });
+  if (error) throw error;
+};
+
+/**
  * Update employment_status and/or is_blocked for a staff member.
  * Calls the SECURITY DEFINER RPC — this is the ONLY safe write path.
  * @param {string} targetId  - UUID of the staff member to update
