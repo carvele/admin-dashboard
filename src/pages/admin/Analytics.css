@@ -170,8 +170,12 @@
   font-size: 1.5rem;
 }
 
+.table.compact {
+  border-collapse: collapse;
+}
+
 .table.compact td, .table.compact th {
-  padding: 0.75rem 0;
+  padding: 0.75rem 0.5rem;
 }
 
 .tracking-wider {
