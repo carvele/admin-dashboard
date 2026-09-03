@@ -37,6 +37,10 @@ function normalizeRow(row, productName) {
     verifiedPurchase: row.verified_purchase || false,
     images:          row.images || null,
     productId:       row.product_id,
+    adminReply:      row.admin_reply || null,
+    isPinned:        row.is_pinned || false,
+    likes:           row.likes || 0,
+    dislikes:        row.dislikes || 0,
     ...(productName !== undefined ? { productName } : {}),
   };
 }
@@ -58,9 +62,14 @@ export const getProductReviews = async (productId) => {
       images,
       verified_purchase,
       created_at,
+      admin_reply,
+      is_pinned,
+      likes,
+      dislikes,
       profiles (first_name, last_name, email)
     `)
     .eq('product_id', productId)
+    .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -75,6 +84,20 @@ export const deleteReview = async (reviewId) => {
   const { error } = await supabase
     .from('reviews')
     .delete()
+    .eq('id', reviewId);
+
+  if (error) throw error;
+};
+
+/**
+ * Update a review's moderation fields.
+ * @param {string} reviewId 
+ * @param {Object} updates { is_pinned?, admin_reply? }
+ */
+export const updateReview = async (reviewId, updates) => {
+  const { error } = await supabase
+    .from('reviews')
+    .update(updates)
     .eq('id', reviewId);
 
   if (error) throw error;
@@ -100,6 +123,10 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
         images,
         verified_purchase,
         created_at,
+        admin_reply,
+        is_pinned,
+        likes,
+        dislikes,
         profiles (first_name, last_name, email),
         products!inner (name)
       `, { count: 'exact' })
@@ -116,6 +143,10 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
         images,
         verified_purchase,
         created_at,
+        admin_reply,
+        is_pinned,
+        likes,
+        dislikes,
         profiles (first_name, last_name, email),
         products (name)
       `, { count: 'exact' });
@@ -126,7 +157,7 @@ export const getAllReviews = async (page = 1, limit = 20, rating = null, search 
   const from = (page - 1) * limit;
   const to   = from + limit - 1;
 
-  query = query.order('created_at', { ascending: false }).range(from, to);
+  query = query.order('is_pinned', { ascending: false }).order('created_at', { ascending: false }).range(from, to);
 
   const { data, count, error } = await query;
   if (error) throw error;

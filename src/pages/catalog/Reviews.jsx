@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { getAllReviews, deleteReview } from '../../services/reviewService';
+import { getAllReviews, deleteReview, updateReview } from '../../services/reviewService';
 import { Filter } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ReviewCard from '../../components/ReviewCard';
@@ -45,6 +45,16 @@ const Reviews = () => {
       fetchReviews(); // Re-fetch current page (handles edge-case of last item on page)
     } catch {
       toast.error('Failed to delete review');
+    }
+  }, [fetchReviews]);
+
+  const handleUpdate = useCallback(async (reviewId, updates) => {
+    try {
+      await updateReview(reviewId, updates);
+      toast.success('Review updated');
+      fetchReviews();
+    } catch {
+      toast.error('Failed to update review');
     }
   }, [fetchReviews]);
 
@@ -105,6 +115,7 @@ const Reviews = () => {
                 key={review.id}
                 review={review}
                 onDelete={handleDelete}
+                onUpdate={handleUpdate}
                 showProductName
               />
             ))}
