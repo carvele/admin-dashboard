@@ -4,6 +4,20 @@
   gap: 1.25rem;
   flex: 1;
   min-height: 0;
+  /* Prevent infinite height growth so internal panes scroll */
+  height: calc(100vh - 70px - 5rem);
+}
+
+@media (max-width: 1024px) {
+  .messages-layout {
+    height: calc(100vh - 70px - 3rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .messages-layout {
+    height: calc(100vh - 70px - 2rem);
+  }
 }
 
 .messages-sidebar {
