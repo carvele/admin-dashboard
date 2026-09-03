@@ -497,40 +497,42 @@ const Settings = () => {
               </p>
 
               <div className="table-container mb-6">
-                <table className="data-table">
+                <table className="hours-table">
                   <thead>
                     <tr>
-                      <th>Day</th>
-                      <th>Status</th>
-                      <th>Open Time</th>
-                      <th>Close Time</th>
-                      <th>Slots / 30m</th>
+                      <th style={{ width: '18%' }}>Day</th>
+                      <th style={{ width: '22%' }}>Status</th>
+                      <th style={{ width: '25%' }}>Open Time</th>
+                      <th style={{ width: '25%' }}>Close Time</th>
+                      <th style={{ width: '10%' }}>Slots / 30m</th>
                     </tr>
                   </thead>
                   <tbody>
                     {weeklyHours.map((item, idx) => (
                       <tr key={item.day_of_week}>
-                        <td className="font-semibold">{item.day_name}</td>
+                        <td className="hours-day-name">{item.day_name}</td>
                         <td>
-                          <label className="toggle-switch" aria-label={`Toggle ${item.day_name} open status`}>
-                            <input
-                              type="checkbox"
-                              checked={!item.is_closed}
-                              onChange={(e) => {
-                                const val = !e.target.checked;
-                                setWeeklyHours(prev => prev.map((h, i) => i === idx ? { ...h, is_closed: val } : h));
-                              }}
-                            />
-                            <span className="toggle-slider"></span>
-                          </label>
-                          <span className={`text-xs font-semibold ml-2 ${item.is_closed ? 'text-danger' : 'text-success'}`}>
-                            {item.is_closed ? 'CLOSED' : 'OPEN'}
-                          </span>
+                          <div className="hours-status-cell">
+                            <label className="toggle-switch" aria-label={`Toggle ${item.day_name} open status`}>
+                              <input
+                                type="checkbox"
+                                checked={!item.is_closed}
+                                onChange={(e) => {
+                                  const val = !e.target.checked;
+                                  setWeeklyHours(prev => prev.map((h, i) => i === idx ? { ...h, is_closed: val } : h));
+                                }}
+                              />
+                              <span className="toggle-slider"></span>
+                            </label>
+                            <span className={`status-pill ${item.is_closed ? 'status-pill-closed' : 'status-pill-open'}`}>
+                              {item.is_closed ? 'Closed' : 'Open'}
+                            </span>
+                          </div>
                         </td>
                         <td>
                           <input
                             type="time"
-                            className="input-field small"
+                            className="hours-time-input"
                             disabled={item.is_closed}
                             value={item.open_time ? item.open_time.slice(0, 5) : '09:00'}
                             onChange={(e) => {
@@ -542,7 +544,7 @@ const Settings = () => {
                         <td>
                           <input
                             type="time"
-                            className="input-field small"
+                            className="hours-time-input"
                             disabled={item.is_closed}
                             value={item.close_time ? item.close_time.slice(0, 5) : '18:00'}
                             onChange={(e) => {
@@ -554,7 +556,7 @@ const Settings = () => {
                         <td>
                           <input
                             type="number"
-                            className="input-field small w-20"
+                            className="hours-slot-input"
                             min="1"
                             max="20"
                             disabled={item.is_closed}
@@ -571,27 +573,29 @@ const Settings = () => {
                 </table>
               </div>
 
-              <button
-                type="button"
-                className="btn-primary mb-8"
-                onClick={handleSaveWeeklyHours}
-                disabled={isLoading}
-              >
-                <Save size={16} /> Save Weekly Hours
-              </button>
+              <div className="hours-action-bar">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleSaveWeeklyHours}
+                  disabled={isLoading}
+                >
+                  <Save size={16} /> Save Weekly Hours
+                </button>
+              </div>
 
-              <hr className="my-6 border-border" />
+              <hr className="my-8 border-border" />
 
               <div className="section-header-icon">
                 <Calendar size={18} className="text-secondary" />
                 <h3 className="section-title mb-0">Shop Closures & Holidays</h3>
               </div>
-              <p className="text-secondary text-sm mb-4">
+              <p className="text-secondary text-sm mb-6">
                 Close the boutique for a specific holiday or date (e.g. Christmas Day or staff event). This immediately blocks mobile appointments on that date.
               </p>
 
               <div
-                className="flex gap-3 align-center mb-6 max-w-xl"
+                className="closures-form-card"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -599,37 +603,49 @@ const Settings = () => {
                   }
                 }}
               >
-                <input
-                  type="date"
-                  className="input-field flex-1"
-                  value={newClosure.date}
-                  onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })}
-                  required
-                />
-                <input
-                  type="text"
-                  className="input-field flex-1"
-                  placeholder="Reason (e.g. Christmas Day)"
-                  value={newClosure.reason}
-                  onChange={(e) => setNewClosure({ ...newClosure, reason: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleAddClosure}
-                  disabled={isLoading}
-                >
-                  <Plus size={16} /> Add Closure
-                </button>
+                <div className="closures-form-grid">
+                  <div className="form-group mb-0">
+                    <label className="label" htmlFor="closure-date">Closure Date</label>
+                    <input
+                      id="closure-date"
+                      type="date"
+                      className="input-field"
+                      value={newClosure.date}
+                      onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group mb-0">
+                    <label className="label" htmlFor="closure-reason">Reason or Occasion</label>
+                    <input
+                      id="closure-reason"
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Christmas Day, Staff Retreat, Boutique Renovation"
+                      value={newClosure.reason}
+                      onChange={(e) => setNewClosure({ ...newClosure, reason: e.target.value })}
+                    />
+                  </div>
+                  <div className="closures-btn-col">
+                    <button
+                      type="button"
+                      className="btn-primary w-full"
+                      onClick={handleAddClosure}
+                      disabled={isLoading}
+                    >
+                      <Plus size={16} /> Add Closure
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="table-container max-w-xl">
-                <table className="data-table">
+              <div className="table-container mt-4 mb-4">
+                <table className="closures-table">
                   <thead>
                     <tr>
-                      <th>Closure Date</th>
-                      <th>Reason</th>
-                      <th>Action</th>
+                      <th style={{ width: '25%' }}>Closure Date</th>
+                      <th style={{ width: '55%' }}>Reason</th>
+                      <th style={{ width: '20%', textAlign: 'right' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -637,7 +653,7 @@ const Settings = () => {
                       <tr key={c.id}>
                         <td className="font-mono font-semibold">{c.closure_date}</td>
                         <td>{c.reason || 'Closed'}</td>
-                        <td>
+                        <td style={{ textAlign: 'right' }}>
                           <button
                             type="button"
                             className="btn-outline small text-danger"
@@ -651,8 +667,8 @@ const Settings = () => {
                     ))}
                     {closures.length === 0 && (
                       <tr>
-                        <td colSpan="3" className="text-center text-secondary py-4">
-                          No special closures set
+                        <td colSpan="3" className="text-center text-secondary py-6">
+                          No special closures configured yet.
                         </td>
                       </tr>
                     )}
