@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 /* eslint-disable jsx-a11y/no-static-element-interactions */
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import debounce from 'lodash.debounce';
 import {
@@ -13,8 +13,6 @@ import {
   ExternalLink,
   ShieldCheck,
   Lock,
-  Unlock,
-  ShieldAlert,
 } from 'lucide-react';
 import { subscribeToWardrobeItems } from '../../services/wardrobeService';
 import { subscribeToCustomers } from '../../services/customerService';
@@ -34,8 +32,8 @@ const DigitalWardrobe = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  const debouncedSearch = useCallback(
-    debounce((val) => setSearchTerm(val), 300),
+  const debouncedSearch = React.useMemo(
+    () => debounce((val) => setSearchTerm(val), 300),
     []
   );
 
