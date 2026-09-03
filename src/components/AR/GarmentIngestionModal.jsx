@@ -293,6 +293,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                 {/* 3D Preview */}
                 <div className="flex-1 bg-gray-100 rounded-lg relative overflow-hidden">
                   <model-viewer
+                    key={glbUrl}
                     src={glbUrl}
                     auto-rotate
                     camera-controls

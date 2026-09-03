@@ -703,6 +703,7 @@ const ARAssets = () => {
             <div className="modal-body" style={{ height: '60vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-card)', borderRadius: '8px', position: 'relative' }}>
               {previewAssetUrl.toLowerCase().endsWith('.glb') || previewAssetUrl.toLowerCase().endsWith('.gltf') ? (
                 <model-viewer
+                  key={previewAssetUrl}
                   src={previewAssetUrl}
                   auto-rotate
                   camera-controls
