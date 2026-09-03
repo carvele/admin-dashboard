@@ -10,6 +10,7 @@ import {
   sanitizeForDisplay,
 } from '../utils/helpers';
 import { subscribeToCollection, updateDocument } from '../lib/supabaseService';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import './TopNav.css';
 import { User } from '../types';
 
@@ -128,12 +129,15 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Activate global realtime sync for sounds and alerts
+  useRealtimeSync();
+
   // ── Subscribe to notifications (Limited to 20 recent) ──
   // Handles both web-created docs (createdAt: Timestamp) and
   // Android-created docs (timestamp: epoch-ms long).
   useEffect(() => {
     const unsub = subscribeToCollection(
-      'notifications',
+      'admin_notifications',
       (data: any[]) => {
         // Sort by ISO createdAt string descending
         const sorted = [...data].sort((a, b) => {
@@ -175,7 +179,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     try {
       const unread = notifications.filter((n) => !n.isRead);
       for (const n of unread) {
-        await updateDocument('notifications', n.docId, { isRead: true });
+        await updateDocument('admin_notifications', n.docId, { isRead: true });
       }
     } catch (err) {
       console.error('Failed to mark notifications as read:', err);
