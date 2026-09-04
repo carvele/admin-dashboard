@@ -18,8 +18,10 @@ import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, Chevr
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { subscribeToCollection } from '../../lib/supabaseService';
+import { subscribeToInventory } from '../../services/productService';
 import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
 import { countsAsRevenue } from '../../utils/reservationStatus';
+import { getStockBreakdown } from '../../utils/stockStatus';
 import PageHeader from '../../components/PageHeader';
 import './Analytics.css';
 
@@ -46,18 +48,26 @@ const Analytics = () => {
   const [reservations, setReservations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [arLogs, setArLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [poseGuides, setPoseGuides] = useState([]);
   
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
+  const getLocalDateString = (date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    return getLocalDateString(d);
   });
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(getLocalDateString(new Date()));
   
   const [showPreferences, setShowPreferences] = useState(false);
   const [exportRef, setExportRef] = useState(false);
@@ -88,26 +98,75 @@ const Analytics = () => {
   const handleTogglePref = (key) => {
     setWidgetPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-
+  // Static/Dimension Data
   useEffect(() => {
-    const unsubR = subscribeToCollection('reservations', setReservations, {}, true);
-    const unsubC = subscribeToCollection('profiles', (data) => {
-      setCustomers(data.filter((u) => !u.role || u.role === 'customer'));
-    });
-    const unsubCat = subscribeToCollection('products', setCatalog, {}, true);
-    const unsubAR = subscribeToCollection('ar_sessions', setArLogs);
-    const unsubFeed = subscribeToCollection('feedback', setFeedback, {}, true);
-    const unsubPoses = subscribeToCollection('pose_guides', setPoseGuides);
+    let isMounted = true;
+    const loadStaticData = async () => {
+      try {
+        const { getCustomers } = await import('../../services/customerService');
+        const { getProducts, getInventory } = await import('../../services/productService');
+        const { getCollection } = await import('../../lib/supabaseService');
 
-    return () => {
-      unsubR();
-      unsubC();
-      unsubCat();
-      unsubAR();
-      unsubFeed();
-      unsubPoses();
+        const [c, p, i, pg] = await Promise.all([
+          getCustomers(),
+          getProducts(true),
+          getInventory(),
+          getCollection('pose_guides')
+        ]);
+        
+        if (!isMounted) return;
+        setCustomers(c || []);
+        setCatalog(p || []);
+        setInventory(i || []);
+        setPoseGuides(pg || []);
+      } catch (err) {
+        console.error('Failed to load static analytics data:', err);
+      }
     };
+    loadStaticData();
+    return () => { isMounted = false; };
   }, []);
+
+  // Time-Series Data (Date Bounded)
+  useEffect(() => {
+    let isMounted = true;
+    const loadTimeSeriesData = async () => {
+      try {
+        // Parse the dates into local midnight and 23:59:59 exactly as we do for filtering
+        const [sYear, sMonth, sDay] = startDate.split('-').map(Number);
+        const [eYear, eMonth, eDay] = endDate.split('-').map(Number);
+        const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0).toISOString();
+        const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999).toISOString();
+
+        const { getPaginatedReservations } = await import('../../services/reservationService');
+        const { supabase } = await import('../../lib/supabaseClient');
+        const { toCamel } = await import('../../lib/supabaseService');
+
+        // Fetch explicitly bounded historical data
+        // For reservations, we use the custom pagination helper (we'll fetch up to max 10k for the range)
+        // Note: For true scalability, this should be replaced by an RPC aggregation.
+        const [resResult, arResult, feedbackResult] = await Promise.all([
+          getPaginatedReservations(10000, 0, { created_at: ['in', [s, e]] }), // Pseudo-filter, better to use native querying
+          supabase.from('ar_sessions').select('*').gte('created_at', s).lte('created_at', e).limit(10000),
+          supabase.from('feedback').select('*').gte('created_at', s).lte('created_at', e).limit(10000)
+        ]);
+
+        if (!isMounted) return;
+        
+        // Since getPaginatedReservations doesn't support range filters out of the box nicely, 
+        // let's do a direct Supabase fetch for reservations too to ensure it scales correctly.
+        const resQuery = await supabase.from('reservations').select('*').gte('created_at', s).lte('created_at', e).limit(10000);
+        
+        setReservations((resQuery.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setArLogs((arResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setFeedback((feedbackResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
+      } catch (err) {
+        console.error('Failed to load time-series analytics data:', err);
+      }
+    };
+    loadTimeSeriesData();
+    return () => { isMounted = false; };
+  }, [startDate, endDate]);
 
   const handleDatePresetChange = (preset) => {
     setDateRange(preset);
@@ -119,8 +178,8 @@ const Analytics = () => {
     else if (preset === 'quarter') start.setMonth(now.getMonth() - 3);
     else if (preset === 'ytd') start = new Date(now.getFullYear(), 0, 1);
     
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(now.toISOString().split('T')[0]);
+    setStartDate(getLocalDateString(start));
+    setEndDate(getLocalDateString(now));
   };
 
   const parseResDate = useCallback((item, overrideField = null) => {
@@ -135,9 +194,14 @@ const Analytics = () => {
   const isInRange = useCallback((date) => {
     if (!date) return false;
     const d = new Date(date);
-    const s = new Date(startDate);
-    const e = new Date(endDate);
-    e.setHours(23, 59, 59, 999);
+    
+    // Parse YYYY-MM-DD into local midnight and 23:59:59
+    const [sYear, sMonth, sDay] = startDate.split('-').map(Number);
+    const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+    
+    const [eYear, eMonth, eDay] = endDate.split('-').map(Number);
+    const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+    
     return d >= s && d <= e;
   }, [startDate, endDate]);
 
@@ -167,10 +231,12 @@ const Analytics = () => {
     list.forEach((r) => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-      if (item) {
+      
+      const paid = r.rentalPrice ?? r.price ?? r.totalAmount ?? r.rentalFee;
+      if (paid !== undefined && paid !== null) {
+        rev += Number(paid) || 0;
+      } else if (item) {
         rev += Number(item.price) || 0;
-      } else {
-        rev += Number(r.price) || Number(r.totalAmount) || Number(r.rentalFee) || Number(r.rentalPrice) || 0;
       }
     });
     return { totalRev: rev, earnedReservations: list };
@@ -207,8 +273,9 @@ const Analytics = () => {
       const outfitName = r.productName || r.outfit;
       const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
       const cat = item?.category || 'Uncategorized';
-      const val = r.price || r.totalAmount || r.rentalFee || item?.price || 0;
-      categoryRev[cat] = (categoryRev[cat] || 0) + val;
+      const paid = r.rentalPrice ?? r.price ?? r.totalAmount ?? r.rentalFee;
+      const val = (paid !== undefined && paid !== null) ? Number(paid) : (Number(item?.price) || 0);
+      categoryRev[cat] = (categoryRev[cat] || 0) + Number(val) || 0;
     });
 
     return Object.entries(categoryRev)
@@ -237,9 +304,18 @@ const Analytics = () => {
   }, [feedback]);
 
   // Inventory Health - Active items only
-  const activeCatalog = catalog.filter(p => p.deleted !== true);
-  const inStock = activeCatalog.filter(p => (p.stock || 0) > 0).length;
-  const outOfStock = activeCatalog.filter(p => (p.stock || 0) <= 0).length;
+  const activeCatalog = useMemo(() => catalog.filter((p) => !p.deleted), [catalog]);
+  const activeInventory = useMemo(() => inventory.filter((i) => !i.deleted), [inventory]);
+  const { inStock, outOfStock } = useMemo(() => {
+    let inCount = 0;
+    let outCount = 0;
+    activeInventory.forEach((i) => {
+      const breakdown = getStockBreakdown(i);
+      if (breakdown.available > 0) inCount++;
+      else outCount++;
+    });
+    return { inStock: inCount, outOfStock: outCount };
+  }, [activeInventory]);
 
   // Build dynamic trends from actual reservation data
   const buildTrends = () => {
