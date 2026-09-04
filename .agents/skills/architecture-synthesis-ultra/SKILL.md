@@ -32,13 +32,13 @@ Analyze the accumulated findings for the following patterns:
 * **Systemic Evidence Blockers:** What verification tools are we consistently missing (e.g., ADB profiling)?
 
 ### 3. Generate the Architecture Synthesis Report
-Produce a structured markdown report (docs/audits/SYSTEM-SYNTHESIS.md) with the following format:
+Produce a structured markdown artifact summarizing your findings. Do not automatically modify repository architecture/code or create remediation tasks. Your output should purely be the synthesis report:
 
 **1. Executive Summary:** (High-level assessment of the platform's architectural health)
-**2. Systemic Anti-Patterns:** (Detailed breakdown of recurring issues, citing the specific [FINDING-IDs] that prove the pattern)
+**2. Systemic Anti-Patterns:** (Detailed breakdown of recurring issues, citing the specific `[FINDING-IDs]` that prove the pattern)
 **3. Domain-Model Drift:** (Where the backend and frontend are fundamentally disagreeing)
 **4. Strategic Recommendations:** (Major refactors or infrastructure changes required to eliminate entire classes of findings)
 **5. Tooling Gaps:** (What evidence blockers are preventing thorough verification?)
 
 ## 📋 The Golden Rule
-Do not invent systemic problems. Every architectural claim MUST be backed by citing at least one (preferably multiple) [IMMUTABLE_ID] from the historical audit ledgers.
+Do not invent systemic problems. **A systemic pattern requires corroboration across multiple independent findings unless a single finding demonstrates a platform-wide architectural violation by itself.** Every architectural claim MUST be backed by citing at least one (preferably multiple) `[IMMUTABLE_ID]` from the historical audit ledgers.
