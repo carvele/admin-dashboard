@@ -637,37 +637,42 @@ const ProductForm = ({ readOnly = false }) => {
 
         const newDocId = await createProduct(payload);
 
-        Logger.info(`Initializing inventory variants for new product ${newDocId}...`);
-        if (variantColumnsReady && selectedVariants.size > 0) {
-          // Variant-aware path: create one row per selected (size, color) combo
-          const toCreate = variantMatrix.filter((cell) => selectedVariants.has(cell.key));
-          for (const cell of toCreate) {
-            await createVariant(newDocId, {
-              size: cell.size,
-              color: cell.color,
-              pattern: '',
-              item: payload.name,
-              category: payload.category,
-              sku: payload.styleCode,
-              // price: payload.price, // PGRST204 fix: price column does not exist on inventory
-            });
+        try {
+          Logger.info(`Initializing inventory variants for new product ${newDocId}...`);
+          if (variantColumnsReady && selectedVariants.size > 0) {
+            // Variant-aware path: create one row per selected (size, color) combo
+            const toCreate = variantMatrix.filter((cell) => selectedVariants.has(cell.key));
+            for (const cell of toCreate) {
+              await createVariant(newDocId, {
+                size: cell.size,
+                color: cell.color,
+                pattern: '',
+                item: payload.name,
+                category: payload.category,
+                sku: payload.styleCode,
+              });
+            }
+            await syncProductAttributesFromVariants(newDocId);
+          } else {
+            // Legacy fallback: one row per size, no colour/pattern
+            const inventoryPromises = payload.sizes.map((size) =>
+              createInventoryItem({
+                productDocId: newDocId,
+                sku: payload.id || payload.styleCode,
+                item: payload.name,
+                category: payload.category,
+                size: size,
+                total: 0,
+                reserved: 0,
+                available: 0,
+              }),
+            );
+            await Promise.all(inventoryPromises);
           }
-          await syncProductAttributesFromVariants(newDocId);
-        } else {
-          // Legacy fallback: one row per size, no colour/pattern
-          const inventoryPromises = payload.sizes.map((size) =>
-            createInventoryItem({
-              productDocId: newDocId,
-              sku: payload.id || payload.styleCode,
-              item: payload.name,
-              category: payload.category,
-              size: size,
-              total: 0,
-              reserved: 0,
-              available: 0,
-            }),
-          );
-          await Promise.all(inventoryPromises);
+        } catch (variantErr) {
+          Logger.error('Variant creation failed, rolling back product', variantErr);
+          await supabase.from('products').delete().eq('id', newDocId);
+          throw new Error('Failed to create product variants. The product creation was rolled back.');
         }
 
         await logAction(user, 'Created new product', {

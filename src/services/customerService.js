@@ -71,6 +71,7 @@ export const getPaginatedCustomers = async (pageSize, page = 0, filters = {}, in
     data: (data ?? []).map((r) => ({ ...toCamel(r), docId: r.id })),
     hasMore: (from + (data?.length ?? 0)) < (count ?? 0),
     nextPage: page + 1,
+    total: count ?? 0,
   };
 };
 
@@ -297,7 +298,8 @@ export const sendNotification = async (customerId, customerName, messageText, st
         customer_id: customerId,
         last_message: messageText,
         last_message_time: now,
-        unread_count: 1,
+        unread_customer: 1,
+        unread_staff: 0,
         created_at: now,
         updated_at: now,
       })
@@ -310,7 +312,6 @@ export const sendNotification = async (customerId, customerName, messageText, st
     await supabase.from('conversations').update({
       last_message: messageText,
       last_message_time: now,
-      unread_count: supabase.rpc ? undefined : 0, // increment handled server-side ideally
       updated_at: now,
     }).eq('id', conversationId);
   }

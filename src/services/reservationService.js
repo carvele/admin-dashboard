@@ -20,7 +20,6 @@ import {
   toCamel,
 } from '../lib/supabaseService';
 
-import { holdsStock } from '../utils/reservationStatus';
 import { recalculateAllInventoryStock } from './productService';
 
 // ── Helpers ─────────────────────────────────────────────────

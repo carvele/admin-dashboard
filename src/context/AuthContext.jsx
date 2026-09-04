@@ -155,6 +155,127 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
+
+      // --- 4. Staff / Admin / Owner role lookup from public.profiles ---
+      let resolvedRole = null;
+      let staffName = '';
+      let profile = null;
+      let profileFetchAttempt = 0;
+
+      // Retry up to 3 times to prevent kicking out valid users during transient wake/network lag
+      while (profileFetchAttempt < 3 && !profile) {
+        profileFetchAttempt++;
+        try {
+          const { data, error: profileErr } = await withTimeout(
+            supabase
+              .from('profiles')
+              // Fetch the full status fields — we decide access, not the query filter
+              .select('role, first_name, last_name, deleted, is_blocked, employment_status')
+              .eq('id', supabaseUser.id)
+              .maybeSingle(),
+            5000,
+          );
+
+          if (profileErr) {
+            console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile fetch error:`, profileErr.message);
+          } else {
+            profile = data;
+            break;
+          }
+        } catch (err) {
+          console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile lookup timed out or failed:`, err);
+        }
+
+        if (profileFetchAttempt < 3 && !profile) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * profileFetchAttempt));
+        }
+      }
+
+      if (profile) {
+        // ── Lockout guard ──────────────────────────────────────
+        // DENY-LIST logic: only block on explicit bad states.
+        // Synchronized with DB is_staff_or_admin(): only NULL and 'active' are allowed.
+        const isActive = !profile.employment_status || profile.employment_status === 'active';
+        if (
+          profile.deleted === true ||
+          profile.is_blocked === true ||
+          !isActive
+        ) {
+          isIntentionalSignOutRef.current = true;
+          await supabase.auth.signOut();
+          setUser(null);
+          setIsLoading(false);
+          toast.error(
+            'This account no longer has access. Please contact the store owner.',
+            { duration: 6000 },
+          );
+          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+          return;
+        }
+
+        resolvedRole = profile.role;
+        staffName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+      }
+
+      // Customer accounts attempting web dashboard access
+      if (resolvedRole === 'customer') {
+        isIntentionalSignOutRef.current = true;
+        await supabase.auth.signOut();
+        toast.error('Access restricted: This portal is for store staff and administrators only. Customer accounts must use the mobile application.', { duration: 6000 });
+        setUser(null);
+        setIsLoading(false);
+        setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+        return;
+      }
+
+      // If no profile was resolved after retries:
+      if (!resolvedRole) {
+        // Pending invite: the invite-email link already established a session for
+        // this user, but they haven't finished Set Password yet (no staff profile
+        // row). Leave the session alone so SetPassword.jsx can use it — rather
+        // than signing them out before they ever reach that page. Detected via
+        // app_metadata.staff_role, which is service-role-only and unforgeable.
+        const isPendingInvite = ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
+        if (isPendingInvite) {
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // If user already had a confirmed active session and this is just a background network blip, do not kick them out
+        if (userRef.current && userRef.current.uid === supabaseUser.id) {
+          console.warn('[handleDeviceCheck] Transient network blip during session refresh; retaining active session.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!isIntentionalSignOutRef.current) {
+          isIntentionalSignOutRef.current = true;
+          await supabase.auth.signOut();
+          toast.error('Access restricted: No staff profile found for this account.');
+          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+        }
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+
+      // --- 5. Set user state ---
+      const nextUser = {
+        uid: supabaseUser.id,
+        name: staffName || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Staff',
+        email: supabaseUser.email,
+        role: resolvedRole,
+      };
+      userRef.current = nextUser;
+      setUser(nextUser);
+
+      setIsLoading(false); // Unblock rendering immediately!
+
+      // --- Asynchronous Device Fingerprinting & Registration ---
+      (async () => {
+        try {
       // --- 1. Fingerprint ---
       // Device fingerprints are hashed before storing — cannot be reversed.
       // The plaintext fingerprint is only held in memory for the current session.
@@ -280,119 +401,11 @@ export const AuthProvider = ({ children }) => {
         setDeviceStatus('pending');
       }
 
-      // --- 4. Staff / Admin / Owner role lookup from public.profiles ---
-      let resolvedRole = null;
-      let staffName = '';
-      let profile = null;
-      let profileFetchAttempt = 0;
-
-      // Retry up to 3 times to prevent kicking out valid users during transient wake/network lag
-      while (profileFetchAttempt < 3 && !profile) {
-        profileFetchAttempt++;
-        try {
-          const { data, error: profileErr } = await withTimeout(
-            supabase
-              .from('profiles')
-              // Fetch the full status fields — we decide access, not the query filter
-              .select('role, first_name, last_name, deleted, is_blocked, employment_status')
-              .eq('id', supabaseUser.id)
-              .maybeSingle(),
-            5000,
-          );
-
-          if (profileErr) {
-            console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile fetch error:`, profileErr.message);
-          } else {
-            profile = data;
-            break;
-          }
-        } catch (err) {
-          console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile lookup timed out or failed:`, err);
+        } catch (asyncErr) {
+          console.error('Async device check failed:', asyncErr);
+          setDeviceStatus('error');
         }
-
-        if (profileFetchAttempt < 3 && !profile) {
-          await new Promise((resolve) => setTimeout(resolve, 500 * profileFetchAttempt));
-        }
-      }
-
-      if (profile) {
-        // ── Lockout guard ──────────────────────────────────────
-        // DENY-LIST logic: only block on explicit bad states.
-        // NULL / 'active' / 'on_leave' / 'resigned' employment_status
-        // are all ALLOWED — only 'terminated' is denied.
-        if (
-          profile.deleted === true ||
-          profile.is_blocked === true ||
-          profile.employment_status === 'terminated'
-        ) {
-          isIntentionalSignOutRef.current = true;
-          await supabase.auth.signOut();
-          setUser(null);
-          setIsLoading(false);
-          toast.error(
-            'This account no longer has access. Please contact the store owner.',
-            { duration: 6000 },
-          );
-          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
-          return;
-        }
-
-        resolvedRole = profile.role;
-        staffName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
-      }
-
-      // Customer accounts attempting web dashboard access
-      if (resolvedRole === 'customer') {
-        isIntentionalSignOutRef.current = true;
-        await supabase.auth.signOut();
-        toast.error('Access restricted: This portal is for store staff and administrators only. Customer accounts must use the mobile application.', { duration: 6000 });
-        setUser(null);
-        setIsLoading(false);
-        setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
-        return;
-      }
-
-      // If no profile was resolved after retries:
-      if (!resolvedRole) {
-        // Pending invite: the invite-email link already established a session for
-        // this user, but they haven't finished Set Password yet (no staff profile
-        // row). Leave the session alone so SetPassword.jsx can use it — rather
-        // than signing them out before they ever reach that page. Detected via
-        // app_metadata.staff_role, which is service-role-only and unforgeable.
-        const isPendingInvite = ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
-        if (isPendingInvite) {
-          setUser(null);
-          setIsLoading(false);
-          return;
-        }
-
-        // If user already had a confirmed active session and this is just a background network blip, do not kick them out
-        if (userRef.current && userRef.current.uid === supabaseUser.id) {
-          console.warn('[handleDeviceCheck] Transient network blip during session refresh; retaining active session.');
-          setIsLoading(false);
-          return;
-        }
-
-        if (!isIntentionalSignOutRef.current) {
-          isIntentionalSignOutRef.current = true;
-          await supabase.auth.signOut();
-          toast.error('Access restricted: No staff profile found for this account.');
-          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
-        }
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // --- 5. Set user state ---
-      const nextUser = {
-        uid: supabaseUser.id,
-        name: staffName || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Staff',
-        email: supabaseUser.email,
-        role: resolvedRole,
-      };
-      userRef.current = nextUser;
-      setUser(nextUser);
+      })();
     } catch (err) {
       console.error('Auth check failed:', err);
       setDeviceStatus('error');
@@ -546,12 +559,13 @@ export const AuthProvider = ({ children }) => {
 
       // !profile (row not found) is treated as fail-open: transient RLS/network
       // issues must not sign out a valid user. Only explicit bad flags trigger lockout.
+      const isActive = !profile?.employment_status || profile.employment_status === 'active';
       if (
         profile &&
         (
           profile.deleted === true ||
           profile.is_blocked === true ||
-          profile.employment_status === 'terminated'
+          !isActive
         )
       ) {
         clearDeviceChannel();

@@ -17,11 +17,8 @@ import {
 import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { subscribeToCollection } from '../../lib/supabaseService';
-import { subscribeToInventory } from '../../services/productService';
 import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
 import { countsAsRevenue } from '../../utils/reservationStatus';
-import { getStockBreakdown } from '../../utils/stockStatus';
 import PageHeader from '../../components/PageHeader';
 import './Analytics.css';
 
@@ -138,25 +135,21 @@ const Analytics = () => {
         const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0).toISOString();
         const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999).toISOString();
 
-        const { getPaginatedReservations } = await import('../../services/reservationService');
         const { supabase } = await import('../../lib/supabaseClient');
         const { toCamel } = await import('../../lib/supabaseService');
 
-        // Fetch explicitly bounded historical data
-        // For reservations, we use the custom pagination helper (we'll fetch up to max 10k for the range)
-        // Note: For true scalability, this should be replaced by an RPC aggregation.
-        const [resResult, arResult, feedbackResult] = await Promise.all([
-          getPaginatedReservations(10000, 0, { created_at: ['in', [s, e]] }), // Pseudo-filter, better to use native querying
+        // Fetch explicitly bounded historical data.
+        // Reservations use a direct range-filtered query rather than
+        // getPaginatedReservations, which doesn't support range filters natively.
+        const [resQuery, arResult, feedbackResult] = await Promise.all([
+          supabase.from('reservations').select('*').gte('created_at', s).lte('created_at', e).limit(10000),
           supabase.from('ar_sessions').select('*').gte('created_at', s).lte('created_at', e).limit(10000),
           supabase.from('feedback').select('*').gte('created_at', s).lte('created_at', e).limit(10000)
         ]);
 
         if (!isMounted) return;
-        
-        // Since getPaginatedReservations doesn't support range filters out of the box nicely, 
-        // let's do a direct Supabase fetch for reservations too to ensure it scales correctly.
-        const resQuery = await supabase.from('reservations').select('*').gte('created_at', s).lte('created_at', e).limit(10000);
-        
+
+
         setReservations((resQuery.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
         setArLogs((arResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
         setFeedback((feedbackResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
@@ -310,8 +303,7 @@ const Analytics = () => {
     let inCount = 0;
     let outCount = 0;
     activeInventory.forEach((i) => {
-      const breakdown = getStockBreakdown(i);
-      if (breakdown.available > 0) inCount++;
+      if ((i.available || 0) > 0) inCount++;
       else outCount++;
     });
     return { inStock: inCount, outOfStock: outCount };

@@ -260,7 +260,8 @@ const Customers = () => {
   const startEdit = () => {
     const m = custMeasurements?.measurements || {};
     setEditForm({
-      name: getUserDisplayName(selectedCustomer),
+      firstName: selectedCustomer.firstName || selectedCustomer.first_name || '',
+      lastName: selectedCustomer.lastName || selectedCustomer.last_name || '',
       email: selectedCustomer.email,
       phone: selectedCustomer.phone,
       status: selectedCustomer.isBlocked ? 'Inactive' : 'Active',
@@ -283,10 +284,9 @@ const Customers = () => {
   const handleEditSave = async () => {
     const toNum = (v) => (v === '' || v === null || v === undefined ? null : parseFloat(v));
 
-    // Split the single display name back into first/last (last token = surname).
-    const nameParts = (editForm.name || '').trim().split(/\s+/).filter(Boolean);
-    const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : (nameParts[0] || '');
-    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+    const firstName = (editForm.firstName || '').trim();
+    const lastName = (editForm.lastName || '').trim();
+    const fullName = `${firstName} ${lastName}`.trim();
 
     // Real `profiles` columns only. Status maps to the is_blocked flag
     // (Active = not blocked, Inactive = blocked) — there is no status column.
@@ -321,8 +321,10 @@ const Customers = () => {
 
       // Audit: record which profile fields actually changed (from → to)
       const changes = {};
-      const beforeName = getUserDisplayName(selectedCustomer);
-      if (editForm.name !== beforeName) changes.name = { from: beforeName ?? null, to: editForm.name };
+      const beforeFirst = selectedCustomer.firstName || selectedCustomer.first_name || '';
+      const beforeLast = selectedCustomer.lastName || selectedCustomer.last_name || '';
+      if (firstName !== beforeFirst) changes.firstName = { from: beforeFirst, to: firstName };
+      if (lastName !== beforeLast) changes.lastName = { from: beforeLast, to: lastName };
       ['email', 'phone'].forEach((f) => {
         if (profileUpdates[f] !== undefined && profileUpdates[f] !== selectedCustomer[f]) {
           changes[f] = { from: selectedCustomer[f] ?? null, to: profileUpdates[f] };
@@ -335,7 +337,7 @@ const Customers = () => {
       await logAction(user, 'Updated customer profile', {
         targetType: 'profile',
         targetId: selectedCustomer.docId,
-        customerName: editForm.name,
+        customerName: fullName,
         changes,
       });
 
@@ -345,7 +347,7 @@ const Customers = () => {
       setCustMeasurements({ ...(custMeasurements || {}), height, weight, measurements });
       setCustomers((prev) => prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...patched } : c)));
       setIsEditing(false);
-      toast.success(`Updated ${editForm.name}`);
+      toast.success(`Updated ${fullName}`);
     } catch (e) {
       toast.error('Failed to update customer: ' + (e?.message || 'unknown error'));
     }
@@ -739,9 +741,17 @@ const Customers = () => {
                   <>
                     <input autoComplete="off" id="field_jtcus83" name="field_jtcus83"
                       type="text"
+                      placeholder="First Name"
                       className="input-field mt-3"
-                      value={editForm.name}
-                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      value={editForm.firstName}
+                      onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                    />
+                    <input autoComplete="off" id="field_jtcus84" name="field_jtcus84"
+                      type="text"
+                      placeholder="Last Name"
+                      className="input-field mt-2"
+                      value={editForm.lastName}
+                      onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
                     />
                     <select autoComplete="off" id="field_3rsf05m" name="field_3rsf05m"
                       className="input-field mt-2"

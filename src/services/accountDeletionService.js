@@ -61,9 +61,9 @@ export const getBlockingObligations = async (userId) => {
   const [{ data: reservations, error: resErr }, { data: payments, error: payErr }] = await Promise.all([
     supabase
       .from('reservations')
-      .select('id, display_id, status')
+      .select('id, display_id, status, payment_status, payment_type, rental_price, deposit, balance_settled_at')
       .eq('customer_id', userId)
-      .not('status', 'in', '("Completed","Cancelled")'),
+      .eq('deleted', false),
     supabase
       .from('payments')
       .select('id, status')
@@ -74,8 +74,21 @@ export const getBlockingObligations = async (userId) => {
   if (resErr) throw resErr;
   if (payErr) throw payErr;
 
+  const blockingReservations = (reservations || []).filter((r) => {
+    if (r.status?.toLowerCase() === 'cancelled') return false;
+    if (r.balance_settled_at) return false;
+    const paymentStatus = (r.payment_status || '').toLowerCase();
+    const paymentType = (r.payment_type || '').toLowerCase();
+    const rentalPrice = Number(r.rental_price || 0);
+    const deposit = Number(r.deposit || 0);
+
+    if (paymentStatus !== 'paid') return true;
+    if (paymentType === 'deposit' && rentalPrice > deposit) return true;
+    return false;
+  });
+
   return {
-    reservations: reservations || [],
+    reservations: blockingReservations,
     payments: payments || [],
   };
 };

@@ -37,7 +37,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 // @ts-ignore
-import { getReservations, autoCancelExpiredReservations, getPaginatedReservations } from '../../services/reservationService';
+import { getPaginatedReservations } from '../../services/reservationService';
 // @ts-ignore
 import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
 
@@ -56,7 +56,7 @@ const defaultPreferences = {
 };
 
 // @ts-ignore
-import { getCustomers, getPaginatedCustomers } from '../../services/customerService';
+import { getPaginatedCustomers } from '../../services/customerService';
 // @ts-ignore
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore

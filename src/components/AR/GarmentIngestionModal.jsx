@@ -52,7 +52,19 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
         
         // Merge with existing metadata to prevent resetting manual configurations (e.g. restPoseMetricWidth)
         if (existingMetadata) {
-          md = { ...md, ...existingMetadata, ingestionStatus: existingMetadata.ingestionStatus || md.ingestionStatus };
+          const toCamelCase = (s) => s.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+          const normalizedExisting = {};
+          for (const [key, value] of Object.entries(existingMetadata)) {
+            normalizedExisting[toCamelCase(key)] = value;
+          }
+          if (normalizedExisting.boneMap) {
+            const canonicalBoneMap = {};
+            for (const [glbBone, canonical] of Object.entries(normalizedExisting.boneMap)) {
+              if (canonical) canonicalBoneMap[canonical] = glbBone;
+            }
+            normalizedExisting.boneMap = canonicalBoneMap;
+          }
+          md = { ...md, ...normalizedExisting, ingestionStatus: normalizedExisting.ingestionStatus || md.ingestionStatus };
         }
 
         setMetadata(md);
@@ -122,10 +134,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
   };
 
   const handleSave = () => {
-    let finalStatus = 'AR_READY';
-    if (metadata.autoRigged) {
-      finalStatus = 'NEEDS_CALIBRATION'; // Phase 6A strict state until skinning is implemented
-    }
+    const finalStatus = 'AR_READY';
 
     const finalMetadata = {
       ...metadata,

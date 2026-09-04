@@ -33,7 +33,6 @@ import {
   recalculateAllInventoryStock,
   recordBoutiqueSale,
   subscribeToCategories,
-  persistDemandScore,
   logStockMovement,
 } from '../../services/productService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
@@ -364,37 +363,6 @@ const Inventory = () => {
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
   }, [restockModal, sellModal]);
-
-  // ── Demand score persistence (fire-and-forget, debounced per item) ──────────
-  // Runs whenever inventory changes. Writes demandScore + tier to Firestore
-  // for historical analysis. Skips if the stored value already matches.
-  const persistTimerRef = useRef(null);
-  useEffect(() => {
-    if (inventory.length === 0) return;
-    // Debounce: wait 2s after last inventory update before writing
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = setTimeout(() => {
-      inventory.forEach((item) => {
-        if (!item.docId) return;
-        const health = getStockHealth(item.available, item.total, item.reserved || 0);
-        // Only write if the stored value is stale or missing
-        if (
-          item.demandScore !== health.demandScore ||
-          item.stockTier  !== health.tier
-        ) {
-          persistDemandScore(
-            item.docId,
-            health.demandScore,
-            health.tier,
-            health.adjustedScore
-          );
-        }
-      });
-    }, 2000);
-    return () => {
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    };
-  }, [inventory]);
 
   // Derived stats (Active inventory only)
   const activeInventory = inventory.filter((i) => i.deleted !== true);

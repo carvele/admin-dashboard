@@ -28,61 +28,11 @@ import { supabase } from '../../lib/supabaseClient';
 import '@google/model-viewer';
 import './ARAssets.css';
 
-const parsePoint = (str) => {
-  const parts = (str || '').split(',').map(s => parseFloat(s.trim()));
-  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
-};
-const formatPoint = (p) => `${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}`;
-const toSpaceString = (pointStr) => {
-  const p = parsePoint(pointStr);
-  return `${p.x} ${p.y} ${p.z}`;
-};
-const toSpaceStringOffset = (pointStr, xOffset) => {
-  const p = parsePoint(pointStr);
-  return `${p.x + xOffset} ${p.y} ${p.z}`;
-};
 
-const PointSlider = ({ label, pointStr, onChange }) => {
-  const p = parsePoint(pointStr);
-  const handleUpdate = (axis, val) => {
-    onChange(formatPoint({ ...p, [axis]: parseFloat(val) }));
-  };
-  return (
-    <div className="point-slider-group">
-      <label>{label}</label>
-      <div className="slider-row">
-        <span>X:</span>
-        <input autoComplete="off" id="ar-pos-x" name="ar-pos-x" type="range" min="-1" max="1" step="0.01" 
-          value={p.x} onChange={(e) => handleUpdate('x', e.target.value)}
-          aria-label={`${label} X Axis`} aria-valuenow={p.x} aria-valuemin={-1} aria-valuemax={1}
-        />
-        <span className="val">{p.x.toFixed(2)}</span>
-      </div>
-      <div className="slider-row">
-        <span>Y:</span>
-        <input autoComplete="off" id="ar-pos-y" name="ar-pos-y" type="range" min="0" max="2" step="0.01" 
-          value={p.y} onChange={(e) => handleUpdate('y', e.target.value)}
-          aria-label={`${label} Y Axis`} aria-valuenow={p.y} aria-valuemin={0} aria-valuemax={2}
-        />
-        <span className="val">{p.y.toFixed(2)}</span>
-      </div>
-      <div className="slider-row">
-        <span>Z:</span>
-        <input autoComplete="off" id="ar-pos-z" name="ar-pos-z" type="range" min="-1" max="1" step="0.01" 
-          value={p.z} onChange={(e) => handleUpdate('z', e.target.value)}
-          aria-label={`${label} Z Axis`} aria-valuenow={p.z} aria-valuemin={-1} aria-valuemax={1}
-        />
-        <span className="val">{p.z.toFixed(2)}</span>
-      </div>
-    </div>
-  );
-};
 
 const ARAssets = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('assets');
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [configAsset, setConfigAsset] = useState(null);
   const [assets, setAssets] = useState([]);
   const [pendingProducts, setPendingProducts] = useState([]);
   const [globalLibrary, setGlobalLibrary] = useState([]);
@@ -98,14 +48,6 @@ const ARAssets = () => {
   
   const [previewAssetUrl, setPreviewAssetUrl] = useState(null);
   const [deleteAssetConfirm, setDeleteAssetConfirm] = useState(null);
-
-  // Alignment form state
-  const [alignPoints, setAlignPoints] = useState({
-    shoulderL: '-0.25, 1.45, 0',
-    shoulderR: '0.25, 1.45, 0',
-    waist: '0, 1.05, 0',
-    hips: '0, 0.90, 0',
-  });
 
 
   const handleIngestionComplete = async ({ metadata, riggedBlob }) => {
@@ -221,20 +163,6 @@ const ARAssets = () => {
       });
     } else {
       toast.error('No 3D model linked to this product. Upload a GLB first.');
-    }
-  };
-
-  const saveAlignmentPoints = async () => {
-    if (!configAsset) return;
-    try {
-      await updateArData(configAsset.docId, configAsset.arData, {
-        alignPoints,
-        alignments: 'Verified',
-      });
-      toast.success('Alignment points saved & verified!');
-      setIsConfigModalOpen(false);
-    } catch {
-      toast.error('Failed to save alignment points');
     }
   };
 
@@ -477,7 +405,17 @@ const ARAssets = () => {
                             className="btn-outline small text-danger" 
                             onClick={async () => {
                               try {
-                                await updateProduct(asset.docId, { model_3dUrl: null });
+                                // Clear the model URL, stale garment metadata, and AR status together.
+                                // Leaving stale boneMap + Active status behind poisons the next GLB upload.
+                                const { error } = await supabase
+                                  .from('products')
+                                  .update({ garment_metadata: null })
+                                  .eq('id', asset.docId);
+                                if (error) throw error;
+                                await updateProduct(asset.docId, {
+                                  model_3dUrl: null,
+                                  arData: { ...(asset.arData || {}), status: 'Disabled', alignments: 'Pending' }
+                                });
                                 toast.success('Asset unlinked from product');
                               } catch (e) {
                                 toast.error('Failed to unlink asset');

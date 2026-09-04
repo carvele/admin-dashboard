@@ -179,6 +179,10 @@ export class GarmentValidator {
 
     // Box size check helper
     const checkExplosion = (poseName: string) => {
+      let root: THREE.Object3D = skeleton.bones[0];
+      while (root && root.parent) { root = root.parent; }
+      if (root) root.updateMatrixWorld(true);
+
       skeleton.update();
       const maxDisp = this.getMaxDisplacement(mesh, pos, skeleton, bindMatrix, bindMatrixInverse);
       if (maxDisp > dynamicThreshold) { 
