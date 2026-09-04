@@ -88,11 +88,14 @@ Every finding MUST follow this exact structure to prevent AI overconfidence. Pre
 
 **[Severity] Finding Title**
 * **Claim:** (What is the issue?)
-* **Evidence:** (Quote the code or reference the file/line)
+* **Evidence:** (Reference the exact file path and line range whenever available. Quote only the minimum relevant code necessary.)
 * **Reproduction / Reasoning:** (How does this fail or cause risk?)
 * **Impact:** (What is the consequence?)
 * **Recommended Fix:** (Code snippet or architectural change)
 * **Verification:** (Explicitly state how to test it. If you cannot prove it from available code, explicitly state **"Unverified Hypothesis"**).
+
+### 🛡️ No Finding Rule
+**Auditors MUST NOT manufacture findings to satisfy the audit format.** If a dimension was investigated and no substantiated issue was found, explicitly report **"✅ No substantiated finding."** Distinguish this clearly from areas that could not be verified.
 
 ### Severity Categories
 *A finding must not be classified as an Actual Defect, Security Risk, or Performance Risk unless the available evidence supports that classification. When evidence is insufficient, classify it as Unverified Hypothesis.*
