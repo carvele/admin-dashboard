@@ -47,9 +47,19 @@ px tsc --noEmit\).
 ## 📋 Remediation Report Format
 Produce a markdown remediation report tracking the action taken on each finding. Do not modify the original audit report.
 
-**[Finding ID / Title]**
+**[Finding ID / Title]** (e.g., \[AR-TRYON-007]\)
 * **Validation:** (Confirmed to exist / Rejected due to X)
 * **Root Cause:** (Brief explanation of why it was failing)
 * **Dependency Check:** (What else relies on this, and is it safe?)
-* **Applied Change:** (Summary of the minimal fix applied, or "Deferred")
+* **Applied Change:** (Summary of the minimal fix applied. If addressing a Partial resolution, append \-R2\ to the ID)
 * **Verification Status:** (e.g., Passed \	sc\, manual runtime check required)
+
+### ⏸️ If a Finding is Deferred
+If a fix is too risky, blocked by missing tools, or requires a massive refactor, do not blindly change code. Instead, output:
+
+**[Finding ID] - DEFERRED**
+* **Severity:** (Original severity)
+* **Reason:** (Why are we not fixing this right now? e.g., Evidence blocked, requires massive refactor)
+* **Risk Accepted:** (What happens if we leave this as-is?)
+* **Dependencies/Blockers:** (What needs to happen before we can fix it?)
+* **Revisit Condition:** (e.g., After Catalog ultra audit, or when ADB profiling is available)
