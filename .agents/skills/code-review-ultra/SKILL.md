@@ -86,7 +86,7 @@ Before Pass 1, explicitly establish and state:
 ## 📋 11. Verification Discipline & Output Format
 Every finding MUST follow this exact structure to prevent AI overconfidence. Present findings grouped by the Severity Categories below.
 
-**[Severity] Finding Title**
+**[Severity] [IMMUTABLE_ID] Finding Title** (e.g., `[AR-TRYON-001]`)
 * **Claim:** (What is the issue?)
 * **Evidence:** (Reference the exact file path and line range whenever available. Quote only the minimum relevant code necessary.)
 * **Reproduction / Reasoning:** (How does this fail or cause risk?)

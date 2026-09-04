@@ -12,6 +12,7 @@ This skill provides the standard operating procedure for remediating findings ge
 - **Do Not Blindly Trust the Audit:** Before changing anything, independently validate that the finding actually exists and the proposed recommendation is safe.
 - **Finding-by-Finding:** Do not batch refactor the feature. Address issues one at a time.
 - **Minimal Appropriate Change:** Implement the smallest, safest fix that resolves the root cause. Avoid rewriting entire files.
+- **No Opportunistic Refactoring:** While fixing a finding, do not modify unrelated code merely because it appears old, inconsistent, or improvable. Record unrelated concerns for a future audit/remediation task.
 - **Never Erase Audit Evidence:** The original finding and evidence must remain immutable in the audit report. Your output is a separate *Remediation Report*.
 
 ## 🛠️ Remediation Workflow

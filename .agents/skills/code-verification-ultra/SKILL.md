@@ -10,6 +10,7 @@ This skill provides the standard operating procedure for verifying remediations.
 
 ## 🚨 Core Verification Philosophy
 - **Objective Proof:** Do not assume a fix works just because the code was changed. Demand static, runtime, or architectural proof.
+- **Verification Must Reproduce the Original Failure Where Practical:** Do not merely verify that tests pass. Confirm that the original failure condition described in the audit can no longer occur.
 - **Dependency Regression Check:** Verify that the fix did not silently break the broader system (e.g., an Admin fix breaking the Mobile app).
 
 ## 🔍 Verification Workflow
