@@ -29,6 +29,7 @@ import {
   getCustomerMeasurements,
   saveCustomerMeasurements,
   getCustomerStatsBatch,
+  getCustomerWishlistStats,
   ENGAGEMENT_FORMULA,
 } from '../../services/customerService';
 import { toast } from 'sonner';
@@ -83,7 +84,20 @@ const Customers = () => {
       let enriched = appUsers;
       try {
         const stats = await getCustomerStatsBatch(appUsers.map((u) => u.docId ?? u.id));
-        enriched = appUsers.map((u) => ({ ...u, ...(stats[u.docId ?? u.id] ?? {}) }));
+        const wishlistStats = await getCustomerWishlistStats(appUsers.map((u) => u.docId ?? u.id));
+        enriched = appUsers.map((u) => {
+          const id = u.docId ?? u.id;
+          const s = stats[id] || {};
+          const w = wishlistStats[id] || {};
+          const wishlistPoints = Math.min((w.wishlistCount || 0) * 2, 10);
+          const engagementScore = Math.min(100, (s.engagementScore || 0) + wishlistPoints);
+          return { 
+            ...u, 
+            ...s,
+            ...w,
+            engagementScore
+          };
+        });
       } catch (statsErr) {
         // Never let a stats failure blank out the customer list itself.
         console.error('Failed to load customer stats:', statsErr?.message ?? statsErr);
@@ -840,6 +854,10 @@ const Customers = () => {
                     <h4>{selectedCustomer.wardrobeCount || 0}</h4>
                     <p>Saved Items</p>
                   </div>
+                  <div className="p-stat">
+                    <h4>{selectedCustomer.wishlistCount || 0}</h4>
+                    <p>Wishlisted</p>
+                  </div>
                 </div>
 
                 {!isEditing && (
@@ -1046,6 +1064,31 @@ const Customers = () => {
                       );
                     })()
                   )}
+                </div>
+
+                {/* Recent Wishlist */}
+                <div className="profile-section">
+                  <h4 className="section-title flex-center gap-2 justify-start">
+                    <Heart size={18} /> Recent Wishlist
+                  </h4>
+                  <div className="recent-wishlist-grid" style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                    {(selectedCustomer.latestWishlistItems || []).length > 0 ? (
+                      selectedCustomer.latestWishlistItems.map((item) => (
+                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: '#f3f4f6', borderRadius: '8px', overflow: 'hidden' }}>
+                            {item.products?.imageUrl ? (
+                              <img src={item.products.imageUrl} alt={item.products.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : null}
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#4b5563', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.products?.name || 'Unknown'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-secondary text-sm">No items in wishlist</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Account History */}
