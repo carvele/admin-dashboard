@@ -6,6 +6,7 @@
 
 import { useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../context/AuthContext';
 import { 
   playReservationAlert, 
   playMessageAlert,
@@ -48,6 +49,8 @@ function teardown() {
 }
 
 export const useRealtimeSync = (onUpdate) => {
+  const { user } = useAuth();
+  
   useEffect(() => {
     // Unique token per hook instance so listeners.size always accurately
     // counts mounted consumers regardless of whether onUpdate is provided.
@@ -95,7 +98,7 @@ export const useRealtimeSync = (onUpdate) => {
       messagesChannel = supabase
         .channel(msgTopic)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-          if (payload.new && payload.new.sender_role !== 'staff') {
+          if (payload.new && payload.new.sender_id !== user?.uid) {
             playMessageAlert();
             showDesktopNotification('New Message', {
               body: `You received a new message from a customer.`
@@ -115,5 +118,5 @@ export const useRealtimeSync = (onUpdate) => {
         }, 100);
       }
     };
-  }, [onUpdate]);
+  }, [onUpdate, user?.uid]);
 };

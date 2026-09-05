@@ -20,7 +20,6 @@ import {
   toCamel,
 } from '../lib/supabaseService';
 
-import { holdsStock } from '../utils/reservationStatus';
 import { recalculateAllInventoryStock } from './productService';
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -291,7 +290,24 @@ export const createReservation = async (data) => {
     deleted: false,
   });
 
-  return addDocument('reservations', payload);
+  const reservationId = await addDocument('reservations', payload);
+
+  if (reservationId) {
+    // Write the corresponding line item so triggers can see what was actually
+    // reserved. Fallbacks to the reservation's own columns for missing data.
+    await addDocument('reservation_items', {
+      reservation_id: reservationId,
+      product_id: payload.product_id,
+      product_name: payload.product_name,
+      image_url: payload.image_url,
+      size: payload.size,
+      color: payload.color,
+      quantity: data.quantity ?? 1,
+      unit_price: payload.rental_price,
+    });
+  }
+
+  return reservationId;
 };
 
 export const updateReservation = async (docId, updates) => {
@@ -580,15 +596,7 @@ export const autoCancelExpiredReservations = async () => {
 
     const cancelledIds = [];
     for (const { row: r, reason } of toCancel) {
-      if (holdsStock(r.status)) {
-        await adjustInventoryForReservation(
-          r.product_id || r.product_name,
-          r.size,
-          1,
-          false,
-          r.color || ''
-        );
-      }
+      // DB triggers will automatically handle releasing stock when status updates to 'Cancelled'.
 
       const nowIso = new Date().toISOString();
       const { error: updateErr } = await supabase

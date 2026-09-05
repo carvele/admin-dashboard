@@ -227,8 +227,8 @@ const StaffManagement = () => {
   };
 
   const toggleRole = async (member) => {
-    if (member.role === 'owner') {
-      toast.error('The Owner role cannot be downgraded. It is permanent.');
+    if (member.id === user?.uid) {
+      toast.error('You cannot change your own role.');
       return;
     }
     setRoleToggleConfirm(member);

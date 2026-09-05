@@ -90,7 +90,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
 
     const unsubConv = subscribeToCollection('conversations', (convs: any[]) => {
       convUnread = convs.reduce(
-        (sum: number, conv: any) => sum + (conv.unreadCount || conv.unread_count || conv.unread || 0),
+        (sum: number, conv: any) => sum + (conv.unreadStaff || 0),
         0,
       );
       updateCount(convUnread, msgUnread);

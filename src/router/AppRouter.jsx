@@ -63,14 +63,6 @@ const DeviceProtectedRoute = ({ children }) => {
   // If not logged in at all, go to login
   if (!user) return <Navigate to="/login" replace />;
 
-  // If we are checking the fingerprint, just show a loading state
-  if (deviceStatus === 'checking') {
-    return (
-      <div className="flex-center-vh">
-        <div className="loading-spinner"></div>
-      </div>
-    );
-  }
 
   // If there was an error with fingerprinting/loading
   if (deviceStatus === 'error') {
@@ -90,8 +82,9 @@ const DeviceProtectedRoute = ({ children }) => {
     );
   }
 
-  // If approved OR the owner unlocked the bypass with their role, let them in
-  if (deviceStatus === 'approved' || isAdminUnlocked) {
+  // Optimistically allow rendering while checking. If it later resolves to
+  // pending/revoked, the state update will re-render and kick them out below.
+  if (deviceStatus === 'checking' || deviceStatus === 'approved' || isAdminUnlocked) {
     return children;
   }
 

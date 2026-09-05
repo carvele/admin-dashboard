@@ -33,14 +33,12 @@ import PageHeader from '../../components/PageHeader';
 import '../../components/reservations/ReservationBoard.css';
 import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
-import { holdsStock } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
   subscribeToReservationItems,
-  adjustInventoryForReservation,
   updateReservation,
   createReservation,
   repairReservationData,
@@ -131,17 +129,7 @@ const Reservations = () => {
   useEffect(() => {
     setLoading(true);
 
-    // Initial sweep to auto-cancel any expired reservations whose appointment date/time or payment deadline passed
-    const runAutoCancel = () => {
-      autoCancelExpiredReservations().then((cancelledIds) => {
-        if (cancelledIds && cancelledIds.length > 0) {
-          toast.info(`Auto-cancelled ${cancelledIds.length} expired reservation(s) whose appointment date or payment deadline passed.`);
-        }
-      }).catch(console.warn);
-    };
-
-    runAutoCancel();
-    const sweepTimer = setInterval(runAutoCancel, 60000);
+    // Auto-cancellation has been moved to a server-side pg_cron job `expire_all_stale_reservations`
 
     // Real-time Reservations Listener
     const unsubR = subscribeToReservations((data) => {
@@ -171,7 +159,6 @@ const Reservations = () => {
     });
 
     return () => {
-      clearInterval(sweepTimer);
       unsubR();
       unsubI();
       unsubC();
@@ -378,43 +365,6 @@ const Reservations = () => {
   const totalPages = Math.max(1, Math.ceil(sortedReservations.length / PAGE_SIZE));
   const pagedReservations = sortedReservations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // --- Stock adjustment helper ---
-  const adjustStock = async (outfit, size, delta, isConsume = false) => {
-    return adjustInventoryForReservation(outfit, size, delta, isConsume);
-  };
-
-  // A reservation can hold several products, so stock has to move for every
-  // line. Adjusting only the reservation's own product columns would leave
-  // every item after the first uncounted -- reserved stock silently wrong.
-  // Quantity is honoured too: 2 of something moves 2.
-  // Returns false if any line failed, so callers can warn staff instead of
-  // claiming a stock move that didn't actually happen.
-  const adjustStockForReservation = async (res, deltaPerUnit, isConsume = false) => {
-    const lines = itemsByReservation[res.id]?.length
-      ? itemsByReservation[res.id]
-      : [{
-          productId: res.productId,
-          productName: res.productName || res.outfit,
-          size: res.size,
-          color: res.color,
-          quantity: res.quantity ?? 1,
-        }];
-
-    let allOk = true;
-    for (const line of lines) {
-      const qty = Math.max(1, line.quantity ?? 1);
-      const ok = await adjustStock(
-        line.productId || line.productName,
-        line.size,
-        deltaPerUnit * qty,
-        isConsume,
-        line.color || '',
-      );
-      if (!ok) allOk = false;
-    }
-    return allOk;
-  };
-
   // --- LIFECYCLE ACTIONS ---
   // Lifecycle: Pending → To Pay → Preparing → To Pickup → Completed | Cancelled
   // Also backwards compatible with Confirmed, Fitting and Active
@@ -452,13 +402,9 @@ const Reservations = () => {
           confirmed_by_name: user?.name || user?.email || 'Staff',
           confirmed_at: new Date().toISOString()
         });
-        // Stock is committed at approval, not at pickup: once staff accept, the
-        // item is promised to this customer and must stop being sellable even
-        // though payment has not landed. Deducting only at ready_pickup meant
-        // two customers could both be approved for the same last unit.
-        const stockOk = await adjustStockForReservation(res, -1);
+        // Stock hold is handled automatically by the Supabase database trigger
+        // `trg_apply_inventory_on_reservation_status` when the status changes to 'To Pay'.
         toast.success(`Reservation ${id} approved for payment — stock held`);
-        if (!stockOk) toast.error(`Stock adjustment for ${id} may have failed — check inventory`);
       } else if (action === 'mark_paid') {
         await updateReservation(res.docId, {
           status: 'Preparing',
@@ -488,17 +434,16 @@ const Reservations = () => {
             }
 
             await updateReservation(res.docId, { status: 'Completed' });
-            // Consume reserved stock (item purchased/picked up forever)
-            const stockOk = await adjustStockForReservation(res, 1, true);
+            // Consume reserved stock is handled automatically by DB trigger
             toast.success(
               outstanding > 0
                 ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
                 : `Reservation ${id} completed — stock consumed permanently`,
             );
-            if (!stockOk) toast.error(`Stock consumption for ${id} may have failed — check inventory`);
             await logAction(user, 'Completed reservation', { reservationId: id });
-          } catch {
-            toast.error('Failed to update reservation');
+          } catch (err) {
+            console.error('Reservation completion failed:', err);
+            toast.error(err.message || 'Failed to update reservation');
           }
         };
 
@@ -518,16 +463,9 @@ const Reservations = () => {
         return;
       } else if (action === 'cancel') {
         await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Restore exactly when the previous status was holding stock. Using the
-        // shared predicate rather than a hand-listed set is the point: the old
-        // inline list included statuses that had never deducted, so cancelling
-        // handed back units that were never taken.
-        let stockOk = true;
-        if (holdsStock(res.status)) {
-          stockOk = await adjustStockForReservation(res, 1);
-        }
+        // Stock restoration is handled automatically by the Supabase database trigger
+        // `trg_apply_inventory_on_reservation_status` when the status changes to 'Cancelled'.
         toast.error(`Reservation ${id} cancelled`);
-        if (!stockOk) toast.error(`Stock restore for ${id} may have failed — check inventory`);
       }
       const actionLabels = {
         approve_pay: 'Approved for Payment',
@@ -537,8 +475,9 @@ const Reservations = () => {
         cancel: 'Cancelled',
       };
       await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
-    } catch {
-      toast.error('Failed to update reservation');
+    } catch (err) {
+      console.error('Reservation action failed:', err);
+      toast.error(err.message || 'Failed to update reservation');
     }
   };
 
@@ -582,9 +521,7 @@ const Reservations = () => {
         toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
         setRescheduleModal(null);
         setNewDate('');
-      } catch {
-        toast.error('Failed to reschedule');
-      }
+      } catch (err) { console.error('Failed to reschedule:', err); toast.error(err.message || 'Failed to reschedule'); }
     };
 
     if (conflict) {
@@ -657,9 +594,7 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.success(nextPaid ? 'Payment marked as received' : 'Payment marked as unpaid');
-    } catch {
-      toast.error('Failed to update payment status');
-    }
+    } catch (err) { console.error('Failed to update payment status:', err); toast.error(err.message || 'Failed to update payment status'); }
   };
 
   const handleVerifyPayment = async (res) => {
@@ -681,9 +616,7 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.success('Payment verified — preparing item');
-    } catch {
-      toast.error('Failed to verify payment');
-    }
+    } catch (err) { console.error('Failed to verify payment:', err); toast.error(err.message || 'Failed to verify payment'); }
   };
 
   // A receipt only leaves 'Submitted' when a person has looked at it. Rejecting
@@ -699,9 +632,7 @@ const Reservations = () => {
         customer: res.customerName || res.customer,
       });
       toast.error('Receipt rejected — the customer can upload another');
-    } catch {
-      toast.error('Failed to reject the receipt');
-    }
+    } catch (err) { console.error('Failed to reject the receipt:', err); toast.error(err.message || 'Failed to reject the receipt'); }
   };
 
 
@@ -752,9 +683,7 @@ const Reservations = () => {
         setIsModalOpen(false);
         toast.success('Reservation created successfully');
         setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
-      } catch {
-        toast.error('Failed to create reservation');
-      }
+      } catch (err) { console.error('Failed to create reservation:', err); toast.error(err.message || 'Failed to create reservation'); }
     };
 
     if (conflict) {

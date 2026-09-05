@@ -217,6 +217,7 @@ export const getPaginatedCollection = async (
     data: (data ?? []).map(normaliseRow),
     hasMore: (from + (data?.length ?? 0)) < (count ?? 0),
     nextPage: page + 1,
+    total: count ?? 0,
   };
 };
 

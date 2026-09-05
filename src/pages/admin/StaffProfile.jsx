@@ -275,7 +275,7 @@ const StaffProfile = () => {
   const age         = computeAge(form.date_of_birth || profile.dateOfBirth);
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.email;
   const meta        = statusMeta(profile.employmentStatus);
-  const canEditPersonal = isAdminUnlocked || isOwnProfile;
+  const canEditPersonal = isOwnProfile;
 
   return (
     <div className="page-container sp-page">

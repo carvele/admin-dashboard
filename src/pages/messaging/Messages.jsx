@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
+import { normaliseRow } from '../../lib/supabaseService';
 import {
   Search,
   Send,
@@ -152,6 +153,13 @@ const Messages = () => {
     debounce((val) => setCustSearchTerm(val), 300),
     []
   );
+
+  useEffect(() => {
+    return () => {
+      debouncedConvSearch.cancel();
+      debouncedCustSearch.cancel();
+    };
+  }, [debouncedConvSearch, debouncedCustSearch]);
   const messagesEndRef = useRef(null);
   const imageInputRef = useRef(null);
   const location = useLocation();
@@ -272,9 +280,8 @@ const Messages = () => {
       return;
     }
     const convKey = activeChat.id || activeChat.customId;
-    const unsub = subscribeToMessages((data) => {
-      const filtered = data.filter((m) => m.conversationId === convKey);
-      const sorted = [...filtered].sort((a, b) => {
+    const unsub = subscribeToMessages(convKey, (data) => {
+      const sorted = [...data].sort((a, b) => {
         const tA = new Date(a.createdAt || 0).getTime();
         const tB = new Date(b.createdAt || 0).getTime();
         return tA - tB;
@@ -291,12 +298,8 @@ const Messages = () => {
         markMessagesRead(convKey, activeChat.customerId);
       }
 
-      // Delivered, across every conversation, not just the active one --
-      // subscribeToMessages already delivers the full table on every change
-      // (it's what `data` is), so this is the one place that sees a customer
-      // message the instant any staff browser tab receives it, regardless
-      // of which conversation they have open. Mirrors the mobile app's
-      // global markDelivered handler on its own presence/messages channel.
+      // Delivered, for the active conversation. 
+      // (Used to pull the entire table, now scoped to active chat for performance)
       const customerIds = new Set(conversationsRef.current.map((c) => c.customerId).filter(Boolean));
       const undeliveredCustomerMsgIds = data
         .filter((m) => !m.deliveredAt && m.senderId && customerIds.has(m.senderId))
@@ -498,12 +501,30 @@ const Messages = () => {
     }
   };
 
-  // Load the customer list eagerly (not just when the "New Conversation"
-  // modal opens) — it's needed to resolve names below, since public.conversations
-  // only stores customer_id, no denormalized name column.
+  // Fetch only the customers needed for the loaded conversations to avoid
+  // eager O(N) memory loading of all customers on mount.
   useEffect(() => {
-    loadCustomers();
-  }, []);
+    const fetchMissingCustomers = async () => {
+      // Find customer IDs in conversations that we haven't loaded yet
+      const missingIds = [...new Set(conversations.map((c) => c.customerId))].filter(Boolean);
+      const toFetch = missingIds.filter((id) => !allCustomers.find((c) => (c.docId || c.id) === id));
+      
+      if (toFetch.length === 0) return;
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').in('id', toFetch);
+        if (!error && data) {
+          setAllCustomers((prev) => {
+            const map = new Map(prev.map((c) => [c.docId || c.id, c]));
+            data.map(normaliseRow).forEach((c) => map.set(c.docId || c.id, c));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch missing conversation customers:', err);
+      }
+    };
+    fetchMissingCustomers();
+  }, [conversations, allCustomers]);
 
   // ── Resolve a conversation's customer display name ─────────────────────
   // conversations has no customer_name column (only customer_id), so the
@@ -553,7 +574,8 @@ const Messages = () => {
         customerId,
         lastMessage: 'Conversation started by staff',
         lastMessageTime: new Date().toISOString(),
-        unreadCount: 0,
+        unreadCustomer: 0,
+        unreadStaff: 0,
       });
       await logAction(user, 'Started new conversation', { customerName, customerId });
       setShowNewConvModal(false);
@@ -620,7 +642,8 @@ const Messages = () => {
           customerId,
           lastMessage: 'Conversation started by staff',
           lastMessageTime: new Date().toISOString(),
-          unreadCount: 0,
+          unreadCustomer: 0,
+          unreadStaff: 0,
         }).then((newConv) => {
           if (newConv) {
             // Use the returned conversation directly
@@ -630,15 +653,18 @@ const Messages = () => {
             // subscription on `conversations` will deliver it shortly.
             // Check once after a short delay as a fallback.
             setTimeout(() => {
+              if (autoSendFiredRef.current) return;
               setConversations((prev) => {
                 const found = prev.find(
                   (c) => c.customerId === buyerId || c.customerName === buyerName,
                 );
                 if (found) proceed(found);
                 return prev;
-                });
+              });
             }, 1000);
           }
+        }).catch((err) => {
+          console.error('Failed to auto-create conversation:', err);
         });
       }
     }
@@ -704,7 +730,7 @@ const Messages = () => {
         <div className="bubble-col">
           {/* Reservation card */}
           {isReservationCard && reservationData ? (
-            <div className="message-bubble bubbles-received">
+            <div className={`message-bubble ${isSent ? 'bubbles-sent' : 'bubbles-received'}`}>
               <div className="reservation-card">
                 <div className="res-card-header">
                   <Calendar size={15} />
@@ -1027,7 +1053,7 @@ const Messages = () => {
             .map((conv) => {
               const convKey = conv.id || conv.customId;
               const isSelected = (activeChat?.id || activeChat?.customId) === convKey;
-              const unreadNum = isSelected ? 0 : (conv.unreadCount || conv.unread_count || 0);
+              const unreadNum = isSelected ? 0 : (conv.unreadStaff || 0);
 
               return (
                 <div

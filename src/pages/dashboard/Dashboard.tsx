@@ -37,7 +37,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 // @ts-ignore
-import { getReservations, autoCancelExpiredReservations } from '../../services/reservationService';
+import { getPaginatedReservations } from '../../services/reservationService';
 // @ts-ignore
 import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
 
@@ -56,7 +56,7 @@ const defaultPreferences = {
 };
 
 // @ts-ignore
-import { getCustomers } from '../../services/customerService';
+import { getPaginatedCustomers } from '../../services/customerService';
 // @ts-ignore
 import { getInventory, subscribeToInventory } from '../../services/productService';
 // @ts-ignore
@@ -73,10 +73,11 @@ import './Dashboard.css';
 const COLORS = ['#8B6F5C', '#C9BEB4', '#E8DDD3', '#2C2C2C'];
 
 const parseDate = (d: any) => {
-  if (!d) return new Date();
+  if (!d) return new Date(0);
   if (d.toDate) return d.toDate();
   if (d.seconds) return new Date(d.seconds * 1000);
-  return new Date(d);
+  const parsed = new Date(d);
+  return isNaN(parsed.getTime()) ? new Date(0) : parsed;
 };
 
 const Dashboard = () => {
@@ -84,18 +85,29 @@ const Dashboard = () => {
   const { user, isAdminUnlocked } = useAuth() as { user: any, isAdminUnlocked: boolean };
   const canCustomize = can(user?.role, 'customize_dashboard');
   
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [totalReservationsCount, setTotalReservationsCount] = useState(0);
+  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
+  
   const loadDashboard = React.useCallback(async () => {
     try {
-      await autoCancelExpiredReservations().catch(console.warn);
-      const [resData, cusData, invData, arCount, outfitsData] = await Promise.all([
-        getReservations(100),
-        getCustomers(100),
+      const [resRaw, cusRaw, invData, arCount, outfitsData] = await Promise.all([
+        getPaginatedReservations(100, 0, {}),
+        getPaginatedCustomers(100, 0, {}),
         getInventory(100),
         getARSessions(),
         getSuggestedOutfits(),
       ]);
-      setReservations(resData || []);
-      setCustomers((cusData || []).filter((u: any) => !u.role || u.role === 'customer'));
+      const resResult = resRaw as any;
+      const cusResult = cusRaw as any;
+      setReservations(resResult.data || []);
+      setTotalReservationsCount(resResult.total || 0);
+      
+      const activeCusts = (cusResult.data || []).filter((u: any) => !u.role || u.role === 'customer');
+      setCustomers(activeCusts);
+      setTotalCustomersCount(cusResult.total || 0);
+      
       setInventory(invData || []);
       setArSessionCount(arCount?.length || 0);
       setSuggestedOutfits(outfitsData || []);
@@ -107,9 +119,6 @@ const Dashboard = () => {
 
   // Initialize realtime sync for global alerts and auto-refresh
   useRealtimeSync(loadDashboard);
-
-  const [reservations, setReservations] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [suggestedOutfits, setSuggestedOutfits] = useState<any[]>([]);
   const [arSessionCount, setArSessionCount] = useState(0);
@@ -152,9 +161,9 @@ const Dashboard = () => {
     activeInventory.map((i: any) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
   );
 
-  const totalReservations = reservations.length;
+  const totalReservations = totalReservationsCount;
   // profiles has no `status` column — "active" = not blocked
-  const activeCustomers = customers.filter((c) => !c.isBlocked).length;
+  const activeCustomers = totalCustomersCount;
   const pendingRequests = reservations.filter((r) => isPending(r.status)).length;
   // 5-tier: alert = very-low + critical + no-stock items (Active items only)
   const lowStockItems = activeInventory

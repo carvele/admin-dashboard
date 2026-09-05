@@ -12,6 +12,7 @@ import {
   addDocument,
   updateDocument,
   deleteDocument,
+  normaliseRow,
 } from '../lib/supabaseService';
 
 // --- Conversations ---
@@ -28,8 +29,49 @@ export const deleteConversation = (docId) => deleteDocument('conversations', doc
 
 // --- Messages ---
 
-export const subscribeToMessages = (callback) =>
-  subscribeToCollection('messages', callback);
+export const subscribeToMessages = (conversationId, callback) => {
+  if (!conversationId) return () => {};
+
+  let localMessages = [];
+
+  const doFetch = async () => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+      
+    if (error) {
+      console.error('[Supabase] fetch messages error:', error.message);
+      return callback([]);
+    }
+    // We must normalise rows if the rest of the app expects camelCase
+    localMessages = (data ?? []).map(normaliseRow);
+    callback([...localMessages]);
+  };
+
+  doFetch();
+
+  const channel = supabase
+    .channel(`msgs_${conversationId}_${Date.now()}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      if (payload.eventType === 'INSERT') {
+        localMessages.push(normaliseRow(payload.new));
+      } else if (payload.eventType === 'UPDATE') {
+        const updatedMsg = normaliseRow(payload.new);
+        localMessages = localMessages.map(msg => msg.id === updatedMsg.id ? updatedMsg : msg);
+      } else if (payload.eventType === 'DELETE') {
+        localMessages = localMessages.filter(msg => msg.id !== payload.old.id);
+      }
+      callback([...localMessages]);
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};
 
 export const sendMessage = (data) => addDocument('messages', data);
 
@@ -86,7 +128,7 @@ export const markMessagesRead = async (conversationId, customerId) => {
   // Clear unread count on conversation table
   const { error: convErr } = await supabase
     .from('conversations')
-    .update({ unread_count: 0 })
+    .update({ unread_staff: 0 })
     .eq('id', conversationId);
   if (convErr) console.error('[Supabase] markMessagesRead conversation update failed:', convErr.message);
 };
@@ -131,26 +173,12 @@ export const uploadChatImage = async (file, conversationId) => {
  */
 export const addReaction = async (messageDocId, userId, emoji) => {
   try {
-    const { data: msg } = await supabase
-      .from('messages')
-      .select('reactions')
-      .eq('id', messageDocId)
-      .maybeSingle();
-
-    const currentReactions = msg?.reactions || {};
-    const updatedReactions = { ...currentReactions };
-
-    // Toggle reaction: if already set to this emoji, remove it
-    if (currentReactions[userId] === emoji) {
-      delete updatedReactions[userId];
-    } else {
-      updatedReactions[userId] = emoji;
-    }
-
-    await supabase
-      .from('messages')
-      .update({ reactions: updatedReactions })
-      .eq('id', messageDocId);
+    const { error } = await supabase.rpc('merge_message_reaction', {
+      _message_id: messageDocId,
+      _user_id: userId,
+      _emoji: emoji
+    });
+    if (error) throw error;
   } catch (err) {
     console.error('Error updating reaction:', err);
   }

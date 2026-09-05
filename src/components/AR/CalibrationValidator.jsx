@@ -149,6 +149,7 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
 
     return () => {
       cancelAnimationFrame(req);
+      controls.dispose();
       renderer.dispose();
       if (containerRef.current) containerRef.current.innerHTML = '';
     };
@@ -167,7 +168,16 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
         // SkeletalRetargeter currently returns world-space orientations 
         // that match the T-pose definition of the canonical rig.
         const targetQ = new THREE.Quaternion(quat.x, quat.y, quat.z, quat.w);
-        bones[glbBoneName].quaternion.copy(targetQ);
+        const bone = bones[glbBoneName];
+        if (bone.parent) {
+          bone.parent.updateMatrixWorld(true);
+          const parentWorldQ = new THREE.Quaternion();
+          bone.parent.getWorldQuaternion(parentWorldQ);
+          const localQ = targetQ.clone().premultiply(parentWorldQ.invert());
+          bone.quaternion.copy(localQ);
+        } else {
+          bone.quaternion.copy(targetQ);
+        }
       }
     }
   }, [angles, metadata]);
