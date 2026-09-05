@@ -49,6 +49,7 @@ const Analytics = () => {
   const [arLogs, setArLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [poseGuides, setPoseGuides] = useState([]);
+  const [topWishlist, setTopWishlist] = useState([]);
   
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
@@ -101,14 +102,15 @@ const Analytics = () => {
     const loadStaticData = async () => {
       try {
         const { getCustomers } = await import('../../services/customerService');
-        const { getProducts, getInventory } = await import('../../services/productService');
+        const { getProducts, getInventory, getMostWishlistedProducts } = await import('../../services/productService');
         const { getCollection } = await import('../../lib/supabaseService');
 
-        const [c, p, i, pg] = await Promise.all([
+        const [c, p, i, pg, tw] = await Promise.all([
           getCustomers(),
           getProducts(true),
           getInventory(),
-          getCollection('pose_guides')
+          getCollection('pose_guides'),
+          getMostWishlistedProducts()
         ]);
         
         if (!isMounted) return;
@@ -116,6 +118,7 @@ const Analytics = () => {
         setCatalog(p || []);
         setInventory(i || []);
         setPoseGuides(pg || []);
+        setTopWishlist(tw || []);
       } catch (err) {
         console.error('Failed to load static analytics data:', err);
       }
@@ -360,6 +363,16 @@ const Analytics = () => {
         category: item?.category || '' 
       };
     });
+
+  const enrichedTopWishlist = (topWishlist || []).slice(0, 5).map(item => {
+    const resCount = outfitCounts[item.productName] || 0;
+    const conversion = item.wishlistCount > 0 ? ((resCount / item.wishlistCount) * 100).toFixed(1) : 0;
+    return {
+      ...item,
+      resCount,
+      conversion
+    };
+  });
 
   const handleExport = (type) => {
     if (reservations.length === 0) return;
@@ -675,6 +688,48 @@ const Analytics = () => {
                       <td className="font-medium text-sm">{item.name}</td>
                       <td className="text-right font-bold text-sm">
                         ₱{(item.revenue || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Top Wishlisted */}
+        {widgetPrefs.showTopItems && enrichedTopWishlist.length > 0 && (
+          <div className="card mt-6">
+            <div className="card-header border-none">
+              <h3>Top Wishlisted</h3>
+            </div>
+            <div className="table-container pt-0">
+              <table className="table compact">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="text-right">Wishlists</th>
+                    <th className="text-right">Reservations</th>
+                    <th className="text-right">Conversion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrichedTopWishlist.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="font-medium text-sm flex-center gap-2 justify-start">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.productName} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                        ) : null}
+                        {item.productName}
+                      </td>
+                      <td className="text-right font-bold text-sm text-secondary">
+                        {item.wishlistCount}
+                      </td>
+                      <td className="text-right font-bold text-sm text-secondary">
+                        {item.resCount}
+                      </td>
+                      <td className="text-right font-bold text-sm text-accent">
+                        {item.conversion}%
                       </td>
                     </tr>
                   ))}

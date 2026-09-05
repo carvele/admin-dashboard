@@ -550,3 +550,20 @@ export const recalculateAllInventoryStock = async () => {
   queryCache.invalidateByPrefix('inventory');
   queryCache.invalidateByPrefix('products');
 };
+
+/**
+ * Get the most wishlisted products.
+ * @returns {Promise<Array<{ productId, productName, imageUrl, wishlistCount }>>}
+ */
+export const getMostWishlistedProducts = async () => {
+  const { data, error } = await supabase.rpc('get_most_wishlisted_products');
+  if (error) throw error;
+  
+  return (data || []).map((row) => ({
+    productId: row.product_id,
+    productName: row.product_name,
+    imageUrl: row.image_url,
+    wishlistCount: Number(row.wishlist_count),
+  }));
+};
+
