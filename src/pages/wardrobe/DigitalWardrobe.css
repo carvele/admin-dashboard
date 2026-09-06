@@ -16,6 +16,8 @@
 
 .dw-sidebar {
   width: 280px;
+  flex-shrink: 0;
+  min-width: 0;
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -68,6 +70,11 @@
 .dw-privacy-banner-icon {
   color: var(--accent);
   flex-shrink: 0;
+}
+
+.dw-customer-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .dw-customer-name-row {
@@ -124,14 +131,15 @@
 .dw-privacy-locked-container {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   padding: 3rem 1.5rem;
   background-color: var(--cream);
+  overflow-y: auto;
 }
 
 .dw-privacy-card {
   max-width: 480px;
+  margin: auto;
   text-align: center;
   padding: 2.5rem 2rem;
   display: flex;
@@ -186,6 +194,9 @@
   font-weight: 600;
   color: var(--charcoal);
   margin-bottom: 0.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dw-customer-info p {
   font-size: 0.75rem;
