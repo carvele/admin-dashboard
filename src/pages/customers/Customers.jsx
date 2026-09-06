@@ -50,6 +50,39 @@ import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './Customers.css';
 
+// Safe extraction of numeric measurement value (handles { valueCm: 88.5 }, { valueInches: 34 }, { value: 88.5 }, or primitive 88.5)
+const extractNumericMeasurement = (val) => {
+  if (val === null || val === undefined || val === '') return '';
+  if (typeof val === 'object') {
+    if (typeof val.valueCm === 'number') return val.valueCm;
+    if (typeof val.valueInches === 'number') return val.valueInches;
+    if (typeof val.value === 'number') return val.value;
+    return '';
+  }
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? '' : parsed;
+};
+
+// Safe extraction for display (returns { value, unit } where value is ALWAYS a primitive number or string)
+const extractMeasurementDisplay = (val, defaultUnit = 'cm') => {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'object') {
+    if (typeof val.valueCm === 'number') {
+      return { value: Math.round(val.valueCm * 10) / 10, unit: 'cm' };
+    }
+    if (typeof val.valueInches === 'number') {
+      return { value: Math.round(val.valueInches * 10) / 10, unit: '"' };
+    }
+    if (typeof val.value === 'number' || typeof val.value === 'string') {
+      return { value: val.value, unit: val.unit || defaultUnit };
+    }
+    return null;
+  }
+  const parsed = parseFloat(val);
+  if (isNaN(parsed)) return { value: String(val), unit: '' };
+  return { value: Math.round(parsed * 10) / 10, unit: defaultUnit };
+};
+
 // ── Component ────────────────────────────────────────────────
 
 const Customers = () => {
@@ -279,18 +312,18 @@ const Customers = () => {
       email: selectedCustomer.email,
       phone: selectedCustomer.phone,
       status: selectedCustomer.isBlocked ? 'Inactive' : 'Active',
-      // Read canonical jsonb keys, falling back to any legacy admin-written keys
-      topBust: m.bust ?? m.topBust ?? '',
-      underBust: m.underBust ?? '',
-      waist: m.waist ?? '',
-      hip: m.hips ?? m.hip ?? '',
-      neck: m.neck ?? m.neckBase ?? '',
-      shoulderWidth: m.shoulderWidth ?? '',
-      armLength: m.armLength ?? '',
-      backLength: m.torsoLength ?? m.backLength ?? '',
-      insideLegLength: m.inseam ?? m.insideLegLength ?? '',
-      height: custMeasurements?.height ?? '',
-      weight: custMeasurements?.weight ?? '',
+      // Read canonical jsonb keys, unwrapping any { valueCm } objects to numbers
+      topBust: extractNumericMeasurement(m.bust ?? m.topBust),
+      underBust: extractNumericMeasurement(m.underBust),
+      waist: extractNumericMeasurement(m.waist),
+      hip: extractNumericMeasurement(m.hips ?? m.hip),
+      neck: extractNumericMeasurement(m.neck ?? m.neckBase),
+      shoulderWidth: extractNumericMeasurement(m.shoulderWidth),
+      armLength: extractNumericMeasurement(m.armLength),
+      backLength: extractNumericMeasurement(m.torsoLength ?? m.backLength),
+      insideLegLength: extractNumericMeasurement(m.inseam ?? m.insideLegLength),
+      height: extractNumericMeasurement(custMeasurements?.height),
+      weight: extractNumericMeasurement(custMeasurements?.weight),
     });
     setIsEditing(true);
   };
@@ -312,19 +345,29 @@ const Customers = () => {
       isBlocked: editForm.status === 'Inactive',
     };
 
+    const saveMeasure = (existing, val) => {
+      const num = toNum(val);
+      if (num === null) return null;
+      if (typeof existing === 'object' && existing !== null) {
+        return { ...existing, valueCm: num };
+      }
+      return { valueCm: num };
+    };
+
+    const existingM = custMeasurements?.measurements || {};
     // Body metrics → user_measurements. Merge onto the existing jsonb so any
     // keys the admin form doesn't surface (confidence, etc.) survive.
     const measurements = {
-      ...(custMeasurements?.measurements || {}),
-      bust: toNum(editForm.topBust),
-      underBust: toNum(editForm.underBust),
-      waist: toNum(editForm.waist),
-      hips: toNum(editForm.hip),
-      neck: toNum(editForm.neck),
-      shoulderWidth: toNum(editForm.shoulderWidth),
-      armLength: toNum(editForm.armLength),
-      torsoLength: toNum(editForm.backLength),
-      inseam: toNum(editForm.insideLegLength),
+      ...existingM,
+      bust: saveMeasure(existingM.bust ?? existingM.topBust, editForm.topBust),
+      underBust: saveMeasure(existingM.underBust, editForm.underBust),
+      waist: saveMeasure(existingM.waist, editForm.waist),
+      hips: saveMeasure(existingM.hips ?? existingM.hip, editForm.hip),
+      neck: saveMeasure(existingM.neck ?? existingM.neckBase, editForm.neck),
+      shoulderWidth: saveMeasure(existingM.shoulderWidth, editForm.shoulderWidth),
+      armLength: saveMeasure(existingM.armLength, editForm.armLength),
+      torsoLength: saveMeasure(existingM.torsoLength ?? existingM.backLength, editForm.backLength),
+      inseam: saveMeasure(existingM.inseam ?? existingM.insideLegLength, editForm.insideLegLength),
     };
     const height = toNum(editForm.height);
     const weight = toNum(editForm.weight);
@@ -788,7 +831,12 @@ const Customers = () => {
                       const tags = [];
                       if ((selectedCustomer.totalSpent || 0) >= 50000) tags.push({ label: '💎 VIP', color: 'var(--status-pending-text)', bg: 'var(--status-pending-bg)' });
                       if ((selectedCustomer.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: 'var(--status-completed-text)', bg: 'var(--status-completed-bg)' });
-                      if (custMeasurements && Object.values(custMeasurements).some(v => v)) tags.push({ label: '📏 Fit Profile', color: 'var(--status-approved-text)', bg: 'var(--status-approved-bg)' });
+                      const hasFitProfile = custMeasurements && (
+                        custMeasurements.height ||
+                        custMeasurements.weight ||
+                        (custMeasurements.measurements && Object.values(custMeasurements.measurements).some((v) => extractNumericMeasurement(v) !== ''))
+                      );
+                      if (hasFitProfile) tags.push({ label: '📏 Fit Profile', color: 'var(--status-approved-text)', bg: 'var(--status-approved-bg)' });
                       if (selectedCustomer.isBlocked) tags.push({ label: '⛔ Blocked', color: 'var(--status-cancelled-text)', bg: 'var(--status-cancelled-bg)' });
                       if (tags.length === 0) return null;
                       return (
@@ -1028,26 +1076,36 @@ const Customers = () => {
                       const m = custMeasurements?.measurements || {};
                       const height = custMeasurements?.height;
                       const weight = custMeasurements?.weight;
-                      const hasMeasurements =
-                        m && Object.keys(m).some((k) => m[k] !== null && m[k] !== undefined && m[k] !== '');
 
-                      if (!hasMeasurements && !height && !weight) {
+                      const rawRows = [
+                        { label: 'Bust', raw: m.bust ?? m.topBust },
+                        { label: 'Under Bust', raw: m.underBust },
+                        { label: 'Waist', raw: m.waist },
+                        { label: 'Hips', raw: m.hips ?? m.hip },
+                        { label: 'Neck', raw: m.neck ?? m.neckBase },
+                        { label: 'Shoulder', raw: m.shoulderWidth },
+                        { label: 'Back / Torso', raw: m.torsoLength ?? m.backLength },
+                        { label: 'Arm Length', raw: m.armLength },
+                        { label: 'Inseam', raw: m.inseam ?? m.insideLegLength ?? m.legLength },
+                        { label: 'Height', raw: height, defaultUnit: 'cm' },
+                        { label: 'Weight', raw: weight, defaultUnit: 'kg' },
+                      ];
+
+                      const rows = rawRows
+                        .map((r) => {
+                          const extracted = extractMeasurementDisplay(r.raw, r.defaultUnit || 'cm');
+                          if (!extracted) return null;
+                          return {
+                            label: r.label,
+                            value: extracted.value,
+                            unit: extracted.unit,
+                          };
+                        })
+                        .filter(Boolean);
+
+                      if (rows.length === 0) {
                         return <div className="empty-state">No AI scan or measurements saved yet.</div>;
                       }
-
-                      const rows = [
-                        { label: 'Bust', value: m.bust ?? m.topBust },
-                        { label: 'Under Bust', value: m.underBust },
-                        { label: 'Waist', value: m.waist },
-                        { label: 'Hips', value: m.hips ?? m.hip },
-                        { label: 'Neck', value: m.neck ?? m.neckBase },
-                        { label: 'Shoulder', value: m.shoulderWidth },
-                        { label: 'Back / Torso', value: m.torsoLength ?? m.backLength },
-                        { label: 'Arm Length', value: m.armLength },
-                        { label: 'Inseam', value: m.inseam ?? m.insideLegLength ?? m.legLength },
-                        { label: 'Height', value: height, unit: 'cm' },
-                        { label: 'Weight', value: weight, unit: 'kg' },
-                      ].filter((r) => r.value !== undefined && r.value !== null && r.value !== '');
 
                       return (
                         <div className="measurements-grid">
@@ -1056,7 +1114,7 @@ const Customers = () => {
                               <span>{r.label}</span>
                               <strong>
                                 {r.value}
-                                {r.unit ? r.unit : '"'}
+                                {r.unit ? (r.unit === '"' ? '"' : ` ${r.unit}`) : ''}
                               </strong>
                             </div>
                           ))}
