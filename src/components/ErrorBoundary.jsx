@@ -170,6 +170,8 @@ class ErrorBoundary extends React.Component {
               }}
               onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "var(--cream)")}
               onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "var(--white)")}
+              onFocus={(e) => (e.currentTarget.style.backgroundColor = "var(--cream)")}
+              onBlur={(e) => (e.currentTarget.style.backgroundColor = "var(--white)")}
             >
               <RefreshCw size={18} /> Try Again
             </button>

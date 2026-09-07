@@ -88,6 +88,7 @@ const ProductForm = ({ readOnly = false }) => {
   // Variant matrix
   const [variantColumnsReady, setVariantColumnsReady] = useState(false);
   const [variantMatrix, setVariantMatrix] = useState([]);
+  const [existingVariants, setExistingVariants] = useState([]);
   // Set<variantKey> of combinations the staff has ticked
   const [selectedVariants, setSelectedVariants] = useState(new Set());
   // File uploads
@@ -155,9 +156,19 @@ const ProductForm = ({ readOnly = false }) => {
              setOldData(docParams);
              // Colours are stored comma-joined in `color`; fall back to the
              // legacy single `baseColor` so older products still populate.
+             let existing = [];
+             try {
+               const { getProductVariants } = await import('../../services/variantService');
+               existing = await getProductVariants(id);
+               setExistingVariants(existing);
+             } catch (e) {
+               console.warn('[ProductForm] Could not fetch variants:', e);
+             }
              const parsedColors = docParams.color
                ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
                : (docParams.baseColor ? [docParams.baseColor] : []);
+             const variantColors = existing.map((v) => v.color).filter(Boolean);
+             const mergedColors = [...new Set([...parsedColors, ...variantColors])];
              setFormData(prev => ({
                 ...prev,
                 ...docParams,
@@ -181,7 +192,7 @@ const ProductForm = ({ readOnly = false }) => {
                 salePrice: docParams.salePrice ?? '',
                 isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
                 sizes: docParams.sizes || [],
-                colors: parsedColors,
+                colors: mergedColors,
                 images: docParams.images || [],
                 measurements: docParams.measurements || {},
                 tags: docParams.tags || []
@@ -265,43 +276,33 @@ const ProductForm = ({ readOnly = false }) => {
   }, [formData.name, isEditing]);
 
   // Rebuild variant matrix: Size × Color only (no pattern dimension)
-  const rebuildMatrix = useCallback(
-    (sizes, colors, existingVariants = []) => {
-      // Always pass patterns=[''] so every cell has pattern=''
-      const matrix = buildVariantMatrix({ sizes, colors, patterns: [''] }, existingVariants);
-      setVariantMatrix(matrix);
-      // Auto-select all size x color combinations by default
-      setSelectedVariants(() => {
-        const next = new Set();
-        matrix.forEach((cell) => {
-          next.add(cell.key);
-        });
-        return next;
-      });
-    },
-    [],
-  );
-
-  // Re-run whenever sizes or colors change
-  useEffect(() => {
-    if (!variantColumnsReady) return;
-    rebuildMatrix(formData.sizes, formData.colors || []);
-     
-  }, [formData.sizes, formData.colors, variantColumnsReady]);
-
-  // When editing: fetch live variants to pre-tick existing combos
-  useEffect(() => {
-    if (!isEditing || !id || !variantColumnsReady) return;
-    import('../../services/variantService').then(({ getProductVariants }) => {
-      getProductVariants(id).then((existing) => {
-        rebuildMatrix(formData.sizes, formData.colors || [], existing);
-      }).catch(() => {});
-    });
-     
-  }, [isEditing, id, variantColumnsReady]);
-
-
-
+  const rebuildMatrix = useCallback( 
+    (sizes, colors, existingVariantsList = []) => { 
+      const existingColors = [...new Set(existingVariantsList.map((v) => v.color).filter(Boolean))];
+      const effectiveColors = colors && colors.length > 0 ? colors : existingColors;
+      // Always pass patterns=[''] so every cell has pattern='' 
+      const matrix = buildVariantMatrix({ sizes, colors: effectiveColors, patterns: [''] }, existingVariantsList); 
+      setVariantMatrix(matrix); 
+      // Auto-select all size x color combinations by default 
+      setSelectedVariants(() => { 
+        const next = new Set(); 
+        matrix.forEach((cell) => { 
+          next.add(cell.key); 
+        }); 
+        return next; 
+      }); 
+    }, 
+    [], 
+  ); 
+ 
+  // Re-run whenever sizes, colors, or existing variants change 
+  useEffect(() => { 
+    if (!variantColumnsReady) return; 
+    rebuildMatrix(formData.sizes, formData.colors || [], existingVariants); 
+  }, [formData.sizes, formData.colors, existingVariants, variantColumnsReady, rebuildMatrix]); 
+ 
+ 
+ 
   // Handle subcategory logic when category changes
   useEffect(() => {
     const selectedCat = categories.find((c) => c.name === formData.category);
@@ -574,11 +575,16 @@ const ProductForm = ({ readOnly = false }) => {
             }
             Logger.info(`Created ${toCreate.length} new variant rows for product ${id}`);
 
-            // Soft-delete deselected variants that have zero stock
-            const toSoftDelete = productInv.filter((inv) => {
-              if (inv.deleted) return false;
-              const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' });
-              return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0;
+            // Soft-delete deselected variants that have zero stock 
+            // Safety guard: Never soft-delete if color and size match current product selection
+            const selectedColorSet = new Set(formData.colors || []);
+            const toSoftDelete = productInv.filter((inv) => { 
+              if (inv.deleted) return false; 
+              const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' }); 
+              if (inv.color && selectedColorSet.has(inv.color) && (formData.sizes || []).includes(inv.size)) {
+                return false;
+              }
+              return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0; 
             });
             if (toSoftDelete.length > 0) {
               const now = new Date().toISOString();

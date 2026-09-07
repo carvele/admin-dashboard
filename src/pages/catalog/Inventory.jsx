@@ -84,6 +84,38 @@ const groupInventoryRows = (rows) => {
   );
 };
 
+const COLOR_DOT_MAP = {
+  blue: '#3b82f6',
+  navy: '#1e3a8a',
+  cream: '#fef3c7',
+  yellow: '#eab308',
+  red: '#ef4444',
+  green: '#22c55e',
+  emerald: '#10b981',
+  black: '#1f2937',
+  white: '#f3f4f6',
+  gray: '#9ca3af',
+  grey: '#9ca3af',
+  pink: '#ec4899',
+  purple: '#a855f7',
+  orange: '#f97316',
+  brown: '#78350f',
+  beige: '#f5f5dc',
+  olive: '#84cc16',
+  maroon: '#800000',
+  teal: '#14b8a6',
+  gold: '#d4af37',
+};
+
+const getChipColorDot = (name) => {
+  if (!name) return '#cbd5e1';
+  const clean = String(name).toLowerCase().trim();
+  for (const [key, hex] of Object.entries(COLOR_DOT_MAP)) {
+    if (clean.includes(key)) return hex;
+  }
+  return '#cbd5e1';
+};
+
 const GroupedInvRow = ({
   group,
   isAdminUnlocked,
@@ -128,75 +160,71 @@ const GroupedInvRow = ({
     targetInv.id;
 
   return (
-    <tr key={group.key}>
-      <td className="font-mono text-xs text-secondary">{skuDisplay}</td>
-      <td className="font-medium">{group.item}</td>
-      <td>{group.category}</td>
-      <td>
+    <tr key={group.key} className="inv-row">
+      <td className="sku-cell">
+        <span className="sku-code" title={skuDisplay}>
+          {skuDisplay}
+        </span>
+      </td>
+      <td className="cell-product font-medium">{group.item}</td>
+      <td className="cell-category text-secondary">{group.category}</td>
+      <td className="cell-size text-center">
         <span className="size-badge">{group.size}</span>
       </td>
-      <td>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+      <td className="cell-color">
+        <div className="color-chips-row">
           {group.variants.length > 1 && (
             <button
               type="button"
               className={`color-chip-btn ${selectedColor === 'ALL' ? 'active' : ''}`}
               onClick={() => setSelectedColor('ALL')}
             >
-              All ({group.variants.reduce((s, v) => s + (v.available || 0), 0)})
+              <span>All</span>
+              <span className="chip-count">
+                {group.variants.reduce((s, v) => s + (v.available || 0), 0)}
+              </span>
             </button>
           )}
           {group.variants.map((v) => {
             const cName = v.color || 'Standard';
             const isSel = selectedColor === cName;
+            const avail = v.available || 0;
             return (
               <button
                 key={v.id || cName}
                 type="button"
-                className={`color-chip-btn ${isSel ? 'active' : ''}`}
+                className={`color-chip-btn ${isSel ? 'active' : ''} ${avail === 0 ? 'out-of-stock' : ''}`}
                 onClick={() => setSelectedColor(cName)}
+                title={`${cName}: ${avail} available`}
               >
-                {cName} ({v.available || 0})
+                <span className="chip-dot" style={{ backgroundColor: getChipColorDot(cName) }} />
+                <span>{cName}</span>
+                <span className="chip-count">{avail}</span>
               </button>
             );
           })}
         </div>
       </td>
-      <td className="text-right">{displayedTotal}</td>
-      <td className="text-right text-secondary">{displayedReserved}</td>
-      <td className="text-right font-medium">{displayedAvailable}</td>
+      <td className="text-right cell-num">{displayedTotal}</td>
+      <td className="text-right cell-num text-secondary">{displayedReserved}</td>
+      <td className="text-right cell-num font-semibold">{displayedAvailable}</td>
       <td className="stock-cell">
         <div className="urgency-tooltip-wrap">
-          <div className="stock-progress-container" style={{ flex: 1 }}>
-            <div
-              className="stock-progress-bar"
-              role="progressbar"
-              aria-valuenow={Math.round(health.percent)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Stock level: ${health.label}`}
-            >
-              <div
-                className="stock-progress-fill"
-                style={{ width: `${health.percent}%`, backgroundColor: health.color }}
-              />
-            </div>
-            <StockStatusBadge
-              available={displayedAvailable}
-              total={displayedTotal}
-              reserved={displayedReserved}
-            />
-            {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
-              <span className={`demand-badge ${health.demandLevel}`}>
-                <span aria-hidden="true">🔥</span> {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
-              </span>
-            )}
-          </div>
+          <StockStatusBadge
+            available={displayedAvailable}
+            total={displayedTotal}
+            reserved={displayedReserved}
+          />
+          {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
+            <span className={`demand-badge ${health.demandLevel}`}>
+              <span aria-hidden="true">🔥</span> {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
+            </span>
+          )}
           <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
           <span className="urgency-tip">{health.urgencyTooltip}</span>
         </div>
       </td>
-      <td className="text-right">
+      <td className="text-right cell-actions">
         <div className="action-buttons justify-end">
           {targetInv.deleted ? (
             <button
@@ -262,6 +290,7 @@ const Inventory = () => {
   const [inventory, setInventory] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('inventory');
@@ -298,7 +327,10 @@ const Inventory = () => {
   // real category instead of falling into "Uncategorized" just because
   // their parent product is soft-deleted.
   React.useEffect(() => {
-    const unsub = subscribeToProducts((data) => setProducts(data), true);
+    const unsub = subscribeToProducts((data) => {
+      setProducts(data);
+      setLoadingProducts(false);
+    }, true);
     return () => unsub();
   }, []);
 
@@ -900,7 +932,7 @@ const Inventory = () => {
       </div>
 
       {/* ── Products-with-no-inventory warning banner ── */}
-      {!noInvBannerDismissed && productsWithNoInventory.length > 0 && (
+      {!loading && !loadingProducts && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
         <div
           style={{
             display: 'flex',
@@ -1072,7 +1104,7 @@ const Inventory = () => {
             <table className="table inv-table">
               <thead>
                 <tr>
-                  <th scope="col" aria-sort={ariaSort('sku')}>
+                  <th scope="col" className="th-sku" aria-sort={ariaSort('sku')}>
                     <button
                       type="button"
                       className="th-sort-btn"
@@ -1084,7 +1116,7 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col" aria-sort={ariaSort('item')}>
+                  <th scope="col" className="th-product" aria-sort={ariaSort('item')}>
                     <button
                       type="button"
                       className="th-sort-btn"
@@ -1096,7 +1128,7 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col" aria-sort={ariaSort('category')}>
+                  <th scope="col" className="th-category" aria-sort={ariaSort('category')}>
                     <button
                       type="button"
                       className="th-sort-btn"
@@ -1108,9 +1140,9 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col">Size</th>
-                  <th scope="col">Color</th>
-                  <th scope="col" className="text-right" aria-sort={ariaSort('total')}>
+                  <th scope="col" className="th-size text-center">Size</th>
+                  <th scope="col" className="th-color">Color</th>
+                  <th scope="col" className="th-num text-right" aria-sort={ariaSort('total')}>
                     <button
                       type="button"
                       className="th-sort-btn justify-end"
@@ -1122,8 +1154,8 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col" className="text-right">Reserved</th>
-                  <th scope="col" className="text-right" aria-sort={ariaSort('available')}>
+                  <th scope="col" className="th-num text-right">Reserved</th>
+                  <th scope="col" className="th-num text-right" aria-sort={ariaSort('available')}>
                     <button
                       type="button"
                       className="th-sort-btn justify-end"
@@ -1135,7 +1167,7 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col" aria-sort={ariaSort('stockStatus')}>
+                  <th scope="col" className="th-stock" aria-sort={ariaSort('stockStatus')}>
                     <button
                       type="button"
                       className="th-sort-btn"
@@ -1147,7 +1179,7 @@ const Inventory = () => {
                       )}
                     </button>
                   </th>
-                  <th scope="col" className="text-right">Actions</th>
+                  <th scope="col" className="th-actions text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
