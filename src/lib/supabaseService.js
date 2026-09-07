@@ -133,11 +133,24 @@ export const addDocument = async (table, data) => {
 /**
  * Update an existing row by its PK.
  */
+const NO_UPDATED_AT_TABLES = [
+  'admin_notifications',
+  'messages',
+  'conversations',
+  'stock_movements',
+  'logs',
+  'audit_logs',
+];
+
 export const updateDocument = async (table, id, updates) => {
-  const payload = toSnake({
-    ...updates,
-    updated_at: new Date().toISOString(),
-  });
+  const payload = toSnake(
+    NO_UPDATED_AT_TABLES.includes(table)
+      ? updates
+      : {
+          ...updates,
+          ...(updates.updated_at === undefined && { updated_at: new Date().toISOString() }),
+        }
+  );
   delete payload.id;
 
   const { error } = await supabase.from(table).update(payload).eq('id', id);
