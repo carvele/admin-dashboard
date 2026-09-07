@@ -57,34 +57,194 @@
   width: 25%;
 }
 
-.color-chip-btn {
-  font-size: 11px;
+/* ===== Proportional & Balanced Inventory Table ===== */
+.inv-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+}
+
+.inv-table th {
+  padding: 0.75rem 0.85rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 3px 9px;
-  border-radius: var(--spacing-md);
-  border: 1.5px solid var(--border-color, #e5e7eb);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.inv-table td {
+  padding: 0.65rem 0.85rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  font-size: 0.85rem;
+}
+
+.inv-table tbody tr.inv-row {
+  height: 48px;
+  transition: background-color 0.15s ease;
+}
+
+.inv-table tbody tr.inv-row:hover {
+  background-color: rgba(79, 70, 229, 0.035);
+}
+
+/* Specific column sizing */
+.th-sku, .sku-cell {
+  max-width: 150px;
+  min-width: 110px;
+  white-space: nowrap;
+}
+
+.sku-code {
+  display: inline-block;
+  max-width: 135px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 0.72rem;
+  color: var(--text-secondary, #6b7280);
+  background: var(--cream, #f9fafb);
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  letter-spacing: -0.2px;
+  cursor: default;
+  transition: all 0.15s ease;
+}
+
+.sku-code:hover {
+  border-color: var(--color-primary, #4f46e5);
+  color: var(--color-primary, #4f46e5);
+  background: #ffffff;
+}
+
+.th-product, .cell-product {
+  min-width: 130px;
+  max-width: 220px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--charcoal, #1f2937);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.th-category, .cell-category {
+  min-width: 90px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.th-size, .cell-size {
+  width: 55px;
+  text-align: center;
+}
+
+.size-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  background-color: var(--cream, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--charcoal, #1f2937);
+}
+
+/* Color Chips Row & Badges */
+.th-color, .cell-color {
+  min-width: 170px;
+  max-width: 280px;
+}
+
+.color-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.color-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap !important;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  height: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
   background: var(--cream, #f9fafb);
   color: var(--text-secondary, #4b5563);
   cursor: pointer;
   transition: all 0.15s ease;
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .color-chip-btn:hover {
   border-color: var(--color-primary, #4f46e5);
   color: var(--color-primary, #4f46e5);
+  background: #ffffff;
+  transform: translateY(-1px);
 }
 
 .color-chip-btn.active {
   background: var(--color-primary, #4f46e5);
-  color: var(--white);
+  color: #ffffff;
   border-color: var(--color-primary, #4f46e5);
-  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.25);
 }
 
-.inv-table th,
-.inv-table td {
-  padding: 1rem;
+.color-chip-btn .chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.color-chip-btn .chip-count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
+}
+
+.color-chip-btn.active .chip-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.color-chip-btn.out-of-stock {
+  opacity: 0.55;
+}
+
+/* Numeric Columns */
+.th-num, .cell-num {
+  width: 65px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Stock Status Cell */
+.th-stock, .stock-cell {
+  min-width: 135px;
+  white-space: nowrap;
+}
+
+.th-actions, .cell-actions {
+  width: 125px;
+  white-space: nowrap;
 }
 
 .stock-progress-container {

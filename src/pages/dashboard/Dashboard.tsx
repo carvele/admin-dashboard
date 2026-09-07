@@ -27,9 +27,6 @@ import {
   X,
   MapPin,
   Activity,
-  Cloud,
-  Sun,
-  CloudRain,
   Zap,
   PlusCircle,
   MessageSquare,
@@ -49,7 +46,6 @@ const defaultPreferences = {
   widgetRecentCustomers: true,
   widgetLogistics: true,
   widgetActivityFeed: true,
-  widgetWeather: true,
 };
 
 import { getPaginatedCustomers } from '../../services/customerService';
@@ -196,17 +192,6 @@ const Dashboard = () => {
     ...reservations.map(r => ({ type: 'reservation', date: parseDate(r.createdAt || r.date), desc: `${r.customerName || 'A customer'} booked ${r.productName || 'an outfit'}`, user: r.customerName })),
     ...customers.map(c => ({ type: 'customer', date: parseDate(c.createdAt || c.id), desc: `New customer ${getUserDisplayName(c)} joined`, user: getUserDisplayName(c) })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
-
-  // 3. Weather Insight logic (Simulation)
-  const weatherStates = ['Sunny', 'Cloudy', 'Rainy', 'Cloudy']; // Alternating
-  const currentHour = new Date().getHours();
-  const weather = weatherStates[currentHour % 4];
-  const weatherAdvice = {
-    'Sunny': 'High demand for Outdoor Shoots: Suggest light fabrics.',
-    'Rainy': 'Wet weather warning: Recommend waterproof accessories.',
-    'Cloudy': 'Overcast: Ideal for neutral palette suggestions.'
-  }[weather] || 'Ready for all styles today.';
-
 
   // Popular Outfit Combinations — sourced from admin-created suggestedOutfits
   const outfitCounts: Record<string, number> = {};
@@ -606,30 +591,7 @@ const Dashboard = () => {
         </motion.div>
         )}
 
-        {widgetPrefs.widgetWeather && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.7 }}
-          className="weather-insight-card widget card"
-        >
-          <div className="card-header">
-            <h3>Operational Insight</h3>
-            <span className="badge accent">Weather Context</span>
-          </div>
-          <div className="flex align-center gap-4 mt-2">
-            <div className="weather-icon-large">
-              {weather === 'Sunny' && <Sun size={40} className="text-warning" />}
-              {weather === 'Rainy' && <CloudRain size={40} className="text-accent" />}
-              {weather === 'Cloudy' && <Cloud size={40} className="text-secondary" />}
-            </div>
-            <div>
-              <h4 className="font-bold text-lg">{weather} Today</h4>
-              <p className="text-sm text-secondary leading-tight">{weatherAdvice}</p>
-            </div>
-          </div>
-        </motion.div>
-        )}
+        
       </div>
 
       <div className="command-center-grid mt-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
@@ -808,13 +770,7 @@ const Dashboard = () => {
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
-                  <div className="pref-item">
-                    <span className="pref-label">Operational Insights</span>
-                    <label className="toggle-switch" aria-label="Toggle Operational Insights">
-                      <input type="checkbox" id="pref-widget-weather" name="pref-widget-weather" className="toggle-input" checked={widgetPrefs.widgetWeather} onChange={() => togglePref('widgetWeather')} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
+                  
                 </div>
               </div>
             </div>

@@ -1,6 +1,65 @@
+# =============================================================================
+# Cloudflare Pages _headers
+# Rule priority: more-specific paths take precedence over wildcards.
+# Asset rules MUST appear before the /* catch-all.
+# =============================================================================
+
+# JavaScript modules -- explicit MIME type prevents Cloudflare from serving
+# these as text/html when the SPA fallback fires before the asset rule.
+/assets/*.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.mjs
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=31536000, immutable
+
+# CSS
+/assets/*.css
+  Content-Type: text/css; charset=utf-8
+  Cache-Control: public, max-age=31536000, immutable
+
+# WebAssembly
+/assets/*.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=31536000, immutable
+
+# Images
+/assets/*.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+# Fonts
+/assets/*.woff2
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.woff
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static public pages (privacy/terms)
+/privacy.html
+  Cache-Control: public, max-age=3600
+
+/terms.html
+  Cache-Control: public, max-age=3600
+
+# =============================================================================
+# Global security headers -- applied to all responses including HTML and assets
+# =============================================================================
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.gstatic.com https://www.gstatic.com https://apis.google.com; worker-src 'self' blob:; connect-src 'self' https://wufcmtndotfvxvvxkamv.supabase.co wss://wufcmtndotfvxvvxkamv.supabase.co https://res.cloudinary.com https://api.cloudinary.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; img-src * 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.gstatic.com https://www.gstatic.com https://apis.google.com; worker-src 'self' blob:; connect-src 'self' https://wufcmtndotfvxvvxkamv.supabase.co wss://wufcmtndotfvxvvxkamv.supabase.co https://res.cloudinary.com https://api.cloudinary.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; img-src * 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:

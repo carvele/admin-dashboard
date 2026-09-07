@@ -1,2 +1,9 @@
-/*        /index.html    200
+# Static asset paths -- must come BEFORE the SPA fallback
+# Cloudflare Pages matches rules top-to-bottom; the SPA wildcard
+# must never swallow real asset requests.
+/assets/*    /assets/:splat    200
+/fonts/*     /fonts/:splat     200
+/icons/*     /icons/:splat     200
 
+# SPA fallback: all non-asset routes serve index.html
+/*           /index.html       200
