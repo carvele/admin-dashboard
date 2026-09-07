@@ -1,59 +1,20 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+﻿import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { supabase } from '../lib/supabaseClient';
 import { toCamel } from '../lib/supabaseService';
+import SessionTimeoutModal from '../components/auth/SessionTimeoutModal';
 
 const AuthContext = createContext(null);
 
-// Utility: Race a promise against a timeout so the app never freezes
+// Race a promise against a timeout so the app never freezes
 const withTimeout = (promise, ms = 5000) =>
   Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
   ]);
 
-// ── Device helpers ──────────────────────────────────────────
-/*
- * Device registration is performed by the register-device Edge Function.
- * The browser may read status, but it must not write approval records.
- */
-/*
-  const now = new Date().toISOString();
-  const { data: existing } = await supabase
-    .from('devices')
-    .select('fingerprint, login_history')
-    .eq('fingerprint', fingerprint)
-    .maybeSingle();
-
-  if (!existing) {
-    await supabase.from('devices').insert({
-      fingerprint,
-      status: 'pending',
-      user_agent: userAgent,
-      last_seen: now,
-      name: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
-      staff_email: staffEmail,
-      staff_name: staffName,
-      failed_attempts: 0,
-      lockout_until: null,
-      login_history: [{ email: staffEmail, time: now }],
-    });
-  } else {
-    const history = Array.isArray(existing.login_history) ? existing.login_history : [];
-    await supabase.from('devices').update({
-      last_seen: now,
-      ...(staffEmail && {
-        staff_email: staffEmail,
-        staff_name: staffName,
-        login_history: [...history, { email: staffEmail, time: now }].slice(-20),
-      }),
-      updated_at: now,
-    }).eq('fingerprint', fingerprint);
-  }
-}; */
-
-// Lightweight pure JS SHA-256 fallback for non-secure HTTP contexts where crypto.subtle is undefined
+// Lightweight pure JS SHA-256 fallback for non-secure contexts where crypto.subtle is undefined
 function fallbackSha256(ascii) {
   function rightRotate(value, amount) {
     return (value >>> amount) | (value << (32 - amount));
@@ -66,7 +27,7 @@ function fallbackSha256(ascii) {
 
   let hash = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ];
   const k = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -76,7 +37,7 @@ function fallbackSha256(ascii) {
     0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
     0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
     0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
   ];
 
   ascii += '\x80';
@@ -125,29 +86,97 @@ function fallbackSha256(ascii) {
   return hash.map(h => ((h >>> 0).toString(16).padStart(8, '0'))).join('');
 }
 
-// ── Main provider ───────────────────────────────────────────
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState('checking');
   const [deviceFingerprint, setDeviceFingerprint] = useState(null);
   const [deviceData, setDeviceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Unified timeout state machine: ACTIVE | IDLE_WARNING | VISIBILITY_WARNING | SIGNING_OUT
+  const [sessionTimeoutState, setSessionTimeoutState] = useState('ACTIVE');
+  const [countdownSeconds, setCountdownSeconds] = useState(0);
+
   const deviceChannelRef = useRef(null);
   const userRef = useRef(null);
   const isIntentionalSignOutRef = useRef(false);
+  const initialSessionCheckedRef = useRef(false);
+
+  // Lockout concurrency and stale result protection
+  const lockoutCheckGenerationRef = useRef(0);
+  const lockoutDebounceTimerRef = useRef(null);
+  const lockoutInFlightRef = useRef(false);
+
+  // Timeout and activity tracking references
+  const lastActivityTimeRef = useRef(Date.now());
+  const idleTimerRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const lastActivityThrottleRef = useRef(0);
+
+  const IDLE_LIMIT_MS = 60 * 60 * 1000; // 60 minutes
+  const IDLE_WARNING_BUFFER_MS = 2 * 60 * 1000; // 2 minutes warning
+  const IDLE_WARNING_TIME_MS = IDLE_LIMIT_MS - IDLE_WARNING_BUFFER_MS; // 58 minutes
+  const VISIBILITY_COUNTDOWN_SECONDS = 60;
 
   // Unsubscribe from old device channel before starting a new one
-  const clearDeviceChannel = React.useCallback(() => {
+  const clearDeviceChannel = useCallback(() => {
     if (deviceChannelRef.current) {
       supabase.removeChannel(deviceChannelRef.current);
       deviceChannelRef.current = null;
     }
   }, []);
 
-  const handleDeviceCheck = React.useCallback(async (supabaseUser) => {
+  // Intentional sign out with safe storage preservation
+  const doSignOut = useCallback(async (message, toastOptions) => {
+    if (isIntentionalSignOutRef.current) return;
+    isIntentionalSignOutRef.current = true;
+
+    // Clear timeout timers
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (lockoutDebounceTimerRef.current) clearTimeout(lockoutDebounceTimerRef.current);
+
+    clearDeviceChannel();
+
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[doSignOut] Supabase signOut error:', err);
+    }
+
+    userRef.current = null;
+    setUser(null);
+    setDeviceStatus('checking');
+    setSessionTimeoutState('ACTIVE');
+    setCountdownSeconds(0);
+
+    // Note: Never call localStorage.clear(). Supabase manages its own auth token storage.
+    // User preferences and persistent device fallbacks are preserved.
+
+    if (message) {
+      toast.info(message, toastOptions);
+    }
+
+    setTimeout(() => {
+      isIntentionalSignOutRef.current = false;
+    }, 1000);
+  }, [clearDeviceChannel]);
+
+  const logout = useCallback(
+    () => doSignOut('Logged out successfully'),
+    [doSignOut]
+  );
+
+  const handleIdleLogout = useCallback(
+    () => doSignOut('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 }),
+    [doSignOut]
+  );
+
+  // Full device and staff profile check (for initial sign-in and verified session restoration)
+  const handleDeviceCheck = useCallback(async (supabaseUser) => {
     if (!supabaseUser) {
       clearDeviceChannel();
+      userRef.current = null;
       setUser(null);
       setDeviceStatus('checking');
       setIsLoading(false);
@@ -155,12 +184,12 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-
-      // --- 4. Staff / Admin / Owner role lookup from public.profiles ---
       let resolvedRole = null;
       let staffName = '';
       let profile = null;
       let profileFetchAttempt = 0;
+      let hadTransientNetworkError = false;
+      let querySucceeded = false;
 
       // Retry up to 3 times to prevent kicking out valid users during transient wake/network lag
       while (profileFetchAttempt < 3 && !profile) {
@@ -169,7 +198,6 @@ export const AuthProvider = ({ children }) => {
           const { data, error: profileErr } = await withTimeout(
             supabase
               .from('profiles')
-              // Fetch the full status fields — we decide access, not the query filter
               .select('role, first_name, last_name, deleted, is_blocked, employment_status')
               .eq('id', supabaseUser.id)
               .maybeSingle(),
@@ -177,12 +205,15 @@ export const AuthProvider = ({ children }) => {
           );
 
           if (profileErr) {
+            hadTransientNetworkError = true;
             console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile fetch error:`, profileErr.message);
           } else {
+            querySucceeded = true;
             profile = data;
             break;
           }
         } catch (err) {
+          hadTransientNetworkError = true;
           console.warn(`[handleDeviceCheck] Attempt ${profileFetchAttempt} profile lookup timed out or failed:`, err);
         }
 
@@ -192,9 +223,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (profile) {
-        // ── Lockout guard ──────────────────────────────────────
-        // DENY-LIST logic: only block on explicit bad states.
-        // Synchronized with DB is_staff_or_admin(): only NULL and 'active' are allowed.
+        // Lockout guard: only block on explicit confirmed bad states
         const isActive = !profile.employment_status || profile.employment_status === 'active';
         if (
           profile.deleted === true ||
@@ -203,6 +232,7 @@ export const AuthProvider = ({ children }) => {
         ) {
           isIntentionalSignOutRef.current = true;
           await supabase.auth.signOut();
+          userRef.current = null;
           setUser(null);
           setIsLoading(false);
           toast.error(
@@ -222,19 +252,16 @@ export const AuthProvider = ({ children }) => {
         isIntentionalSignOutRef.current = true;
         await supabase.auth.signOut();
         toast.error('Access restricted: This portal is for store staff and administrators only. Customer accounts must use the mobile application.', { duration: 6000 });
+        userRef.current = null;
         setUser(null);
         setIsLoading(false);
         setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
         return;
       }
 
-      // If no profile was resolved after retries:
+      // If no profile was resolved:
       if (!resolvedRole) {
-        // Pending invite: the invite-email link already established a session for
-        // this user, but they haven't finished Set Password yet (no staff profile
-        // row). Leave the session alone so SetPassword.jsx can use it — rather
-        // than signing them out before they ever reach that page. Detected via
-        // app_metadata.staff_role, which is service-role-only and unforgeable.
+        // Check for pending invite with unforgeable app_metadata
         const isPendingInvite = ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
         if (isPendingInvite) {
           setUser(null);
@@ -242,26 +269,36 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        // If user already had a confirmed active session and this is just a background network blip, do not kick them out
+        // If user already had a confirmed active session and this is a transient error, preserve session
         if (userRef.current && userRef.current.uid === supabaseUser.id) {
-          console.warn('[handleDeviceCheck] Transient network blip during session refresh; retaining active session.');
+          console.warn('[handleDeviceCheck] Transient validation failure during active session; preserving session.');
           setIsLoading(false);
           return;
         }
 
-        if (!isIntentionalSignOutRef.current) {
-          isIntentionalSignOutRef.current = true;
-          await supabase.auth.signOut();
-          toast.error('Access restricted: No staff profile found for this account.');
-          setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+        // If lookup failed due to network or database error, NEVER treat it as confirmed missing profile
+        if (hadTransientNetworkError && !querySucceeded) {
+          console.warn('[handleDeviceCheck] Network/database issue during profile validation; preserving session.');
+          setIsLoading(false);
+          return;
         }
-        setUser(null);
-        setIsLoading(false);
-        return;
+
+        // Succeeded with zero rows: confirmed missing staff profile
+        if (querySucceeded && !profile) {
+          if (!isIntentionalSignOutRef.current) {
+            isIntentionalSignOutRef.current = true;
+            await supabase.auth.signOut();
+            toast.error('Access restricted: No staff profile found for this account.');
+            setTimeout(() => { isIntentionalSignOutRef.current = false; }, 1000);
+          }
+          userRef.current = null;
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
       }
 
-
-      // --- 5. Set user state ---
+      // Set user state
       const nextUser = {
         uid: supabaseUser.id,
         name: staffName || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Staff',
@@ -270,137 +307,124 @@ export const AuthProvider = ({ children }) => {
       };
       userRef.current = nextUser;
       setUser(nextUser);
+      setIsLoading(false);
 
-      setIsLoading(false); // Unblock rendering immediately!
-
-      // --- Asynchronous Device Fingerprinting & Registration ---
+      // Asynchronous device fingerprinting & registration
       (async () => {
         try {
-      // --- 1. Fingerprint ---
-      // Device fingerprints are hashed before storing — cannot be reversed.
-      // The plaintext fingerprint is only held in memory for the current session.
-      const hashFP = async (fp) => {
-        if (typeof crypto !== 'undefined' && crypto?.subtle?.digest) {
-          try {
-            const enc = new TextEncoder().encode(fp);
-            const hash = await crypto.subtle.digest('SHA-256', enc);
-            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-          } catch {
-            /* ignore & fallback */
-          }
-        }
-        return fallbackSha256(fp);
-      };
-
-      let visitorId = null;
-      try {
-        const fp = await withTimeout(FingerprintJS.load(), 6000);
-        const result = await fp.get();
-        visitorId = result.visitorId;
-        const hashed = await hashFP(visitorId);
-        localStorage.setItem('_jz_fp_hash', hashed);
-      } catch {
-        // FingerprintJS failed/blocked (e.g. ad-blocker or offline) — check for persistent fallback UUID
-        const DEVICE_UUID_KEY = '_jz_device_uuid';
-        const legacyStored = localStorage.getItem('_jz_fp_id');
-        if (legacyStored) {
-          try { visitorId = atob(legacyStored); } catch { /* ignore */ }
-          if (visitorId) {
-            localStorage.setItem(DEVICE_UUID_KEY, visitorId);
-            localStorage.removeItem('_jz_fp_id');
-          }
-        }
-        // Stable fallback: reuse an existing fallback ID from localStorage or
-        // a long-lived cookie before generating a brand-new random one.
-        if (!visitorId) {
-          const storedFallback = localStorage.getItem('_jz_fallback_device_id') || localStorage.getItem(DEVICE_UUID_KEY);
-          const cookieFallback = document.cookie.match(/(?:^|; )_jz_fp_cookie=([^;]*)/)?.[1];
-          visitorId = storedFallback || cookieFallback || null;
-        }
-        if (!visitorId) {
-          const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
-            ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-            : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-          visitorId = 'sb_' + randSuffix;
-          localStorage.setItem(DEVICE_UUID_KEY, visitorId);
-        }
-        // Persist the fallback ID in both localStorage and a long-lived cookie
-        // so subsequent sessions always reuse the same device identity.
-        localStorage.setItem('_jz_fallback_device_id', visitorId);
-        try {
-          const maxAge = 365 * 24 * 60 * 60; // 1 year
-          document.cookie = `_jz_fp_cookie=${visitorId}; path=/; max-age=${maxAge}; SameSite=Lax`;
-        } catch { /* cookie write failed — localStorage alone is fine */ }
-        const hashed = await hashFP(visitorId);
-        localStorage.setItem('_jz_fp_hash', hashed);
-      }
-      setDeviceFingerprint(visitorId);
-
-      // --- 2. Register device through the server-side function. Staff have
-      // read-only RLS access to devices; client-side inserts must not be used.
-      try {
-        const { error: registrationError } = await supabase.functions.invoke('register-device', {
-          body: {
-            fingerprint: visitorId,
-            user_agent: navigator.userAgent,
-            staff_name: supabaseUser.user_metadata?.full_name || '',
-          },
-        });
-        if (registrationError) {
-          console.warn('Device registration function returned an error:', registrationError);
-        }
-      } catch (invokeErr) {
-        console.warn('Device registration network call failed (may be offline or transient network change):', invokeErr);
-      }
-
-      // --- 3. Start live device listener ---
-      clearDeviceChannel();
-      try {
-        const channel = supabase
-          .channel(`device:${visitorId}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
-            async () => {
-              const { data } = await supabase
-                .from('devices')
-                .select('*')
-                .eq('fingerprint', visitorId)
-                .maybeSingle();
-              if (data) {
-                const row = toCamel(data);
-                setDeviceData(row);
-                setDeviceStatus(row.status);
+          const hashFP = async (fp) => {
+            if (typeof crypto !== 'undefined' && crypto?.subtle?.digest) {
+              try {
+                const enc = new TextEncoder().encode(fp);
+                const hash = await crypto.subtle.digest('SHA-256', enc);
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+              } catch {
+                /* ignore & fallback */
               }
-            },
-          )
-          .subscribe();
-        deviceChannelRef.current = channel;
-      } catch (channelErr) {
-        console.warn('Failed to subscribe to device realtime channel:', channelErr);
-      }
+            }
+            return fallbackSha256(fp);
+          };
 
-      // Initial device status fetch
-      try {
-        const { data: deviceRow } = await supabase
-          .from('devices')
-          .select('*')
-          .eq('fingerprint', visitorId)
-          .maybeSingle();
-        if (deviceRow) {
-          const row = toCamel(deviceRow);
-          setDeviceData(row);
-          setDeviceStatus(row.status);
-        } else {
-          // Never fail open. A missing device row means registration or lookup
-          // failed and must be reviewed, not silently approved.
-          setDeviceStatus('pending');
-        }
-      } catch (devLookupErr) {
-        console.warn('Device status lookup failed:', devLookupErr);
-        setDeviceStatus('pending');
-      }
+          let visitorId = null;
+          try {
+            const fp = await withTimeout(FingerprintJS.load(), 6000);
+            const result = await fp.get();
+            visitorId = result.visitorId;
+            const hashed = await hashFP(visitorId);
+            localStorage.setItem('_jz_fp_hash', hashed);
+          } catch {
+            const DEVICE_UUID_KEY = '_jz_device_uuid';
+            const legacyStored = localStorage.getItem('_jz_fp_id');
+            if (legacyStored) {
+              try { visitorId = atob(legacyStored); } catch { /* ignore */ }
+              if (visitorId) {
+                localStorage.setItem(DEVICE_UUID_KEY, visitorId);
+                localStorage.removeItem('_jz_fp_id');
+              }
+            }
+            if (!visitorId) {
+              const storedFallback = localStorage.getItem('_jz_fallback_device_id') || localStorage.getItem(DEVICE_UUID_KEY);
+              const cookieFallback = document.cookie.match(/(?:^|; )_jz_fp_cookie=([^;]*)/)?.[1];
+              visitorId = storedFallback || cookieFallback || null;
+            }
+            if (!visitorId) {
+              const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
+                ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+                : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+              visitorId = 'sb_' + randSuffix;
+              localStorage.setItem(DEVICE_UUID_KEY, visitorId);
+            }
+            localStorage.setItem('_jz_fallback_device_id', visitorId);
+            try {
+              const maxAge = 365 * 24 * 60 * 60;
+              document.cookie = `_jz_fp_cookie=${visitorId}; path=/; max-age=${maxAge}; SameSite=Lax`;
+            } catch { /* cookie write failed */ }
+            const hashed = await hashFP(visitorId);
+            localStorage.setItem('_jz_fp_hash', hashed);
+          }
+          setDeviceFingerprint(visitorId);
 
+          // Register device through Edge Function
+          try {
+            const { error: registrationError } = await supabase.functions.invoke('register-device', {
+              body: {
+                fingerprint: visitorId,
+                user_agent: navigator.userAgent,
+                staff_name: supabaseUser.user_metadata?.full_name || '',
+              },
+            });
+            if (registrationError) {
+              console.warn('Device registration function returned an error:', registrationError);
+            }
+          } catch (invokeErr) {
+            console.warn('Device registration network call failed:', invokeErr);
+          }
+
+          // Live device listener
+          clearDeviceChannel();
+          try {
+            const channel = supabase
+              .channel(`device:${visitorId}`)
+              .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
+                async () => {
+                  const { data } = await supabase
+                    .from('devices')
+                    .select('*')
+                    .eq('fingerprint', visitorId)
+                    .maybeSingle();
+                  if (data) {
+                    const row = toCamel(data);
+                    setDeviceData(row);
+                    setDeviceStatus(row.status);
+                  }
+                },
+              )
+              .subscribe();
+            deviceChannelRef.current = channel;
+          } catch (channelErr) {
+            console.warn('Failed to subscribe to device realtime channel:', channelErr);
+          }
+
+          // Initial device status fetch
+          try {
+            const { data: deviceRow } = await supabase
+              .from('devices')
+              .select('*')
+              .eq('fingerprint', visitorId)
+              .maybeSingle();
+            if (deviceRow) {
+              const row = toCamel(deviceRow);
+              setDeviceData(row);
+              setDeviceStatus(row.status);
+            } else {
+              setDeviceStatus('pending');
+            }
+          } catch (devLookupErr) {
+            console.warn('Device status lookup failed:', devLookupErr);
+            setDeviceStatus('pending');
+          }
         } catch (asyncErr) {
           console.error('Async device check failed:', asyncErr);
           setDeviceStatus('error');
@@ -414,22 +438,63 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearDeviceChannel]);
 
-  // Listen for Supabase auth state changes (initial load + logout)
+  // Auth state listener with event-specific dispatch
   useEffect(() => {
-    // Get current session on mount
+    // Check session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      handleDeviceCheck(session?.user ?? null);
+      if (!initialSessionCheckedRef.current) {
+        initialSessionCheckedRef.current = true;
+        handleDeviceCheck(session?.user ?? null);
+      }
     });
 
-    // Supabase's auth callback holds an internal lock while it runs. handleDeviceCheck
-    // calls supabase.auth.signOut() in several branches, and calling an auth method
-    // from inside the callback re-enters that lock, which manifests as
-    // "RangeError: Maximum call stack size exceeded" and can corrupt the session,
-    // producing later 401s and a forced logout. Deferring with setTimeout(0) runs
-    // handleDeviceCheck after the callback returns, outside the lock.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Defer execution outside Supabase internal lock
       setTimeout(() => {
-        handleDeviceCheck(session?.user ?? null);
+        if (event === 'SIGNED_OUT') {
+          clearDeviceChannel();
+          userRef.current = null;
+          setUser(null);
+          setDeviceStatus('checking');
+          setIsLoading(false);
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          // Token refresh: do not re-run device check or profile check
+          if (session?.user && userRef.current) {
+            userRef.current = {
+              ...userRef.current,
+              email: session.user.email,
+            };
+          }
+          return;
+        }
+
+        if (event === 'INITIAL_SESSION') {
+          if (!initialSessionCheckedRef.current) {
+            initialSessionCheckedRef.current = true;
+            handleDeviceCheck(session?.user ?? null);
+          }
+          return;
+        }
+
+        if (event === 'SIGNED_IN') {
+          handleDeviceCheck(session?.user ?? null);
+          return;
+        }
+
+        if (event === 'USER_UPDATED') {
+          if (session?.user) {
+            handleDeviceCheck(session.user);
+          }
+          return;
+        }
+
+        // Any other event
+        if (session?.user && !userRef.current) {
+          handleDeviceCheck(session.user);
+        }
       }, 0);
     });
 
@@ -439,81 +504,128 @@ export const AuthProvider = ({ children }) => {
     };
   }, [handleDeviceCheck, clearDeviceChannel]);
 
-  const doSignOut = React.useCallback(async (message, toastOptions) => {
-    isIntentionalSignOutRef.current = true;
-    const savedFPHash = localStorage.getItem('_jz_fp_hash');
-    clearDeviceChannel();
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      /* ignore */
+  // Unified reset activity timer
+  const resetActivityTimer = useCallback(() => {
+    lastActivityTimeRef.current = Date.now();
+
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    setSessionTimeoutState('ACTIVE');
+    setCountdownSeconds(0);
+
+    if (userRef.current) {
+      idleTimerRef.current = setTimeout(() => {
+        if (userRef.current) {
+          setSessionTimeoutState('IDLE_WARNING');
+        }
+      }, IDLE_WARNING_TIME_MS);
     }
-    userRef.current = null;
-    setUser(null);
-    setDeviceStatus('checking');
-    localStorage.clear();
-    sessionStorage.clear();
-    if (savedFPHash) localStorage.setItem('_jz_fp_hash', savedFPHash);
-    toast.info(message, toastOptions);
-    setTimeout(() => {
-      isIntentionalSignOutRef.current = false;
-    }, 1000);
-  }, [clearDeviceChannel]);
+  }, [IDLE_WARNING_TIME_MS]);
 
-  const logout = React.useCallback(
-    () => doSignOut('Logged out successfully'),
-    [doSignOut]
-  );
+  // Action for user clicking 'Stay logged in'
+  const handleStayLoggedIn = useCallback(() => {
+    resetActivityTimer();
+  }, [resetActivityTimer]);
 
-  const handleIdleLogout = React.useCallback(
-    () => doSignOut('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 }),
-    [doSignOut]
-  );
-
-  // Auto-logout idle timer (30 minutes of inactivity)
+  // Countdown timer effect for IDLE_WARNING and VISIBILITY_WARNING
   useEffect(() => {
-    let timeoutId;
-    let lastActivityTime = Date.now();
-    const IDLE_LIMIT_MS = 30 * 60 * 1000;
+    if (sessionTimeoutState === 'IDLE_WARNING') {
+      let remaining = 120;
+      setCountdownSeconds(remaining);
 
-    const resetTimer = () => {
-      lastActivityTime = Date.now();
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        if (user) {
+      countdownIntervalRef.current = setInterval(() => {
+        remaining -= 1;
+        setCountdownSeconds(remaining);
+        if (remaining <= 0) {
+          clearInterval(countdownIntervalRef.current);
+          setSessionTimeoutState('SIGNING_OUT');
           handleIdleLogout();
         }
-      }, IDLE_LIMIT_MS);
-    };
+      }, 1000);
+
+      return () => {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      };
+    }
+
+    if (sessionTimeoutState === 'VISIBILITY_WARNING') {
+      let remaining = VISIBILITY_COUNTDOWN_SECONDS;
+      setCountdownSeconds(remaining);
+
+      countdownIntervalRef.current = setInterval(() => {
+        remaining -= 1;
+        setCountdownSeconds(remaining);
+        if (remaining <= 0) {
+          clearInterval(countdownIntervalRef.current);
+          setSessionTimeoutState('SIGNING_OUT');
+          handleIdleLogout();
+        }
+      }, 1000);
+
+      return () => {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      };
+    }
+  }, [sessionTimeoutState, handleIdleLogout]);
+
+  // Idle session tracking and visibility change handler
+  useEffect(() => {
+    if (!user || deviceStatus !== 'approved') {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      return;
+    }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user) {
-        const elapsed = Date.now() - lastActivityTime;
-        if (elapsed >= IDLE_LIMIT_MS) {
-          handleIdleLogout();
+      if (!userRef.current) return;
+
+      if (document.visibilityState === 'visible') {
+        const elapsed = Date.now() - lastActivityTimeRef.current;
+
+        if (elapsed < IDLE_WARNING_TIME_MS) {
+          resetActivityTimer();
+        } else if (elapsed >= IDLE_LIMIT_MS) {
+          // Tab hidden beyond inactivity threshold: show recovery warning instead of immediate logout
+          if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          setSessionTimeoutState('VISIBILITY_WARNING');
         } else {
-          resetTimer();
+          // Tab restored in the warning window
+          if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          setSessionTimeoutState('IDLE_WARNING');
         }
       }
     };
 
-    if (user && deviceStatus === 'approved') {
-      const activityEvents = ['mousemove', 'mousedown', 'pointerdown', 'keydown', 'scroll', 'touchstart', 'focus'];
-      activityEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      resetTimer();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      // If currently showing a warning, any interaction dismisses it and stays logged in
+      if (sessionTimeoutState === 'IDLE_WARNING' || sessionTimeoutState === 'VISIBILITY_WARNING') {
+        resetActivityTimer();
+        return;
+      }
+      // Throttle event handling to avoid thrashing timers
+      if (now - lastActivityThrottleRef.current > 10000) {
+        lastActivityThrottleRef.current = now;
+        resetActivityTimer();
+      }
+    };
 
-      return () => {
-        clearTimeout(timeoutId);
-        activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'pointerdown'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, handleUserActivity, { passive: true }));
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    resetActivityTimer();
 
     return () => {
-      clearTimeout(timeoutId);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, handleUserActivity));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, deviceStatus, handleIdleLogout]);
+  }, [user, deviceStatus, resetActivityTimer, IDLE_WARNING_TIME_MS, IDLE_LIMIT_MS, sessionTimeoutState]);
 
   const login = async (email, password) => {
     try {
@@ -535,56 +647,65 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Background lockout check — called on every route change.
-   * Silently signs out the user if their account has been archived,
-   * blocked, or terminated since their session was last validated.
-   */
-  const checkLockout = async () => {
-    // Only run if there is an active user session
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
+  // Debounced lockout check with generation counter and stale-result protection
+  const checkLockout = useCallback(() => {
+    const currentGen = ++lockoutCheckGenerationRef.current;
 
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('deleted, is_blocked, employment_status')
-        .eq('id', authUser.id)
-        .maybeSingle();
-
-      if (error) {
-        console.warn('[checkLockout] Profile fetch error:', error.message);
-        return; // fail open — don't sign out on a fetch error
-      }
-
-      // !profile (row not found) is treated as fail-open: transient RLS/network
-      // issues must not sign out a valid user. Only explicit bad flags trigger lockout.
-      const isActive = !profile?.employment_status || profile.employment_status === 'active';
-      if (
-        profile &&
-        (
-          profile.deleted === true ||
-          profile.is_blocked === true ||
-          !isActive
-        )
-      ) {
-        clearDeviceChannel();
-        await supabase.auth.signOut();
-        setUser(null);
-        setDeviceStatus('checking');
-        toast.error(
-          'This account no longer has access. Please contact the store owner.',
-          { duration: 6000 },
-        );
-      }
-    } catch (err) {
-      console.warn('[checkLockout] Unexpected error:', err);
+    if (lockoutDebounceTimerRef.current) {
+      clearTimeout(lockoutDebounceTimerRef.current);
     }
-  };
 
-  // Role normalization: Supabase stores lowercase ('owner', 'staff')
-  // The UI historically checks for 'Owner' (capitalized).
-  // We surface a normalized role to satisfy both old (capital) and new (lower) checks.
+    lockoutDebounceTimerRef.current = setTimeout(async () => {
+      if (lockoutInFlightRef.current) return;
+      lockoutInFlightRef.current = true;
+
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+
+        if (currentGen !== lockoutCheckGenerationRef.current) return;
+
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('deleted, is_blocked, employment_status')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        // Discard stale response if a newer check has started
+        if (currentGen !== lockoutCheckGenerationRef.current) return;
+
+        if (error) {
+          console.warn('[checkLockout] Transient profile fetch error:', error.message);
+          return;
+        }
+
+        const isActive = !profile?.employment_status || profile.employment_status === 'active';
+        if (
+          profile &&
+          (
+            profile.deleted === true ||
+            profile.is_blocked === true ||
+            !isActive
+          )
+        ) {
+          clearDeviceChannel();
+          await supabase.auth.signOut();
+          userRef.current = null;
+          setUser(null);
+          setDeviceStatus('checking');
+          toast.error(
+            'This account no longer has access. Please contact the store owner.',
+            { duration: 6000 },
+          );
+        }
+      } catch (err) {
+        console.warn('[checkLockout] Unexpected error during lockout check:', err);
+      } finally {
+        lockoutInFlightRef.current = false;
+      }
+    }, 400);
+  }, [clearDeviceChannel]);
+
   const normalizedRole = user?.role
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()
     : null;
@@ -622,6 +743,13 @@ export const AuthProvider = ({ children }) => {
       }}
     >
       {children}
+      <SessionTimeoutModal
+        isOpen={sessionTimeoutState === 'IDLE_WARNING' || sessionTimeoutState === 'VISIBILITY_WARNING'}
+        mode={sessionTimeoutState === 'IDLE_WARNING' ? 'idle' : 'visibility'}
+        countdownSeconds={countdownSeconds}
+        onStayLoggedIn={handleStayLoggedIn}
+        onSignOut={logout}
+      />
     </AuthContext.Provider>
   );
 };
