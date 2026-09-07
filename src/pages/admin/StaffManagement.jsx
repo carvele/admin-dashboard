@@ -184,20 +184,17 @@ const StaffManagement = () => {
   const confirmRoleToggle = async () => {
     if (!roleToggleConfirm) return;
     const member = roleToggleConfirm;
-    const newRole = member.role === 'owner' ? 'staff' : 'owner';
+    const newRole = member.role === 'admin' ? 'staff' : 'admin';
     const name = getDisplayName(member);
     try {
-      const { error } = await supabase.rpc('update_staff_role', {
+      const { error } = await supabase.rpc('update_staff_role_v2', {
         target_user_id: member.id,
         new_role: newRole,
       });
       if (error) throw error;
-      // update_staff_role now logs this itself server-side (guaranteed,
-      // not dependent on this client call succeeding) -- see
-      // jezsy-mobile-app's audit_log_hardening migration.
       toast.success(`${name} is now ${newRole}`);
-    } catch {
-      toast.error('Failed to update role');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update role');
     } finally {
       setRoleToggleConfirm(null);
     }
@@ -208,19 +205,15 @@ const StaffManagement = () => {
     const member = removeConfirm;
     const name = getDisplayName(member);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ deleted: true, updated_at: new Date().toISOString() })
-        .eq('id', member.id);
-      if (error) throw error;
-      await logAction(user, 'Archived staff member', {
-        targetType: 'profile',
-        targetId: member.id,
-        staffName: name,
+      const { error } = await supabase.rpc('set_staff_archive_state', {
+        target_user_id: member.id,
+        archived: true,
+        change_note: 'Archived via Staff Management',
       });
+      if (error) throw error;
       toast.success(`${name} has been archived`);
-    } catch {
-      toast.error('Failed to archive staff member');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to archive staff member');
     } finally {
       setRemoveConfirm(null);
     }
@@ -229,6 +222,10 @@ const StaffManagement = () => {
   const toggleRole = async (member) => {
     if (member.id === user?.uid) {
       toast.error('You cannot change your own role.');
+      return;
+    }
+    if (member.role === 'owner') {
+      toast.error('The owner role cannot be modified.');
       return;
     }
     setRoleToggleConfirm(member);
@@ -259,28 +256,22 @@ const StaffManagement = () => {
 
     setReactivating(true);
     try {
-      // 1. Update employment_status → 'active' via the secured RPC (writes audit log)
-      await updateStaffStatus(reactivateMember.id, 'active', false, reactivateNote.trim());
-
-      // 2. Flip the soft-delete flag back
-      const { error } = await supabase
-        .from('profiles')
-        .update({ deleted: false, updated_at: new Date().toISOString() })
-        .eq('id', reactivateMember.id);
-      if (error) throw error;
-
-      await logAction(user, 'Reactivated archived staff account', {
-        targetType: 'profile',
-        targetId: reactivateMember.id,
-        staffName: getDisplayName(reactivateMember),
-        note: reactivateNote.trim(),
+      // 1. Restore the staff account via secured RPC (must happen before status update)
+      const { error: archiveError } = await supabase.rpc('set_staff_archive_state', {
+        target_user_id: reactivateMember.id,
+        archived: false,
+        change_note: reactivateNote.trim(),
       });
+      if (archiveError) throw archiveError;
+
+      // 2. Update employment_status -> 'active' via secured RPC
+      await updateStaffStatus(reactivateMember.id, 'active', false, reactivateNote.trim());
 
       toast.success(`${getDisplayName(reactivateMember)} has been reactivated.`);
       setReactivateMember(null);
       setReactivateNote('');
     } catch (err) {
-      toast.error('Failed to reactivate account: ' + err.message);
+      toast.error('Failed to reactivate account: ' + (err?.message || 'unknown error'));
     } finally {
       setReactivating(false);
     }
@@ -703,7 +694,7 @@ const StaffManagement = () => {
       <ConfirmDialog
         isOpen={!!roleToggleConfirm}
         title="Change Role?"
-        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'owner' ? 'Staff' : 'Owner'}?`}
+        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'admin' ? 'Staff' : 'Admin'}?`}
         confirmText="Change Role"
         onConfirm={confirmRoleToggle}
         onCancel={() => setRoleToggleConfirm(null)}
