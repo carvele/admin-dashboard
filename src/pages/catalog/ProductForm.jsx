@@ -493,10 +493,19 @@ const ProductForm = ({ readOnly = false }) => {
       }
       const finalImages = [...formData.images, ...uploadedImages];
 
+      // Resolve canonical category_id from loaded category tree
+      const parentCat = categories.find((c) => c.name === formData.category);
+      const subCat = parentCat?.subcategories?.find(
+        (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
+      );
+      // Canonical target is subcategory ID, or parent category ID only if no subcategory exists
+      const resolvedCategoryId = subCat?.id || (!formData.subCategory && parentCat ? parentCat.id : null);
+
       const payload = {
         name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
+        category_id: resolvedCategoryId,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
