@@ -9,7 +9,8 @@ import {
   formatRelativeTime,
   sanitizeForDisplay,
 } from '../utils/helpers';
-import { subscribeToCollection, updateDocument } from '../lib/supabaseService';
+import { subscribeToCollection, updateDocument, deleteDocument } from '../lib/supabaseService';
+import { supabase } from '../lib/supabaseClient';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import './TopNav.css';
 import { User } from '../types';
@@ -175,14 +176,100 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     setShowSearchResults(false);
   };
 
+    const handleNotificationClick = async (n: any) => {
+    const notiId = n.id || n.docId;
+
+    if (!n.isRead && notiId) {
+      setNotifications((prev) =>
+        prev.map((item) => ((item.id || item.docId) === notiId ? { ...item, isRead: true } : item))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+
+      try {
+        await updateDocument('admin_notifications', notiId, { isRead: true });
+      } catch (err) {
+        console.warn('Failed to mark notification as read:', err);
+      }
+    }
+
+    setShowNotifications(false);
+
+    const type = (n.type || '').toLowerCase();
+    const title = (n.title || '').toLowerCase();
+    const message = (n.message || '').toLowerCase();
+
+    if (type === 'message' || title.includes('message') || message.includes('message')) {
+      navigate('/messages');
+    } else if (type === 'reservation' || title.includes('reservation') || message.includes('reservation')) {
+      navigate('/reservations');
+    } else if (type === 'customer' || title.includes('customer') || message.includes('customer')) {
+      navigate('/customers');
+    } else if (type === 'product' || title.includes('inventory') || message.includes('stock')) {
+      navigate('/inventory');
+    }
+  };
+
+  const dismissNotification = async (e: any, n: any) => {
+    e.stopPropagation();
+    const notiId = n.id || n.docId;
+
+    setNotifications((prev) => prev.filter((item) => (item.id || item.docId) !== notiId));
+    if (!n.isRead) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+
+    try {
+      if (notiId) {
+        await deleteDocument('admin_notifications', notiId);
+      }
+    } catch (err) {
+      console.warn('Failed to dismiss notification:', err);
+    }
+  };
+
   const markAllRead = async () => {
     try {
-      const unread = notifications.filter((n) => !n.isRead);
-      for (const n of unread) {
-        await updateDocument('admin_notifications', n.docId, { isRead: true });
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+
+      const unreadIds = notifications
+        .filter((n) => !n.isRead)
+        .map((n) => n.id || n.docId)
+        .filter(Boolean);
+
+      if (unreadIds.length === 0) return;
+
+      const { error } = await supabase
+        .from('admin_notifications')
+        .update({ is_read: true })
+        .in('id', unreadIds);
+
+      if (error) {
+        console.warn('Failed to mark notifications read in batch:', error.message);
       }
     } catch (err) {
       console.error('Failed to mark notifications as read:', err);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      const allIds = notifications.map((n) => n.id || n.docId).filter(Boolean);
+      setNotifications([]);
+      setUnreadCount(0);
+
+      if (allIds.length === 0) return;
+
+      const { error } = await supabase
+        .from('admin_notifications')
+        .delete()
+        .in('id', allIds);
+
+      if (error) {
+        console.warn('Failed to clear notifications:', error.message);
+      }
+    } catch (err) {
+      console.error('Failed to clear all notifications:', err);
     }
   };
 
@@ -296,39 +383,77 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
           {showNotifications && (
             <div className="notifications-dropdown card">
               <div className="dropdown-header">
-                <h3>Notifications</h3>
-                <button className="text-btn" onClick={markAllRead}>
-                  Mark all read
-                </button>
+                <div className="dropdown-header-title">
+                  <h3>Notifications</h3>
+                  {unreadCount > 0 && <span className="unread-badge">{unreadCount} new</span>}
+                </div>
+                <div className="dropdown-header-actions">
+                  {unreadCount > 0 ? (
+                    <button type="button" className="text-btn" onClick={markAllRead}>
+                      Mark all read
+                    </button>
+                  ) : notifications.length > 0 ? (
+                    <button type="button" className="text-btn" onClick={clearAllNotifications}>
+                      Clear all
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <ul className="notification-list">
                 {notifications.length === 0 ? (
-                  <li className="notification-item">
+                  <li className="notification-item" style={{ cursor: 'default' }}>
                     <div className="noti-content" style={{ textAlign: 'center', width: '100%' }}>
                       <p className="text-secondary">No notifications yet</p>
                     </div>
                   </li>
                 ) : (
-                  notifications.map((n, idx) => (
-                    <li
-                      key={n.id || n.docId || `notification-${idx}`}
-                      className={`notification-item ${!n.isRead ? 'unread' : ''}`}
-                    >
-                      <div className="noti-icon reservation">
-                        {(n.type || 'N')[0].toUpperCase()}
-                      </div>
-                      <div className="noti-content">
-                        <p>{n.title ? <strong>{n.title}:</strong> : null} {n.message || 'New notification'}</p>
-                        <span>
-                          {n.createdAt
-                            ? formatRelativeTime(new Date(n.createdAt).getTime())
-                            : n.timestamp
-                            ? formatRelativeTime(n.timestamp)
-                            : 'Just now'}
-                        </span>
-                      </div>
-                    </li>
-                  ))
+                  notifications.map((n, idx) => {
+                    const isMessage =
+                      (n.type || '').toLowerCase() === 'message' ||
+                      (n.title || '').toLowerCase().includes('message');
+                    return (
+                      <li
+                        key={n.id || n.docId || `notification-${idx}`}
+                        className={`notification-item ${!n.isRead ? 'unread' : ''}`}
+                      >
+                        <div
+                          className="notification-item-click"
+                          onClick={() => handleNotificationClick(n)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleNotificationClick(n);
+                            }
+                          }}
+                        >
+                          <div className={`noti-icon ${isMessage ? 'message' : 'reservation'}`}>
+                            {(n.type || 'N')[0].toUpperCase()}
+                          </div>
+                          <div className="noti-content">
+                            <p>{n.title ? <strong>{n.title}:</strong> : null} {n.message || 'New notification'}</p>
+                            <span>
+                              {n.createdAt
+                                ? formatRelativeTime(new Date(n.createdAt).getTime())
+                                : n.timestamp
+                                ? formatRelativeTime(n.timestamp)
+                                : 'Just now'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="noti-dismiss-btn"
+                          title="Dismiss notification"
+                          aria-label="Dismiss notification"
+                          onClick={(e) => dismissNotification(e, n)}
+                        >
+                          <X size={14} />
+                        </button>
+                      </li>
+                    );
+                  })
                 )}
               </ul>
             </div>
