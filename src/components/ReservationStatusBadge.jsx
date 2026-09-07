@@ -8,7 +8,6 @@
  * existing color rules for pending/completed/cancelled/etc still apply.
  */
 
-import React from 'react';
 import './StatusBadge.css';
 
 /**

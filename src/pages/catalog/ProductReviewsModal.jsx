@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import { getProductReviews, deleteReview } from '../../services/reviewService';
 import { updateProduct } from '../../services/productService';

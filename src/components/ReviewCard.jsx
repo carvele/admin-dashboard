@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { formatPHDate } from '../utils/dateFormatter';
 import { Star, CheckCircle, Trash2, Pin, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ImageOff } from 'lucide-react';
 
 const ImageWithFallback = ({ src, alt, className = '', fallbackSize = 24, ...props }) => {

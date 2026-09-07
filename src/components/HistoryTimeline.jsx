@@ -1,4 +1,3 @@
-import React from 'react';
 import { Loader, ChevronRight } from 'lucide-react';
 import './HistoryTimeline.css';
 

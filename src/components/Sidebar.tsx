@@ -21,10 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-// @ts-ignore
 import { useAuth } from '../context/AuthContext';
-// @ts-ignore
-// @ts-ignore
 import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';

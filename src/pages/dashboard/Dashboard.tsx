@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// @ts-ignore
 import { useAuth } from '../../context/AuthContext';
-// @ts-ignore
 import { can } from '../../utils/permissions';
 import {
   AreaChart,
@@ -36,9 +34,8 @@ import {
   PlusCircle,
   MessageSquare,
 } from 'lucide-react';
-// @ts-ignore
 import { getPaginatedReservations } from '../../services/reservationService';
-// @ts-ignore
+// @ts-expect-error -- helpers.d.ts missing declarations for getUserDisplayName, formatDate, formatSmartDateTime; tracked for STRAT-005
 import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
 
 const defaultPreferences = {
@@ -55,17 +52,12 @@ const defaultPreferences = {
   widgetWeather: true,
 };
 
-// @ts-ignore
 import { getPaginatedCustomers } from '../../services/customerService';
-// @ts-ignore
 import { getInventory, subscribeToInventory } from '../../services/productService';
-// @ts-ignore
 import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 import PageHeader from '../../components/PageHeader';
 import { isPending } from '../../utils/reservationStatus';
-// @ts-ignore
 import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
-// @ts-ignore
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
