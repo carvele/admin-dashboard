@@ -337,10 +337,10 @@ const Customers = () => {
 
     // Real `profiles` columns only. Status maps to the is_blocked flag
     // (Active = not blocked, Inactive = blocked) — there is no status column.
+    // Email is managed via Auth and excluded from profile updates.
     const profileUpdates = {
       firstName,
       lastName,
-      email: editForm.email,
       phone: editForm.phone,
       isBlocked: editForm.status === 'Inactive',
     };
@@ -869,7 +869,9 @@ const Customers = () => {
                         className="input-field"
                         placeholder="Email"
                         value={editForm.email}
-                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                        disabled
+                        title="Email is managed via Auth and cannot be edited directly"
+                        style={{ opacity: 0.7, cursor: 'not-allowed' }}
                       />
                       <input autoComplete="off"
                         id="customer-edit-phone"
