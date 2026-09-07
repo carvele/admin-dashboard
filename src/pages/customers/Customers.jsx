@@ -22,8 +22,9 @@ import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import {
-  updateCustomer,
-  deleteCustomer,
+  updateCustomerDetails,
+  setCustomerBlockState,
+  setCustomerArchiveState,
   sendNotification,
   getPaginatedCustomers,
   getCustomerMeasurements,
@@ -87,6 +88,7 @@ const extractMeasurementDisplay = (val, defaultUnit = 'cm') => {
 
 const Customers = () => {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'owner';
   const location = useLocation();
   const navigate = useNavigate();
   const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
@@ -335,14 +337,12 @@ const Customers = () => {
     const lastName = (editForm.lastName || '').trim();
     const fullName = `${firstName} ${lastName}`.trim();
 
-    // Real `profiles` columns only. Status maps to the is_blocked flag
-    // (Active = not blocked, Inactive = blocked) — there is no status column.
+    // Personal details only. Status is handled separately via admin RPC setCustomerBlockState.
     // Email is managed via Auth and excluded from profile updates.
-    const profileUpdates = {
+    const personalUpdates = {
       firstName,
       lastName,
       phone: editForm.phone,
-      isBlocked: editForm.status === 'Inactive',
     };
 
     const saveMeasure = (existing, val) => {
@@ -373,33 +373,49 @@ const Customers = () => {
     const weight = toNum(editForm.weight);
 
     try {
-      await updateCustomer(selectedCustomer.docId, profileUpdates);
+      await updateCustomerDetails(selectedCustomer.docId, personalUpdates);
       await saveCustomerMeasurements(selectedCustomer.docId, { height, weight, measurements });
 
-      // Audit: record which profile fields actually changed (from → to)
+      // Moderation: only admin/owner can change block state via setCustomerBlockState
+      let nextIsBlocked = selectedCustomer.isBlocked;
+      const beforeStatus = selectedCustomer.isBlocked ? 'Inactive' : 'Active';
+      if (isAdmin && editForm.status !== beforeStatus) {
+        nextIsBlocked = editForm.status === 'Inactive';
+        await setCustomerBlockState(
+          selectedCustomer.docId,
+          nextIsBlocked,
+          'Status updated via Customer Management'
+        );
+      }
+
+      // Audit: record personal profile fields that actually changed (from → to)
       const changes = {};
       const beforeFirst = selectedCustomer.firstName || selectedCustomer.first_name || '';
       const beforeLast = selectedCustomer.lastName || selectedCustomer.last_name || '';
       if (firstName !== beforeFirst) changes.firstName = { from: beforeFirst, to: firstName };
       if (lastName !== beforeLast) changes.lastName = { from: beforeLast, to: lastName };
-      ['email', 'phone'].forEach((f) => {
-        if (profileUpdates[f] !== undefined && profileUpdates[f] !== selectedCustomer[f]) {
-          changes[f] = { from: selectedCustomer[f] ?? null, to: profileUpdates[f] };
-        }
-      });
-      const beforeStatus = selectedCustomer.isBlocked ? 'Inactive' : 'Active';
-      if (editForm.status !== beforeStatus) {
-        changes.status = { from: beforeStatus, to: editForm.status };
+      if (editForm.phone !== undefined && editForm.phone !== selectedCustomer.phone) {
+        changes.phone = { from: selectedCustomer.phone ?? null, to: editForm.phone };
       }
-      await logAction(user, 'Updated customer profile', {
-        targetType: 'profile',
-        targetId: selectedCustomer.docId,
-        customerName: fullName,
-        changes,
-      });
+      if (Object.keys(changes).length > 0) {
+        await logAction(user, 'Updated customer profile', {
+          targetType: 'profile',
+          targetId: selectedCustomer.docId,
+          customerName: fullName,
+          changes,
+        });
+      }
 
       // Reflect changes locally without a refetch
-      const patched = { ...selectedCustomer, firstName, lastName, name: undefined, email: editForm.email, phone: editForm.phone, isBlocked: profileUpdates.isBlocked };
+      const patched = {
+        ...selectedCustomer,
+        firstName,
+        lastName,
+        name: undefined,
+        email: editForm.email,
+        phone: editForm.phone,
+        isBlocked: nextIsBlocked,
+      };
       setSelectedCustomer(patched);
       setCustMeasurements({ ...(custMeasurements || {}), height, weight, measurements });
       setCustomers((prev) => prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...patched } : c)));
@@ -410,20 +426,20 @@ const Customers = () => {
     }
   };
 
-  // --- DELETE CUSTOMER ---
+  // --- DELETE / ARCHIVE CUSTOMER ---
   const handleDelete = async () => {
     try {
-      await deleteCustomer(deleteConfirm.docId);
-      await logAction(user, 'Archived customer account', {
-        targetType: 'profile',
-        targetId: deleteConfirm.docId,
-        customerName: getUserDisplayName(deleteConfirm),
-      });
+      await setCustomerArchiveState(
+        deleteConfirm.docId,
+        true,
+        'Archived via Customer Management'
+      );
       toast.success(`Removed customer ${getUserDisplayName(deleteConfirm)}`);
       setDeleteConfirm(null);
       setSelectedCustomer(null);
-    } catch {
-      toast.error('Failed to delete customer');
+      setCustomers((prev) => prev.filter((c) => (c.docId || c.id) !== deleteConfirm.docId));
+    } catch (e) {
+      toast.error('Failed to archive customer: ' + (e?.message || 'unknown error'));
     }
   };
 
@@ -741,12 +757,15 @@ const Customers = () => {
                     <button className="btn-outline small flex-center gap-1" onClick={startEdit}>
                       <Edit size={14} /> Edit
                     </button>
-                    <button
-                      className="icon-btn-small text-danger"
-                      onClick={() => setDeleteConfirm(selectedCustomer)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        className="icon-btn-small text-danger"
+                        onClick={() => setDeleteConfirm(selectedCustomer)}
+                        title="Archive customer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -813,6 +832,9 @@ const Customers = () => {
                     <select autoComplete="off" id="field_3rsf05m" name="field_3rsf05m"
                       className="input-field mt-2"
                       value={editForm.status}
+                      disabled={!isAdmin}
+                      title={!isAdmin ? "Only administrators can modify customer account status" : undefined}
+                      style={!isAdmin ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
                       onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                     >
                       <option>Active</option>

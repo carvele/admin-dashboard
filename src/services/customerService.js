@@ -75,17 +75,47 @@ export const getPaginatedCustomers = async (pageSize, page = 0, filters = {}, in
   };
 };
 
-export const createCustomer = (customerData) => {
-  return addDocument('profiles', { ...customerData, role: 'customer' });
+/**
+ * Update personal customer details (first_name, last_name, phone).
+ * Strips any privileged/moderation columns so clients cannot accidentally send them.
+ */
+export const updateCustomerDetails = async (docId, personalDetails) => {
+  const safePayload = {};
+  if (personalDetails.firstName !== undefined) safePayload.firstName = (personalDetails.firstName || '').trim();
+  if (personalDetails.lastName !== undefined) safePayload.lastName = (personalDetails.lastName || '').trim();
+  if (personalDetails.phone !== undefined) safePayload.phone = personalDetails.phone;
+  return updateDocument('profiles', docId, safePayload);
 };
 
+/** @deprecated Use updateCustomerDetails instead. Kept for backwards compatibility. */
 export const updateCustomer = (docId, updates) => {
-  return updateDocument('profiles', docId, updates);
+  return updateCustomerDetails(docId, updates);
 };
 
-/** Soft-delete a customer profile. */
-export const deleteCustomer = (docId) => {
-  return softDeleteDocument('profiles', docId);
+/**
+ * Admin-only: Block or unblock a customer via hardened set_customer_block_state RPC.
+ */
+export const setCustomerBlockState = async (customerId, isBlocked, reason) => {
+  const { data, error } = await supabase.rpc('set_customer_block_state', {
+    target_customer_id: customerId,
+    new_is_blocked: isBlocked,
+    change_reason: reason,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Admin-only: Archive or restore a customer via hardened set_customer_archive_state RPC.
+ */
+export const setCustomerArchiveState = async (customerId, isDeleted, reason) => {
+  const { data, error } = await supabase.rpc('set_customer_archive_state', {
+    target_customer_id: customerId,
+    new_deleted: isDeleted,
+    change_reason: reason,
+  });
+  if (error) throw error;
+  return data;
 };
 
 // ── Engagement stats (derived — no such columns exist on profiles) ──

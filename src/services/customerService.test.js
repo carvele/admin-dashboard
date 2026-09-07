@@ -1,14 +1,13 @@
 /**
- * Tests for the derived customer engagement stats.
- *
- * These figures used to be read straight off the `profiles` row, where the
- * columns don't exist — so every customer showed 0. These tests pin the real
- * aggregation so that regression can't return silently.
+ * Tests for customerService.js:
+ * 1. Customer engagement stats (getCustomerStatsBatch)
+ * 2. B2A-4 Customer Commands (updateCustomerDetails, setCustomerBlockState, setCustomerArchiveState)
  */
 
-// Mock the Supabase client before importing the service under test.
 const mockReservations = { data: [], error: null };
 const mockWardrobe = { data: [], error: null };
+const mockRpc = jest.fn();
+const mockUpdateDocument = jest.fn();
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: {
@@ -20,15 +19,15 @@ jest.mock('../lib/supabaseClient', () => ({
         }),
       }),
     }),
+    rpc: (...args) => mockRpc(...args),
   },
 }));
 
-// supabaseService pulls in other browser-ish deps; stub what the service imports.
 jest.mock('../lib/supabaseService', () => ({
   getCollection: jest.fn(),
   getDocument: jest.fn(),
   addDocument: jest.fn(),
-  updateDocument: jest.fn(),
+  updateDocument: (...args) => mockUpdateDocument(...args),
   softDeleteDocument: jest.fn(),
   subscribeToCollection: jest.fn(),
   getPaginatedCollection: jest.fn(),
@@ -36,7 +35,12 @@ jest.mock('../lib/supabaseService', () => ({
   toCamel: (o) => o,
 }));
 
-import { getCustomerStatsBatch } from './customerService';
+import {
+  getCustomerStatsBatch,
+  updateCustomerDetails,
+  setCustomerBlockState,
+  setCustomerArchiveState,
+} from './customerService';
 
 const CUST = 'cust-1';
 const OTHER = 'cust-2';
@@ -57,13 +61,9 @@ describe('getCustomerStatsBatch', () => {
 
   test('sums only reservations that have actually been handed over', async () => {
     setData([
-      // handed over → earned
       { customer_id: CUST, status: 'Completed', rental_price: 1000, size: 'M', created_at: daysAgo(5) },
-      // approved and progressing, but the customer does not have the item yet
       { customer_id: CUST, status: 'Active', rental_price: 500, size: 'M', created_at: daysAgo(10) },
-      // cancelled → never
       { customer_id: CUST, status: 'Cancelled', rental_price: 9999, size: 'L', created_at: daysAgo(3) },
-      // pre-approval → a reservation, but nothing earned
       { customer_id: CUST, status: 'Pending', rental_price: 700, size: 'S', created_at: daysAgo(2) },
     ]);
 
@@ -74,10 +74,6 @@ describe('getCustomerStatsBatch', () => {
     expect(stats[CUST].totalSpent).toBe(1000);
   });
 
-  // This is the defect the change exists to fix. The payment webhook sets
-  // payment_status to 'Paid' the moment the 50% deposit clears, so the old rule
-  // credited the customer with the full price of an item they had not received
-  // and had only half paid for.
   test('a cleared deposit is not revenue until the item is handed over', async () => {
     setData([
       {
@@ -107,8 +103,6 @@ describe('getCustomerStatsBatch', () => {
       },
     ]);
     const stats = await getCustomerStatsBatch([CUST]);
-    // At handover the balance has been collected in person, so cash and
-    // accrual agree on the full price.
     expect(stats[CUST].totalSpent).toBe(1890);
   });
 
@@ -171,7 +165,6 @@ describe('getCustomerStatsBatch', () => {
         Array.from({ length: 5 }, () => ({ user_id: CUST })),
       );
       const stats = await getCustomerStatsBatch([CUST]);
-      // recency 40 + frequency min(40,40) + wardrobe min(20,20)
       expect(stats[CUST].engagementScore).toBe(100);
     });
 
@@ -194,7 +187,102 @@ describe('getCustomerStatsBatch', () => {
       const fresh = (await getCustomerStatsBatch([CUST]))[CUST].engagementScore;
 
       expect(stale).toBeLessThan(fresh);
-      expect(stale).toBe(10); // recency 0 + one reservation
+      expect(stale).toBe(10);
+    });
+  });
+});
+
+describe('customerService B2A-4 commands', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUpdateDocument.mockResolvedValue({ success: true });
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+  });
+
+  describe('updateCustomerDetails', () => {
+    test('sends only sanitized personal fields and excludes privileged/moderation keys', async () => {
+      await updateCustomerDetails('cust-123', {
+        firstName: 'Maria',
+        lastName: 'Santos',
+        phone: '+639123456789',
+        isBlocked: true,
+        deleted: true,
+        role: 'admin',
+        email: 'attacker@evil.com',
+      });
+
+      expect(mockUpdateDocument).toHaveBeenCalledTimes(1);
+      const [table, docId, payload] = mockUpdateDocument.mock.calls[0];
+      expect(table).toBe('profiles');
+      expect(docId).toBe('cust-123');
+
+      expect(payload.firstName).toBe('Maria');
+      expect(payload.lastName).toBe('Santos');
+      expect(payload.phone).toBe('+639123456789');
+
+      expect(payload.isBlocked).toBeUndefined();
+      expect(payload.deleted).toBeUndefined();
+      expect(payload.role).toBeUndefined();
+      expect(payload.email).toBeUndefined();
+    });
+
+    test('trims names properly', async () => {
+      await updateCustomerDetails('cust-123', {
+        firstName: '  Juan  ',
+        lastName: '  Dela Cruz  ',
+      });
+
+      const [, , payload] = mockUpdateDocument.mock.calls[0];
+      expect(payload.firstName).toBe('Juan');
+      expect(payload.lastName).toBe('Dela Cruz');
+    });
+  });
+
+  describe('setCustomerBlockState', () => {
+    test('calls set_customer_block_state RPC with correct arguments', async () => {
+      const result = await setCustomerBlockState('cust-456', true, 'Payment delinquency');
+
+      expect(mockRpc).toHaveBeenCalledWith('set_customer_block_state', {
+        target_customer_id: 'cust-456',
+        new_is_blocked: true,
+        change_reason: 'Payment delinquency',
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    test('propagates error when RPC fails', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: new Error('Unauthorized: Only active administrators on approved devices can modify customer block status.'),
+      });
+
+      await expect(
+        setCustomerBlockState('cust-456', false, 'Unblocking customer')
+      ).rejects.toThrow('Unauthorized');
+    });
+  });
+
+  describe('setCustomerArchiveState', () => {
+    test('calls set_customer_archive_state RPC with correct arguments', async () => {
+      const result = await setCustomerArchiveState('cust-789', true, 'Requested by customer');
+
+      expect(mockRpc).toHaveBeenCalledWith('set_customer_archive_state', {
+        target_customer_id: 'cust-789',
+        new_deleted: true,
+        change_reason: 'Requested by customer',
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    test('propagates error when archive RPC fails', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: new Error('Cannot modify block state of an archived customer'),
+      });
+
+      await expect(
+        setCustomerArchiveState('cust-789', false, 'Restoring customer')
+      ).rejects.toThrow('Cannot modify block state');
     });
   });
 });
