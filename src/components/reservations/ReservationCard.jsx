@@ -7,7 +7,6 @@
  * read as if it held a single piece.
  */
 
-import React from 'react';
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
 import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';

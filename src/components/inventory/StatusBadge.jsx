@@ -9,7 +9,6 @@
  *  - Icon is decorative (aria-hidden)
  */
 
-import React from 'react';
 import '../StatusBadge.css';
 
 /**

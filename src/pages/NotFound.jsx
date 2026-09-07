@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Compass, ArrowLeft, Home } from "lucide-react";
 import "./NotFound.css";

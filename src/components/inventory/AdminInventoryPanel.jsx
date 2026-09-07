@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Upload, Settings2, Palette, FolderTree } from 'lucide-react';
 import {
   addColor,

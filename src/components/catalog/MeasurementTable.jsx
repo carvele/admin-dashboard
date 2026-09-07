@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Ruler, RefreshCw, Copy } from 'lucide-react';
 import { DEFAULT_MEASUREMENT_METRICS, AVAILABLE_SIZES } from '../../utils/constants';
 import ConfirmDialog from '../ConfirmDialog';

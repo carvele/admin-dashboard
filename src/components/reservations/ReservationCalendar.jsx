@@ -8,7 +8,7 @@
  * modal) rather than introducing a new dependency for a month grid.
  */
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Eye, MessageSquare } from 'lucide-react';
 import StatusBadge from '../ReservationStatusBadge';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';

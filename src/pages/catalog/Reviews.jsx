@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { getAllReviews, deleteReview, updateReview } from '../../services/reviewService';
 import { Filter } from 'lucide-react';
