@@ -181,7 +181,6 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
     item: item ?? null,
     category: category ?? null,
     sku: sku ?? null,
-    price: price ?? null,
     size,
     color,
     pattern,
@@ -191,6 +190,10 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
     available: 0,
     deleted: false,
   };
+
+  if (price !== undefined && price !== null) {
+    payload.price = price;
+  }
 
   const { data, error } = await supabase.from('inventory').insert(payload).select().single();
   if (error) throw error;
