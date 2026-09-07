@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../layouts/DashboardLayout';
 import PendingDeviceView from '../components/PendingDeviceView';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // ── Lazy-loaded pages (code-split for faster initial load) ──
 const Login = lazy(() => import('../pages/auth/Login'));
@@ -109,6 +110,7 @@ const AnimatedRoutes = () => {
     checkLockout();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
+    <ErrorBoundary key={location.pathname}>
     <Routes location={location}>
       <Route
         path="/login"
@@ -391,6 +393,7 @@ const AnimatedRoutes = () => {
           />
         </Route>
       </Routes>
+    </ErrorBoundary>
   );
 };
 

@@ -1,161 +1,224 @@
-import React from 'react';
-import { AlertOctagon, RotateCcw, Home } from 'lucide-react';
+import React from "react";
+import { AlertOctagon, RotateCcw, Home, RefreshCw } from "lucide-react";
+
+// Detects errors caused by Vite/webpack dynamic chunk fetch failures.
+// These always happen when:
+// - A new deploy invalidates chunk hashes (stale cache)
+// - Cloudflare Pages misconfiguration serves JS as text/html (MIME mismatch)
+function isChunkLoadError(error) {
+  if (!error) return false;
+  const msg = error.message || "";
+  return (
+    error.name === "ChunkLoadError" ||
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("Loading chunk") ||
+    msg.includes("Loading CSS chunk") ||
+    msg.includes("Importing a module script failed")
+  );
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = {
+      hasError: false,
+      error: null,
+      isChunkError: false,
+      // How many times we have auto-retried this specific error in this
+      // boundary instance -- resets to 0 when the boundary remounts (i.e.
+      // when the user navigates to a new route and React replaces the tree).
+      autoRetryCount: 0,
+    };
+    this._handleReset = this._handleReset.bind(this);
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      error,
+      isChunkError: isChunkLoadError(error),
+    };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
-    // Automatic recovery for dynamic import chunk load errors after new deployment
-    const isChunkLoadError =
-      error?.name === 'ChunkLoadError' ||
-      error?.message?.includes('Failed to fetch dynamically imported module') ||
-      error?.message?.includes('Loading chunk');
+    console.error("[ErrorBoundary] caught:", error, errorInfo);
 
-    if (isChunkLoadError && !sessionStorage.getItem('chunk_reload_retry')) {
-      sessionStorage.setItem('chunk_reload_retry', 'true');
-      window.location.reload();
+    // Auto-reload once for chunk load errors (new deploy / stale cache).
+    // Limit to 2 auto-retries per boundary instance to avoid infinite loops.
+    // We intentionally do NOT use sessionStorage so the counter resets on
+    // every navigation (component remount), making the boundary self-healing.
+    if (isChunkLoadError(error) && this.state.autoRetryCount < 2) {
+      this.setState((prev) => ({ autoRetryCount: prev.autoRetryCount + 1 }));
+      // Small delay so the browser has time to purge any bad cached response.
+      setTimeout(() => window.location.reload(), 300);
     }
   }
 
+  // Attempt in-place recovery: reset state so Suspense re-tries the lazy import.
+  _handleReset() {
+    this.setState({ hasError: false, error: null, isChunkError: false });
+  }
+
   render() {
-    if (this.state.hasError) {
-      return (
+    if (!this.state.hasError) return this.props.children;
+
+    const { error, isChunkError, autoRetryCount } = this.state;
+
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "var(--bg-main)",
+          fontFamily: "var(--font-primary)",
+          padding: "2rem",
+        }}
+      >
         <div
           style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'var(--bg-main)',
-            fontFamily: 'var(--font-primary)',
-            padding: '2rem',
+            maxWidth: "520px",
+            width: "100%",
+            backgroundColor: "var(--white)",
+            borderRadius: "var(--spacing-lg)",
+            padding: "2.5rem",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.06)",
+            textAlign: "center",
+            border: "1px solid var(--border-color)",
           }}
         >
           <div
             style={{
-              maxWidth: '500px',
-              width: '100%',
-              backgroundColor: 'var(--white)',
-              borderRadius: 'var(--spacing-lg)',
-              padding: '2.5rem',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.06)',
-              textAlign: 'center',
-              border: '1px solid var(--border-color)',
+              width: "64px",
+              height: "64px",
+              backgroundColor: "var(--status-cancelled-bg)",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.5rem",
+              color: "var(--color-danger)",
             }}
           >
-            <div
+            <AlertOctagon size={32} />
+          </div>
+
+          <h1
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: "700",
+              color: "var(--text-main)",
+              marginBottom: "0.75rem",
+            }}
+          >
+            {isChunkError ? "Page Failed to Load" : "System Error Encountered"}
+          </h1>
+
+          <p
+            style={{
+              fontSize: "0.95rem",
+              color: "var(--text-secondary)",
+              lineHeight: "1.6",
+              marginBottom: isChunkError ? "1rem" : "2rem",
+            }}
+          >
+            {isChunkError
+              ? autoRetryCount > 0
+                ? "Reloading the app to pick up the latest version..."
+                : "A page resource failed to load. This usually happens after a new deployment. Click Reload to fix it."
+              : "The application encountered an unexpected fault and was unable to recover."}
+          </p>
+
+          {/* Show technical detail for non-chunk errors */}
+          {!isChunkError && error && (
+            <span
               style={{
-                width: '64px',
-                height: '64px',
-                backgroundColor: 'var(--status-cancelled-bg)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1.5rem',
-                color: 'var(--color-danger)',
+                display: "block",
+                marginBottom: "2rem",
+                fontSize: "0.82rem",
+                padding: "0.75rem",
+                backgroundColor: "var(--cream)",
+                borderRadius: "var(--spacing-sm)",
+                color: "var(--text-main)",
+                textAlign: "left",
+                wordBreak: "break-all",
+                fontFamily: "monospace",
               }}
             >
-              <AlertOctagon size={32} />
-            </div>
+              {error.toString()}
+            </span>
+          )}
 
-            <h1
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+            {/* Try Again: resets the boundary so Suspense can retry without
+                a full page reload -- works for transient network hiccups. */}
+            <button
+              onClick={this._handleReset}
               style={{
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                color: 'var(--text-main)',
-                marginBottom: '0.75rem',
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.75rem 1.5rem",
+                backgroundColor: "var(--white)",
+                color: "var(--text-main)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--spacing-sm)",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "var(--cream)")}
+              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "var(--white)")}
+            >
+              <RefreshCw size={18} /> Try Again
+            </button>
+
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.75rem 1.5rem",
+                backgroundColor: "var(--accent)",
+                color: "var(--white)",
+                border: "none",
+                borderRadius: "var(--spacing-sm)",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "background-color 0.2s",
               }}
             >
-              System Error Encountered
-            </h1>
+              <RotateCcw size={18} /> Reload App
+            </button>
 
-            <p
+            <button
+              onClick={() => (window.location.href = "/")}
               style={{
-                fontSize: '0.95rem',
-                color: 'var(--text-secondary)',
-                lineHeight: '1.6',
-                marginBottom: '2rem',
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.75rem 1.5rem",
+                backgroundColor: "var(--white)",
+                color: "var(--text-main)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--spacing-sm)",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s",
               }}
+              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "var(--cream)")}
+              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "var(--white)")}
+              onFocus={(e) => (e.currentTarget.style.backgroundColor = "var(--cream)")}
+              onBlur={(e) => (e.currentTarget.style.backgroundColor = "var(--white)")}
             >
-              The application encountered an unexpected fault and was unable to recover.
-              {this.state.error && (
-                <span
-                  style={{
-                    display: 'block',
-                    marginTop: '0.5rem',
-                    fontSize: '0.85rem',
-                    padding: '0.75rem',
-                    backgroundColor: 'var(--cream)',
-                    borderRadius: 'var(--spacing-sm)',
-                    color: 'var(--text-main)',
-                    textAlign: 'left',
-                    wordBreak: 'break-all',
-                    fontFamily: 'monospace',
-                  }}
-                >
-                  {this.state.error.toString()}
-                </span>
-              )}
-            </p>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => window.location.reload()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: 'var(--accent)',
-                  color: 'var(--white)',
-                  border: 'none',
-                  borderRadius: 'var(--spacing-sm)',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-              >
-                <RotateCcw size={18} /> Reload App
-              </button>
-
-              <button
-                onClick={() => (window.location.href = '/')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: 'var(--white)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--spacing-sm)',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--cream)')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'var(--white)')}
-                onFocus={(e) => (e.currentTarget.style.backgroundColor = 'var(--cream)')}
-                onBlur={(e) => (e.currentTarget.style.backgroundColor = 'var(--white)')}
-              >
-                <Home size={18} /> Dashboard
-              </button>
-            </div>
+              <Home size={18} /> Dashboard
+            </button>
           </div>
         </div>
-      );
-    }
-
-    return this.props.children;
+      </div>
+    );
   }
 }
 
