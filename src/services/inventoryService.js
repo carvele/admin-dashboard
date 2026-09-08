@@ -17,6 +17,7 @@ import {
   updateDocument,
   toCamel,
 } from '../lib/supabaseService';
+import { queryCache } from '../utils/cache';
 
 // ── Color List Functions ────────────────────────────────
 
@@ -161,13 +162,17 @@ export const deletePattern = async (patternId) => {
 export const updatePattern=async(id,name)=>{const{data,error}=await supabase.from('pattern_list').update({name}).eq('id',id).select().single();if(error)throw error;return toCamel(data)};
 
 export const updateStockBaseline = async (productId, newBaseline) => {
-  // Use raw column name 'stockbaseline' (Postgres lowercased the unquoted identifier).
-  // Cannot go through updateDocument/toSnake — that would produce 'stock_baseline' (wrong).
-  const { error } = await supabase
-    .from('products')
-    .update({ stockbaseline: newBaseline, updated_at: new Date().toISOString() })
-    .eq('id', productId);
+  const baselineNum = parseInt(newBaseline, 10);
+  if (isNaN(baselineNum) || baselineNum < 0) {
+    throw new Error('Baseline must be a non-negative integer');
+  }
+  const { data, error } = await supabase.rpc('set_inventory_baseline', {
+    p_product_id: productId,
+    p_baseline: baselineNum,
+  });
   if (error) throw error;
+  queryCache.invalidateByPrefix('products');
+  return data;
 };
 
 /**

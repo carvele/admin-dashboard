@@ -142,6 +142,32 @@ export const updateInventoryItem = async (docId, updates) => {
 };
 
 /**
+ * Authoritative stock adjustment via B3 command RPC adjust_inventory_on_hand.
+ * Atomically updates variant total/available, records structured ledger movement, and writes audit log.
+ * @param {string} inventoryId - UUID of the inventory row
+ * @param {number} delta - positive for restock, negative for reduction
+ * @param {string} reason - business justification for adjustment
+ * @returns {Promise<{success, inventoryId, prevTotal, newTotal, prevAvailable, newAvailable, changeType}>}
+ */
+export const adjustInventoryOnHand = async (inventoryId, delta, reason) => {
+  if (!inventoryId) throw new Error('Inventory ID is required');
+  const d = parseInt(delta, 10);
+  if (!d || isNaN(d)) throw new Error('Delta must be a non-zero integer');
+  const cleanReason = (reason || '').trim();
+  if (!cleanReason) throw new Error('Reason is required for inventory adjustment');
+
+  const { data, error } = await supabase.rpc('adjust_inventory_on_hand', {
+    p_inventory_id: inventoryId,
+    p_delta: d,
+    p_reason: cleanReason,
+  });
+  if (error) throw error;
+  queryCache.invalidateByPrefix('inventory');
+  queryCache.invalidateByPrefix('products');
+  return data;
+};
+
+/**
  * Apply total/available/reserved as atomic deltas rather than absolute
  * values -- use this instead of updateInventoryItem whenever the new value
  * is "current + N", not a value the user typed directly (like handleEdit's
@@ -150,6 +176,7 @@ export const updateInventoryItem = async (docId, updates) => {
  * (a double-click, two staff acting near-simultaneously) can't silently
  * overwrite each other the way reading a JS-side snapshot then writing an
  * absolute number back can.
+ * @deprecated Prefer adjustInventoryOnHand for all business adjustments.
  * @returns {{prevTotal, prevAvailable, prevReserved, newTotal, newAvailable, newReserved, productDocId}}
  */
 export const adjustInventoryStockDelta = async (docId, { totalDelta = 0, availableDelta = 0, reservedDelta = 0 } = {}) => {
@@ -214,27 +241,28 @@ export const syncProductStock = async (productDocId) => {
   }
 };
 
-export const archiveInventoryItem = async (docId) => {
+export const archiveInventoryItem = async (docId, reason = '') => {
   queryCache.invalidateByPrefix('inventory');
-  const result = await updateDocument('inventory', docId, {
-    deleted: true,
-    deleted_at: new Date().toISOString(),
+  queryCache.invalidateByPrefix('products');
+  const { data, error } = await supabase.rpc('set_inventory_archive_state', {
+    p_inventory_id: docId,
+    p_deleted: true,
+    p_reason: reason || 'Archived inventory item',
   });
-  // Fetch the productDocId so we can re-sync the parent product's stock
-  const { data: row } = await supabase.from('inventory').select('product_doc_id').eq('id', docId).maybeSingle();
-  await syncProductStock(row?.product_doc_id);
-  return result;
+  if (error) throw error;
+  return data;
 };
 
-export const restoreInventoryItem = async (docId) => {
+export const restoreInventoryItem = async (docId, reason = '') => {
   queryCache.invalidateByPrefix('inventory');
-  const result = await updateDocument('inventory', docId, {
-    deleted: false,
-    deleted_at: null,
+  queryCache.invalidateByPrefix('products');
+  const { data, error } = await supabase.rpc('set_inventory_archive_state', {
+    p_inventory_id: docId,
+    p_deleted: false,
+    p_reason: reason || 'Restored inventory item',
   });
-  const { data: row } = await supabase.from('inventory').select('product_doc_id').eq('id', docId).maybeSingle();
-  await syncProductStock(row?.product_doc_id);
-  return result;
+  if (error) throw error;
+  return data;
 };
 
 /**
@@ -294,62 +322,22 @@ export const getStockMovements = async (productId, limit = 50) => {
   return (data ?? []).map(toCamel);
 };
 
-/** Record an in-store walk-in sale: deduct stock + create a completed reservation. */
+/** Record an in-store walk-in sale atomically via B3 command RPC record_boutique_sale. */
 export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
-  if (!inventoryItem || quantity <= 0) throw new Error('Invalid sale data');
+  const inventoryId = inventoryItem?.docId || inventoryItem?.id;
+  const qty = parseInt(quantity, 10);
+  if (!inventoryId || !qty || qty <= 0) throw new Error('Invalid sale data');
 
-  // 1. Update Inventory Stock -- delta applied atomically server-side, not
-  // against inventoryItem.total/available, which are just a snapshot from
-  // whenever this modal opened. Two sales recorded close together used to
-  // both subtract from the same stale starting number, silently losing one
-  // sale's deduction.
-  const result = await adjustInventoryStockDelta(inventoryItem.docId, {
-    totalDelta: -quantity,
-    availableDelta: -quantity,
+  const { data, error } = await supabase.rpc('record_boutique_sale', {
+    p_inventory_id: inventoryId,
+    p_quantity: qty,
+    p_sale_price: parseFloat(salePrice) || 0,
   });
 
-  // 1b. Ledger entry (product-level; size noted). Uses the RPC's own
-  // before/after rather than the stale snapshot, so the ledger reflects
-  // what actually happened even if another mutation landed in between.
-  await logStockMovement(
-    inventoryItem.productDocId,
-    result?.prevTotal ?? inventoryItem.total,
-    result?.newTotal ?? inventoryItem.total - quantity,
-    'sale',
-    `Walk-in sale: ${quantity}× ${inventoryItem.item} (size ${inventoryItem.size})`,
-  );
-
-  // 2. Create virtual completed reservation
-  const now = new Date().toISOString();
-  await supabase.from('reservations').insert({
-    product_id: inventoryItem.productDocId || null,
-    product_name: inventoryItem.item,
-    size: inventoryItem.size,
-    quantity,
-    rental_price: salePrice || 0,
-    status: 'Completed',
-    customer_name: 'Walk-in Customer',
-    staff_id: user?.uid ?? null,
-    created_at: now,
-    updated_at: now,
-    hidden_in_history: false,
-    deleted: false,
-  });
-
-  // 3. Audit log -- targets the product (not the inventory row) to match
-  // getStockMovements/getLogsForTarget('product', id), which is what
-  // ProductForm's history panel actually queries. This entry used to target
-  // 'inventory' + the row id, a combination nothing ever queried, so it was
-  // captured but never visible anywhere.
-  await logAction(user, 'Recorded In-Store Sale', {
-    targetType: 'product',
-    targetId: inventoryItem.productDocId,
-    itemName: inventoryItem.item,
-    size: inventoryItem.size,
-    quantitySold: quantity,
-  });
-
-  return { success: true };
+  if (error) throw error;
+  queryCache.invalidateByPrefix('inventory');
+  queryCache.invalidateByPrefix('products');
+  return data;
 };
 
 // ── Categories ───────────────────────────────────────────────

@@ -23,7 +23,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { toCamel } from '../lib/supabaseService';
-import { adjustInventoryStockDelta, syncProductStock } from './productService';
+import { adjustInventoryOnHand } from './productService';
 
 // ── Normalisation ────────────────────────────────────────────────────────────
 
@@ -211,15 +211,13 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
  * @param {number} qtyDelta   units to add (negative to remove)
  * @returns {Promise<{prevTotal, newTotal, ...}|null>}
  */
-export const restockVariant = async (variantId, qtyDelta) => {
+export const restockVariant = async (variantId, qtyDelta, reason = '') => {
   const qty = Number(qtyDelta);
   if (!variantId) throw new Error('restockVariant requires a variant id');
   if (!Number.isFinite(qty) || qty === 0) throw new Error('Restock quantity must be a non-zero number');
 
-  return adjustInventoryStockDelta(variantId, {
-    totalDelta: qty,
-    availableDelta: qty,
-  });
+  const defaultReason = qty > 0 ? 'Restock delivery shipment' : 'Manual stock adjustment';
+  return adjustInventoryOnHand(variantId, qty, reason || defaultReason);
 };
 
 /**
@@ -230,11 +228,11 @@ export const restockVariant = async (variantId, qtyDelta) => {
  * products.stock. One failure does not abort the rest — partial success is
  * reported so the caller can tell staff exactly what landed.
  */
-export const restockVariants = async (entries = []) => {
+export const restockVariants = async (entries = [], reason = '') => {
   const results = [];
   for (const { variantId, qtyDelta, label } of entries) {
     try {
-      const result = await restockVariant(variantId, qtyDelta);
+      const result = await restockVariant(variantId, qtyDelta, reason);
       results.push({ variantId, label, ok: true, result });
     } catch (err) {
       results.push({ variantId, label, ok: false, error: err?.message || 'Restock failed' });
@@ -278,6 +276,5 @@ export const syncProductAttributesFromVariants = async (productDocId) => {
   const { error } = await supabase.from('products').update(updates).eq('id', productDocId);
   if (error) throw error;
 
-  await syncProductStock(productDocId);
   return { colors, patterns };
 };

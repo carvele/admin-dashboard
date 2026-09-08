@@ -8,7 +8,7 @@ import {
   restockVariant,
   restockVariants,
 } from './variantService';
-import { adjustInventoryStockDelta } from './productService';
+import { adjustInventoryOnHand } from './productService';
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: { from: jest.fn() },
@@ -19,7 +19,7 @@ jest.mock('../lib/supabaseService', () => ({
 }));
 
 jest.mock('./productService', () => ({
-  adjustInventoryStockDelta: jest.fn(),
+  adjustInventoryOnHand: jest.fn(),
   syncProductStock: jest.fn(),
 }));
 
@@ -116,15 +116,12 @@ describe('getVariantAxes', () => {
 });
 
 describe('restockVariant', () => {
-  it('delegates to the atomic RPC rather than reading then writing', async () => {
-    adjustInventoryStockDelta.mockResolvedValue({ prevTotal: 4, newTotal: 12 });
+  it('delegates to the authoritative RPC rather than reading then writing', async () => {
+    adjustInventoryOnHand.mockResolvedValue({ prevTotal: 4, newTotal: 12 });
 
     const res = await restockVariant('inv-1', 8);
 
-    expect(adjustInventoryStockDelta).toHaveBeenCalledWith('inv-1', {
-      totalDelta: 8,
-      availableDelta: 8,
-    });
+    expect(adjustInventoryOnHand).toHaveBeenCalledWith('inv-1', 8, 'Restock delivery shipment');
     expect(res.newTotal).toBe(12);
   });
 
@@ -132,22 +129,19 @@ describe('restockVariant', () => {
     await expect(restockVariant('inv-1', 0)).rejects.toThrow(/non-zero/);
     await expect(restockVariant('inv-1', 'abc')).rejects.toThrow(/non-zero/);
     await expect(restockVariant('', 5)).rejects.toThrow(/variant id/);
-    expect(adjustInventoryStockDelta).not.toHaveBeenCalled();
+    expect(adjustInventoryOnHand).not.toHaveBeenCalled();
   });
 
-  it('allows a negative delta for corrections', async () => {
-    adjustInventoryStockDelta.mockResolvedValue({ prevTotal: 4, newTotal: 2 });
+  it('allows a negative delta for corrections with appropriate default reason', async () => {
+    adjustInventoryOnHand.mockResolvedValue({ prevTotal: 4, newTotal: 2 });
     await restockVariant('inv-1', -2);
-    expect(adjustInventoryStockDelta).toHaveBeenCalledWith('inv-1', {
-      totalDelta: -2,
-      availableDelta: -2,
-    });
+    expect(adjustInventoryOnHand).toHaveBeenCalledWith('inv-1', -2, 'Manual stock adjustment');
   });
 });
 
 describe('restockVariants', () => {
   it('reports partial success instead of aborting the batch', async () => {
-    adjustInventoryStockDelta
+    adjustInventoryOnHand
       .mockResolvedValueOnce({ newTotal: 12 })
       .mockRejectedValueOnce(new Error('row locked'));
 
@@ -161,9 +155,9 @@ describe('restockVariants', () => {
     expect(results[1].error).toBe('row locked');
   });
 
-  it('applies each restock sequentially so product sync writes cannot race', async () => {
+  it('applies each restock sequentially', async () => {
     const order = [];
-    adjustInventoryStockDelta.mockImplementation(async (id) => {
+    adjustInventoryOnHand.mockImplementation(async (id) => {
       order.push(`start-${id}`);
       await new Promise((r) => setTimeout(r, 5));
       order.push(`end-${id}`);

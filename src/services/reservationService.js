@@ -20,8 +20,6 @@ import {
   toCamel,
 } from '../lib/supabaseService';
 
-import { recalculateAllInventoryStock } from './productService';
-
 // ── Helpers ─────────────────────────────────────────────────
 
 /**
@@ -611,10 +609,6 @@ export const autoCancelExpiredReservations = async () => {
       if (!updateErr) {
         cancelledIds.push(r.id);
       }
-    }
-
-    if (cancelledIds.length > 0) {
-      await recalculateAllInventoryStock();
     }
 
     return cancelledIds;
