@@ -243,8 +243,21 @@
 }
 
 .th-actions, .cell-actions {
-  width: 125px;
+  width: 160px;
   white-space: nowrap;
+}
+
+/* Row actions are icon-only (title attr supplies the tooltip), so keep the
+   hit target close to the 15px icon it holds -- the shared 48px
+   .icon-btn-small size left ~90px of dead space per button, which forced
+   this column (table-layout: auto) to balloon past its declared width and
+   steal room from the color-chips column next to it. */
+.cell-actions .action-buttons {
+  gap: 0.35rem;
+}
+.cell-actions .icon-btn-small {
+  width: 28px;
+  height: 28px;
 }
 
 .stock-progress-container {

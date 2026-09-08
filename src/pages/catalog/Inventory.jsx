@@ -78,6 +78,17 @@ const groupInventoryRows = (rows) => {
     }
     map.get(key).variants.push(r);
   });
+  // Variants arrive in whatever order the DB query happened to return them --
+  // no ORDER BY on color, so it tracks incidental insertion timing rather
+  // than anything meaningful. Confirmed live: the same product's size rows
+  // showed Black-then-White for one size and White-then-Black for another,
+  // purely because their color variants were created in a different order.
+  // Sorting alphabetically here (once, at the source) makes every row's
+  // color-chip order deterministic and consistent for every consumer of
+  // group.variants, not just this one render site.
+  for (const group of map.values()) {
+    group.variants.sort((a, b) => (a.color || '').localeCompare(b.color || ''));
+  }
   return Array.from(map.values()).sort(
     (a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size)
   );
@@ -261,7 +272,7 @@ const GroupedInvRow = ({
                   setRestockQty('1');
                   setSalePriceInput(targetInv.price || '');
                 }}
-                style={{ color: 'var(--stock-high)', opacity: displayedAvailable > 0 ? 1 : 0.4 }}
+                style={{ color: 'var(--status-approved-text)', opacity: displayedAvailable > 0 ? 1 : 0.4 }}
                 disabled={displayedAvailable <= 0}
               >
                 <ShoppingCart size={15} />
