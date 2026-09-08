@@ -567,14 +567,28 @@ const ProductForm = ({ readOnly = false }) => {
           );
 
           if (variantColumnsReady && selectedVariants.size > 0) {
-            // Variant-aware path: add newly selected combos
+            // Variant-aware path: add newly selected combos.
+            //
+            // Existence must be checked by (size, color) alone, NOT pattern:
+            // this form never exposes pattern selection, so every cell in
+            // variantMatrix and every createVariant() call below always uses
+            // pattern=''. Comparing full variantKey()s (which include the
+            // EXISTING row's real pattern, e.g. seed data's 'Solid') against
+            // a pattern='' cell key never matches even when the color/size
+            // already has a stocked variant -- confirmed live, this silently
+            // created a second, empty duplicate row for the same visible
+            // color swatch on every edit of an already-seeded product. The
+            // DB now also enforces (product_doc_id, size, color) uniqueness
+            // directly (see 20260908150000_fix_duplicate_inventory_variants),
+            // so this check just avoids surfacing that as a raw insert error.
+            const sizeColorKey = (size, color) => `${size ?? ''}|||${color ?? ''}`;
             const existingKeys = new Set(
               productInv.filter((inv) => !inv.deleted).map((inv) =>
-                variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' }),
+                sizeColorKey(inv.size, inv.color),
               ),
             );
             const toCreate = variantMatrix.filter(
-              (cell) => selectedVariants.has(cell.key) && !existingKeys.has(cell.key),
+              (cell) => selectedVariants.has(cell.key) && !existingKeys.has(sizeColorKey(cell.size, cell.color)),
             );
             for (const cell of toCreate) {
               await createVariant(id, {
