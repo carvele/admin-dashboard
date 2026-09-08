@@ -45,7 +45,7 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
-  const [, setOldData] = useState(null); // To track changes for sync
+  const [oldData, setOldData] = useState(null); // To track changes for sync
   const [orderHistory, setOrderHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [productHistory, setProductHistory] = useState([]);
@@ -118,18 +118,20 @@ const ProductForm = ({ readOnly = false }) => {
     const unsubscribeCategories = subscribeToCategories((cats) => {
       if (cats && cats.length > 0) {
         setCategories(cats);
-        // If current category is not in the new list, reset it
-        setFormData(prev => {
-           if (!cats.some(c => c.name === prev.category)) {
-             return { ...prev, category: cats[0].name };
-           }
-           return prev;
-        });
+        // Only assign default category on brand-new product creation if blank
+        if (!id) {
+          setFormData((prev) => {
+            if (!prev.category && cats[0]?.name) {
+              return { ...prev, category: cats[0].name };
+            }
+            return prev;
+          });
+        }
       }
     });
 
     return () => unsubscribeCategories();
-  }, []);
+  }, [id]);
 
   // Load admin-managed color and pattern lists from Supabase + probe variant columns
   useEffect(() => {
@@ -303,23 +305,23 @@ const ProductForm = ({ readOnly = false }) => {
  
  
  
-  // Handle subcategory logic when category changes
+  // Handle subcategory logic when category explicitly changes
   useEffect(() => {
+    if (loading || !categories || categories.length === 0) return;
     const selectedCat = categories.find((c) => c.name === formData.category);
     if (selectedCat && selectedCat.subcategories && selectedCat.subcategories.length > 0) {
-      const firstSubCat = selectedCat.subcategories[0];
-      const subCatName = typeof firstSubCat === 'string' ? firstSubCat : firstSubCat.name;
       const isValidSubCategory = selectedCat.subcategories.some(
         s => (typeof s === 'string' ? s : s.name) === formData.subCategory
       );
 
-      if (!isValidSubCategory) {
-         setFormData((prev) => ({ ...prev, subCategory: subCatName }));
+      // Only auto-default subcategory if the category actually changed and current subcategory is not valid
+      if (!isValidSubCategory && (!oldData || oldData.category !== formData.category)) {
+        const firstSubCat = selectedCat.subcategories[0];
+        const subCatName = typeof firstSubCat === 'string' ? firstSubCat : firstSubCat.name;
+        setFormData((prev) => ({ ...prev, subCategory: subCatName }));
       }
-    } else {
-      setFormData((prev) => ({ ...prev, subCategory: '' }));
     }
-  }, [formData.category, formData.subCategory, categories]);
+  }, [formData.category, categories, loading, oldData]);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -494,19 +496,31 @@ const ProductForm = ({ readOnly = false }) => {
       }
       const finalImages = [...formData.images, ...uploadedImages];
 
-      // Resolve canonical category_id from loaded category tree
-      const parentCat = categories.find((c) => c.name === formData.category);
-      const subCat = parentCat?.subcategories?.find(
-        (s) => (typeof s === 'string' ? s : s.name) === formData.subCategory
+      // Safe Category & Category ID preservation logic
+      const isNewProduct = !id;
+      const categoryChanged = oldData && (
+        oldData.category !== formData.category ||
+        oldData.subCategory !== formData.subCategory
       );
-      // Canonical target is subcategory ID, or parent category ID only if no subcategory exists
-      const resolvedCategoryId = subCat?.id || (!formData.subCategory && parentCat ? parentCat.id : null);
+
+      let finalCategoryId = null;
+      if (!isNewProduct && !categoryChanged && oldData?.category_id) {
+        // Strictly preserve existing category_id when category/subcategory were not explicitly changed
+        finalCategoryId = oldData.category_id;
+      } else {
+        const norm = (s) => (s || '').trim().toLowerCase();
+        const parentCat = categories.find((c) => norm(c.name) === norm(formData.category));
+        const subCat = parentCat?.subcategories?.find(
+          (s) => norm(typeof s === 'string' ? s : s.name) === norm(formData.subCategory)
+        );
+        finalCategoryId = subCat?.id || (!formData.subCategory && parentCat ? parentCat.id : null) || oldData?.category_id || null;
+      }
 
       const payload = {
         name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
-        category_id: resolvedCategoryId,
+        category_id: finalCategoryId,
         price: parseFloat(formData.price),
         sizes: formData.sizes,
         description: sanitizeText(formData.description),
