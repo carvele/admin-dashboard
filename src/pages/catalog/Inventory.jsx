@@ -24,7 +24,7 @@ import {
   subscribeToInventory,
   subscribeToProducts,
   updateInventoryItem,
-  adjustInventoryStockDelta,
+  adjustInventoryOnHand,
   archiveInventoryItem,
   restoreInventoryItem,
   getInventory,
@@ -33,7 +33,6 @@ import {
   recalculateAllInventoryStock,
   recordBoutiqueSale,
   subscribeToCategories,
-  logStockMovement,
 } from '../../services/productService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
@@ -554,95 +553,31 @@ const Inventory = () => {
   // getStockStatus is replaced by the shared getStockHealth() from stockStatus.js
 
   // --- ACTIONS ---
-  const syncProductStock = async (productDocId, sku) => {
-    try {
-      const currentInventory = await getInventory();
-      const allSizes = currentInventory.filter(
-        (i) => (i.productDocId || i.sku) === (productDocId || sku),
-      );
-
-      let newTotalStock = 0; // Total Available
-      let totalReserved = 0;
-      let actualProdDocId = productDocId;
-
-      allSizes.forEach((s) => {
-        newTotalStock += s.available || 0;
-        totalReserved += s.reserved || 0;
-        if (!actualProdDocId && s.productDocId) actualProdDocId = s.productDocId;
-      });
-
-      if (!actualProdDocId) {
-        const prods = await getProducts();
-        const match = prods.find((p) => p.id === sku); // item.id is sku
-        if (match) actualProdDocId = match.docId;
-      }
-
-      if (actualProdDocId) {
-        let status = 'In Boutique';
-        if (newTotalStock <= 0) {
-          status = totalReserved > 0 ? 'Reserved' : 'Out of Stock';
-        }
-
-        await updateProduct(actualProdDocId, {
-          stock: newTotalStock,
-          status: status
-        });
-      }
-    } catch (err) {
-      console.error('Failed to sync total stock to product:', err);
-    }
-  };
-
   const handleRestock = async (e) => {
     e.preventDefault();
-    const qty = parseInt(restockQty);
+    const qty = parseInt(restockQty, 10);
     if (!qty || qty <= 0) {
       toast.error('Enter a valid quantity');
       return;
     }
 
     try {
-      // Delta applied atomically server-side, not restockModal.total + qty --
-      // restockModal is a snapshot from whenever this modal opened, so two
-      // restocks landing close together (a double-click, two staff acting
-      // near-simultaneously) used to both add qty to the same stale starting
-      // number, silently losing one restock's units.
-      const result = await adjustInventoryStockDelta(restockModal.docId, {
-        totalDelta: qty,
-        availableDelta: qty,
-      });
-      await syncProductStock(restockModal.productDocId, restockModal.sku);
-      await logStockMovement(
-        restockModal.productDocId,
-        result?.prevTotal ?? restockModal.total,
-        result?.newTotal ?? restockModal.total + qty,
-        'restock',
-        `Restock: +${qty} units of ${restockModal.item} (size ${restockModal.size})`,
+      await adjustInventoryOnHand(
+        restockModal.docId,
+        qty,
+        'Restock delivery shipment',
       );
-      await logAction(user, 'Restocked inventory item', {
-        targetType: 'product',
-        targetId: restockModal.productDocId,
-        itemName: restockModal.item,
-        size: restockModal.size,
-        color: restockModal.color || restockModal.colour || '',
-        qtyAdded: qty,
-        // Before/after come from the atomic RPC's own return values, so the
-        // activity log shows the true stock movement rather than a number
-        // derived from a possibly-stale modal snapshot.
-        qtyBefore: result?.prevTotal ?? restockModal.total,
-        qtyAfter: result?.newTotal ?? restockModal.total + qty,
-      });
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
       setRestockModal(null);
       setRestockQty('');
-    } catch {
-      toast.error('Failed to restock items');
+    } catch (err) {
+      toast.error('Failed to restock items: ' + (err?.message || ''));
     }
   };
 
   const handleSell = async (e) => {
     e.preventDefault();
-    const qty = parseInt(restockQty);
+    const qty = parseInt(restockQty, 10);
     if (!qty || qty <= 0) {
       toast.error('Enter a valid quantity');
       return;
@@ -656,7 +591,6 @@ const Inventory = () => {
     try {
       const price = parseFloat(salePriceInput) || 0;
       await recordBoutiqueSale(sellModal, qty, user, price);
-      await syncProductStock(sellModal.productDocId, sellModal.sku);
 
       toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
       setSellModal(null);
@@ -667,28 +601,13 @@ const Inventory = () => {
     }
   };
 
-
   const handleArchive = async () => {
     const item = archiveConfirm;
     try {
-      await archiveInventoryItem(item.docId);
-      await syncProductStock(item.productDocId, item.sku);
-      await logStockMovement(
-        item.productDocId,
-        item.total,
-        0,
-        'correction',
-        `Archived inventory row: ${item.item} (size ${item.size}), ${item.total} units removed from circulation`,
-      );
-      await logAction(user, 'Archived inventory item', {
-        targetType: 'product',
-        targetId: item.productDocId,
-        itemName: item.item,
-        size: item.size,
-      });
+      await archiveInventoryItem(item.docId, 'Season decommission');
       toast.success(`Archived ${item.item} (${item.size}) from inventory`);
-    } catch {
-      toast.error('Failed to archive item');
+    } catch (err) {
+      toast.error('Failed to archive item: ' + (err?.message || ''));
     } finally {
       setArchiveConfirm(null);
     }
@@ -696,28 +615,18 @@ const Inventory = () => {
 
   const handleRestore = async (item) => {
     try {
-      await restoreInventoryItem(item.docId);
-      await syncProductStock(item.productDocId, item.sku);
-      await logStockMovement(
-        item.productDocId,
-        0,
-        item.total,
-        'correction',
-        `Restored inventory row: ${item.item} (size ${item.size}), ${item.total} units returned to circulation`,
-      );
-      await logAction(user, 'Restored inventory item', {
-        targetType: 'product',
-        targetId: item.productDocId,
-        itemName: item.item,
-        size: item.size,
-      });
+      await restoreInventoryItem(item.docId, 'Inventory reactivated');
       toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
-    } catch {
-      toast.error('Failed to restore item');
+    } catch (err) {
+      toast.error('Failed to restore item: ' + (err?.message || ''));
     }
   };
 
   const handleSyncStock = async () => {
+    if (!canManageLookups) {
+      toast.error('Admin privileges required to fix and sync stock.');
+      return;
+    }
     setIsSyncing(true);
     const toastId = toast.loading('Synchronizing inventory with reservations...');
     try {
@@ -726,7 +635,7 @@ const Inventory = () => {
       toast.success('Inventory re-calculated and synchronized successfully!', { id: toastId });
     } catch (err) {
       console.error('Manual sync failed:', err);
-      toast.error('Failed to synchronize inventory.', { id: toastId });
+      toast.error('Failed to synchronize inventory: ' + (err?.message || ''), { id: toastId });
     } finally {
       setIsSyncing(false);
     }
@@ -850,14 +759,16 @@ const Inventory = () => {
                 <Settings2 size={18} /> {showAdmin ? 'Hide Admin' : 'Show Admin'}
               </button>
             )}
-            <button
-              className="btn-outline flex-center gap-2"
-              onClick={handleSyncStock}
-              disabled={isSyncing}
-            >
-              <RefreshCw size={18} className={isSyncing ? 'spin' : ''} />
-              {isSyncing ? 'Syncing...' : 'Fix & Sync Stock'}
-            </button>
+            {canManageLookups && (
+              <button
+                className="btn-outline flex-center gap-2"
+                onClick={handleSyncStock}
+                disabled={isSyncing}
+              >
+                <RefreshCw size={18} className={isSyncing ? 'spin' : ''} />
+                {isSyncing ? 'Syncing...' : 'Fix & Sync Stock'}
+              </button>
+            )}
             <button className="btn-outline flex-center gap-2" onClick={handleExportCSV}>
               <Download size={18} /> Export CSV
             </button>
