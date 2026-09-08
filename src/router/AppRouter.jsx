@@ -1,4 +1,22 @@
 import { Suspense, lazy, useEffect } from 'react';
+
+// Resilient wrapper for dynamic code-splitting: auto-retries with page reload if deployment hashes rotate
+const lazyWithRetry = (componentImport) =>
+  lazy(async () => {
+    const pageHasBeenForceRefreshed = window.sessionStorage.getItem('jezsy_chunk_force_refresh');
+    try {
+      const component = await componentImport();
+      window.sessionStorage.removeItem('jezsy_chunk_force_refresh');
+      return component;
+    } catch (error) {
+      if (!pageHasBeenForceRefreshed) {
+        window.sessionStorage.setItem('jezsy_chunk_force_refresh', 'true');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -7,29 +25,29 @@ import PendingDeviceView from '../components/PendingDeviceView';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 // ── Lazy-loaded pages (code-split for faster initial load) ──
-const Login = lazy(() => import('../pages/auth/Login'));
-const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
-const SetPassword = lazy(() => import('../pages/auth/SetPassword'));
+const Login = lazyWithRetry(() => import('../pages/auth/Login'));
+const ForgotPassword = lazyWithRetry(() => import('../pages/auth/ForgotPassword'));
+const SetPassword = lazyWithRetry(() => import('../pages/auth/SetPassword'));
 import NotFound from '../pages/NotFound';
 
-const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
-const Reservations = lazy(() => import('../pages/customers/Reservations'));
-const Customers = lazy(() => import('../pages/customers/Customers'));
-const Messages = lazy(() => import('../pages/messaging/Messages'));
-const DigitalWardrobe = lazy(() => import('../pages/wardrobe/DigitalWardrobe'));
-const ClothingCatalog = lazy(() => import('../pages/catalog/ClothingCatalog'));
-const Reviews = lazy(() => import('../pages/catalog/Reviews'));
-const ProductForm = lazy(() => import('../pages/catalog/ProductForm'));
-const ARAssets = lazy(() => import('../pages/wardrobe/ARAssets'));
-const Inventory = lazy(() => import('../pages/catalog/Inventory'));
-const Analytics = lazy(() => import('../pages/admin/Analytics'));
-const Announcements = lazy(() => import('../pages/admin/Announcements'));
-const Settings = lazy(() => import('../pages/admin/Settings'));
-const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
-const StaffProfile = lazy(() => import('../pages/admin/StaffProfile'));
-const ActivityLog = lazy(() => import('../pages/admin/ActivityLog'));
-const AccountDeletionRequests = lazy(() => import('../pages/admin/AccountDeletionRequests'));
-const DeviceManagement = lazy(() => import('../pages/admin/DeviceManagement'));
+const Dashboard = lazyWithRetry(() => import('../pages/dashboard/Dashboard'));
+const Reservations = lazyWithRetry(() => import('../pages/customers/Reservations'));
+const Customers = lazyWithRetry(() => import('../pages/customers/Customers'));
+const Messages = lazyWithRetry(() => import('../pages/messaging/Messages'));
+const DigitalWardrobe = lazyWithRetry(() => import('../pages/wardrobe/DigitalWardrobe'));
+const ClothingCatalog = lazyWithRetry(() => import('../pages/catalog/ClothingCatalog'));
+const Reviews = lazyWithRetry(() => import('../pages/catalog/Reviews'));
+const ProductForm = lazyWithRetry(() => import('../pages/catalog/ProductForm'));
+const ARAssets = lazyWithRetry(() => import('../pages/wardrobe/ARAssets'));
+const Inventory = lazyWithRetry(() => import('../pages/catalog/Inventory'));
+const Analytics = lazyWithRetry(() => import('../pages/admin/Analytics'));
+const Announcements = lazyWithRetry(() => import('../pages/admin/Announcements'));
+const Settings = lazyWithRetry(() => import('../pages/admin/Settings'));
+const StaffManagement = lazyWithRetry(() => import('../pages/admin/StaffManagement'));
+const StaffProfile = lazyWithRetry(() => import('../pages/admin/StaffProfile'));
+const ActivityLog = lazyWithRetry(() => import('../pages/admin/ActivityLog'));
+const AccountDeletionRequests = lazyWithRetry(() => import('../pages/admin/AccountDeletionRequests'));
+const DeviceManagement = lazyWithRetry(() => import('../pages/admin/DeviceManagement'));
 
 // Suspense fallback
 const PageLoader = () => (

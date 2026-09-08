@@ -8,12 +8,16 @@ import { AlertOctagon, RotateCcw, Home, RefreshCw } from "lucide-react";
 function isChunkLoadError(error) {
   if (!error) return false;
   const msg = error.message || "";
+  const name = error.name || "";
   return (
-    error.name === "ChunkLoadError" ||
+    name === "ChunkLoadError" ||
     msg.includes("Failed to fetch dynamically imported module") ||
     msg.includes("Loading chunk") ||
     msg.includes("Loading CSS chunk") ||
-    msg.includes("Importing a module script failed")
+    msg.includes("Importing a module script failed") ||
+    msg.includes("Unexpected token '<'") ||
+    msg.includes("Unexpected token <") ||
+    (name === "SyntaxError" && (msg.includes("<") || msg.includes("token")))
   );
 }
 
@@ -56,6 +60,10 @@ class ErrorBoundary extends React.Component {
 
   // Attempt in-place recovery: reset state so Suspense re-tries the lazy import.
   _handleReset() {
+    if (this.state.isChunkError || isChunkLoadError(this.state.error)) {
+      window.location.reload();
+      return;
+    }
     this.setState({ hasError: false, error: null, isChunkError: false });
   }
 

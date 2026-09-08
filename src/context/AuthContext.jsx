@@ -113,9 +113,11 @@ export const AuthProvider = ({ children }) => {
   const countdownIntervalRef = useRef(null);
   const lastActivityThrottleRef = useRef(0);
 
-  const IDLE_LIMIT_MS = 60 * 60 * 1000; // 60 minutes
-  const IDLE_WARNING_BUFFER_MS = 2 * 60 * 1000; // 2 minutes warning
-  const IDLE_WARNING_TIME_MS = IDLE_LIMIT_MS - IDLE_WARNING_BUFFER_MS; // 58 minutes
+  // Industry standard e-commerce admin session: 7 days of inactivity (e.g. Google, Shopify, Stripe)
+  const LAST_ACTIVITY_STORAGE_KEY = 'jezsy_admin_last_activity';
+  const IDLE_LIMIT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days of inactivity
+  const IDLE_WARNING_BUFFER_MS = 5 * 60 * 1000; // 5 minutes warning
+  const IDLE_WARNING_TIME_MS = IDLE_LIMIT_MS - IDLE_WARNING_BUFFER_MS;
   const VISIBILITY_COUNTDOWN_SECONDS = 60;
 
   // Unsubscribe from old device channel before starting a new one
@@ -135,6 +137,8 @@ export const AuthProvider = ({ children }) => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     if (lockoutDebounceTimerRef.current) clearTimeout(lockoutDebounceTimerRef.current);
+
+    try { localStorage.removeItem('jezsy_admin_last_activity'); } catch {}
 
     clearDeviceChannel();
 
@@ -168,7 +172,7 @@ export const AuthProvider = ({ children }) => {
   );
 
   const handleIdleLogout = useCallback(
-    () => doSignOut('Your session has expired due to inactivity. Please sign in again.', { duration: 5000 }),
+    () => doSignOut('Your session has expired due to 7 days of inactivity. Please sign in again.', { duration: 6000 }),
     [doSignOut]
   );
 
@@ -442,6 +446,24 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Check session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        let lastActive = Date.now();
+        try {
+          const stored = localStorage.getItem('jezsy_admin_last_activity');
+          if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed) && parsed > 0) lastActive = parsed;
+          }
+        } catch {}
+
+        const elapsed = Date.now() - lastActive;
+        if (elapsed >= IDLE_LIMIT_MS) {
+          console.warn('[AuthContext] Session expired on mount due to prolonged inactivity (7 days).');
+          doSignOut('Your session has expired due to 7 days of inactivity. Please sign in again.', { duration: 6000 });
+          return;
+        }
+      }
+
       if (!initialSessionCheckedRef.current) {
         initialSessionCheckedRef.current = true;
         handleDeviceCheck(session?.user ?? null);
@@ -506,7 +528,11 @@ export const AuthProvider = ({ children }) => {
 
   // Unified reset activity timer
   const resetActivityTimer = useCallback(() => {
-    lastActivityTimeRef.current = Date.now();
+    const now = Date.now();
+    lastActivityTimeRef.current = now;
+    try {
+      localStorage.setItem('jezsy_admin_last_activity', String(now));
+    } catch {}
 
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -581,20 +607,29 @@ export const AuthProvider = ({ children }) => {
       if (!userRef.current) return;
 
       if (document.visibilityState === 'visible') {
-        const elapsed = Date.now() - lastActivityTimeRef.current;
+        let lastActive = lastActivityTimeRef.current;
+        try {
+          const stored = localStorage.getItem('jezsy_admin_last_activity');
+          if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed) && parsed > 0) {
+              lastActive = parsed;
+              lastActivityTimeRef.current = parsed;
+            }
+          }
+        } catch {}
 
-        if (elapsed < IDLE_WARNING_TIME_MS) {
-          resetActivityTimer();
-        } else if (elapsed >= IDLE_LIMIT_MS) {
-          // Tab hidden beyond inactivity threshold: show recovery warning instead of immediate logout
+        const elapsed = Date.now() - lastActive;
+
+        if (elapsed >= IDLE_LIMIT_MS) {
+          // Inactive for more than 7 days: clean session expiration
+          console.warn('[AuthContext] Session expired due to prolonged inactivity (7 days).');
           if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          setSessionTimeoutState('VISIBILITY_WARNING');
+          handleIdleLogout();
         } else {
-          // Tab restored in the warning window
-          if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          setSessionTimeoutState('IDLE_WARNING');
+          // Active within 7 days: keep session alive smoothly
+          resetActivityTimer();
         }
       }
     };
