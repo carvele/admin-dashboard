@@ -98,12 +98,6 @@ const CountdownTimer = ({ targetDate }) => {
 // scroll past all day.
 const BOARD_COLUMNS = [
   {
-    status: 'Pending',
-    label: 'Pending review',
-    icon: Clock,
-    empty: 'Nothing waiting on a decision.',
-  },
-  {
     status: 'To Pay',
     label: 'Awaiting payment',
     icon: CheckCircle,
@@ -373,8 +367,8 @@ const Reservations = () => {
   const pagedReservations = sortedReservations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // --- LIFECYCLE ACTIONS ---
-  // Lifecycle: Pending → To Pay → Preparing → To Pickup → Completed | Cancelled
-  // Also backwards compatible with Confirmed, Fitting and Active
+  // Lifecycle: To Pay → Preparing → To Pickup → Completed | Cancelled.
+  // Legacy Pending rows can still be activated from the list view.
   // Answering a customer's request to move their appointment. Approving
   // re-checks the slot inside the RPC: it was free when they asked, but the
   // request may have sat in the queue while another reservation took it, so a
@@ -727,7 +721,7 @@ const Reservations = () => {
               aria-label="Filter by reservation status"
             >
               <option value="All">All Statuses</option>
-              <option value="Pending">Pending / Requests</option>
+              <option value="Pending">Legacy pending</option>
               <option value="To Pay">To Pay</option>
               <option value="Preparing">Preparing</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>

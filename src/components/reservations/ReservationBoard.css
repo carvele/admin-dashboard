@@ -1,10 +1,6 @@
 .res-board {
   display: grid;
-  /* One column per BOARD_COLUMNS entry (Reservations.jsx) -- stale here at
-     3 after the Preparing stage made it 4, so the 4th column (To Pickup)
-     silently wrapped onto its own row under column 1 instead of sitting
-     alongside the others. */
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--spacing-lg);
   padding: var(--spacing-lg);
   align-items: start;
