@@ -27,26 +27,26 @@ const emptyForm = {
   isFeatured: false,
 };
 
-// Supabase Storage public URLs are deterministic:
-// .../object/public/<bucket>/<path> -- used to recover the storage path
-// from a stored URL so an old/removed pose image can be cleaned up without
-// changing uploadToSupabase's shared return contract (a plain URL string).
-// Returns null for anything not actually in our bucket (e.g. the 4 seeded
-// poses whose images are borrowed product photos) -- we only ever delete
-// assets this feature owns.
-const extractPoseImagePath = (url) => {
-  if (!url || typeof url !== 'string') return null;
+// Ownership is metadata-driven: pose_guides.image_storage_path is the
+// authoritative record of whether this feature owns the current image,
+// set once at upload time (below) and read back from the DB row for every
+// later delete/replace decision -- never re-inferred from the image_url
+// string. NULL means "not ours" (the 4 seeded poses' borrowed product
+// photos, or any row saved before this column existed) and is never
+// deleted. This replaces an earlier version that re-parsed the URL against
+// the bucket's public-URL marker on every delete; that worked but was
+// fragile to a future bucket rename or CDN fronting silently breaking the
+// ownership check.
+const deriveUploadedStoragePath = (publicUrl) => {
   const marker = `/object/public/${POSE_IMAGES_BUCKET}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  return url.slice(idx + marker.length);
+  const idx = publicUrl.indexOf(marker);
+  return idx === -1 ? null : publicUrl.slice(idx + marker.length);
 };
 
-const bestEffortDeletePoseImage = async (url) => {
-  const path = extractPoseImagePath(url);
-  if (!path) return;
+const bestEffortDeletePoseImage = async (storagePath) => {
+  if (!storagePath) return;
   try {
-    await supabase.storage.from(POSE_IMAGES_BUCKET).remove([path]);
+    await supabase.storage.from(POSE_IMAGES_BUCKET).remove([storagePath]);
   } catch (e) {
     console.warn('[StyleInspiration] Failed to clean up old pose image:', e);
   }
@@ -131,12 +131,18 @@ const StyleInspiration = () => {
     setSaving(true);
     try {
       let finalImageUrl = editingPose?.imageUrl || null;
+      let finalImageStoragePath = editingPose?.imageStoragePath || null;
 
       if (selectedFile) {
         finalImageUrl = await uploadToSupabase(selectedFile, POSE_IMAGES_BUCKET, 'pose-guides');
+        // Captured once, right here, from the URL we ourselves just
+        // uploaded -- this is the one moment ownership can be established
+        // with certainty. From here on, every delete/replace decision reads
+        // this stored value back, not the URL.
+        finalImageStoragePath = deriveUploadedStoragePath(finalImageUrl);
       }
 
-      const previousImageUrl = editingPose?.imageUrl || null;
+      const previousImageStoragePath = editingPose?.imageStoragePath || null;
       const poseId = editingPose ? (editingPose.docId ?? editingPose.id) : crypto.randomUUID();
 
       // Single atomic write: the pose row and its product links commit or
@@ -153,13 +159,15 @@ const StyleInspiration = () => {
         sort_order: Number(formData.sortOrder) || 0,
         is_featured: formData.isFeatured,
         image_url: finalImageUrl,
+        image_storage_path: finalImageStoragePath,
         product_ids: linkedProducts.map((p) => p.id),
       });
 
       // Update DB first (above), then best-effort clean up the replaced
-      // image -- never touches an asset this feature doesn't own.
-      if (editingPose && selectedFile && previousImageUrl && previousImageUrl !== finalImageUrl) {
-        await bestEffortDeletePoseImage(previousImageUrl);
+      // image -- reads the stored ownership marker, never touches an asset
+      // this feature doesn't own.
+      if (editingPose && selectedFile && previousImageStoragePath && previousImageStoragePath !== finalImageStoragePath) {
+        await bestEffortDeletePoseImage(previousImageStoragePath);
       }
 
       toast.success(editingPose ? 'Pose updated' : 'Pose created');
@@ -180,7 +188,7 @@ const StyleInspiration = () => {
       // Junction rows cascade automatically (pose_guide_products.pose_guide_id
       // is ON DELETE CASCADE) -- no separate unlink pass needed.
       await deletePoseGuide(pose.docId ?? pose.id);
-      await bestEffortDeletePoseImage(pose.imageUrl);
+      await bestEffortDeletePoseImage(pose.imageStoragePath);
       toast.success('Pose deleted');
     } catch (e) {
       console.error(e);

@@ -130,6 +130,7 @@ export const savePoseGuide = async (data) => {
     base_pose_type = 'front',
     sort_order = 0,
     product_ids = [],
+    image_storage_path = null,
   } = data;
   const { supabase } = await import('../lib/supabaseService');
   const { error } = await supabase.rpc('save_pose_guide', {
@@ -145,6 +146,7 @@ export const savePoseGuide = async (data) => {
     p_base_pose_type: base_pose_type,
     p_sort_order: sort_order,
     p_product_ids: product_ids,
+    p_image_storage_path: image_storage_path,
   });
   if (error) throw error;
 };
