@@ -389,9 +389,6 @@ const Reservations = () => {
           ? `Moved ${res.displayId || id} to ${formatProposedAppointment(res)}`
           : `Declined the new time for ${res.displayId || id}`,
       );
-      await logAction(user, `${approve ? 'Approved' : 'Declined'} reschedule request`, {
-        reservationId: id,
-      });
     } catch (e) {
       toast.error(e?.message || 'Could not answer that request.');
     }
@@ -427,7 +424,6 @@ const Reservations = () => {
                 ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
                 : `Reservation ${id} completed — stock consumed permanently`,
             );
-            await logAction(user, 'Completed reservation', { reservationId: id });
           } catch (err) {
             console.error('Reservation completion failed:', err);
             toast.error(err.message || 'Failed to update reservation');
@@ -455,14 +451,6 @@ const Reservations = () => {
         await cancelReservation(res.docId, res.status);
         toast.error(`Reservation ${id} cancelled`);
       }
-      const actionLabels = {
-        approve_pay: 'Approved for Payment',
-        start_preparing: 'Started Preparing',
-        ready_pickup: 'Marked Ready for Pickup',
-        complete: 'Completed',
-        cancel: 'Cancelled',
-      };
-      await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
     } catch (err) {
       console.error('Reservation action failed:', err);
       toast.error(err.message || 'Failed to update reservation');
@@ -572,10 +560,6 @@ const Reservations = () => {
     try {
       await reviewReservationReceipt(res.docId, true);
       setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
-      await logAction(user, 'Verified GCash Payment', {
-        reservationId: res.id,
-        customer: res.customerName || res.customer,
-      });
       toast.success('Payment verified — preparing item');
     } catch (err) { console.error('Failed to verify payment:', err); toast.error(err.message || 'Failed to verify payment'); }
   };
@@ -588,10 +572,6 @@ const Reservations = () => {
     try {
       await reviewReservationReceipt(res.docId, false);
       setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev);
-      await logAction(user, 'Rejected payment receipt', {
-        reservationId: res.id,
-        customer: res.customerName || res.customer,
-      });
       toast.error('Receipt rejected — the customer can upload another');
     } catch (err) { console.error('Failed to reject the receipt:', err); toast.error(err.message || 'Failed to reject the receipt'); }
   };
