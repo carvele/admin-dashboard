@@ -21,7 +21,7 @@ import { supabase } from '../lib/supabaseClient';
 import { toCamel } from '../lib/supabaseService';
 
 /** Pending requests, joined to the customer's current (pre-scrub) profile. */
-export const getPendingDeletionRequests = async () => {
+export const getPendingDeletionRequests = async (limit = 101) => {
   const { data, error } = await supabase
     .from('account_deletion_requests')
     .select(`
@@ -38,7 +38,9 @@ export const getPendingDeletionRequests = async () => {
       )
     `)
     .in('status', ['pending', 'auth_revocation_pending'])
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(limit);
 
   if (error) throw error;
   return (data || []).map((row) => ({

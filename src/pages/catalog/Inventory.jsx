@@ -33,6 +33,7 @@ import {
   recalculateAllInventoryStock,
   recordBoutiqueSale,
   subscribeToCategories,
+  searchInventoryPage,
 } from '../../services/productService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
@@ -309,7 +310,8 @@ const Inventory = () => {
 
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
-      setInventory(data);
+      // Realtime trimming contract: cap snapshot at 500
+      setInventory(data.slice(0, 500));
       setLoading(false);
     });
     return () => unsub();
@@ -369,6 +371,37 @@ const Inventory = () => {
   useEffect(() => {
     setPage(0);
   }, [searchTerm, categoryFilter, colorFilter, viewMode]);
+
+  const [serverSearchResults, setServerSearchResults] = useState(null);
+  const [serverSearchLoading, setServerSearchLoading] = useState(false);
+
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setServerSearchResults(null);
+      setServerSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setServerSearchLoading(true);
+    searchInventoryPage(searchTerm, { viewMode, category: categoryFilter, color: colorFilter }, page, 50)
+      .then((res) => {
+        if (!cancelled) {
+          setServerSearchResults(res);
+          setServerSearchLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Server inventory search failed:', err);
+          setServerSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchTerm, viewMode, categoryFilter, colorFilter, page]);
 
   // Extract unique colors for filter
   const uniqueColors = useMemo(() => {
@@ -497,11 +530,21 @@ const Inventory = () => {
   });
 
   const PAGE_SIZE = 25;
+  const isServerSearch = !!searchTerm.trim();
   const filteredGroups = useMemo(() => groupInventoryRows(filteredInv), [filteredInv]);
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+  const serverSearchGroups = useMemo(
+    () => (serverSearchResults ? groupInventoryRows(serverSearchResults.items) : []),
+    [serverSearchResults]
+  );
+
+  const totalPages = isServerSearch
+    ? Math.max(1, Math.ceil((serverSearchResults?.totalCount ?? 0) / 50))
+    : Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+
   const pagedGroups = useMemo(() => {
+    if (isServerSearch) return serverSearchGroups;
     return filteredGroups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  }, [filteredGroups, page]);
+  }, [isServerSearch, serverSearchGroups, filteredGroups, page]);
 
   // ── Category → Subcategory grouping (the "browsing" view) ──────────────────
   // Only used when search, category, and color filters are default.
@@ -1019,10 +1062,15 @@ const Inventory = () => {
           </div>
         ) : (
           <>
-        {loading ? (
+        {loading || (isServerSearch && serverSearchLoading) ? (
           <div className="p-4"><SkeletonTable columns={TABLE_COLUMNS} rows={6} /></div>
         ) : (
           <div className="table-container">
+            {isServerSearch && (
+              <div style={{ padding: '8px 16px', background: 'var(--surface-muted, #f1f5f9)', borderBottom: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Search results across complete inventory (Server — Page {page + 1} of {totalPages})
+              </div>
+            )}
             <table className="table inv-table">
               <thead>
                 <tr>
@@ -1195,7 +1243,7 @@ const Inventory = () => {
                 )}
               </tbody>
             </table>
-            {!isBrowsingMode && filteredGroups.length > PAGE_SIZE && (
+            {!isBrowsingMode && (isServerSearch ? (serverSearchResults?.totalCount ?? 0) > 50 : filteredGroups.length > PAGE_SIZE) && (
               <div className="inv-pagination" role="navigation" aria-label="Inventory table pagination">
                 <button
                   type="button"
@@ -1207,7 +1255,7 @@ const Inventory = () => {
                   ← Previous
                 </button>
                 <span className="inv-pagination-info text-sm text-secondary">
-                  Page {page + 1} of {totalPages} ({filteredGroups.length} items)
+                  Page {page + 1} of {totalPages} ({isServerSearch ? serverSearchResults?.totalCount ?? 0 : filteredGroups.length} items)
                 </span>
                 <button
                   type="button"

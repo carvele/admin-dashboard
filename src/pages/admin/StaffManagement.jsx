@@ -67,7 +67,8 @@ const StaffManagement = () => {
   // ── Subscribe to ALL staff (including deleted) ───────────────
   useEffect(() => {
     const unsub = subscribeToStaff((data) => {
-      setStaff(data);
+      // Realtime trimming contract: cap snapshot at 100
+      setStaff(data.slice(0, 100));
       setLoading(false);
     });
     return () => unsub();

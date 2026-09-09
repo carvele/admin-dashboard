@@ -18,6 +18,7 @@ const Announcements = () => {
   const { user } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   
@@ -31,8 +32,9 @@ const Announcements = () => {
   const fetchAnnouncements = async () => {
     try {
       setIsLoading(true);
-      const data = await getAnnouncements();
-      setAnnouncements(data);
+      const data = await getAnnouncements(51);
+      setHasMore(data.length > 50);
+      setAnnouncements(data.slice(0, 50));
     } catch (error) {
       toast.error('Failed to load announcements');
     } finally {
@@ -127,6 +129,12 @@ const Announcements = () => {
           </button>
         }
       />
+
+      {hasMore && (
+        <div style={{ padding: '8px 16px', marginBottom: '16px', background: 'var(--surface-muted, #f1f5f9)', borderRadius: '6px', fontSize: '13px', color: 'var(--text-secondary, #64748b)' }}>
+          Showing the 50 most recent announcements.
+        </div>
+      )}
 
       {announcements.length === 0 ? (
         <div className="empty-state">

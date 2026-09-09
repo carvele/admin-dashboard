@@ -1,16 +1,18 @@
 import { supabase } from '../lib/supabaseClient';
 
-export const getAnnouncements = async () => {
+export const getAnnouncements = async (limit = 51) => {
   const { data, error } = await supabase
     .from('announcements')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
 
   if (error) {
     console.error('Error fetching announcements:', error);
     throw error;
   }
-  return data;
+  return data ?? [];
 };
 
 export const createAnnouncement = async (announcement) => {

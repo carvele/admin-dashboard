@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Clock3, Laptop, Pencil, RefreshCw, Scissors, ShieldAlert, ShieldCheck, Trash2, X, XCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import {
+  getDevicesSnapshot,
+  subscribeToDevices,
+  updateDeviceStatus,
+  deleteDevice as apiDeleteDevice,
+  renameDevice as apiRenameDevice,
+  pruneInactiveDevices,
+} from '../../services/deviceService';
 import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -38,26 +45,23 @@ const DeviceManagement = () => {
 
   const loadDevices = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('devices')
-      .select('fingerprint, name, status, staff_email, staff_name, user_agent, last_seen, failed_attempts, lockout_until, updated_at')
-      .order('last_seen', { ascending: false });
-    if (error) {
+    try {
+      const data = await getDevicesSnapshot(201);
+      // Realtime trimming contract: cap snapshot at 200
+      setDevices(data.slice(0, 200));
+    } catch {
       toast.error('Unable to load registered devices.');
+    } finally {
       setLoading(false);
-      return;
     }
-    setDevices(data ?? []);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadDevices();
-    const channel = supabase
-      .channel('admin-device-management')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, loadDevices)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const unsub = subscribeToDevices(loadDevices);
+    return () => {
+      unsub();
+    };
   }, [loadDevices]);
 
   const counts = useMemo(() => devices.reduce((result, device) => {
@@ -72,32 +76,31 @@ const DeviceManagement = () => {
 
   const updateStatus = async (device, status) => {
     setBusyId(device.fingerprint);
-    const { error } = await supabase.from('devices').update({ status, updated_at: new Date().toISOString() }).eq('fingerprint', device.fingerprint);
-    setBusyId(null);
-    if (error) {
+    try {
+      await updateDeviceStatus(device.fingerprint, status);
+      toast.success(`Device ${status}.`);
+      await loadDevices();
+    } catch {
       toast.error('Device status could not be updated.');
-      return;
+    } finally {
+      setBusyId(null);
     }
-    toast.success(`Device ${status}.`);
-    await loadDevices();
   };
 
   // ── Single device deletion ──
   const deleteDevice = async () => {
     if (!deleteTarget) return;
     setBusyId(deleteTarget.fingerprint);
-    const { error } = await supabase
-      .from('devices')
-      .delete()
-      .eq('fingerprint', deleteTarget.fingerprint);
-    setBusyId(null);
-    setDeleteTarget(null);
-    if (error) {
+    try {
+      await apiDeleteDevice(deleteTarget.fingerprint);
+      toast.success('Device permanently removed.');
+      setDeleteTarget(null);
+      await loadDevices();
+    } catch {
       toast.error('Device could not be deleted.');
-      return;
+    } finally {
+      setBusyId(null);
     }
-    toast.success('Device permanently removed.');
-    await loadDevices();
   };
 
   // ── Inline rename ──
@@ -118,46 +121,31 @@ const DeviceManagement = () => {
       return;
     }
     setBusyId(fingerprint);
-    const { error } = await supabase
-      .from('devices')
-      .update({ name: trimmed, updated_at: new Date().toISOString() })
-      .eq('fingerprint', fingerprint);
-    setBusyId(null);
-    cancelEditing();
-    if (error) {
+    try {
+      await apiRenameDevice(fingerprint, trimmed);
+      toast.success('Device name updated.');
+      cancelEditing();
+      await loadDevices();
+    } catch {
       toast.error('Failed to update device name.');
-      return;
+    } finally {
+      setBusyId(null);
     }
-    toast.success('Device name updated.');
-    await loadDevices();
   };
 
   // ── Prune inactive (revoked OR stale > 30 days) ──
   const pruneInactive = async () => {
     setPruneLoading(true);
-    const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-    // Delete revoked devices
-    const { error: errRevoked } = await supabase
-      .from('devices')
-      .delete()
-      .eq('status', 'revoked');
-
-    // Delete devices not seen for > 30 days (regardless of status)
-    const { error: errStale } = await supabase
-      .from('devices')
-      .delete()
-      .lt('last_seen', cutoff);
-
-    setPruneLoading(false);
-    setPruneConfirmOpen(false);
-
-    if (errRevoked || errStale) {
+    try {
+      await pruneInactiveDevices(STALE_DAYS);
+      toast.success('Inactive and revoked devices pruned.');
+      setPruneConfirmOpen(false);
+      await loadDevices();
+    } catch {
       toast.error('Some devices could not be pruned. Please try again.');
-      return;
+    } finally {
+      setPruneLoading(false);
     }
-    toast.success('Inactive and revoked devices pruned.');
-    await loadDevices();
   };
 
   const statusIcon = (status) => status === 'approved'

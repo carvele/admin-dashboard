@@ -17,6 +17,7 @@ import { formatRelativeTime, formatDate } from '../../utils/helpers';
 const AccountDeletionRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
 
   const [reviewing, setReviewing] = useState(null); // the request row
   const [obligations, setObligations] = useState(null);
@@ -27,8 +28,9 @@ const AccountDeletionRequests = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await getPendingDeletionRequests();
-      setRequests(data || []);
+      const data = await getPendingDeletionRequests(101);
+      setHasMore(data.length > 100);
+      setRequests((data || []).slice(0, 100));
     } catch (e) {
       toast.error('Failed to load deletion requests');
     } finally {
@@ -124,6 +126,12 @@ const AccountDeletionRequests = () => {
         title="Account Deletion Requests"
         subtitle="Customer-initiated requests to delete their account. Each request is reviewed and processed manually."
       />
+
+      {hasMore && (
+        <div style={{ padding: '8px 16px', marginBottom: '16px', background: 'var(--surface-muted, #f1f5f9)', borderRadius: '6px', fontSize: '13px', color: 'var(--text-secondary, #64748b)' }}>
+          Showing the 100 most recent deletion requests.
+        </div>
+      )}
 
       <div className="card">
         <div className="table-container">

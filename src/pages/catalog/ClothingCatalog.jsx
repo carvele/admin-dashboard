@@ -193,6 +193,17 @@ const ClothingCatalog = () => {
     return matchesSearch && matchesCat && matchesColor && matchesTag;
   });
 
+  const PAGE_SIZE = 24;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(filteredCatalog.length / PAGE_SIZE));
+  const pagedCatalog = React.useMemo(() => {
+    return filteredCatalog.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  }, [filteredCatalog, page]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, activeCategory, activeColor, activeTag, viewMode]);
+
   // --- ARCHIVE PRODUCT ---
   const handleArchive = async () => {
     if (!archiveConfirm) return;
@@ -360,7 +371,7 @@ const ClothingCatalog = () => {
       </div>
 
       <div className="catalog-grid-display">
-        {filteredCatalog.map((item) => {
+        {pagedCatalog.map((item) => {
           // Use real inventory totals (aggregated across all sizes) when available;
           // fall back to products.stock with the flat 10-unit baseline if no
           // inventory rows exist yet for this product.
@@ -630,6 +641,28 @@ const ClothingCatalog = () => {
           </div>
         ) : null}
       </div>
+
+      {totalPages > 1 && (
+        <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem', marginBottom: '2rem' }}>
+          <button
+            className="btn-outline btn-sm"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            Previous
+          </button>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            Page {page + 1} of {totalPages} ({filteredCatalog.length} total)
+          </span>
+          <button
+            className="btn-outline btn-sm"
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!archiveConfirm}

@@ -117,9 +117,11 @@ export const subscribeToReservations = (callback) => {
     const sorted = [...rows].sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
+      if (bTime !== aTime) return bTime - aTime;
+      return (b.id || '').localeCompare(a.id || '');
     });
-    callback(sorted.map(normaliseReservation));
+    // Realtime trimming contract: cap board view snapshot at 200
+    callback(sorted.slice(0, 200).map(normaliseReservation));
   }, {}, true /* includeDeleted so cancelled/history are accessible */);
 };
 
@@ -146,6 +148,7 @@ export const getReservations = async (maxResults = 0) => {
     .from('reservations')
     .select('*')
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(maxResults > 0 ? maxResults : 10000);
   if (error) throw error;
   return (data ?? []).map(normaliseReservation);

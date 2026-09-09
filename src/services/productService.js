@@ -18,6 +18,7 @@ import {
   updateDocument,
   softDeleteDocument,
   subscribeToCollection,
+  getPaginatedCollection,
   toCamel,
 } from '../lib/supabaseService';
 import { logAction } from './staffService';
@@ -36,6 +37,19 @@ export const getProducts = async (includeDeleted = false, maxResults = 0) => {
   const data = await getCollection('products', includeDeleted, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
+};
+
+export const getPaginatedProducts = async (pageSize = 30, page = 0, filters = {}) => {
+  const result = await getPaginatedCollection('products', pageSize, page, filters, true, [
+    { column: 'created_at', ascending: false },
+    { column: 'id', ascending: false },
+  ]);
+  return {
+    items: result.data,
+    hasMore: result.hasMore,
+    nextPage: result.nextPage,
+    total: result.total,
+  };
 };
 
 export const getProductById = (id) => getDocument('products', id);
@@ -118,6 +132,47 @@ export const getInventory = async (maxResults = 0) => {
   const data = await getCollection('inventory', true /* includeDeleted */, maxResults);
   queryCache.set(cacheKey, data, CACHE_TTL.SHORT);
   return data;
+};
+
+export const searchInventoryPage = async (searchTerm, filters = {}, page = 0, pageSize = 50) => {
+  let q = supabase.from('inventory').select('*', { count: 'exact' });
+
+  if (filters.viewMode === 'active') {
+    q = q.eq('deleted', false);
+  } else if (filters.viewMode === 'archived') {
+    q = q.eq('deleted', true);
+  }
+
+  if (filters.category && filters.category !== 'All') {
+    q = q.eq('category', filters.category);
+  }
+
+  if (filters.color && filters.color !== 'All') {
+    q = q.eq('color', filters.color);
+  }
+
+  if (searchTerm && searchTerm.trim()) {
+    const term = searchTerm.trim();
+    q = q.or(`item.ilike.%${term}%,sku.ilike.%${term}%,variant_sku.ilike.%${term}%,color.ilike.%${term}%`);
+  }
+
+  q = q.order('created_at', { ascending: false }).order('id', { ascending: false });
+
+  const from = page * pageSize;
+  const to = from + pageSize; // PAGE_SIZE + 1 sentinel
+  q = q.range(from, to);
+
+  const { data, count, error } = await q;
+  if (error) throw error;
+
+  const raw = (data ?? []).map(toCamel);
+  const items = raw.slice(0, pageSize);
+  return {
+    items,
+    hasMore: raw.length > pageSize,
+    nextOffset: from + items.length,
+    totalCount: count ?? 0,
+  };
 };
 
 export const createInventoryItem = async (data) => {
