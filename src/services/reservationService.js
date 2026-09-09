@@ -13,7 +13,6 @@
 import { supabase } from '../lib/supabaseClient';
 import {
   subscribeToCollection,
-  addDocument,
   updateDocument,
   deleteDocument,
   getPaginatedCollection,
@@ -52,6 +51,18 @@ const buildTimestamp = (date, timeStr) => {
 
   if (!timeStr || typeof timeStr !== 'string') return d.toISOString();
   return `${datePart}T${timeStr.padStart(5, '0')}:00+08:00`;
+};
+
+const toLocalTimeString = (value, explicitTime) => {
+  if (explicitTime) return explicitTime.slice(0, 5);
+  if (typeof value === 'string') {
+    const match = value.match(/T(\d{2}:\d{2})/);
+    if (match) return match[1];
+  }
+  const d = toDate(value);
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 /**
@@ -277,53 +288,41 @@ const sanitizeReservationPayload = (obj) => {
 };
 
 export const createReservation = async (data) => {
-  const appointmentTs = buildTimestamp(data.date || data.reservationDate, data.appointmentTime);
-  const returnTs = toLocalDateString(data.returnDate);
-  const dateTs = toLocalDateString(data.date || data.reservationDate);
+  const dateValue = data.date || data.reservationDate;
+  const date = toLocalDateString(dateValue);
+  const appointmentTime = toLocalTimeString(dateValue, data.appointmentTime);
 
-  const payload = sanitizeReservationPayload({
-    ...data,
-    date: dateTs,
-    return_date: returnTs,
-    appointment_time: appointmentTs,
-    deleted: false,
-  });
-
-  const targetStatus = payload.status;
-  const stagedPayload = targetStatus === 'To Pay' ? { ...payload, status: 'Pending' } : payload;
-  const reservationId = await addDocument('reservations', stagedPayload);
-
-  try {
-    // Pending is a non-holding staging state. Activate only after the line
-    // exists, so an inventory failure cannot leave a payable reservation with
-    // no stock behind it.
-    await addDocument('reservation_items', {
-      reservation_id: reservationId,
-      product_id: payload.product_id,
-      product_name: payload.product_name,
-      image_url: payload.image_url,
-      size: payload.size,
-      color: payload.color,
-      quantity: data.quantity ?? 1,
-      unit_price: payload.rental_price,
-    });
-
-    if (targetStatus !== stagedPayload.status) {
-      await updateDocument('reservations', reservationId, { status: targetStatus });
-    }
-    return reservationId;
-  } catch (error) {
-    try {
-      await deleteDocument('reservations', reservationId);
-    } catch (cleanupError) {
-      console.error('Failed to clean up staged reservation:', cleanupError);
-    }
-    throw error;
+  const customerId = data.customerId || data.customer_id;
+  const productId = data.productId || data.product_id;
+  if (!date || !appointmentTime || !customerId || !productId) {
+    throw new Error('Customer, product, date, and appointment time are required.');
   }
+
+  const { data: created, error } = await supabase.rpc('create_reservation_multi', {
+    _items: [{
+      product_id: productId,
+      size: data.size || null,
+      color: data.color || null,
+      quantity: data.quantity ?? 1,
+    }],
+    _date: date,
+    _appointment_time: appointmentTime,
+    _receipt_path: null,
+    _payment_option: String(data.paymentType || data.payment_type || '').toLowerCase() === 'full'
+      ? 'full'
+      : 'deposit',
+    _customer_id: customerId,
+  });
+  if (error) throw error;
+  return created?.id;
 };
 
 export const updateReservation = async (docId, updates) => {
   const payload = sanitizeReservationPayload(updates);
+
+  if ('status' in payload || 'payment_status' in payload) {
+    throw new Error('Lifecycle and payment state must use a reservation command.');
+  }
 
   if (updates.appointmentTime && (updates.date || updates.reservationDate)) {
     payload.appointment_time = buildTimestamp(
@@ -348,7 +347,7 @@ export const deleteReservation = async (docId) => {
 /**
  * Records that the outstanding balance was collected in person.
  *
- * Goes through settle_reservation_balance rather than writing the columns
+ * Goes through the owner-only balance command rather than writing the columns
  * directly. The RPC re-checks the caller's role, that the deposit has actually
  * cleared, that a balance exists at all, and that it has not already been
  * recorded -- none of which a bare column update would enforce, and all of
@@ -356,7 +355,45 @@ export const deleteReservation = async (docId) => {
  * electronic trail behind it.
  */
 export const settleReservationBalance = async (reservationId, method = 'cash') => {
-  const { data, error } = await supabase.rpc('settle_reservation_balance', {
+  const { data, error } = await supabase.rpc('record_reservation_balance', {
+    _reservation_id: reservationId,
+    _method: method,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const transitionReservationStatus = async (reservationId, expectedStatus, nextStatus) => {
+  const { data, error } = await supabase.rpc('transition_reservation_status', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _next_status: nextStatus,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const cancelReservation = async (reservationId, expectedStatus, reason) => {
+  const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _reason: reason || 'Cancelled by owner',
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const reviewReservationReceipt = async (reservationId, approve) => {
+  const { data, error } = await supabase.rpc('review_reservation_receipt', {
+    _reservation_id: reservationId,
+    _approve: approve,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const completeReservationHandover = async (reservationId, method = 'cash') => {
+  const { data, error } = await supabase.rpc('complete_reservation_handover', {
     _reservation_id: reservationId,
     _method: method,
   });
@@ -528,7 +565,7 @@ export const repairReservationData = async (reservation) => {
  * another reservation took it.
  */
 export const resolveRescheduleRequest = async (reservationId, approve) => {
-  const { data, error } = await supabase.rpc('resolve_reschedule', {
+  const { data, error } = await supabase.rpc('resolve_reschedule_as_manager', {
     _reservation_id: reservationId,
     _approve: approve,
   });

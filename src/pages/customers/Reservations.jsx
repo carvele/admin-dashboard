@@ -48,6 +48,10 @@ import {
   createReservation,
   repairReservationData,
   settleReservationBalance,
+  transitionReservationStatus,
+  cancelReservation,
+  reviewReservationReceipt,
+  completeReservationHandover,
   resolveRescheduleRequest,
   getPaymentsForReservation,
 } from '../../services/reservationService';
@@ -399,31 +403,16 @@ const Reservations = () => {
 
     try {
       if (action === 'approve_pay') {
-        await updateReservation(res.docId, {
-          status: 'To Pay',
-          confirmed_by_id: user?.uid || user?.id || null,
-          confirmed_by_name: user?.name || user?.email || 'Staff',
-          confirmed_at: new Date().toISOString()
-        });
-        // Stock hold is handled automatically by the Supabase database trigger
-        // `trg_apply_inventory_on_reservation_status` when the status changes to 'To Pay'.
+        await transitionReservationStatus(res.docId, res.status, 'To Pay');
         toast.success(`Legacy reservation ${id} activated — stock held`);
       } else if (action === 'start_preparing') {
         if (String(res.paymentStatus || '').toLowerCase() !== 'paid') {
           throw new Error('Payment must be confirmed before preparation starts.');
         }
-        await updateReservation(res.docId, {
-          status: 'Preparing',
-          assigned_staff_id: user?.uid || '',
-          countdown: false,
-        });
-        // No stock movement here: approval already held it, and both statuses
-        // are in STOCK_HOLDING_STATUSES.
+        await transitionReservationStatus(res.docId, res.status, 'Preparing');
         toast.success(`Reservation ${id} payment received — preparing item`);
       } else if (action === 'ready_pickup') {
-        // Payment is already confirmed; this just signals the item is
-        // pulled and physically ready at the counter.
-        await updateReservation(res.docId, { status: 'Ready' });
+        await transitionReservationStatus(res.docId, res.status, 'Ready');
         toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
         // Handing over is the moment the rest of the money is taken, in cash,
@@ -432,14 +421,7 @@ const Reservations = () => {
         const outstanding = outstandingBalance(res);
         const executeComplete = async () => {
           try {
-            if (outstanding > 0) {
-              // Recorded before the status moves: if this throws, the reservation
-              // stays in To Pickup rather than completing with the money unlogged.
-              await settleReservationBalance(res.id);
-            }
-
-            await updateReservation(res.docId, { status: 'Completed' });
-            // Consume reserved stock is handled automatically by DB trigger
+            await completeReservationHandover(res.docId);
             toast.success(
               outstanding > 0
                 ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
@@ -470,9 +452,7 @@ const Reservations = () => {
         if (!canCancelReservation(res)) {
           throw new Error('Resolve or refund the payment before cancelling this reservation.');
         }
-        await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Stock restoration is handled automatically by the Supabase database trigger
-        // `trg_apply_inventory_on_reservation_status` when the status changes to 'Cancelled'.
+        await cancelReservation(res.docId, res.status);
         toast.error(`Reservation ${id} cancelled`);
       }
       const actionLabels = {
@@ -590,14 +570,7 @@ const Reservations = () => {
 
   const handleVerifyPayment = async (res) => {
     try {
-      // Receipt verification is the only owner path that establishes payment
-      // and advances fulfillment in the same review action.
-      await updateReservation(res.docId, {
-        status: 'Preparing',
-        paymentStatus: 'Paid',
-        assignedStaffId: user?.uid || '',
-        countdown: false,
-      });
+      await reviewReservationReceipt(res.docId, true);
       setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
       await logAction(user, 'Verified GCash Payment', {
         reservationId: res.id,
@@ -613,7 +586,7 @@ const Reservations = () => {
   // unreadable screenshot is not the same as refusing to pay.
   const handleRejectReceipt = async (res) => {
     try {
-      await updateReservation(res.docId, { paymentStatus: 'Pending', receiptUrl: null });
+      await reviewReservationReceipt(res.docId, false);
       setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev);
       await logAction(user, 'Rejected payment receipt', {
         reservationId: res.id,
