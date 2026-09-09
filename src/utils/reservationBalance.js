@@ -11,8 +11,9 @@
  * `paymentType` already records 'Deposit' against 'Full' correctly. It just had
  * no reader. This is that reader.
  *
- * Derived, never stored: the balance is always rentalPrice - deposit, so there
- * is nothing to keep in sync and nothing to migrate.
+ * Derived, never stored: the balance is always total price minus deposit. The
+ * API still exposes the legacy `rentalPrice` field name, but this is a purchase
+ * balance and completion transfers the item permanently to the customer.
  */
 
 const money = (value) => {

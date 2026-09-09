@@ -52,8 +52,9 @@ jest.mock('../lib/supabaseService', () => ({
   toCamel: (o) => o,
 }));
 
-import { updateDocument } from '../lib/supabaseService';
+import { addDocument, deleteDocument, updateDocument } from '../lib/supabaseService';
 import {
+  createReservation,
   settleReservationBalance,
   adjustInventoryForReservation,
   resolveRescheduleRequest,
@@ -65,6 +66,58 @@ const resetLookups = () => {
   mockLookup.sku = null;
   mockLookup.item = null;
 };
+
+describe('createReservation', () => {
+  afterEach(() => {
+    addDocument.mockReset();
+    deleteDocument.mockReset();
+    updateDocument.mockReset();
+  });
+
+  const reservation = {
+    customerId: 'customer-1',
+    productId: 'product-1',
+    productName: 'Dress',
+    size: 'M',
+    quantity: 1,
+    date: '2026-09-15T10:00:00+08:00',
+    status: 'To Pay',
+    payment_status: 'Pending',
+    payment_due_at: '2026-09-14T10:00:00.000Z',
+    rentalPrice: 2000,
+    deposit: 1000,
+  };
+
+  test('creates the line before activating an immediate stock hold', async () => {
+    addDocument.mockResolvedValueOnce('reservation-1').mockResolvedValueOnce('line-1');
+    updateDocument.mockResolvedValue(undefined);
+
+    await createReservation(reservation);
+
+    expect(addDocument).toHaveBeenNthCalledWith(
+      1,
+      'reservations',
+      expect.objectContaining({ status: 'Pending', payment_due_at: reservation.payment_due_at }),
+    );
+    expect(addDocument).toHaveBeenNthCalledWith(
+      2,
+      'reservation_items',
+      expect.objectContaining({ reservation_id: 'reservation-1', product_id: 'product-1' }),
+    );
+    expect(updateDocument).toHaveBeenCalledWith('reservations', 'reservation-1', { status: 'To Pay' });
+  });
+
+  test('removes the staged parent if its line cannot be created', async () => {
+    addDocument
+      .mockResolvedValueOnce('reservation-1')
+      .mockRejectedValueOnce(new Error('Inventory unavailable'));
+    deleteDocument.mockResolvedValue(undefined);
+
+    await expect(createReservation(reservation)).rejects.toThrow('Inventory unavailable');
+    expect(updateDocument).not.toHaveBeenCalled();
+    expect(deleteDocument).toHaveBeenCalledWith('reservations', 'reservation-1');
+  });
+});
 
 describe('settleReservationBalance', () => {
   afterEach(() => mockRpc.mockReset());

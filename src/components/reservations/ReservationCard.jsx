@@ -9,7 +9,7 @@
 
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
-import { PRIMARY_ACTION, isAwaitingReceipt } from '../../utils/reservationActions';
+import { canCancelReservation, isAwaitingReceipt, primaryActionFor } from '../../utils/reservationActions';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
@@ -24,7 +24,7 @@ const initialsOf = (name) =>
     .toUpperCase();
 
 const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage, onResolveReschedule }) => {
-  const primary = PRIMARY_ACTION[res.displayStatus];
+  const primary = primaryActionFor(res);
   const deadline = formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
@@ -128,13 +128,13 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         {canManage && primary && (
           <button
             className="btn-primary res-card-primary"
-            // A submitted-receipt reservation used to fire mark_paid the
-            // instant this button was clicked -- same as the normal action,
+            // A submitted-receipt reservation used to mutate payment the
+            // instant this button was clicked,
             // just relabeled "Verify receipt" -- so staff could mark a
             // payment verified without the receipt image ever having been
             // opened. Now opens the detail modal instead, where the receipt
             // renders next to its own dedicated Verify Payment button.
-            onClick={() => (awaitingReceipt ? onView() : onAction(res.id, primary.action))}
+            onClick={() => (primary.action === 'review_receipt' ? onView() : onAction(res.id, primary.action))}
           >
             {awaitingReceipt ? 'Verify receipt' : primary.label}
           </button>
@@ -150,14 +150,16 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
             <button className="btn-outline res-card-icon" onClick={onReschedule} aria-label="Reschedule" title="Reschedule">
               <Calendar size={15} />
             </button>
-            <button
-              className="btn-outline res-card-icon"
-              onClick={() => onAction(res.id, 'cancel')}
-              aria-label="Cancel reservation"
-              title="Cancel reservation"
-            >
-              <XCircle size={15} />
-            </button>
+            {canCancelReservation(res) && (
+              <button
+                className="btn-outline res-card-icon"
+                onClick={() => onAction(res.id, 'cancel')}
+                aria-label="Cancel reservation"
+                title="Cancel reservation"
+              >
+                <XCircle size={15} />
+              </button>
+            )}
           </>
         )}
       </footer>

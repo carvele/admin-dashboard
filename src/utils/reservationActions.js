@@ -8,15 +8,29 @@
 
 // One primary action per column: the common move is a single click, and
 // everything rarer (cancel, reschedule) is secondary.
-export const PRIMARY_ACTION = {
-  Pending: { action: 'approve_pay', label: 'Approve' },
-  'To Pay': { action: 'mark_paid', label: 'Mark paid' },
-  Preparing: { action: 'ready_pickup', label: 'Mark ready' },
-  'To Pickup': { action: 'complete', label: 'Hand over' },
+export const isAwaitingReceipt = (res) =>
+  res.displayStatus === 'To Pay' &&
+  ['submitted', 'processing'].includes(String(res.paymentStatus || '').toLowerCase());
+
+export const primaryActionFor = (res) => {
+  if (res.displayStatus === 'Pending') {
+    return { action: 'approve_pay', label: 'Activate legacy hold' };
+  }
+  if (res.displayStatus === 'To Pay') {
+    if (isAwaitingReceipt(res)) return { action: 'review_receipt', label: 'Verify receipt' };
+    if (String(res.paymentStatus || '').toLowerCase() === 'paid') {
+      return { action: 'start_preparing', label: 'Start preparing' };
+    }
+    return null;
+  }
+  if (res.displayStatus === 'Preparing') return { action: 'ready_pickup', label: 'Mark ready' };
+  if (res.displayStatus === 'To Pickup') return { action: 'complete', label: 'Hand over' };
+  return null;
 };
 
 export const CAN_RESCHEDULE_STATUSES = new Set(['Pending', 'To Pay', 'Preparing', 'To Pickup']);
 
-export const isAwaitingReceipt = (res) =>
-  res.displayStatus === 'To Pay' &&
-  (res.paymentStatus === 'Submitted' || res.paymentStatus === 'Processing');
+export const canCancelReservation = (res) =>
+  !['paid', 'submitted', 'processing', 'refund required'].includes(
+    String(res.paymentStatus || '').toLowerCase(),
+  );
