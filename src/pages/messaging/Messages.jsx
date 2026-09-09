@@ -266,10 +266,13 @@ const Messages = () => {
         const timeB = Math.max(
           new Date(b.lastMessageTime || b.updatedAt || b.createdAt || 0).getTime(),
         );
-        return timeB - timeA;
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.id || '').localeCompare(a.id || '');
       });
-      setConversations(sortedConv);
-      if (sortedConv.length > 0) setActiveChat((prev) => prev || sortedConv[0]);
+      // Realtime trimming contract: cap conversation snapshot at 100
+      const trimmed = sortedConv.slice(0, 100);
+      setConversations(trimmed);
+      if (trimmed.length > 0) setActiveChat((prev) => prev || trimmed[0]);
     });
     return () => unsub();
   }, []);

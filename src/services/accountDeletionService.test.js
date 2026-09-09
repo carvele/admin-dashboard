@@ -14,6 +14,7 @@ jest.mock('../lib/supabaseClient', () => ({
           order: jest.fn().mockReturnThis(),
           eq: jest.fn().mockReturnThis(),
           not: jest.fn().mockReturnThis(),
+          limit: jest.fn().mockReturnThis(),
           then: (resolve) => resolve({ data: mockSelectData.data, error: mockSelectData.error }),
         };
         return queryObj;

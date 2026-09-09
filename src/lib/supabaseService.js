@@ -203,6 +203,10 @@ export const getPaginatedCollection = async (
   page = 0,
   filters = {},
   includeDeleted = false,
+  orderBy = [
+    { column: 'created_at', ascending: false },
+    { column: 'id', ascending: false },
+  ],
 ) => {
   let q = supabase.from(table).select('*', { count: 'exact' });
 
@@ -210,12 +214,25 @@ export const getPaginatedCollection = async (
     q = q.eq('deleted', false);
   }
 
-  // Apply filters: { column: value } or { column: ['in', [v1, v2]] }
+  // Apply filters: { column: value }, { column: ['in', [v1, v2]] }, or { column: ['ilike', pattern] }
   for (const [col, val] of Object.entries(filters)) {
-    if (Array.isArray(val) && val[0] === 'in') {
-      q = q.in(col, val[1]);
+    if (Array.isArray(val)) {
+      if (val[0] === 'in') {
+        q = q.in(col, val[1]);
+      } else if (val[0] === 'ilike') {
+        q = q.ilike(col, val[1]);
+      }
     } else {
       q = q.eq(col, val);
+    }
+  }
+
+  // Apply deterministic ordering
+  if (Array.isArray(orderBy) && orderBy.length > 0) {
+    for (const order of orderBy) {
+      if (order.column) {
+        q = q.order(order.column, { ascending: order.ascending ?? false });
+      }
     }
   }
 

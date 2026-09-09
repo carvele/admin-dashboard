@@ -146,7 +146,8 @@ const Reservations = () => {
         }
       });
 
-      setReservations(data);
+      // Realtime trimming contract: cap snapshot at 200
+      setReservations(data.slice(0, 200));
       setLoading(false);
     });
 

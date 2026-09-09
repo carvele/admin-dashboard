@@ -26,14 +26,17 @@ export const subscribeToStaff = (callback) => {
 };
 
 /** One-time fetch of all staff profiles. */
-export const getStaffMembers = async () => {
+export const getStaffMembers = async (limit = 101) => {
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .neq('role', 'customer')
-    .eq('deleted', false);
+    .eq('deleted', false)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return data.map((r) => ({ ...toCamel(r), docId: r.id }));
+  return (data || []).map((r) => ({ ...toCamel(r), docId: r.id }));
 };
 
 /** Lookup a staff profile by email. Returns null if not found. */

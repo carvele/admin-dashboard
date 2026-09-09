@@ -40,14 +40,15 @@ export const subscribeToMessages = (conversationId, callback) => {
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
-      .limit(100);
+      .order('id', { ascending: false })
+      .limit(101);
       
     if (error) {
       console.error('[Supabase] fetch messages error:', error.message);
       return callback([]);
     }
-    // We must normalise rows if the rest of the app expects camelCase
-    localMessages = (data ?? []).map(normaliseRow);
+    // Normalise rows and cap snapshot to 100
+    localMessages = (data ?? []).slice(0, 100).map(normaliseRow);
     callback([...localMessages]);
   };
 
@@ -57,12 +58,24 @@ export const subscribeToMessages = (conversationId, callback) => {
     .channel(`msgs_${conversationId}_${Date.now()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
       if (payload.eventType === 'INSERT') {
-        localMessages.push(normaliseRow(payload.new));
+        const newRow = normaliseRow(payload.new);
+        if (!localMessages.some((m) => m.id === newRow.id)) {
+          localMessages.push(newRow);
+        }
       } else if (payload.eventType === 'UPDATE') {
         const updatedMsg = normaliseRow(payload.new);
-        localMessages = localMessages.map(msg => msg.id === updatedMsg.id ? updatedMsg : msg);
+        localMessages = localMessages.map((msg) => (msg.id === updatedMsg.id ? updatedMsg : msg));
       } else if (payload.eventType === 'DELETE') {
-        localMessages = localMessages.filter(msg => msg.id !== payload.old.id);
+        localMessages = localMessages.filter((msg) => msg.id !== payload.old.id);
+      }
+      localMessages.sort((a, b) => {
+        const tA = new Date(a.createdAt || 0).getTime();
+        const tB = new Date(b.createdAt || 0).getTime();
+        if (tB !== tA) return tB - tA;
+        return (b.id || '').localeCompare(a.id || '');
+      });
+      if (localMessages.length > 100) {
+        localMessages = localMessages.slice(0, 100);
       }
       callback([...localMessages]);
     })

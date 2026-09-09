@@ -124,7 +124,9 @@ const ARAssets = () => {
       setPendingProducts(arTagged.filter(p => !p.model_3dUrl));
       setLoading(false);
     });
-    const unsubLibrary = subscribeToARAssets(setGlobalLibrary);
+    const unsubLibrary = subscribeToARAssets((data) => {
+      setGlobalLibrary((data || []).slice(0, 100));
+    });
     return () => {
       unsub();
       unsubLibrary();
