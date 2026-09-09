@@ -31,7 +31,12 @@ import ReservationCalendar from '../../components/reservations/ReservationCalend
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
 import '../../components/reservations/ReservationBoard.css';
-import { PRIMARY_ACTION, CAN_RESCHEDULE_STATUSES, isAwaitingReceipt } from '../../utils/reservationActions';
+import {
+  CAN_RESCHEDULE_STATUSES,
+  canCancelReservation,
+  isAwaitingReceipt,
+  primaryActionFor,
+} from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
@@ -43,9 +48,12 @@ import {
   createReservation,
   repairReservationData,
   settleReservationBalance,
+  transitionReservationStatus,
+  cancelReservation,
+  reviewReservationReceipt,
+  completeReservationHandover,
   resolveRescheduleRequest,
   getPaymentsForReservation,
-  autoCancelExpiredReservations,
 } from '../../services/reservationService';
 import { subscribeToCustomers } from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
@@ -89,12 +97,6 @@ const CountdownTimer = ({ targetDate }) => {
 // not work, so they stay in List view rather than adding dead columns staff
 // scroll past all day.
 const BOARD_COLUMNS = [
-  {
-    status: 'Pending',
-    label: 'Pending review',
-    icon: Clock,
-    empty: 'Nothing waiting on a decision.',
-  },
   {
     status: 'To Pay',
     label: 'Awaiting payment',
@@ -298,7 +300,6 @@ const Reservations = () => {
     outfit: '',
     size: 'M',
     date: '',
-    deposit: false,
   });
   const [newDate, setNewDate] = useState('');
   const [expandedRows, setExpandedRows] = useState({});
@@ -366,8 +367,8 @@ const Reservations = () => {
   const pagedReservations = sortedReservations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // --- LIFECYCLE ACTIONS ---
-  // Lifecycle: Pending → To Pay → Preparing → To Pickup → Completed | Cancelled
-  // Also backwards compatible with Confirmed, Fitting and Active
+  // Lifecycle: To Pay → Preparing → To Pickup → Completed | Cancelled.
+  // Legacy Pending rows can still be activated from the list view.
   // Answering a customer's request to move their appointment. Approving
   // re-checks the slot inside the RPC: it was free when they asked, but the
   // request may have sat in the queue while another reservation took it, so a
@@ -382,9 +383,6 @@ const Reservations = () => {
           ? `Moved ${res.displayId || id} to ${formatProposedAppointment(res)}`
           : `Declined the new time for ${res.displayId || id}`,
       );
-      await logAction(user, `${approve ? 'Approved' : 'Declined'} reschedule request`, {
-        reservationId: id,
-      });
     } catch (e) {
       toast.error(e?.message || 'Could not answer that request.');
     }
@@ -396,29 +394,16 @@ const Reservations = () => {
 
     try {
       if (action === 'approve_pay') {
-        await updateReservation(res.docId, {
-          status: 'To Pay',
-          confirmed_by_id: user?.uid || user?.id || null,
-          confirmed_by_name: user?.name || user?.email || 'Staff',
-          confirmed_at: new Date().toISOString()
-        });
-        // Stock hold is handled automatically by the Supabase database trigger
-        // `trg_apply_inventory_on_reservation_status` when the status changes to 'To Pay'.
-        toast.success(`Reservation ${id} approved for payment — stock held`);
-      } else if (action === 'mark_paid') {
-        await updateReservation(res.docId, {
-          status: 'Preparing',
-          payment_status: 'Paid',
-          assigned_staff_id: user?.uid || '',
-          countdown: false,
-        });
-        // No stock movement here: approval already held it, and both statuses
-        // are in STOCK_HOLDING_STATUSES.
+        await transitionReservationStatus(res.docId, res.status, 'To Pay');
+        toast.success(`Legacy reservation ${id} activated — stock held`);
+      } else if (action === 'start_preparing') {
+        if (String(res.paymentStatus || '').toLowerCase() !== 'paid') {
+          throw new Error('Payment must be confirmed before preparation starts.');
+        }
+        await transitionReservationStatus(res.docId, res.status, 'Preparing');
         toast.success(`Reservation ${id} payment received — preparing item`);
       } else if (action === 'ready_pickup') {
-        // Payment already landed at mark_paid; this just signals the item is
-        // pulled and physically ready at the counter.
-        await updateReservation(res.docId, { status: 'Ready' });
+        await transitionReservationStatus(res.docId, res.status, 'Ready');
         toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
         // Handing over is the moment the rest of the money is taken, in cash,
@@ -427,20 +412,12 @@ const Reservations = () => {
         const outstanding = outstandingBalance(res);
         const executeComplete = async () => {
           try {
-            if (outstanding > 0) {
-              // Recorded before the status moves: if this throws, the reservation
-              // stays in To Pickup rather than completing with the money unlogged.
-              await settleReservationBalance(res.id);
-            }
-
-            await updateReservation(res.docId, { status: 'Completed' });
-            // Consume reserved stock is handled automatically by DB trigger
+            await completeReservationHandover(res.docId);
             toast.success(
               outstanding > 0
                 ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
                 : `Reservation ${id} completed — stock consumed permanently`,
             );
-            await logAction(user, 'Completed reservation', { reservationId: id });
           } catch (err) {
             console.error('Reservation completion failed:', err);
             toast.error(err.message || 'Failed to update reservation');
@@ -462,19 +439,12 @@ const Reservations = () => {
         await executeComplete();
         return;
       } else if (action === 'cancel') {
-        await updateReservation(res.docId, { status: 'Cancelled', countdown: false });
-        // Stock restoration is handled automatically by the Supabase database trigger
-        // `trg_apply_inventory_on_reservation_status` when the status changes to 'Cancelled'.
+        if (!canCancelReservation(res)) {
+          throw new Error('Resolve or refund the payment before cancelling this reservation.');
+        }
+        await cancelReservation(res.docId, res.status);
         toast.error(`Reservation ${id} cancelled`);
       }
-      const actionLabels = {
-        approve_pay: 'Approved for Payment',
-        mark_paid: 'Payment Received & Preparing',
-        ready_pickup: 'Marked Ready for Pickup',
-        complete: 'Completed',
-        cancel: 'Cancelled',
-      };
-      await logAction(user, `${actionLabels[action]} reservation`, { reservationId: id });
     } catch (err) {
       console.error('Reservation action failed:', err);
       toast.error(err.message || 'Failed to update reservation');
@@ -580,57 +550,22 @@ const Reservations = () => {
     setViewModal(null);
   };
 
-  // Was handleToggleDeposit, which wrote a boolean into `deposit` -- a numeric
-  // column holding the amount owed. Postgres rejects that outright, so the
-  // control silently did nothing; had it succeeded it would have destroyed the
-  // figure the customer is being charged. Paid/unpaid belongs to payment_status.
-  const handleTogglePaid = async (res) => {
-    const nextPaid = res.paymentStatus !== 'Paid';
-    try {
-      await updateReservation(res.docId, { paymentStatus: nextPaid ? 'Paid' : 'Pending' });
-      setViewModal((prev) => prev ? { ...prev, paymentStatus: nextPaid ? 'Paid' : 'Pending' } : prev);
-      await logAction(user, nextPaid ? 'Marked payment as received' : 'Marked payment as unpaid', {
-        reservationId: res.id,
-        customer: res.customerName || res.customer,
-      });
-      toast.success(nextPaid ? 'Payment marked as received' : 'Payment marked as unpaid');
-    } catch (err) { console.error('Failed to update payment status:', err); toast.error(err.message || 'Failed to update payment status'); }
-  };
-
   const handleVerifyPayment = async (res) => {
     try {
-      // Matches the mark_paid lifecycle action (handleAction) exactly --
-      // this only ever set paymentStatus, so a reservation verified from
-      // here stayed stuck on "To Pay" forever even though payment_status
-      // said Paid, instead of moving to Preparing like every other path
-      // that marks a reservation paid.
-      await updateReservation(res.docId, {
-        status: 'Preparing',
-        paymentStatus: 'Paid',
-        assignedStaffId: user?.uid || '',
-        countdown: false,
-      });
+      await reviewReservationReceipt(res.docId, true);
       setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
-      await logAction(user, 'Verified GCash Payment', {
-        reservationId: res.id,
-        customer: res.customerName || res.customer,
-      });
       toast.success('Payment verified — preparing item');
     } catch (err) { console.error('Failed to verify payment:', err); toast.error(err.message || 'Failed to verify payment'); }
   };
 
-  // A receipt only leaves 'Submitted' when a person has looked at it. Rejecting
+  // A receipt only leaves 'Submitted' when an owner has looked at it. Rejecting
   // returns it to unpaid rather than cancelling outright, so a customer who
   // sent the wrong image can try again inside whatever time is left -- an
   // unreadable screenshot is not the same as refusing to pay.
   const handleRejectReceipt = async (res) => {
     try {
-      await updateReservation(res.docId, { paymentStatus: 'Pending', receiptUrl: null });
+      await reviewReservationReceipt(res.docId, false);
       setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev);
-      await logAction(user, 'Rejected payment receipt', {
-        reservationId: res.id,
-        customer: res.customerName || res.customer,
-      });
       toast.error('Receipt rejected — the customer can upload another');
     } catch (err) { console.error('Failed to reject the receipt:', err); toast.error(err.message || 'Failed to reject the receipt'); }
   };
@@ -668,21 +603,22 @@ const Reservations = () => {
           imageUrl: matchedProduct?.images?.[0] || '',
           reservationDate: new Date(newRes.date),
           date: new Date(newRes.date), // Fallback for Android which parses 'date'
-          status: 'Pending',
-          assigned_staff_id: '', // Will be set on Confirm
+          status: 'To Pay',
+          assigned_staff_id: '',
           countdown: true,
           size: newRes.size,
           // deposit is the numeric amount owed (50%, matching the standard
-          // convention elsewhere in this codebase), not a paid/unpaid flag --
-          // that belongs on payment_status, which the checkbox actually means.
+          // convention elsewhere in this codebase), not a paid/unpaid flag.
           deposit: Math.round((matchedProduct?.price || 0) * 0.5 * 100) / 100,
-          payment_status: newRes.deposit ? 'Paid' : 'Pending',
+          payment_status: 'Pending',
+          payment_type: 'Deposit',
+          payment_due_at: computePaymentDueAt(newRes.date),
           rentalPrice: matchedProduct?.price || 0,
         });
         await logAction(user, 'Created new reservation', { customer: newRes.customer, customerId });
         setIsModalOpen(false);
-        toast.success('Reservation created successfully');
-        setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '', deposit: false });
+        toast.success('Reservation created and stock held for payment');
+        setNewRes({ customer: '', customerId: '', outfit: '', size: 'M', date: '' });
       } catch (err) { console.error('Failed to create reservation:', err); toast.error(err.message || 'Failed to create reservation'); }
     };
 
@@ -706,7 +642,7 @@ const Reservations = () => {
       <PageHeader
         breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Reservations' }]}
         title="Reservation Management"
-        subtitle="Manage customer bookings and outfit try-ons"
+        subtitle="Manage customer holds, payments, and pickup"
         category="OPERATIONS"
         actions={
           <div className="header-actions flex-center gap-2">
@@ -785,7 +721,7 @@ const Reservations = () => {
               aria-label="Filter by reservation status"
             >
               <option value="All">All Statuses</option>
-              <option value="Pending">Pending / Requests</option>
+              <option value="Pending">Legacy pending</option>
               <option value="To Pay">To Pay</option>
               <option value="Preparing">Preparing</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>
@@ -884,7 +820,7 @@ const Reservations = () => {
               <tbody>
                 {pagedReservations.map((res) => {
                   const balance = outstandingBalance(res);
-                  const primaryAction = PRIMARY_ACTION[res.displayStatus];
+                  const primaryAction = primaryActionFor(res);
                   const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
                   const firstLine = res.lines[0];
                   const imageUrl = res.imageUrl || firstLine?.imageUrl;
@@ -1008,12 +944,12 @@ const Reservations = () => {
                             <button
                               className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
                               // Same fix as the board card: this used to fire
-                              // mark_paid immediately, relabeled "Verify
-                              // Receipt" -- staff could mark payment verified
+                              // a payment mutation immediately, relabeled
+                              // "Verify Receipt" -- staff could mark it verified
                               // without ever opening the receipt image. Opens
                               // the detail modal instead, where the receipt
                               // renders next to its own Verify Payment button.
-                              onClick={() => (isAwaitingReceipt(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
+                              onClick={() => (primaryAction.action === 'review_receipt' ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
                             >
                               {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                             </button>
@@ -1023,7 +959,7 @@ const Reservations = () => {
                               <Calendar size={14} />
                             </button>
                           )}
-                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && canCancelReservation(res) && (
                             <button className="res-action-btn reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}>
                               <XCircle size={14} />
                             </button>
@@ -1275,15 +1211,9 @@ const Reservations = () => {
                 />
                 <span className="form-hint">Store hours: 9:00 AM – 5:00 PM, Mon – Sat</span>
               </div>
-              <div className="form-group checkbox-group">
-                <input
-                  type="checkbox"
-                  id="deposit"
-                  checked={newRes.deposit}
-                  onChange={(e) => setNewRes({ ...newRes, deposit: e.target.checked })}
-                />
-                <label htmlFor="deposit">Security Deposit Paid</label>
-              </div>
+              <span className="form-hint">
+                Creating the reservation holds stock immediately. Payment must still be confirmed through PayMongo or receipt review.
+              </span>
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setIsModalOpen(false)}>
                   Cancel
@@ -1523,6 +1453,7 @@ const Reservations = () => {
                         : 'unpaid'
                       }`}>
                         {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'Paid ✓'
+                         : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? 'Refund required'
                          : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'Receipt Submitted ⌛'
                          : 'Unpaid ✗'}
                       </span>
@@ -1540,17 +1471,8 @@ const Reservations = () => {
                       )}
                     </div>
                     <div className="text-xs text-secondary mt-1">
-                      💡 <strong>Note on Payment Actions:</strong> &ldquo;Mark Paid&rdquo; (on the main table) moves reservation lifecycle from <em>To Pay → Preparing</em>; &ldquo;Mark Ready&rdquo; then moves it to <em>To Pickup</em> once the item is pulled. &ldquo;Toggle Payment Record&rdquo; (below) updates financial payment status without changing lifecycle stage.
+                      <strong>Payment controls:</strong> PayMongo confirms electronic payments. Owners verify submitted transfer receipts. Once paid, start preparing the item, then mark it ready for pickup.
                     </div>
-                  </div>
-                  <div className="payment-action-buttons">
-                    <button
-                      className={`btn-pay-toggle ${(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'is-paid' : 'is-unpaid'}`}
-                      onClick={() => handleTogglePaid(viewModal)}
-                      title="Toggle financial payment status"
-                    >
-                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? '✓ Mark as Unpaid' : '💳 Toggle Paid Status'}
-                    </button>
                   </div>
                 </div>
 

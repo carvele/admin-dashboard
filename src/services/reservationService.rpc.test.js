@@ -54,7 +54,12 @@ jest.mock('../lib/supabaseService', () => ({
 
 import { updateDocument } from '../lib/supabaseService';
 import {
+  createReservation,
   settleReservationBalance,
+  transitionReservationStatus,
+  cancelReservation,
+  reviewReservationReceipt,
+  completeReservationHandover,
   adjustInventoryForReservation,
   resolveRescheduleRequest,
   updateReservation,
@@ -66,13 +71,52 @@ const resetLookups = () => {
   mockLookup.item = null;
 };
 
+describe('createReservation', () => {
+  afterEach(() => mockRpc.mockReset());
+
+  const reservation = {
+    customerId: 'customer-1',
+    productId: 'product-1',
+    productName: 'Dress',
+    size: 'M',
+    quantity: 1,
+    date: '2026-09-15T10:00:00+08:00',
+    status: 'To Pay',
+    payment_status: 'Pending',
+    payment_due_at: '2026-09-14T10:00:00.000Z',
+    rentalPrice: 2000,
+    deposit: 1000,
+  };
+
+  test('creates the reservation and stock hold through one server transaction', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'reservation-1' }, error: null });
+
+    await expect(createReservation(reservation)).resolves.toBe('reservation-1');
+
+    expect(mockRpc).toHaveBeenCalledWith('create_reservation_multi', {
+      _items: [{ product_id: 'product-1', size: 'M', color: null, quantity: 1 }],
+      _date: '2026-09-15',
+      _appointment_time: '10:00',
+      _receipt_path: null,
+      _payment_option: 'deposit',
+      _customer_id: 'customer-1',
+    });
+  });
+
+  test('propagates an atomic create failure without client-side compensation', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: new Error('Inventory unavailable') });
+    await expect(createReservation(reservation)).rejects.toThrow('Inventory unavailable');
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('settleReservationBalance', () => {
   afterEach(() => mockRpc.mockReset());
 
-  test('calls settle_reservation_balance with the reservation id and method', async () => {
+  test('calls the owner-only balance command with the reservation id and method', async () => {
     mockRpc.mockResolvedValue({ data: { settled_amount: 500 }, error: null });
     const result = await settleReservationBalance('res-1', 'cash');
-    expect(mockRpc).toHaveBeenCalledWith('settle_reservation_balance', {
+    expect(mockRpc).toHaveBeenCalledWith('record_reservation_balance', {
       _reservation_id: 'res-1',
       _method: 'cash',
     });
@@ -82,7 +126,7 @@ describe('settleReservationBalance', () => {
   test('defaults method to cash when not provided', async () => {
     mockRpc.mockResolvedValue({ data: {}, error: null });
     await settleReservationBalance('res-1');
-    expect(mockRpc).toHaveBeenCalledWith('settle_reservation_balance', {
+    expect(mockRpc).toHaveBeenCalledWith('record_reservation_balance', {
       _reservation_id: 'res-1',
       _method: 'cash',
     });
@@ -94,13 +138,55 @@ describe('settleReservationBalance', () => {
   });
 });
 
+describe('reservation lifecycle commands', () => {
+  afterEach(() => mockRpc.mockReset());
+
+  test('passes expected and target state to the transition command', async () => {
+    mockRpc.mockResolvedValue({ data: { status: 'Preparing' }, error: null });
+    await transitionReservationStatus('res-1', 'To Pay', 'Preparing');
+    expect(mockRpc).toHaveBeenCalledWith('transition_reservation_status', {
+      _reservation_id: 'res-1',
+      _expected_status: 'To Pay',
+      _next_status: 'Preparing',
+    });
+  });
+
+  test('cancels through the guarded command', async () => {
+    mockRpc.mockResolvedValue({ data: { status: 'Cancelled' }, error: null });
+    await cancelReservation('res-1', 'To Pay');
+    expect(mockRpc).toHaveBeenCalledWith('cancel_reservation_as_manager', {
+      _reservation_id: 'res-1',
+      _expected_status: 'To Pay',
+      _reason: 'Cancelled by owner',
+    });
+  });
+
+  test('reviews a receipt through the payment command', async () => {
+    mockRpc.mockResolvedValue({ data: { approved: true }, error: null });
+    await reviewReservationReceipt('res-1', true);
+    expect(mockRpc).toHaveBeenCalledWith('review_reservation_receipt', {
+      _reservation_id: 'res-1',
+      _approve: true,
+    });
+  });
+
+  test('completes handover and balance settlement atomically', async () => {
+    mockRpc.mockResolvedValue({ data: { status: 'Completed' }, error: null });
+    await completeReservationHandover('res-1');
+    expect(mockRpc).toHaveBeenCalledWith('complete_reservation_handover', {
+      _reservation_id: 'res-1',
+      _method: 'cash',
+    });
+  });
+});
+
 describe('resolveRescheduleRequest', () => {
   afterEach(() => mockRpc.mockReset());
 
-  test('calls resolve_reschedule with the reservation id and approve flag', async () => {
+  test('calls the owner-only reschedule command with the reservation id and approve flag', async () => {
     mockRpc.mockResolvedValue({ data: { rescheduled: true }, error: null });
     await resolveRescheduleRequest('res-2', true);
-    expect(mockRpc).toHaveBeenCalledWith('resolve_reschedule', {
+    expect(mockRpc).toHaveBeenCalledWith('resolve_reschedule_as_manager', {
       _reservation_id: 'res-2',
       _approve: true,
     });
@@ -201,36 +287,26 @@ describe('adjustInventoryForReservation', () => {
 describe('updateReservation (status transitions)', () => {
   afterEach(() => updateDocument.mockReset());
 
-  // Reservations.jsx drives every board/list status transition through this
-  // one function -- there is no per-status RPC, the DB enforces validity via
-  // a CHECK constraint (reservations_status_check) instead. These tests pin
-  // that a plain status change reaches updateDocument with exactly {status},
-  // not silently dragging along stale/unrelated fields.
-  test.each([
-    ['Confirmed'],
-    ['Preparing'],
-    ['Ready'],
-    ['Completed'],
-    ['Cancelled'],
-  ])('passes status=%s straight through to updateDocument', async (status) => {
-    await updateReservation('res-1', { status });
-    expect(updateDocument).toHaveBeenCalledWith('reservations', 'res-1', { status });
+  test.each(['Confirmed', 'Preparing', 'Ready', 'Completed', 'Cancelled'])(
+    'rejects direct lifecycle status=%s writes',
+    async (status) => {
+      await expect(updateReservation('res-1', { status })).rejects.toThrow(
+        'Lifecycle and payment state must use a reservation command.',
+      );
+      expect(updateDocument).not.toHaveBeenCalled();
+    },
+  );
+
+  test('rejects direct payment-state writes', async () => {
+    await expect(updateReservation('res-1', { paymentStatus: 'Paid' })).rejects.toThrow(
+      'Lifecycle and payment state must use a reservation command.',
+    );
+    expect(updateDocument).not.toHaveBeenCalled();
   });
 
-  test('cancelling also clears the countdown flag when provided', async () => {
-    await updateReservation('res-1', { status: 'Cancelled', countdown: false });
-    expect(updateDocument).toHaveBeenCalledWith('reservations', 'res-1', { status: 'Cancelled', countdown: false });
-  });
-
-  test('strips fields not on the allowlist rather than passing them through silently', async () => {
-    await updateReservation('res-1', { status: 'Confirmed', notAReservationColumn: 'sneaky' });
-    expect(updateDocument).toHaveBeenCalledWith('reservations', 'res-1', { status: 'Confirmed' });
-  });
-
-  test('a combined reschedule + status change converts date/time into appointment_time', async () => {
-    await updateReservation('res-1', { status: 'Confirmed', date: '2026-09-01', appointmentTime: '14:00' });
+  test('a reschedule converts date/time without changing lifecycle state', async () => {
+    await updateReservation('res-1', { date: '2026-09-01', appointmentTime: '14:00' });
     const [, , payload] = updateDocument.mock.calls[0];
-    expect(payload.status).toBe('Confirmed');
     expect(payload.appointment_time).toBeTruthy();
     expect(payload.appointmentTime).toBeUndefined();
   });

@@ -13,7 +13,6 @@
 import { supabase } from '../lib/supabaseClient';
 import {
   subscribeToCollection,
-  addDocument,
   updateDocument,
   deleteDocument,
   getPaginatedCollection,
@@ -52,6 +51,18 @@ const buildTimestamp = (date, timeStr) => {
 
   if (!timeStr || typeof timeStr !== 'string') return d.toISOString();
   return `${datePart}T${timeStr.padStart(5, '0')}:00+08:00`;
+};
+
+const toLocalTimeString = (value, explicitTime) => {
+  if (explicitTime) return explicitTime.slice(0, 5);
+  if (typeof value === 'string') {
+    const match = value.match(/T(\d{2}:\d{2})/);
+    if (match) return match[1];
+  }
+  const d = toDate(value);
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 /**
@@ -243,6 +254,7 @@ const ALLOWED_RESERVATION_FIELDS = new Set([
   'countdown',
   'assigned_staff_id',
   'payment_status',
+  'payment_type',
   'payment_due_at',
   'confirmed_by_id',
   'confirmed_by_name',
@@ -276,40 +288,41 @@ const sanitizeReservationPayload = (obj) => {
 };
 
 export const createReservation = async (data) => {
-  const appointmentTs = buildTimestamp(data.date || data.reservationDate, data.appointmentTime);
-  const returnTs = toLocalDateString(data.returnDate);
-  const dateTs = toLocalDateString(data.date || data.reservationDate);
+  const dateValue = data.date || data.reservationDate;
+  const date = toLocalDateString(dateValue);
+  const appointmentTime = toLocalTimeString(dateValue, data.appointmentTime);
 
-  const payload = sanitizeReservationPayload({
-    ...data,
-    date: dateTs,
-    return_date: returnTs,
-    appointment_time: appointmentTs,
-    deleted: false,
-  });
-
-  const reservationId = await addDocument('reservations', payload);
-
-  if (reservationId) {
-    // Write the corresponding line item so triggers can see what was actually
-    // reserved. Fallbacks to the reservation's own columns for missing data.
-    await addDocument('reservation_items', {
-      reservation_id: reservationId,
-      product_id: payload.product_id,
-      product_name: payload.product_name,
-      image_url: payload.image_url,
-      size: payload.size,
-      color: payload.color,
-      quantity: data.quantity ?? 1,
-      unit_price: payload.rental_price,
-    });
+  const customerId = data.customerId || data.customer_id;
+  const productId = data.productId || data.product_id;
+  if (!date || !appointmentTime || !customerId || !productId) {
+    throw new Error('Customer, product, date, and appointment time are required.');
   }
 
-  return reservationId;
+  const { data: created, error } = await supabase.rpc('create_reservation_multi', {
+    _items: [{
+      product_id: productId,
+      size: data.size || null,
+      color: data.color || null,
+      quantity: data.quantity ?? 1,
+    }],
+    _date: date,
+    _appointment_time: appointmentTime,
+    _receipt_path: null,
+    _payment_option: String(data.paymentType || data.payment_type || '').toLowerCase() === 'full'
+      ? 'full'
+      : 'deposit',
+    _customer_id: customerId,
+  });
+  if (error) throw error;
+  return created?.id;
 };
 
 export const updateReservation = async (docId, updates) => {
   const payload = sanitizeReservationPayload(updates);
+
+  if ('status' in payload || 'payment_status' in payload) {
+    throw new Error('Lifecycle and payment state must use a reservation command.');
+  }
 
   if (updates.appointmentTime && (updates.date || updates.reservationDate)) {
     payload.appointment_time = buildTimestamp(
@@ -334,7 +347,7 @@ export const deleteReservation = async (docId) => {
 /**
  * Records that the outstanding balance was collected in person.
  *
- * Goes through settle_reservation_balance rather than writing the columns
+ * Goes through the owner-only balance command rather than writing the columns
  * directly. The RPC re-checks the caller's role, that the deposit has actually
  * cleared, that a balance exists at all, and that it has not already been
  * recorded -- none of which a bare column update would enforce, and all of
@@ -342,7 +355,45 @@ export const deleteReservation = async (docId) => {
  * electronic trail behind it.
  */
 export const settleReservationBalance = async (reservationId, method = 'cash') => {
-  const { data, error } = await supabase.rpc('settle_reservation_balance', {
+  const { data, error } = await supabase.rpc('record_reservation_balance', {
+    _reservation_id: reservationId,
+    _method: method,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const transitionReservationStatus = async (reservationId, expectedStatus, nextStatus) => {
+  const { data, error } = await supabase.rpc('transition_reservation_status', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _next_status: nextStatus,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const cancelReservation = async (reservationId, expectedStatus, reason) => {
+  const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _reason: reason || 'Cancelled by owner',
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const reviewReservationReceipt = async (reservationId, approve) => {
+  const { data, error } = await supabase.rpc('review_reservation_receipt', {
+    _reservation_id: reservationId,
+    _approve: approve,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const completeReservationHandover = async (reservationId, method = 'cash') => {
+  const { data, error } = await supabase.rpc('complete_reservation_handover', {
     _reservation_id: reservationId,
     _method: method,
   });
@@ -514,106 +565,10 @@ export const repairReservationData = async (reservation) => {
  * another reservation took it.
  */
 export const resolveRescheduleRequest = async (reservationId, approve) => {
-  const { data, error } = await supabase.rpc('resolve_reschedule', {
+  const { data, error } = await supabase.rpc('resolve_reschedule_as_manager', {
     _reservation_id: reservationId,
     _approve: approve,
   });
   if (error) throw error;
   return data;
-};
-
-/**
- * Scans active reservations in 'Pending', 'Request Approval', 'To Pay', 'Confirmed'
- * and automatically cancels any whose appointment date/time or payment deadline has passed.
- * Releases reserved inventory stock for any cancelled reservation that held stock.
- */
-export const autoCancelExpiredReservations = async () => {
-  try {
-    const now = new Date();
-    // 5-minute buffer so an appointment at 10:30 isn't cancelled at 10:30:01
-    const bufferMs = 5 * 60 * 1000;
-
-    const { data: rows, error } = await supabase
-      .from('reservations')
-      .select('*')
-      .in('status', ['Pending', 'Request Approval', 'To Pay', 'Confirmed'])
-      .eq('deleted', false);
-
-    if (error || !rows || rows.length === 0) return [];
-
-    const toCancel = [];
-
-    for (const r of rows) {
-      let isExpired = false;
-      let reason = '';
-
-      // Determine appointment timestamp
-      let apptTime = null;
-      if (r.appointment_time) {
-        const d = new Date(r.appointment_time);
-        if (!isNaN(d.getTime())) apptTime = d;
-      }
-      if (!apptTime && r.date) {
-        const dateStr = typeof r.date === 'string' ? r.date : (r.date instanceof Date ? r.date.toISOString() : '');
-        if (dateStr) {
-          const timeStr = typeof r.appointment_time === 'string' ? r.appointment_time : '23:59';
-          const combinedStr = `${dateStr.slice(0, 10)}T${timeStr.length === 5 ? timeStr : '23:59'}:00+08:00`;
-          const d = new Date(combinedStr);
-          if (!isNaN(d.getTime())) apptTime = d;
-        }
-      }
-
-      // 1. Pending Review (Pending / Request Approval)
-      if (r.status === 'Pending' || r.status === 'Request Approval') {
-        if (apptTime && apptTime.getTime() + bufferMs < now.getTime()) {
-          isExpired = true;
-          reason = 'Auto-cancelled: Appointment window passed without review';
-        }
-      }
-
-      // 2. Awaiting Payment (To Pay / Confirmed)
-      if (r.status === 'To Pay' || r.status === 'Confirmed') {
-        const paymentDue = r.payment_due_at ? new Date(r.payment_due_at) : null;
-        if (paymentDue && !isNaN(paymentDue.getTime()) && paymentDue.getTime() + bufferMs < now.getTime()) {
-          isExpired = true;
-          reason = 'Auto-cancelled: Payment deadline passed';
-        } else if (apptTime && apptTime.getTime() + bufferMs < now.getTime()) {
-          isExpired = true;
-          reason = 'Auto-cancelled: Appointment time passed without payment';
-        }
-      }
-
-      if (isExpired) {
-        toCancel.push({ row: r, reason });
-      }
-    }
-
-    if (toCancel.length === 0) return [];
-
-    console.log(`[AutoCancel] Found ${toCancel.length} expired reservations to cancel.`);
-
-    const cancelledIds = [];
-    for (const { row: r, reason } of toCancel) {
-      // DB triggers will automatically handle releasing stock when status updates to 'Cancelled'.
-
-      const nowIso = new Date().toISOString();
-      const { error: updateErr } = await supabase
-        .from('reservations')
-        .update({
-          status: 'Cancelled',
-          cancellation_reason: reason,
-          updated_at: nowIso,
-        })
-        .eq('id', r.id);
-
-      if (!updateErr) {
-        cancelledIds.push(r.id);
-      }
-    }
-
-    return cancelledIds;
-  } catch (err) {
-    console.warn('[AutoCancel] Sweep failed:', err?.message ?? err);
-    return [];
-  }
 };

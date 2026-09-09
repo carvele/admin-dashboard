@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { supabase } from '../lib/supabaseClient';
@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
   const lastActivityThrottleRef = useRef(0);
 
   // Industry standard e-commerce admin session: 7 days of inactivity (e.g. Google, Shopify, Stripe)
-  const LAST_ACTIVITY_STORAGE_KEY = 'jezsy_admin_last_activity';
+
   const IDLE_LIMIT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days of inactivity
   const IDLE_WARNING_BUFFER_MS = 5 * 60 * 1000; // 5 minutes warning
   const IDLE_WARNING_TIME_MS = IDLE_LIMIT_MS - IDLE_WARNING_BUFFER_MS;
