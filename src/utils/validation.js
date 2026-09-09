@@ -86,7 +86,7 @@ export const productRules = {
     message: 'Please select a category',
   },
   imageUrl: {
-    validate: (val) => !val || val === '👗' || /^https?:\/\/.+/.test(val),
+    validate: (val) => !val || /^https?:\/\/.+/.test(val),
     message: 'Image URL must start with http:// or https://',
   },
 };
