@@ -3,12 +3,9 @@ import { Plus, Star, Trash2, Edit2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   subscribeToPoseGuides,
-  createPoseGuide,
-  updatePoseGuide,
   deletePoseGuide,
   getPoseGuideProducts,
-  linkProductToPose,
-  unlinkProductFromPose,
+  savePoseGuide,
 } from '../../services/wardrobeService';
 import { uploadToSupabase } from '../../lib/storage';
 import { supabase } from '../../lib/supabaseClient';
@@ -140,56 +137,32 @@ const StyleInspiration = () => {
       }
 
       const previousImageUrl = editingPose?.imageUrl || null;
+      const poseId = editingPose ? (editingPose.docId ?? editingPose.id) : crypto.randomUUID();
 
-      if (editingPose) {
-        await updatePoseGuide(editingPose.docId ?? editingPose.id, {
-          name: formData.name.trim(),
-          category: formData.category.trim(),
-          occasion: formData.occasion || null,
-          difficulty: formData.difficulty || null,
-          description: formData.description.trim() || null,
-          sortOrder: Number(formData.sortOrder) || 0,
-          isFeatured: formData.isFeatured,
-          imageUrl: finalImageUrl,
-        });
+      // Single atomic write: the pose row and its product links commit or
+      // fail together (save_pose_guide RPC), instead of an upsert followed
+      // by a separate Promise.all of link/unlink calls that could leave a
+      // pose saved with a stale product list on partial failure.
+      await savePoseGuide({
+        id: poseId,
+        name: formData.name.trim(),
+        category: formData.category.trim(),
+        occasion: formData.occasion || null,
+        difficulty: formData.difficulty || 'easy',
+        description: formData.description.trim() || null,
+        sort_order: Number(formData.sortOrder) || 0,
+        is_featured: formData.isFeatured,
+        image_url: finalImageUrl,
+        product_ids: linkedProducts.map((p) => p.id),
+      });
 
-        // Update DB first (above), then best-effort clean up the replaced
-        // image -- never touches an asset this feature doesn't own.
-        if (selectedFile && previousImageUrl && previousImageUrl !== finalImageUrl) {
-          await bestEffortDeletePoseImage(previousImageUrl);
-        }
-
-        // Sync linked products: diff against what was loaded on open.
-        const originalIds = new Set((await getPoseGuideProducts(editingPose.docId ?? editingPose.id)).map((r) => r.product_id));
-        const nextIds = new Set(linkedProducts.map((p) => p.id));
-        const poseId = editingPose.docId ?? editingPose.id;
-        await Promise.all([
-          ...[...nextIds].filter((id) => !originalIds.has(id)).map((id) => linkProductToPose(poseId, id)),
-          ...[...originalIds].filter((id) => !nextIds.has(id)).map((id) => unlinkProductFromPose(poseId, id)),
-        ]);
-
-        toast.success('Pose updated');
-      } else {
-        const newId = crypto.randomUUID();
-        await createPoseGuide({
-          id: newId,
-          name: formData.name.trim(),
-          category: formData.category.trim(),
-          occasion: formData.occasion || null,
-          difficulty: formData.difficulty || 'easy',
-          description: formData.description.trim() || null,
-          sort_order: Number(formData.sortOrder) || 0,
-          is_featured: formData.isFeatured,
-          image_url: finalImageUrl,
-        });
-
-        if (linkedProducts.length > 0) {
-          await Promise.all(linkedProducts.map((p) => linkProductToPose(newId, p.id)));
-        }
-
-        toast.success('Pose created');
+      // Update DB first (above), then best-effort clean up the replaced
+      // image -- never touches an asset this feature doesn't own.
+      if (editingPose && selectedFile && previousImageUrl && previousImageUrl !== finalImageUrl) {
+        await bestEffortDeletePoseImage(previousImageUrl);
       }
 
+      toast.success(editingPose ? 'Pose updated' : 'Pose created');
       closeModal();
     } catch (e) {
       console.error(e);
