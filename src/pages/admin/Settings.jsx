@@ -16,7 +16,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../lib/supabaseClient';
+import { fetchSettings, fetchStoreHours, fetchStoreClosures, upsertStoreHour, insertStoreClosure, deleteStoreClosure, upsertSettings, requestPasswordReset } from '../../services/settingsService';
 import { logAction } from '../../lib/supabaseService';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
@@ -65,38 +65,36 @@ const Settings = () => {
 
   // Fetch settings, store_hours, and store_closures from Supabase on mount
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchAll = async () => {
       setIsLoading(true);
       try {
-        // Settings are stored as key/value rows in public.settings
-        const { data: settingsRows, error: sErr } = await supabase.from('settings').select('key, value');
-        if (!sErr && settingsRows) {
-          const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
-          const autoReply = settingsMap.autoReply || {};
-          setFormData((prev) => ({
-            ...prev,
-            ...(settingsMap.storeInfo || {}),
-            ...(settingsMap.reservations || {}),
-            ...(settingsMap.ar || {}),
-            enableAutoReply: autoReply.enabled ?? true,
-            autoReplyMessage: autoReply.message || DEFAULT_AUTO_REPLY_MESSAGE,
-            displayName: user?.name || '',
-          }));
-        }
+        // Settings key/value
+        const settingsRows = await fetchSettings();
+        const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
+        const autoReply = settingsMap.autoReply || {};
+        setFormData((prev) => ({
+          ...prev,
+          ...(settingsMap.storeInfo || {}),
+          ...(settingsMap.reservations || {}),
+          ...(settingsMap.ar || {}),
+          enableAutoReply: autoReply.enabled ?? true,
+          autoReplyMessage: autoReply.message || DEFAULT_AUTO_REPLY_MESSAGE,
+          displayName: user?.name || '',
+        }));
 
-        // Fetch store_hours
-        const { data: hoursRows } = await supabase.from('store_hours').select('*').order('day_of_week', { ascending: true });
+        // Store hours
+        const hoursRows = await fetchStoreHours();
         if (hoursRows && hoursRows.length > 0) {
           const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const mapped = hoursRows.map(h => ({
+          const mapped = hoursRows.map((h) => ({
             ...h,
             day_name: dayNames[h.day_of_week] || `Day ${h.day_of_week}`,
           }));
           setWeeklyHours(mapped);
         }
 
-        // Fetch store_closures
-        const { data: closureRows } = await supabase.from('store_closures').select('*').order('closure_date', { ascending: true });
+        // Store closures
+        const closureRows = await fetchStoreClosures();
         if (closureRows) {
           setClosures(closureRows);
         }
@@ -107,7 +105,7 @@ const Settings = () => {
         setIsLoading(false);
       }
     };
-    fetchSettings();
+    fetchAll();
     // Intentionally mount-only: user?.name seeds the initial displayName field.
     // Re-running on every user change would refetch all settings and clobber
     // any in-progress unsaved edits in this form.
@@ -119,19 +117,11 @@ const Settings = () => {
     try {
       const failedDays = [];
       for (const item of weeklyHours) {
-        const { error } = await supabase.from('store_hours').upsert({
-          day_of_week: item.day_of_week,
-          open_time: item.open_time || '09:00:00',
-          close_time: item.close_time || '18:00:00',
-          is_closed: !!item.is_closed,
-          slot_capacity: item.slot_capacity || 3,
-        }, { onConflict: 'day_of_week' });
-        // Not thrown -- a single bad day (e.g. close time before open time,
-        // rejected by the DB's own CHECK constraint) shouldn't block the
-        // other six days from saving, but it must not be silently dropped
-        // either: this used to show "saved" even when a day's write failed
-        // and quietly reverted to its previous stored value.
-        if (error) failedDays.push(item.day_of_week);
+        try {
+          await upsertStoreHour(item);
+        } catch (_) {
+          failedDays.push(item.day_of_week);
+        }
       }
       if (failedDays.length > 0) {
         toast.error(`Could not save hours for: ${failedDays.join(', ')}. Check that close time is after open time.`);
@@ -154,14 +144,12 @@ const Settings = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('store_closures').insert({
-        closure_date: newClosure.date,
-        is_fully_closed: true,
-        reason: newClosure.reason || 'Closed for Holiday',
-      }).select().single();
-
-      if (error) throw error;
-      setClosures(prev => [...prev, data]);
+        const data = await insertStoreClosure({
+          closure_date: newClosure.date,
+          is_fully_closed: true,
+          reason: newClosure.reason || 'Closed for Holiday',
+        });
+        setClosures(prev => [...prev, data]);
       setNewClosure({ date: '', reason: '' });
       toast.success(`Added shop closure for ${newClosure.date}!`);
       await logAction(user, 'Added shop closure date', { date: newClosure.date });
@@ -175,8 +163,7 @@ const Settings = () => {
   const handleDeleteClosure = async (id) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.from('store_closures').delete().eq('id', id);
-      if (error) throw error;
+      await deleteStoreClosure(id);
       setClosures(prev => prev.filter(c => c.id !== id));
       toast.success('Shop closure removed!');
       await logAction(user, 'Removed shop closure date');
@@ -193,57 +180,54 @@ const Settings = () => {
     try {
       const now = new Date().toISOString();
 
-      if (activeTab === 'boutique') {
-        await supabase.from('settings').upsert({
-          key: 'storeInfo',
-          value: {
-            storeName: formData.storeName,
-            email: formData.email,
-            phone: formData.phone,
-            address: formData.address,
-            gcashName: formData.gcashName || '',
-            gcashNumber: formData.gcashNumber || '',
-            gcashQrUrl: formData.gcashQrUrl || '',
-          },
-          updated_at: now,
-        }, { onConflict: 'key' });
-        toast.success('Boutique settings saved!');
-
-      } else if (activeTab === 'reservation') {
-        await supabase.from('settings').upsert({
-          key: 'reservations',
-          value: {
-            maxBookingDays: formData.maxBookingDays,
-            depositRequired: formData.depositRequired,
-            cancellationWindow: formData.cancellationWindow,
-          },
-          updated_at: now,
-        }, { onConflict: 'key' });
-        toast.success('Reservation rules saved!');
-
-      } else if (activeTab === 'ar') {
-        await supabase.from('settings').upsert({
-          key: 'ar',
-          value: {
-            enableGlobalAR: formData.enableGlobalAR,
-            autoApproveAR: formData.autoApproveAR,
-            maxFileSize: formData.maxFileSize,
-          },
-          updated_at: now,
-        }, { onConflict: 'key' });
-        toast.success('AR settings saved!');
-
-      } else if (activeTab === 'messaging') {
-        await supabase.from('settings').upsert({
-          key: 'autoReply',
-          value: {
-            enabled: Boolean(formData.enableAutoReply),
-            message: formData.autoReplyMessage.trim() || DEFAULT_AUTO_REPLY_MESSAGE,
-          },
-          updated_at: now,
-        }, { onConflict: 'key' });
-        toast.success('Auto-acknowledgment settings saved!');
-      }
+        if (activeTab === 'boutique') {
+          await upsertSettings({
+            key: 'storeInfo',
+            value: {
+              storeName: formData.storeName,
+              email: formData.email,
+              phone: formData.phone,
+              address: formData.address,
+              gcashName: formData.gcashName || '',
+              gcashNumber: formData.gcashNumber || '',
+              gcashQrUrl: formData.gcashQrUrl || '',
+            },
+            updated_at: now,
+          });
+          toast.success('Boutique settings saved!');
+        } else if (activeTab === 'reservation') {
+          await upsertSettings({
+            key: 'reservations',
+            value: {
+              maxBookingDays: formData.maxBookingDays,
+              depositRequired: formData.depositRequired,
+              cancellationWindow: formData.cancellationWindow,
+            },
+            updated_at: now,
+          });
+          toast.success('Reservation rules saved!');
+        } else if (activeTab === 'ar') {
+          await upsertSettings({
+            key: 'ar',
+            value: {
+              enableGlobalAR: formData.enableGlobalAR,
+              autoApproveAR: formData.autoApproveAR,
+              maxFileSize: formData.maxFileSize,
+            },
+            updated_at: now,
+          });
+          toast.success('AR settings saved!');
+        } else if (activeTab === 'messaging') {
+          await upsertSettings({
+            key: 'autoReply',
+            value: {
+              enabled: Boolean(formData.enableAutoReply),
+              message: formData.autoReplyMessage.trim() || DEFAULT_AUTO_REPLY_MESSAGE,
+            },
+            updated_at: now,
+          });
+          toast.success('Auto-acknowledgment settings saved!');
+        }
 
       await logAction(user, 'Updated ' + activeTab + ' settings');
     } catch (error) {
@@ -266,10 +250,7 @@ const Settings = () => {
     const email = user?.email;
     if (!email) { toast.error('No email address found for your account.'); return; }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
-      if (error) throw error;
+      await requestPasswordReset(email, `${window.location.origin}/login`);
       toast.success('Password reset link sent to your email!');
     } catch (error) {
       toast.error('Error sending reset email: ' + error.message);
