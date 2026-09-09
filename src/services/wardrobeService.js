@@ -110,6 +110,45 @@ export const updatePoseGuide = (docId, updates) =>
 export const deletePoseGuide = (docId) =>
   deleteDocument('pose_guides', docId);
 
+// Atomic write path: upserts the pose and reconciles its product links in
+// one DB transaction via save_pose_guide (see jezsy-mobile-app migration
+// 20260910140000_save_pose_guide_atomic.sql), replacing the older pattern
+// of an upsert followed by a separate Promise.all of link/unlink calls,
+// which could leave a pose saved with a stale product list on partial
+// failure.
+export const savePoseGuide = async (data) => {
+  const {
+    id,
+    name,
+    category,
+    image_url = null,
+    description = null,
+    occasion = null,
+    style_tags = [],
+    difficulty = 'easy',
+    is_featured = false,
+    base_pose_type = 'front',
+    sort_order = 0,
+    product_ids = [],
+  } = data;
+  const { supabase } = await import('../lib/supabaseService');
+  const { error } = await supabase.rpc('save_pose_guide', {
+    p_id: id,
+    p_name: name,
+    p_category: category,
+    p_image_url: image_url,
+    p_description: description,
+    p_occasion: occasion,
+    p_style_tags: style_tags,
+    p_difficulty: difficulty,
+    p_is_featured: is_featured,
+    p_base_pose_type: base_pose_type,
+    p_sort_order: sort_order,
+    p_product_ids: product_ids,
+  });
+  if (error) throw error;
+};
+
 // ── Pose Guide Products ──────────────────────────────────────
 
 export const getPoseGuideProducts = async (poseId) => {
