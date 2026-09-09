@@ -39,6 +39,7 @@ const ClothingCatalog = lazyWithRetry(() => import('../pages/catalog/ClothingCat
 const Reviews = lazyWithRetry(() => import('../pages/catalog/Reviews'));
 const ProductForm = lazyWithRetry(() => import('../pages/catalog/ProductForm'));
 const ARAssets = lazyWithRetry(() => import('../pages/wardrobe/ARAssets'));
+const StyleInspiration = lazyWithRetry(() => import('../pages/wardrobe/StyleInspiration'));
 const Inventory = lazyWithRetry(() => import('../pages/catalog/Inventory'));
 const Analytics = lazyWithRetry(() => import('../pages/admin/Analytics'));
 const Announcements = lazyWithRetry(() => import('../pages/admin/Announcements'));
@@ -297,6 +298,18 @@ const AnimatedRoutes = () => {
                 <RequireAdmin>
                   <Suspense fallback={<PageLoader />}>
                     <ARAssets />
+                  </Suspense>
+                </RequireAdmin>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="style-inspiration"
+            element={
+              <ProtectedRoute>
+                <RequireAdmin>
+                  <Suspense fallback={<PageLoader />}>
+                    <StyleInspiration />
                   </Suspense>
                 </RequireAdmin>
               </ProtectedRoute>

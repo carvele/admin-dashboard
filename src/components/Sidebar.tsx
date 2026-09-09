@@ -26,7 +26,7 @@ import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/analytics', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements', '/devices'];
+const ADMIN_ROUTES = ['/ar-assets', '/style-inspiration', '/analytics', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements', '/devices'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -172,6 +172,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
     },
     { to: '/wardrobe', icon: Shirt, label: 'Digital Wardrobe', admin: false },
     { to: '/ar-assets', icon: View, label: 'AR Try-On Assets', admin: true },
+    { to: '/style-inspiration', icon: Star, label: 'Style Inspiration', admin: true },
     { to: '/analytics', icon: BarChart3, label: 'Analytics', admin: true },
     { to: '/announcements', icon: Megaphone, label: 'Announcements', admin: true },
     { to: '/staff', icon: Users, label: 'Team Management', admin: true },
