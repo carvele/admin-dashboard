@@ -540,7 +540,14 @@ const ProductForm = ({ readOnly = false }) => {
         isAlterable: formData.isAlterable,
         updated_by: user?.id || null,
         images: finalImages,
-        imageUrl: finalImages.length > 0 ? finalImages[0] : '👗',
+        // Falls back to the product's existing imageUrl (not a placeholder
+        // string) when finalImages is empty -- a legacy product whose real
+        // image predates the `images` array field has an empty array here
+        // even though products.image_url is a real URL. The previous
+        // '👗' fallback silently overwrote that real URL with a literal
+        // emoji on ANY unrelated edit (price, stock, description) to such
+        // a product. null only applies to genuinely new products.
+        imageUrl: finalImages.length > 0 ? finalImages[0] : (oldData?.imageUrl || null),
         // Sale Fields
         onSale: formData.onSale,
         discountPercentage: parseInt(formData.discountPercentage) || 0,
