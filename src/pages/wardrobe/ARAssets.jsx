@@ -302,7 +302,18 @@ const ARAssets = () => {
                   <tr key={p.docId}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="avatar bg-light text-primary flex-center text-lg">{p.imageUrl || '👗'}</div>
+                        <div className="avatar bg-light text-primary flex-center text-lg">
+                          {typeof p.imageUrl === 'string' && p.imageUrl.startsWith('http') ? (
+                            <img
+                              src={p.imageUrl}
+                              alt={p.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            '👗'
+                          )}
+                        </div>
                         <span className="font-medium">{p.name}</span>
                       </div>
                     </td>
