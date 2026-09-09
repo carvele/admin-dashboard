@@ -84,8 +84,9 @@ export const createPoseGuide = (data) => {
     difficulty = 'easy',
     is_featured = false,
     base_pose_type = 'front',
+    sort_order = 0,
   } = data;
-  return import('../lib/supabaseService').then(({ upsertDocument }) => 
+  return import('../lib/supabaseService').then(({ upsertDocument }) =>
     upsertDocument('pose_guides', {
       id,
       name,
@@ -97,6 +98,7 @@ export const createPoseGuide = (data) => {
       difficulty,
       is_featured,
       base_pose_type,
+      sort_order,
       deleted: false,
     })
   );
