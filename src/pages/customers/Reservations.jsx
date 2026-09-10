@@ -119,8 +119,9 @@ const BOARD_COLUMNS = [
 
 const Reservations = () => {
   const { user } = useAuth();
-  // Staff monitor reservations read-only; only full-access roles act on them.
+  // Staff remain lifecycle-read-only but may record an in-person payment.
   const canManage = can(user?.role, 'assign_reservation');
+  const canRecordPayment = can(user?.role, 'record_reservation_payment');
   const navigate = useNavigate();
   const [reservations, setReservations] = useState([]);
   const [itemsByReservation, setItemsByReservation] = useState({});
@@ -282,6 +283,18 @@ const Reservations = () => {
   // behind a reservation's payment_status.
   const [paymentRecords, setPaymentRecords] = useState([]);
   const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(false);
+  const [balanceMethod, setBalanceMethod] = useState('cash');
+  const [recordingBalance, setRecordingBalance] = useState(false);
+
+  useEffect(() => {
+    setBalanceMethod('cash');
+  }, [viewModal?.id]);
+
+  useEffect(() => {
+    if (!viewModal?.id) return;
+    const current = reservations.find((reservation) => reservation.id === viewModal.id);
+    if (current) setViewModal(current);
+  }, [reservations, viewModal?.id]);
 
   useEffect(() => {
     setPaymentRecords([]);
@@ -293,7 +306,7 @@ const Reservations = () => {
       .catch(() => { if (!cancelled) setPaymentRecords([]) })
       .finally(() => { if (!cancelled) setPaymentRecordsLoading(false); });
     return () => { cancelled = true; };
-  }, [viewModal?.id]);
+  }, [viewModal?.id, viewModal?.paymentStatus, viewModal?.balanceSettledAt]);
 
   const [newRes, setNewRes] = useState({
     customer: '',
@@ -407,37 +420,13 @@ const Reservations = () => {
         await transitionReservationStatus(res.docId, res.status, 'Ready');
         toast.success(`Reservation ${id} marked ready for pickup`);
       } else if (action === 'complete') {
-        // Handing over is the moment the rest of the money is taken, in cash,
-        // with no electronic trail. Completing without recording it was how a
-        // forgotten balance disappeared silently.
         const outstanding = outstandingBalance(res);
-        const executeComplete = async () => {
-          try {
-            await completeReservationHandover(res.docId);
-            toast.success(
-              outstanding > 0
-                ? `Reservation ${id} completed — ${formatCurrency(outstanding)} balance recorded`
-                : `Reservation ${id} completed — stock consumed permanently`,
-            );
-          } catch (err) {
-            console.error('Reservation completion failed:', err);
-            toast.error(err.message || 'Failed to update reservation');
-          }
-        };
-
         if (outstanding > 0) {
-          setConfirmDialogState({
-            title: 'Confirm Balance Collection',
-            message: `${formatCurrency(outstanding)} is still owed on ${id}.\n\nConfirm you have collected it before handing the item over. This is recorded against your account.`,
-            confirmText: 'Confirm & Complete',
-            cancelText: 'Cancel',
-            isDestructive: false,
-            onConfirm: executeComplete,
-          });
-          return;
+          throw new Error(`Record the ${formatCurrency(outstanding)} balance and its payment method in Details before handover.`);
         }
 
-        await executeComplete();
+        await completeReservationHandover(res.docId);
+        toast.success(`Reservation ${id} completed — stock consumed permanently`);
         return;
       } else if (action === 'cancel') {
         if (!canCancelReservation(res)) {
@@ -1453,7 +1442,8 @@ const Reservations = () => {
                         : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'submitted'
                         : 'unpaid'
                       }`}>
-                        {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'Paid ✓'
+                        {(viewModal.paymentStatus || '').toLowerCase() === 'paid'
+                          ? (outstandingBalance(viewModal) > 0 ? 'Reservation payment paid ✓' : 'Paid in full ✓')
                          : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? 'Refund required'
                          : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'Receipt Submitted ⌛'
                          : 'Unpaid ✗'}
@@ -1484,21 +1474,47 @@ const Reservations = () => {
                         <span className="text-sm text-secondary">Balance Owed at Pickup: </span>
                         <strong className="text-gold">{formatCurrency(outstandingBalance(viewModal))}</strong>
                       </div>
-                      {canManage && (
-                        <button
-                          className="btn-collect-balance"
-                          onClick={async () => {
-                            try {
-                              await settleReservationBalance(viewModal.id);
-                              setViewModal(prev => prev ? { ...prev, paymentStatus: 'Paid' } : prev);
-                              toast.success(`Recorded collection of ${formatCurrency(outstandingBalance(viewModal))}`);
-                            } catch (e) {
-                              toast.error(e?.message || 'Failed to record balance collection');
-                            }
-                          }}
-                        >
-                          Record Collection
-                        </button>
+                      {canRecordPayment && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <select
+                            id="balance-payment-method"
+                            value={balanceMethod}
+                            onChange={(event) => setBalanceMethod(event.target.value)}
+                            disabled={recordingBalance}
+                            aria-label="Balance payment method"
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="transfer">Transfer</option>
+                            <option value="card">Card</option>
+                            <option value="other">Other</option>
+                          </select>
+                          <button
+                            className="btn-collect-balance"
+                            disabled={recordingBalance}
+                            onClick={async () => {
+                              const amount = outstandingBalance(viewModal);
+                              setRecordingBalance(true);
+                              try {
+                                const result = await settleReservationBalance(viewModal.id, balanceMethod);
+                                setViewModal(prev => prev ? {
+                                  ...prev,
+                                  paymentStatus: 'Paid',
+                                  balanceSettledAt: result?.settled_at || new Date().toISOString(),
+                                  balanceSettledMethod: balanceMethod,
+                                } : prev);
+                                const rows = await getPaymentsForReservation(viewModal.id);
+                                setPaymentRecords(rows);
+                                toast.success(`Recorded collection of ${formatCurrency(amount)}`);
+                              } catch (e) {
+                                toast.error(e?.message || 'Failed to record balance collection');
+                              } finally {
+                                setRecordingBalance(false);
+                              }
+                            }}
+                          >
+                            {recordingBalance ? 'Recording…' : 'Record Collection'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1547,6 +1563,11 @@ const Reservations = () => {
                         <div>
                           <strong>{formatCurrency((p.amountCentavos || 0) / 100)}</strong>
                           <span className="text-secondary"> · {p.provider}{p.method ? ` (${p.method})` : ''}</span>
+                          {p.purpose && (
+                            <div className="text-secondary text-xs">
+                              {p.purpose.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                            </div>
+                          )}
                           {p.providerRef && (
                             <div className="text-secondary text-xs">
                               <code>{p.providerRef}</code>

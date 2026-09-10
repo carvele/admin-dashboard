@@ -17,6 +17,7 @@ describe('Role-Based Access Control (RBAC) Permissions', () => {
   test('restricts staff permissions from administrative actions', () => {
     expect(can('staff', 'view_catalog')).toBe(true);
     expect(can('staff', 'view_reservations')).toBe(true);
+    expect(can('staff', 'record_reservation_payment')).toBe(true);
     expect(can('staff', 'delete_customer')).toBe(false);
     expect(can('staff', 'manage_settings')).toBe(false);
   });
