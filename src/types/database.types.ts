@@ -1518,13 +1518,16 @@ export type Database = {
           hidden_in_cancelled: boolean | null
           hidden_in_history: boolean | null
           id: string
+          idempotency_key: string | null
           image_url: string | null
           payment_due_at: string | null
+          payment_method: string | null
           payment_status: string | null
           payment_type: string | null
           pickup_token: string | null
           product_id: string | null
           product_name: string | null
+          purchase_mode: string | null
           quantity: number | null
           receipt_url: string | null
           rental_price: number | null
@@ -1532,6 +1535,7 @@ export type Database = {
           reschedule_requested_at_time: string | null
           reschedule_requested_date: string | null
           return_date: string | null
+          sales_channel: string | null
           size: string | null
           staff_id: string | null
           status: string | null
@@ -1561,13 +1565,16 @@ export type Database = {
           hidden_in_cancelled?: boolean | null
           hidden_in_history?: boolean | null
           id?: string
+          idempotency_key?: string | null
           image_url?: string | null
           payment_due_at?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           payment_type?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
+          purchase_mode?: string | null
           quantity?: number | null
           receipt_url?: string | null
           rental_price?: number | null
@@ -1575,6 +1582,7 @@ export type Database = {
           reschedule_requested_at_time?: string | null
           reschedule_requested_date?: string | null
           return_date?: string | null
+          sales_channel?: string | null
           size?: string | null
           staff_id?: string | null
           status?: string | null
@@ -1604,13 +1612,16 @@ export type Database = {
           hidden_in_cancelled?: boolean | null
           hidden_in_history?: boolean | null
           id?: string
+          idempotency_key?: string | null
           image_url?: string | null
           payment_due_at?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           payment_type?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
+          purchase_mode?: string | null
           quantity?: number | null
           receipt_url?: string | null
           rental_price?: number | null
@@ -1618,6 +1629,7 @@ export type Database = {
           reschedule_requested_at_time?: string | null
           reschedule_requested_date?: string | null
           return_date?: string | null
+          sales_channel?: string | null
           size?: string | null
           staff_id?: string | null
           status?: string | null
@@ -2488,14 +2500,25 @@ export type Database = {
       }
       process_account_deletion: { Args: { _request_id: string }; Returns: Json }
       recalculate_inventory_stock: { Args: never; Returns: Json }
-      record_boutique_sale: {
-        Args: {
-          p_inventory_id: string
-          p_quantity: number
-          p_sale_price?: number
-        }
-        Returns: Json
-      }
+      record_boutique_sale:
+        | {
+            Args: {
+              p_inventory_id: string
+              p_quantity: number
+              p_sale_price?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_idempotency_key: string
+              p_inventory_id: string
+              p_payment_method: string
+              p_quantity: number
+              p_unit_price: number
+            }
+            Returns: Json
+          }
       record_reservation_balance: {
         Args: { _method?: string; _reservation_id: string }
         Returns: Json
