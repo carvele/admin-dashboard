@@ -13,9 +13,6 @@ export const isAwaitingReceipt = (res) =>
   ['submitted', 'processing'].includes(String(res.paymentStatus || '').toLowerCase());
 
 export const primaryActionFor = (res) => {
-  if (res.displayStatus === 'Pending') {
-    return { action: 'approve_pay', label: 'Activate legacy hold' };
-  }
   if (res.displayStatus === 'To Pay') {
     if (isAwaitingReceipt(res)) return { action: 'review_receipt', label: 'Verify receipt' };
     if (String(res.paymentStatus || '').toLowerCase() === 'paid') {
@@ -28,7 +25,7 @@ export const primaryActionFor = (res) => {
   return null;
 };
 
-export const CAN_RESCHEDULE_STATUSES = new Set(['Pending', 'To Pay', 'Preparing', 'To Pickup']);
+export const CAN_RESCHEDULE_STATUSES = new Set(['To Pay', 'Preparing', 'To Pickup']);
 
 export const canCancelReservation = (res) =>
   !['paid', 'submitted', 'processing', 'refund required'].includes(

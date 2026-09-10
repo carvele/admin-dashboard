@@ -293,7 +293,22 @@ const Reservations = () => {
   useEffect(() => {
     if (!viewModal?.id) return;
     const current = reservations.find((reservation) => reservation.id === viewModal.id);
-    if (current) setViewModal(current);
+    if (!current) return;
+    // Re-syncing from the raw `reservations` array (not filteredReservations,
+    // which also depends on search/statusFilter state this effect has no
+    // business reacting to) drops displayStatus -- the same normalization
+    // filteredReservations applies has to be redone here, or the lifecycle
+    // tracker silently renders with every step unfilled the moment any live
+    // update (e.g. recording a payment) refreshes `reservations` while this
+    // modal is open.
+    let displayStatus = current.status
+      ? current.status.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+      : 'To Pay';
+    if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
+    if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+    if (displayStatus === 'Ready') displayStatus = 'To Pickup';
+    if (displayStatus === 'Active') displayStatus = 'Completed';
+    setViewModal({ ...current, displayStatus });
   }, [reservations, viewModal?.id]);
 
   useEffect(() => {
@@ -323,9 +338,11 @@ const Reservations = () => {
   };
 
   const filteredReservations = reservations.map(r => {
-    // Normalize status to Sentence Case, mapping legacy states to new ones for display if desired
-    let displayStatus = r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'Pending';
-    if (displayStatus === 'Request Approval') displayStatus = 'Pending';
+    // Normalize status to Sentence Case, mapping legacy states to new ones for display if desired.
+    // A null status shouldn't happen for a live row (every writer sets one),
+    // but the column is nullable -- fall back to To Pay rather than Pending,
+    // which retired along with 'Request Approval' (neither has a live writer).
+    let displayStatus = r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'To Pay';
     if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
     if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
     if (displayStatus === 'Ready') displayStatus = 'To Pickup';
@@ -360,7 +377,6 @@ const Reservations = () => {
     // Status filter logic
     let matchesStatus = false;
     if (statusFilter === 'All') matchesStatus = true;
-    else if (statusFilter.startsWith('Pending')) matchesStatus = r.displayStatus === 'Pending';
     else if (statusFilter.startsWith('To Pickup')) matchesStatus = r.displayStatus === 'To Pickup';
     else if (statusFilter.startsWith('Completed')) matchesStatus = r.displayStatus === 'Completed';
     else matchesStatus = r.displayStatus === statusFilter;
@@ -407,10 +423,7 @@ const Reservations = () => {
     if (!res) return;
 
     try {
-      if (action === 'approve_pay') {
-        await transitionReservationStatus(res.docId, res.status, 'To Pay');
-        toast.success(`Legacy reservation ${id} activated — stock held`);
-      } else if (action === 'start_preparing') {
+      if (action === 'start_preparing') {
         if (String(res.paymentStatus || '').toLowerCase() !== 'paid') {
           throw new Error('Payment must be confirmed before preparation starts.');
         }
@@ -711,7 +724,6 @@ const Reservations = () => {
               aria-label="Filter by reservation status"
             >
               <option value="All">All Statuses</option>
-              <option value="Pending">Legacy pending</option>
               <option value="To Pay">To Pay</option>
               <option value="Preparing">Preparing</option>
               <option value="To Pickup">To Pickup (Confirmed)</option>
@@ -1315,8 +1327,8 @@ const Reservations = () => {
               <nav aria-label="Reservation progress">
                 <ol className="lifecycle-progress">
                   {(() => {
-                    const steps = ['Pending', 'To Pay', 'Preparing', 'To Pickup', 'Completed'];
-                    const statusOrder = { Pending: 0, 'To Pay': 1, Preparing: 2, 'To Pickup': 3, Completed: 4, Cancelled: -1, Returned: -1 };
+                    const steps = ['To Pay', 'Preparing', 'To Pickup', 'Completed'];
+                    const statusOrder = { 'To Pay': 0, Preparing: 1, 'To Pickup': 2, Completed: 3, Cancelled: -1, Returned: -1 };
                     return steps.map((step, i) => {
                       const current = statusOrder[viewModal.displayStatus] ?? -1;
                       const stepIdx = statusOrder[step];

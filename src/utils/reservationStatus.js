@@ -9,10 +9,11 @@
  * with no error. Import from here instead of hardcoding.
  */
 
-// Every status the app writes, in rough lifecycle order.
+// Every status the app writes, in rough lifecycle order. 'Pending' and
+// 'Request Approval' are retired (reservations_status_check narrowed in
+// jezsy-mobile-app 20260911110000) -- neither had a live writer in either
+// repo.
 export const RESERVATION_STATUSES = [
-  'Pending',
-  'Request Approval',
   'To Pay',
   'Approved',
   'Confirmed',
@@ -26,7 +27,7 @@ export const RESERVATION_STATUSES = [
 ];
 
 /** Awaiting staff action — shown as "pending requests". */
-export const PENDING_STATUSES = ['Pending', 'Request Approval', 'To Pay'];
+export const PENDING_STATUSES = ['To Pay'];
 
 /** Terminal, did not happen. Excluded from every count that implies business. */
 export const CANCELLED_STATUSES = ['Cancelled'];

@@ -8,7 +8,10 @@ import { formatPaymentDeadline } from '../utils/reservationDeadline';
 
 describe('Reservation Service & Status Logic', () => {
   test('includes all expected statuses in lifecycle order', () => {
-    expect(RESERVATION_STATUSES).toContain('Pending');
+    // 'Pending' and 'Request Approval' are retired -- neither had a live
+    // writer in either app (see jezsy-mobile-app 20260911110000).
+    expect(RESERVATION_STATUSES).not.toContain('Pending');
+    expect(RESERVATION_STATUSES).not.toContain('Request Approval');
     expect(RESERVATION_STATUSES).toContain('Confirmed');
     expect(RESERVATION_STATUSES).toContain('Preparing');
     expect(RESERVATION_STATUSES).toContain('To Pickup');
@@ -17,8 +20,8 @@ describe('Reservation Service & Status Logic', () => {
   });
 
   test('groups pending statuses correctly', () => {
-    expect(PENDING_STATUSES).toContain('Pending');
     expect(PENDING_STATUSES).toContain('To Pay');
+    expect(PENDING_STATUSES).not.toContain('Pending');
   });
 
   test('groups cancelled statuses correctly', () => {
