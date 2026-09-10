@@ -978,6 +978,7 @@ export type Database = {
       payments: {
         Row: {
           amount_centavos: number
+          attempt_started_at: string
           created_at: string
           currency: string
           id: string
@@ -987,6 +988,8 @@ export type Database = {
           provider: string
           provider_payment_id: string | null
           provider_ref: string | null
+          refund_required_at: string | null
+          requires_refund: boolean
           reservation_id: string
           status: string
           updated_at: string
@@ -994,6 +997,7 @@ export type Database = {
         }
         Insert: {
           amount_centavos: number
+          attempt_started_at?: string
           created_at?: string
           currency?: string
           id?: string
@@ -1003,6 +1007,8 @@ export type Database = {
           provider?: string
           provider_payment_id?: string | null
           provider_ref?: string | null
+          refund_required_at?: string | null
+          requires_refund?: boolean
           reservation_id: string
           status?: string
           updated_at?: string
@@ -1010,6 +1016,7 @@ export type Database = {
         }
         Update: {
           amount_centavos?: number
+          attempt_started_at?: string
           created_at?: string
           currency?: string
           id?: string
@@ -1019,6 +1026,8 @@ export type Database = {
           provider?: string
           provider_payment_id?: string | null
           provider_ref?: string | null
+          refund_required_at?: string | null
+          requires_refund?: boolean
           reservation_id?: string
           status?: string
           updated_at?: string
@@ -1089,6 +1098,7 @@ export type Database = {
           description: string | null
           difficulty: string | null
           id: string
+          image_storage_path: string | null
           image_url: string | null
           is_featured: boolean | null
           name: string
@@ -1105,6 +1115,7 @@ export type Database = {
           description?: string | null
           difficulty?: string | null
           id: string
+          image_storage_path?: string | null
           image_url?: string | null
           is_featured?: boolean | null
           name: string
@@ -1121,6 +1132,7 @@ export type Database = {
           description?: string | null
           difficulty?: string | null
           id?: string
+          image_storage_path?: string | null
           image_url?: string | null
           is_featured?: boolean | null
           name?: string
@@ -1130,6 +1142,35 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      processed_payment_webhook_events: {
+        Row: {
+          event_id: string
+          next_status: string
+          payment_id: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          next_status: string
+          payment_id: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          next_status?: string
+          payment_id?: string
+          processed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_payment_webhook_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
@@ -2212,6 +2253,14 @@ export type Database = {
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
       can_operate_inventory: { Args: never; Returns: boolean }
+      cancel_reservation_as_manager: {
+        Args: {
+          _expected_status: string
+          _reason?: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       check_email_exists: { Args: { lookup_email: string }; Returns: boolean }
       check_rate_limit: {
         Args: {
@@ -2222,6 +2271,10 @@ export type Database = {
         Returns: boolean
       }
       check_unattended_reservations: { Args: never; Returns: undefined }
+      complete_reservation_handover: {
+        Args: { _method?: string; _reservation_id: string }
+        Returns: Json
+      }
       complete_reservation_pickup: {
         Args: {
           _method?: string
@@ -2257,6 +2310,7 @@ export type Database = {
       create_reservation_multi: {
         Args: {
           _appointment_time: string
+          _customer_id?: string
           _date: string
           _items: Json
           _payment_option?: string
@@ -2268,6 +2322,14 @@ export type Database = {
       expire_all_stale_reservations: { Args: never; Returns: number }
       expire_stale_payments: { Args: never; Returns: number }
       expire_unpaid_reservations: { Args: never; Returns: number }
+      get_direct_chat_summaries: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          chat_id: string
+          other_user_id: string
+          updated_at: string
+        }[]
+      }
       get_most_wishlisted_products: {
         Args: never
         Returns: {
@@ -2282,6 +2344,16 @@ export type Database = {
         Returns: string
       }
       get_outfit_privacy: { Args: { p_user_id: string }; Returns: string }
+      get_pose_guides_for_product: {
+        Args: { p_product_id: string }
+        Returns: {
+          category: string
+          id: string
+          image_url: string
+          name: string
+          occasion: string
+        }[]
+      }
       get_product_loved_by: {
         Args: { p_product_id: string }
         Returns: {
@@ -2424,6 +2496,10 @@ export type Database = {
         }
         Returns: Json
       }
+      record_reservation_balance: {
+        Args: { _method?: string; _reservation_id: string }
+        Returns: Json
+      }
       reject_account_deletion_request: {
         Args: { _request_id: string }
         Returns: Json
@@ -2453,7 +2529,33 @@ export type Database = {
         Args: { _approve: boolean; _reservation_id: string }
         Returns: Json
       }
+      resolve_reschedule_as_manager: {
+        Args: { _approve: boolean; _reservation_id: string }
+        Returns: Json
+      }
       resolve_username: { Args: { p_username: string }; Returns: string }
+      review_reservation_receipt: {
+        Args: { _approve: boolean; _reservation_id: string }
+        Returns: Json
+      }
+      save_pose_guide: {
+        Args: {
+          p_base_pose_type?: string
+          p_category: string
+          p_description?: string
+          p_difficulty?: string
+          p_id: string
+          p_image_storage_path?: string
+          p_image_url?: string
+          p_is_featured?: boolean
+          p_name: string
+          p_occasion?: string
+          p_product_ids?: string[]
+          p_sort_order?: number
+          p_style_tags?: string[]
+        }
+        Returns: undefined
+      }
       search_catalog: {
         Args: {
           ar_only?: boolean
@@ -2641,6 +2743,14 @@ export type Database = {
         Returns: Json
       }
       sync_product_stock: { Args: { p_product_id: string }; Returns: undefined }
+      transition_reservation_status: {
+        Args: {
+          _expected_status: string
+          _next_status: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       update_staff_role: {
         Args: { new_role: string; target_user_id: string }
         Returns: undefined
