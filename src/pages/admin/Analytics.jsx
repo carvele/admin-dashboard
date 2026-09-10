@@ -138,24 +138,21 @@ const Analytics = () => {
         const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0).toISOString();
         const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999).toISOString();
 
-        const { supabase } = await import('../../lib/supabaseClient');
+        const { getReservationsRange, getArSessionsRange, getFeedbackRange } = await import('../../services/analyticsService');
         const { toCamel } = await import('../../lib/supabaseService');
 
-        // Fetch explicitly bounded historical data.
-        // Reservations use a direct range-filtered query rather than
-        // getPaginatedReservations, which doesn't support range filters natively.
-        const [resQuery, arResult, feedbackResult] = await Promise.all([
-          supabase.from('reservations').select('*').gte('created_at', s).lte('created_at', e).limit(10000),
-          supabase.from('ar_sessions').select('*').gte('created_at', s).lte('created_at', e).limit(10000),
-          supabase.from('feedback').select('*').gte('created_at', s).lte('created_at', e).limit(10000)
+        // Fetch explicitly bounded historical data via analyticsService
+        const [resData, arData, feedbackData] = await Promise.all([
+          getReservationsRange(s, e),
+          getArSessionsRange(s, e),
+          getFeedbackRange(s, e),
         ]);
 
         if (!isMounted) return;
 
-
-        setReservations((resQuery.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
-        setArLogs((arResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
-        setFeedback((feedbackResult.data || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setReservations((resData || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setArLogs((arData || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setFeedback((feedbackData || []).map(r => ({ ...toCamel(r), docId: r.id })));
       } catch (err) {
         console.error('Failed to load time-series analytics data:', err);
       }
