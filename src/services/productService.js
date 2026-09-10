@@ -377,16 +377,24 @@ export const getStockMovements = async (productId, limit = 50) => {
   return (data ?? []).map(toCamel);
 };
 
-/** Record an in-store walk-in sale atomically via B3 command RPC record_boutique_sale. */
-export const recordBoutiqueSale = async (inventoryItem, quantity, user, salePrice = 0) => {
+/**
+ * Record an in-store walk-in sale atomically via the POS v1 five-argument
+ * record_boutique_sale overload (payment method + idempotency key). The
+ * three-argument overload it replaces here is untouched server-side and
+ * still exists for any other caller, but this is the only one in this repo.
+ */
+export const recordBoutiqueSale = async (inventoryItem, quantity, user, unitPrice = 0, paymentMethod, idempotencyKey) => {
   const inventoryId = inventoryItem?.docId || inventoryItem?.id;
   const qty = parseInt(quantity, 10);
   if (!inventoryId || !qty || qty <= 0) throw new Error('Invalid sale data');
+  if (!idempotencyKey) throw new Error('Missing idempotency key');
 
   const { data, error } = await supabase.rpc('record_boutique_sale', {
     p_inventory_id: inventoryId,
     p_quantity: qty,
-    p_sale_price: parseFloat(salePrice) || 0,
+    p_unit_price: parseFloat(unitPrice) || 0,
+    p_payment_method: paymentMethod,
+    p_idempotency_key: idempotencyKey,
   });
 
   if (error) throw error;
