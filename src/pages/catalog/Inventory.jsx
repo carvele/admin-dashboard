@@ -136,6 +136,8 @@ const GroupedInvRow = ({
   setRestockQty,
   setSellModal,
   setSalePriceInput,
+  setSalePaymentMethod,
+  setSaleIdempotencyKey,
   setArchiveConfirm,
 }) => {
   const [selectedColor, setSelectedColor] = useState('ALL');
@@ -272,6 +274,8 @@ const GroupedInvRow = ({
                   setSellModal(targetInv);
                   setRestockQty('1');
                   setSalePriceInput(targetInv.price || '');
+                  setSalePaymentMethod('cash');
+                  setSaleIdempotencyKey(crypto.randomUUID());
                 }}
                 style={{ color: 'var(--status-approved-text)', opacity: displayedAvailable > 0 ? 1 : 0.4 }}
                 disabled={displayedAvailable <= 0}
@@ -427,6 +431,10 @@ const Inventory = () => {
   // Form state
   const [restockQty, setRestockQty] = useState('');
   const [salePriceInput, setSalePriceInput] = useState('');
+  const [salePaymentMethod, setSalePaymentMethod] = useState('cash');
+  // One key per sale attempt -- kept across Confirm/retry/timeout, replaced
+  // only when the modal opens fresh or is cancelled (never mid-attempt).
+  const [saleIdempotencyKey, setSaleIdempotencyKey] = useState(null);
 
   // Handle escape key for open modals
   useEffect(() => {
@@ -640,11 +648,15 @@ const Inventory = () => {
       toast.error('Cannot sell more than available stock');
       return;
     }
+    if (!salePaymentMethod) {
+      toast.error('Select a payment method');
+      return;
+    }
 
     const toastId = toast.loading('Recording in-store sale...');
     try {
       const price = parseFloat(salePriceInput) || 0;
-      await recordBoutiqueSale(sellModal, qty, user, price);
+      await recordBoutiqueSale(sellModal, qty, user, price, salePaymentMethod, saleIdempotencyKey);
 
       toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
       setSellModal(null);
@@ -765,6 +777,8 @@ const Inventory = () => {
         setRestockQty={setRestockQty}
         setSellModal={setSellModal}
         setSalePriceInput={setSalePriceInput}
+        setSalePaymentMethod={setSalePaymentMethod}
+        setSaleIdempotencyKey={setSaleIdempotencyKey}
         setArchiveConfirm={setArchiveConfirm}
       />
     );
@@ -1419,6 +1433,21 @@ const Inventory = () => {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label" htmlFor="sell-payment-method">Payment Method</label>
+                <select
+                  id="sell-payment-method"
+                  className="input-field"
+                  value={salePaymentMethod}
+                  onChange={(e) => setSalePaymentMethod(e.target.value)}
+                  required
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="ewallet">E-Wallet</option>
+                </select>
               </div>
 
               {restockQty && parseInt(restockQty) > 0 && (
