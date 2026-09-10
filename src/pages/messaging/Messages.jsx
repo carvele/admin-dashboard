@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import { normaliseRow } from '../../lib/supabaseService';
+import { resolveSignedStorageUrl } from '../../lib/storage';
 import {
   Search,
   Send,
@@ -112,6 +113,14 @@ const Messages = () => {
   const [allReservations, setAllReservations] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageModalUrl, setImageModalUrl] = useState(null);
+  // msg.imageUrl is a bare object path (or legacy pseudo-public URL) in the
+  // private 'chat-images' bucket -- unusable as an <img src> directly, which
+  // is why attachments were rendering as broken images. Resolved once per
+  // message id and cached, mirroring resolveSignedStorageUrl's existing use
+  // for payment receipts elsewhere in this app.
+  const [resolvedImageUrls, setResolvedImageUrls] = useState({});
+  const resolvedImageUrlsRef = useRef({});
+  resolvedImageUrlsRef.current = resolvedImageUrls;
   // Clicking a sent bubble reveals its exact Sent/Delivered/Seen time, same
   // as the mobile app's tap-to-reveal -- id of the currently expanded one.
   const [expandedMsgId, setExpandedMsgId] = useState(null);
@@ -319,6 +328,26 @@ const Messages = () => {
     // recreate the message subscription far more often than needed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChat?.id, activeChat?.customId, activeChat?.customerId]);
+
+  // Resolve only what's missing -- a signed URL is fetched once per message
+  // id and cached, not re-fetched on every message list update.
+  useEffect(() => {
+    const toResolve = messages.filter((m) => m.imageUrl && resolvedImageUrlsRef.current[m.id] === undefined);
+    if (toResolve.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        toResolve.map(async (m) => [m.id, (await resolveSignedStorageUrl('chat-images', m.imageUrl)) || ''])
+      );
+      if (cancelled) return;
+      setResolvedImageUrls((prev) => {
+        const next = { ...prev };
+        for (const [id, url] of entries) next[id] = url;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [messages]);
 
   // Typing indicator: ephemeral broadcast on a per-conversation channel, not
   // a DB write. The mobile app joins the exact same channel name/shape
@@ -879,21 +908,27 @@ const Messages = () => {
 
               {/* Image */}
               {msg.imageUrl && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setImageModalUrl(msg.imageUrl);
-                  }}
-                  style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'block' }}
-                  aria-label="View full-size image"
-                >
-                  <img
-                    src={msg.imageUrl}
-                    alt="Chat attachment"
-                    className="chat-image-thumb"
-                  />
-                </button>
+                resolvedImageUrls[msg.id] ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImageModalUrl(resolvedImageUrls[msg.id]);
+                    }}
+                    style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in', display: 'block' }}
+                    aria-label="View full-size image"
+                  >
+                    <img
+                      src={resolvedImageUrls[msg.id]}
+                      alt="Chat attachment"
+                      className="chat-image-thumb"
+                    />
+                  </button>
+                ) : (
+                  <div className="msg-product-loading">
+                    {resolvedImageUrls[msg.id] === '' ? 'Image unavailable' : 'Loading image...'}
+                  </div>
+                )
               )}
 
               {/* Text */}
