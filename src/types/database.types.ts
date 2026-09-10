@@ -2736,8 +2736,6 @@ export type Database = {
         Args: { _method?: string; _reservation_id: string }
         Returns: Json
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       submit_reservation_receipt: {
         Args: { _receipt_path: string; _reservation_id: string }
         Returns: Json
