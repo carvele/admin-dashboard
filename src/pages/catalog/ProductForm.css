@@ -315,5 +315,19 @@
   border-color: var(--charcoal);
   transform: scale(1.03);
 }
+
+/* Breadcrumb link and image-upload dropzone previously targeted
+   hover:text-gray-900 / hover:bg-gray-50 / hover:border-gray-400 -- classes
+   this app never defines (no Tailwind build here; every "Tailwind-named"
+   class is hand-authored against theme tokens, and these three were missed),
+   so hovering did nothing. */
+.breadcrumb-link:hover {
+  color: var(--text-primary);
+}
+
+.upload-dropzone:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--text-secondary);
+}
 .relative { position: relative; }
 .absolute { position: absolute; }

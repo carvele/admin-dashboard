@@ -38,6 +38,7 @@ import {
   primaryActionFor,
 } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
+import { toDisplayStatus } from '../../utils/reservationStatus';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
@@ -301,14 +302,7 @@ const Reservations = () => {
     // tracker silently renders with every step unfilled the moment any live
     // update (e.g. recording a payment) refreshes `reservations` while this
     // modal is open.
-    let displayStatus = current.status
-      ? current.status.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
-      : 'To Pay';
-    if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
-    if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
-    if (displayStatus === 'Ready') displayStatus = 'To Pickup';
-    if (displayStatus === 'Active') displayStatus = 'Completed';
-    setViewModal({ ...current, displayStatus });
+    setViewModal({ ...current, displayStatus: toDisplayStatus(current.status) });
   }, [reservations, viewModal?.id]);
 
   useEffect(() => {
@@ -338,15 +332,11 @@ const Reservations = () => {
   };
 
   const filteredReservations = reservations.map(r => {
-    // Normalize status to Sentence Case, mapping legacy states to new ones for display if desired.
+    // Normalize status to Sentence Case, mapping legacy states to new ones for display.
     // A null status shouldn't happen for a live row (every writer sets one),
     // but the column is nullable -- fall back to To Pay rather than Pending,
     // which retired along with 'Request Approval' (neither has a live writer).
-    let displayStatus = r.status ? r.status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') : 'To Pay';
-    if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
-    if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
-    if (displayStatus === 'Ready') displayStatus = 'To Pickup';
-    if (displayStatus === 'Active') displayStatus = 'Completed';
+    const displayStatus = toDisplayStatus(r.status);
 
     // Falls back to the reservation's own product columns when the lines
     // have not arrived (or an older row predates them), so a card always
