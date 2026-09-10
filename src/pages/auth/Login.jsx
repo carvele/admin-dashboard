@@ -81,7 +81,7 @@ const Login = () => {
       <div className="login-right">
         <div className="login-form-wrapper">
           <div className="login-header">
-            <h2>Welcome back</h2>
+            <h2>Welcome</h2>
             <p>Sign in to your dashboard</p>
           </div>
 
