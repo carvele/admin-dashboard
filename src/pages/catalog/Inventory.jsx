@@ -139,6 +139,7 @@ const GroupedInvRow = ({
   setSalePaymentMethod,
   setSaleIdempotencyKey,
   setArchiveConfirm,
+  productMetaById,
 }) => {
   const [selectedColor, setSelectedColor] = useState('ALL');
 
@@ -273,7 +274,9 @@ const GroupedInvRow = ({
                 onClick={() => {
                   setSellModal(targetInv);
                   setRestockQty('1');
-                  setSalePriceInput(targetInv.price || '');
+                  // inventory rows have no price column of their own -- the
+                  // catalog price lives on products, joined via productDocId.
+                  setSalePriceInput(productMetaById[targetInv.productDocId]?.price || '');
                   setSalePaymentMethod('cash');
                   setSaleIdempotencyKey(crypto.randomUUID());
                 }}
@@ -780,6 +783,7 @@ const Inventory = () => {
         setSalePaymentMethod={setSalePaymentMethod}
         setSaleIdempotencyKey={setSaleIdempotencyKey}
         setArchiveConfirm={setArchiveConfirm}
+        productMetaById={productMetaById}
       />
     );
   };
@@ -1402,7 +1406,11 @@ const Inventory = () => {
                 </div>
                 <div className="d-flex justify-between text-sm">
                   <span className="text-secondary">Expected Price:</span>
-                  <span className="font-bold text-success">₱{sellModal.price?.toLocaleString() || '--'}</span>
+                  <span className="font-bold text-success">
+                    ₱{productMetaById[sellModal.productDocId]?.price
+                      ? Number(productMetaById[sellModal.productDocId].price).toLocaleString()
+                      : '--'}
+                  </span>
                 </div>
               </div>
 
