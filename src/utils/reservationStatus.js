@@ -104,6 +104,23 @@ const normalise = (status) =>
     .toLowerCase();
 
 /**
+ * Stored status to the 5-value customer-facing label: To Pay, Preparing,
+ * To Pickup, Completed, Cancelled. Previously duplicated inline in
+ * Reservations.jsx in two places (the list and the modal re-sync effect) --
+ * exactly the drift this file exists to prevent, per the header note above.
+ */
+export const toDisplayStatus = (status) => {
+  let displayStatus = status
+    ? status.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+    : 'To Pay';
+  if (displayStatus === 'Confirmed') displayStatus = 'To Pay';
+  if (displayStatus === 'Fitting') displayStatus = 'To Pickup';
+  if (displayStatus === 'Ready') displayStatus = 'To Pickup';
+  if (displayStatus === 'Active') displayStatus = 'Completed';
+  return displayStatus;
+};
+
+/**
  * Does this reservation count toward a customer's lifetime spend?
  *
  * Only once it has been handed over. This used to return true the moment

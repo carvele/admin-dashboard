@@ -23,6 +23,8 @@ import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
 import { getColorList } from '../../services/inventoryService';
+import ReservationStatusBadge from '../../components/ReservationStatusBadge';
+import { toDisplayStatus } from '../../utils/reservationStatus';
 import {
   buildVariantMatrix,
   createVariant,
@@ -768,7 +770,7 @@ const ProductForm = ({ readOnly = false }) => {
         
           <div className="flex-1">
             <nav className="flex items-center gap-2 mb-1 text-sm font-medium text-gray-500">
-              <span role="button" tabIndex={0} onKeyDown={(e) => { if(e.key==='Enter') e.target.click(); }} onClick={() => navigate('/catalog')} className="cursor-pointer hover:text-gray-900 transition-colors">Catalog</span>
+              <span role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/catalog'); } }} onClick={() => navigate('/catalog')} className="cursor-pointer breadcrumb-link transition-colors">Catalog</span>
               <ChevronRight size={14} className="opacity-50" />
               <span className="text-gray-900">{readOnly ? 'View Product' : isEditing ? 'Edit Product' : 'New Product'}</span>
             </nav>
@@ -977,7 +979,7 @@ const ProductForm = ({ readOnly = false }) => {
               {/* Existing Images */}
               {formData.images.map((url, idx) => (
                 <div key={`exist-${idx}`} className="gallery-item relative border rounded-lg overflow-hidden group shadow-sm bg-gray-50">
-                  <img src={url} alt="" className="w-full h-full object-contain" />
+                  <img src={url} alt={`${formData.name || 'Product'} ${idx + 1}`} className="w-full h-full object-contain" />
                   {idx === 0 && <div className="primary-badge">PRIMARY COVER</div>}
                   
                   <div className="gallery-overlay">
@@ -1002,14 +1004,14 @@ const ProductForm = ({ readOnly = false }) => {
               {/* Previews */}
               {previews.map((url, idx) => (
                 <div key={`prev-${idx}`} className="gallery-item relative border-2 border-dashed border-primary/50 rounded-lg overflow-hidden group bg-gray-50/50">
-                  <img src={url} alt="" className="w-full h-full object-contain opacity-70" />
+                  <img src={url} alt={`New upload preview ${idx + 1}`} className="w-full h-full object-contain opacity-70" />
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" onClick={() => removeSelectedFile(idx)} className="p-1.5 bg-red-500 rounded-full text-white shadow-lg"><X size={16} /></button>
                   </div>
                 </div>
               ))}
 
-              <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all">
+              <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer upload-dropzone transition-all">
                 <Upload size={24} className="text-gray-400 mb-2" />
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
                 <input autoComplete="off" id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
@@ -1365,13 +1367,7 @@ const ProductForm = ({ readOnly = false }) => {
                               <td className="px-4 py-3 font-medium">{order.customerName || order.customer || 'Guest'}</td>
                               <td className="px-4 py-3 text-secondary">{formatPHDate(orderDate)}</td>
                               <td className="px-4 py-3">
-                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                  order.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                                  order.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                                  'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {order.status || 'Pending'}
-                                </span>
+                                <ReservationStatusBadge status={toDisplayStatus(order.status)} />
                               </td>
                            </tr>
                          );
