@@ -124,8 +124,6 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
         const rescheduleStatus = (r.rescheduleStatus || r.reschedule_status || '').trim();
         const paymentStatus = (r.paymentStatus || r.payment_status || '').trim();
         if (
-          status === 'Pending' ||
-          status === 'Request Approval' ||
           status === 'To Pay' ||
           rescheduleStatus === 'requested' ||
           paymentStatus === 'Awaiting Verification'

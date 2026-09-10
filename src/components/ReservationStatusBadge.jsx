@@ -12,12 +12,10 @@ import './StatusBadge.css';
 
 /**
  * @param {string} status - One of the displayStatus strings Reservations.jsx
- *   produces: Pending, To Pay, Preparing, To Pickup, Completed, Cancelled.
+ *   produces: To Pay, Preparing, To Pickup, Completed, Cancelled.
  */
 const getReservationStatusIcon = (status) => {
   switch (status) {
-    case 'Pending':
-      return '⏳';
     case 'To Pay':
       return '💳';
     case 'Preparing':
