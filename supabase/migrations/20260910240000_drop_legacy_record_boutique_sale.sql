@@ -1,0 +1,14 @@
+-- Drops the legacy three-argument record_boutique_sale(uuid, integer, numeric)
+-- overload, required before Migration-2 (NOT NULL + DEFAULT on
+-- purchase_mode/sales_channel) can run safely -- see pos-v1-implementation-plan.md
+-- "Critical sequencing finding". The legacy overload never sets those
+-- columns; once a DEFAULT existed, every future call through it (a real
+-- walk-in sale) would silently be mislabeled as a mobile reservation by the
+-- default rather than correctly as a walk-in sale.
+--
+-- Confirmed safe: the admin front-end has been fully cut over to the
+-- five-argument overload since PR #118 (productService.js's
+-- recordBoutiqueSale calls p_inventory_id/p_quantity/p_unit_price/
+-- p_payment_method/p_idempotency_key exclusively). Grepped both repos'
+-- client code, no other caller of the three-argument signature exists.
+DROP FUNCTION IF EXISTS public.record_boutique_sale(uuid, integer, numeric);
