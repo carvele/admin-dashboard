@@ -350,7 +350,7 @@ export const deleteReservation = async (docId) => {
 /**
  * Records that the outstanding balance was collected in person.
  *
- * Goes through the owner-only balance command rather than writing the columns
+ * Goes through the narrow balance command rather than writing the columns
  * directly. The RPC re-checks the caller's role, that the deposit has actually
  * cleared, that a balance exists at all, and that it has not already been
  * recorded -- none of which a bare column update would enforce, and all of
@@ -358,6 +358,7 @@ export const deleteReservation = async (docId) => {
  * electronic trail behind it.
  */
 export const settleReservationBalance = async (reservationId, method = 'cash') => {
+  await expireReservationPaymentSessions(reservationId);
   const { data, error } = await supabase.rpc('record_reservation_balance', {
     _reservation_id: reservationId,
     _method: method,
@@ -377,6 +378,7 @@ export const transitionReservationStatus = async (reservationId, expectedStatus,
 };
 
 export const cancelReservation = async (reservationId, expectedStatus, reason) => {
+  await expireReservationPaymentSessions(reservationId);
   const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
     _reservation_id: reservationId,
     _expected_status: expectedStatus,
@@ -387,6 +389,7 @@ export const cancelReservation = async (reservationId, expectedStatus, reason) =
 };
 
 export const reviewReservationReceipt = async (reservationId, approve) => {
+  if (approve) await expireReservationPaymentSessions(reservationId);
   const { data, error } = await supabase.rpc('review_reservation_receipt', {
     _reservation_id: reservationId,
     _approve: approve,
@@ -396,12 +399,20 @@ export const reviewReservationReceipt = async (reservationId, approve) => {
 };
 
 export const completeReservationHandover = async (reservationId, method = 'cash') => {
+  await expireReservationPaymentSessions(reservationId);
   const { data, error } = await supabase.rpc('complete_reservation_handover', {
     _reservation_id: reservationId,
     _method: method,
   });
   if (error) throw error;
   return data;
+};
+
+const expireReservationPaymentSessions = async (reservationId) => {
+  const { error } = await supabase.functions.invoke('payments-expire', {
+    body: { reservation_id: reservationId },
+  });
+  if (error) throw error;
 };
 
 // ── Inventory adjustment ─────────────────────────────────────

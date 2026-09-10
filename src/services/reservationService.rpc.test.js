@@ -15,11 +15,13 @@
  */
 
 const mockRpc = jest.fn();
+const mockInvoke = jest.fn().mockResolvedValue({ data: { expired: 0 }, error: null });
 const mockLookup = { product_doc_id: null, sku: null, item: null };
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: {
     rpc: (...args) => mockRpc(...args),
+    functions: { invoke: (...args) => mockInvoke(...args) },
     from: (table) => ({
       select: () => ({
         eq: (col1, _val1) => ({
@@ -42,6 +44,8 @@ jest.mock('../lib/supabaseClient', () => ({
     }),
   },
 }));
+
+afterEach(() => mockInvoke.mockClear());
 
 jest.mock('../lib/supabaseService', () => ({
   subscribeToCollection: jest.fn(),
@@ -113,12 +117,15 @@ describe('createReservation', () => {
 describe('settleReservationBalance', () => {
   afterEach(() => mockRpc.mockReset());
 
-  test('calls the owner-only balance command with the reservation id and method', async () => {
+  test('calls the balance command with the reservation id and method', async () => {
     mockRpc.mockResolvedValue({ data: { settled_amount: 500 }, error: null });
     const result = await settleReservationBalance('res-1', 'cash');
     expect(mockRpc).toHaveBeenCalledWith('record_reservation_balance', {
       _reservation_id: 'res-1',
       _method: 'cash',
+    });
+    expect(mockInvoke).toHaveBeenCalledWith('payments-expire', {
+      body: { reservation_id: 'res-1' },
     });
     expect(result).toEqual({ settled_amount: 500 });
   });
@@ -154,6 +161,9 @@ describe('reservation lifecycle commands', () => {
   test('cancels through the guarded command', async () => {
     mockRpc.mockResolvedValue({ data: { status: 'Cancelled' }, error: null });
     await cancelReservation('res-1', 'To Pay');
+    expect(mockInvoke).toHaveBeenCalledWith('payments-expire', {
+      body: { reservation_id: 'res-1' },
+    });
     expect(mockRpc).toHaveBeenCalledWith('cancel_reservation_as_manager', {
       _reservation_id: 'res-1',
       _expected_status: 'To Pay',
@@ -164,15 +174,21 @@ describe('reservation lifecycle commands', () => {
   test('reviews a receipt through the payment command', async () => {
     mockRpc.mockResolvedValue({ data: { approved: true }, error: null });
     await reviewReservationReceipt('res-1', true);
+    expect(mockInvoke).toHaveBeenCalledWith('payments-expire', {
+      body: { reservation_id: 'res-1' },
+    });
     expect(mockRpc).toHaveBeenCalledWith('review_reservation_receipt', {
       _reservation_id: 'res-1',
       _approve: true,
     });
   });
 
-  test('completes handover and balance settlement atomically', async () => {
+  test('completes handover through the guarded command', async () => {
     mockRpc.mockResolvedValue({ data: { status: 'Completed' }, error: null });
     await completeReservationHandover('res-1');
+    expect(mockInvoke).toHaveBeenCalledWith('payments-expire', {
+      body: { reservation_id: 'res-1' },
+    });
     expect(mockRpc).toHaveBeenCalledWith('complete_reservation_handover', {
       _reservation_id: 'res-1',
       _method: 'cash',
