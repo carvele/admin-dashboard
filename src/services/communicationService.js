@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
+import { errorReporting } from './observability';
 import {
   subscribeToCollection,
   addDocument,
@@ -180,20 +181,28 @@ export const uploadChatImage = async (file, conversationId) => {
 /**
  * Add or update an emoji reaction on a message.
  * Reactions are stored as jsonb: { userId: emoji, ... }
+ * Uses live stored procedure merge_message_reaction(p_message_id, p_user_id, p_emoji).
  * @param {string} messageDocId - Supabase message uuid
  * @param {string} userId - User performing the reaction
  * @param {string} emoji - Emoji character to store
+ * @returns {Promise<{ ok: boolean, data?: any, error?: any }>}
  */
 export const addReaction = async (messageDocId, userId, emoji) => {
   try {
-    const { error } = await supabase.rpc('merge_message_reaction', {
-      _message_id: messageDocId,
-      _user_id: userId,
-      _emoji: emoji
+    const { data, error } = await supabase.rpc('merge_message_reaction', {
+      p_message_id: messageDocId,
+      p_user_id: userId,
+      p_emoji: emoji,
     });
     if (error) throw error;
+    return { ok: true, data };
   } catch (err) {
-    console.error('Error updating reaction:', err);
+    errorReporting.capture(err, {
+      domain: 'communication',
+      operation: 'addReaction',
+      context: { messageDocId, emoji },
+    });
+    return { ok: false, error: err };
   }
 };
 
