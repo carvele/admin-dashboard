@@ -22,42 +22,63 @@ export const subscribeToDevices = (callback) => {
   };
 };
 
+export const approveDevice = async (fingerprint) => {
+  const { error } = await supabase.rpc('admin_manage_device', {
+    _action: 'approve',
+    _fingerprint: fingerprint,
+  });
+  if (error) throw error;
+};
+
+export const revokeDevice = async (fingerprint) => {
+  const { error } = await supabase.rpc('admin_manage_device', {
+    _action: 'revoke',
+    _fingerprint: fingerprint,
+  });
+  if (error) throw error;
+};
+
 export const updateDeviceStatus = async (fingerprint, status) => {
-  const { error } = await supabase
-    .from('devices')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('fingerprint', fingerprint);
+  const action = (status || '').toLowerCase().trim();
+  const _action = action === 'approved' ? 'approve' : action === 'revoked' ? 'revoke' : action;
+  if (_action !== 'approve' && _action !== 'revoke') {
+    throw new Error(`Unsupported device status transition: ${status}`);
+  }
+  const { error } = await supabase.rpc('admin_manage_device', {
+    _action,
+    _fingerprint: fingerprint,
+  });
   if (error) throw error;
 };
 
 export const deleteDevice = async (fingerprint) => {
-  const { error } = await supabase.from('devices').delete().eq('fingerprint', fingerprint);
+  const { error } = await supabase.rpc('admin_manage_device', {
+    _action: 'delete',
+    _fingerprint: fingerprint,
+  });
   if (error) throw error;
 };
 
 export const renameDevice = async (fingerprint, name) => {
-  const { error } = await supabase
-    .from('devices')
-    .update({ name, updated_at: new Date().toISOString() })
-    .eq('fingerprint', fingerprint);
+  const { error } = await supabase.rpc('admin_manage_device', {
+    _action: 'rename',
+    _fingerprint: fingerprint,
+    _value: name,
+  });
   if (error) throw error;
+};
+
+export const pruneDevices = async (cutoff) => {
+  const cutoffStr = typeof cutoff === 'string' ? cutoff : cutoff.toISOString();
+  const { data, error } = await supabase.rpc('admin_prune_devices', {
+    _cutoff: cutoffStr,
+  });
+  if (error) throw error;
+  return data;
 };
 
 export const pruneInactiveDevices = async (staleDays = 30) => {
   const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000).toISOString();
-
-  const { error: errRevoked } = await supabase
-    .from('devices')
-    .delete()
-    .eq('status', 'revoked');
-
-  const { error: errStale } = await supabase
-    .from('devices')
-    .delete()
-    .lt('last_seen', cutoff);
-
-  if (errRevoked || errStale) {
-    throw errRevoked || errStale;
-  }
+  return pruneDevices(cutoff);
 };
 

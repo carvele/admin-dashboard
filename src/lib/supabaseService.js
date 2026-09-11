@@ -180,12 +180,15 @@ export const deleteDocument = async (table, id) => {
 
 /**
  * Soft delete a row — sets deleted = true.
- * For 'products', also cascades to all linked inventory rows.
+ * Constrained strictly to its proven compatible domain: 'products'.
  */
 export const softDeleteDocument = async (table, id) => {
+  if (table !== 'products') {
+    throw new Error(`softDeleteDocument is only supported for 'products', received '${table}'`);
+  }
   const now = new Date().toISOString();
   const { error } = await supabase
-    .from(table)
+    .from('products')
     .update({ deleted: true, deleted_at: now, updated_at: now })
     .eq('id', id);
   if (error) handleError(error, `softDeleteDocument(${table}, ${id})`);

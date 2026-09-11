@@ -418,11 +418,6 @@ export const updateCategory = (docId, updates) => {
   return updateDocument('categories', docId, updates);
 };
 
-export const deleteCategory = (docId) => {
-  queryCache.invalidateByPrefix('categories');
-  return softDeleteDocument('categories', docId);
-};
-
 // ── Admin-managed category CRUD ──────────────────────────────
 
 /**

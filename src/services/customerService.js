@@ -13,7 +13,6 @@ import { countsAsRevenue } from '../utils/reservationStatus';
 import {
   addDocument,
   updateDocument,
-  softDeleteDocument,
   subscribeToCollection,
   toCamel,
 } from '../lib/supabaseService';
@@ -331,7 +330,6 @@ export const getReservations = async () => {
 
 export const createReservation = (data) => addDocument('reservations', data);
 export const updateReservation = (docId, updates) => updateDocument('reservations', docId, updates);
-export const deleteReservation = (docId) => softDeleteDocument('reservations', docId);
 
 // ── Wardrobe (placeholder — feature reads from wardrobe_items) ──
 
