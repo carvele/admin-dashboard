@@ -168,13 +168,22 @@ export const buildVariantMatrix = ({ sizes = [], colors = [], patterns = [] }, e
 
 // ── Writes ───────────────────────────────────────────────────────────────────
 
+// AR Garment Recoloring (Phase 1): #RRGGBB, matching the inventory.hex_color
+// CHECK constraint exactly.
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
 /**
  * Create one stock-tracked variant row. Quantities start at zero — stock only
  * ever arrives through an explicit restock, so a mistyped variant can never
  * invent inventory.
  */
-export const createVariant = async (productDocId, { size = '', color = '', pattern = '', item, category, sku, price } = {}) => {
+export const createVariant = async (productDocId, { size = '', color = '', pattern = '', item, category, sku, price, hexColor } = {}) => {
   if (!productDocId) throw new Error('createVariant requires a product id');
+
+  const trimmedHex = (hexColor ?? '').trim();
+  if (trimmedHex && !HEX_COLOR_PATTERN.test(trimmedHex)) {
+    throw new Error(`"${trimmedHex}" is not a valid #RRGGBB color`);
+  }
 
   const payload = {
     product_doc_id: productDocId,
@@ -189,6 +198,7 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
     reserved: 0,
     available: 0,
     deleted: false,
+    hex_color: trimmedHex ? trimmedHex.toUpperCase() : null,
   };
 
   if (price !== undefined && price !== null) {
@@ -198,6 +208,38 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
   const { data, error } = await supabase.from('inventory').insert(payload).select().single();
   if (error) throw error;
   return normaliseVariant(data);
+};
+
+/**
+ * Set (or clear) a variant's AR Color -- the hex hint the AR Try-On renderer
+ * uses to recolor the garment's Recolor_-prefixed materials for this
+ * specific commercial color. This is a targeted write, not a pass-through
+ * to updateDocument/supabaseService's generic helpers: `inventory` has
+ * column-level grants (see 20260911161353_add_inventory_hex_color.sql),
+ * and hex_color is the one column on this table `authenticated` can
+ * actually update after creation -- everything else (stock, size, color
+ * name) goes through its own dedicated RPC/path for a reason.
+ *
+ * Normalizes to uppercase before writing so `#18233f` and `#18233F` don't
+ * become textually distinct values for the same color -- an exact string
+ * match is how the mobile renderer and any future admin de-duplication
+ * would compare two variants' colors.
+ *
+ * @param {string} variantId inventory row id
+ * @param {string|null} hexColor `#RRGGBB` (either case) or null/'' to clear
+ */
+export const updateVariantHexColor = async (variantId, hexColor) => {
+  if (!variantId) throw new Error('updateVariantHexColor requires a variant id');
+
+  const trimmed = (hexColor ?? '').trim();
+  if (trimmed && !HEX_COLOR_PATTERN.test(trimmed)) {
+    throw new Error(`"${trimmed}" is not a valid #RRGGBB color`);
+  }
+  const normalized = trimmed ? trimmed.toUpperCase() : null;
+
+  const { error } = await supabase.from('inventory').update({ hex_color: normalized }).eq('id', variantId);
+  if (error) throw error;
+  return normalized;
 };
 
 /**
