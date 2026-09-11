@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Settings2,
+  Palette,
 } from 'lucide-react';
 import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockStatus';
 import {
@@ -35,6 +36,7 @@ import {
   subscribeToCategories,
   searchInventoryPage,
 } from '../../services/productService';
+import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
 import { useAuth } from '../../context/AuthContext';
@@ -139,6 +141,7 @@ const GroupedInvRow = ({
   setSalePaymentMethod,
   setSaleIdempotencyKey,
   setArchiveConfirm,
+  setArColorModal,
   productMetaById,
 }) => {
   const [selectedColor, setSelectedColor] = useState('ALL');
@@ -204,17 +207,31 @@ const GroupedInvRow = ({
             const isSel = selectedColor === cName;
             const avail = v.available || 0;
             return (
-              <button
-                key={v.id || cName}
-                type="button"
-                className={`color-chip-btn ${isSel ? 'active' : ''} ${avail === 0 ? 'out-of-stock' : ''}`}
-                onClick={() => setSelectedColor(cName)}
-                title={`${cName}: ${avail} available`}
-              >
-                <span className="chip-dot" style={{ backgroundColor: getChipColorDot(cName) }} />
-                <span>{cName}</span>
-                <span className="chip-count">{avail}</span>
-              </button>
+              <span key={v.id || cName} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                <button
+                  type="button"
+                  className={`color-chip-btn ${isSel ? 'active' : ''} ${avail === 0 ? 'out-of-stock' : ''}`}
+                  onClick={() => setSelectedColor(cName)}
+                  title={`${cName}: ${avail} available`}
+                >
+                  <span
+                    className="chip-dot"
+                    style={v.hexColor ? { backgroundColor: v.hexColor } : { backgroundColor: getChipColorDot(cName) }}
+                  />
+                  <span>{cName}</span>
+                  <span className="chip-count">{avail}</span>
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn-small"
+                  title={v.hexColor ? `AR Color: ${v.hexColor} (click to edit)` : 'Set AR Color'}
+                  aria-label={`Set AR Color for ${cName}`}
+                  onClick={() => setArColorModal(v)}
+                  style={{ padding: 2 }}
+                >
+                  <Palette size={12} />
+                </button>
+              </span>
             );
           })}
         </div>
@@ -430,6 +447,9 @@ const Inventory = () => {
   const [restockModal, setRestockModal] = useState(null); // inv item or null
   const [sellModal, setSellModal] = useState(null); // Added for POS
   const [archiveConfirm, setArchiveConfirm] = useState(null);
+  const [arColorModal, setArColorModal] = useState(null); // inv variant or null
+  const [arColorInput, setArColorInput] = useState('');
+  const [savingArColor, setSavingArColor] = useState(false);
 
   // Form state
   const [restockQty, setRestockQty] = useState('');
@@ -445,10 +465,34 @@ const Inventory = () => {
       if (e.key !== 'Escape') return;
       if (restockModal) setRestockModal(null);
       else if (sellModal) setSellModal(null);
+      else if (arColorModal) setArColorModal(null);
     };
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
-  }, [restockModal, sellModal]);
+  }, [restockModal, sellModal, arColorModal]);
+
+  // Opening the modal seeds the input from the variant's current value
+  // (already-normalized uppercase from the service, or '') rather than
+  // starting blank every time -- editing an existing color should show
+  // what's there, not look cleared.
+  useEffect(() => {
+    setArColorInput(arColorModal?.hexColor || '');
+  }, [arColorModal]);
+
+  const handleSaveArColor = async (e) => {
+    e.preventDefault();
+    if (!arColorModal) return;
+    setSavingArColor(true);
+    try {
+      await updateVariantHexColor(arColorModal.id, arColorInput);
+      toast.success(`AR Color updated for ${arColorModal.item} (${arColorModal.color || 'Standard'})`);
+      setArColorModal(null);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update AR Color');
+    } finally {
+      setSavingArColor(false);
+    }
+  };
 
   // Derived stats (Active inventory only)
   const activeInventory = inventory.filter((i) => i.deleted !== true);
@@ -783,6 +827,7 @@ const Inventory = () => {
         setSalePaymentMethod={setSalePaymentMethod}
         setSaleIdempotencyKey={setSaleIdempotencyKey}
         setArchiveConfirm={setArchiveConfirm}
+        setArColorModal={setArColorModal}
         productMetaById={productMetaById}
       />
     );
@@ -1354,6 +1399,77 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* ===== AR COLOR MODAL ===== */}
+      {arColorModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setArColorModal(null); }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close AR Color dialog"
+          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setArColorModal(null); } }}
+        >
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ar-color-dialog-title"
+            style={{ maxWidth: 420 }}
+          >
+            <div className="modal-header">
+              <h2 id="ar-color-dialog-title">AR Color</h2>
+              <button className="close-btn" onClick={() => setArColorModal(null)} aria-label="Close dialog">
+                &times;
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleSaveArColor}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+                The color the AR Try-On viewer renders for this exact variant. This is a rendering approximation --
+                lighting, display, and the 3D model&apos;s own texture all affect what customers actually see, so treat it
+                as a close match rather than an exact swatch. If this commercial color has other sizes, set the same
+                value on each for a consistent look in AR.
+              </p>
+              <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <strong>{arColorModal.item}</strong>
+                <span className="size-badge">{arColorModal.size}</span>
+                {arColorModal.color && <span className="color-badge">{arColorModal.color}</span>}
+              </div>
+              <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                <label className="label" htmlFor="ar-color-hex">Hex Color</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="color"
+                    aria-label="Pick AR color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(arColorInput) ? arColorInput : '#808080'}
+                    onChange={(e) => setArColorInput(e.target.value)}
+                    style={{ width: 40, height: 40, padding: 0, border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                  />
+                  <input autoComplete="off"
+                    id="ar-color-hex"
+                    type="text"
+                    className="input-field"
+                    placeholder="#18233F"
+                    value={arColorInput}
+                    onChange={(e) => setArColorInput(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                <p className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                  Leave blank to clear -- the AR viewer falls back to the 3D model&apos;s own authored appearance.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setArColorModal(null)} disabled={savingArColor}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={savingArColor}>
+                  {savingArColor ? 'Saving...' : 'Save AR Color'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!archiveConfirm}
