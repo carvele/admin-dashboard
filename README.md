@@ -1,20 +1,22 @@
 # JezSy Collection — Web Admin Dashboard
 
-The central management interface for the JezSy Collection boutique application, built with React and Vite. It serves as the sister platform to the Android consumer application.
+The central management interface for the JezSy Collection boutique application, built with React, Vite, and Tailwind CSS. It serves as the administrative operations platform paired with the mobile customer application and backed by a shared Supabase PostgreSQL database.
 
 ## Tech Stack
-- **Framework:** React + Vite
-- **Styling:** Vanilla CSS (no Tailwind)
-- **Database / Auth:** Firebase (Firestore, Auth, Storage)
+- **Framework:** React 18 + Vite
+- **Styling:** Tailwind CSS + PostCSS
+- **Database / Auth:** Supabase (PostgreSQL 15, Row Level Security, Realtime subscriptions)
+- **Image Storage:** Supabase Storage (`products`, `pose-images`, `payment_receipts`)
 - **Icons:** Lucide React
 - **Notifications:** Sonner
 
 ## Features
-- **Dashboard:** Real-time metrics and recent reservations.
-- **Reservations:** Order management with detailed items views and status toggles.
-- **Products:** Complete catalog CRUD (Create, Read, Update, Delete) with image uploading.
-- **Staff / Users:** Role-based access control (RBAC), user tracking, and manual password cleanup for legacy seed data.
-- **Settings:** Advanced overrides, app configuration, and schema migration tools.
+- **Dashboard:** Real-time business metrics, active holds, and recent reservations.
+- **Reservations:** Lifecycle order management, appointment scheduling, deposit review, and handover completion via canonical RPC boundaries (`complete_reservation_handover`).
+- **Catalog & Inventory:** Complete product CRUD with multi-variant inventory management (`inventory` table), category associations, and hex-color attributes.
+- **Staff & Access Governance:** Multi-role RBAC (`admin`, `staff`, `owner`) managed via canonical RPC procedures (`update_staff_role_v2`, `update_staff_status_v2`).
+- **Device Management:** Hardware fingerprint registration, approval, and audit pruning via `admin_manage_device` and `admin_prune_devices`.
+- **Operations & Settings:** Store hours configuration, holiday closures, boutique preferences, and audit logs.
 
 ## Development Setup
 
@@ -26,7 +28,7 @@ The central management interface for the JezSy Collection boutique application, 
    ```bash
    cp .env.example .env
    ```
-   *Edit `.env` and fill in your actual Firebase credentials.*
+   *Edit `.env` and configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.*
 3. **Run the local server:**
    ```bash
    npm run dev
@@ -44,15 +46,14 @@ The central management interface for the JezSy Collection boutique application, 
 ### Build & Deploy
 - `npm run build` - Create production build
 - `npm run preview` - Preview production build locally
-- Production hosting target: **Cloudflare Pages** (free tier) -- see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full setup guide, including why Vercel/Netlify/GitHub Pages/Render/Firebase were rejected. `public/_redirects` (SPA routing) is already in place; connecting the repo to a Cloudflare account is the one remaining manual step (only the repo owner can authorize the GitHub App install).
+- Production hosting target: **Cloudflare Pages** (free tier) -- see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full setup guide. `public/_redirects` (SPA routing) is in place.
 
 ### Docker (reproducible local/staging builds)
-- `docker compose up --build` - Build and serve via nginx at http://localhost:8080 (requires `.env` -- `cp .env.example .env` and fill in real values first; Vite bakes `VITE_*` vars into the bundle at build time, so they must be present before `docker compose build`, not just at container runtime)
-- `docker build -t admin-dashboard --build-arg VITE_SUPABASE_URL=... --build-arg VITE_SUPABASE_ANON_KEY=... .` - Equivalent without compose, passing build args directly
-- The Supabase backend stays remote/hosted per this project's shared-DB workflow -- this does not containerize Postgres locally, only the built static app + nginx
+- `docker compose up --build` - Build and serve via nginx at http://localhost:8080 (requires `.env`)
+- The Supabase backend stays remote/hosted per this project's shared-DB workflow.
 
 ### Testing
-- `npm test` - Run test suite
+- `npm test` - Run Vitest test suite
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Generate coverage report
 
@@ -64,9 +65,8 @@ The central management interface for the JezSy Collection boutique application, 
 
 ## Documentation
 
-- **[Database Schema Reference](./DATABASE_SCHEMA.md)**: Rules, document shapes, and standards for making Firebase updates that maintain parity with the Android app. 
-- **[Validation Rules](./src/utils/validation.js)**: Standardized rules for the creation of Entities like Reservations, Products, and Users.
+See [docs/README.md](./docs/README.md) for the complete documentation registry and classification index.
 
-## Security 
+## Security & RBAC
 
-Access to the portal is restricted to users with `role: "admin" | "staff" | "owner"`. Authentication ensures unpermitted Android customers cannot access backend controls. To securely remove legacy Android plaintext passwords, navigate to `Settings > Maintenance` on the live application.
+Access to administrative views is protected by Supabase authentication and verified against user roles (`admin`, `staff`, `owner`). Client-side mutations on sensitive entities route through audited SECURITY DEFINER RPC boundaries. Hardware device authorization enforces additional zero-trust boundary verification.
