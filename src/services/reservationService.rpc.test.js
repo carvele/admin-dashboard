@@ -1,47 +1,16 @@
 /**
  * Tests for reservationService's RPC call sites -- the functions that talk
  * to trusted server-side SECURITY DEFINER RPCs rather than writing columns
- * directly, and the inventory-adjustment lookup/delta logic in front of
- * adjust_inventory_stock.
- *
- * adjustInventoryForReservation is the one that matters most: it used to be
- * a JS-side read-compute-write (fetch the row, add/subtract in JS, write it
- * back), which lost updates under concurrent calls -- a double-click, two
- * staff acting close together, a realtime refresh racing a manual action.
- * It's now a thin wrapper that resolves which inventory row to touch, then
- * hands the delta to the atomic adjust_inventory_stock RPC to apply
- * server-side. These tests pin that shape: no direct .update()/.upsert() on
- * inventory's numeric columns from this layer, ever.
+ * directly.
  */
 
 const mockRpc = jest.fn();
 const mockInvoke = jest.fn().mockResolvedValue({ data: { expired: 0 }, error: null });
-const mockLookup = { product_doc_id: null, sku: null, item: null };
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: {
     rpc: (...args) => mockRpc(...args),
     functions: { invoke: (...args) => mockInvoke(...args) },
-    from: (table) => ({
-      select: () => ({
-        eq: (col1, _val1) => ({
-          eq: (_col2, _val2) => ({
-            maybeSingle: () =>
-              Promise.resolve({ data: table === 'inventory' ? mockLookup[col1] : null, error: null }),
-          }),
-        }),
-      }),
-      // Any direct write attempt on inventory from this layer is exactly
-      // the regression these tests exist to catch -- fail loudly instead
-      // of silently succeeding if adjustInventoryForReservation is ever
-      // "simplified" back into a read-compute-write.
-      update: () => {
-        throw new Error('adjustInventoryForReservation must not write inventory columns directly -- use the adjust_inventory_stock RPC');
-      },
-      upsert: () => {
-        throw new Error('adjustInventoryForReservation must not write inventory columns directly -- use the adjust_inventory_stock RPC');
-      },
-    }),
   },
 }));
 
@@ -64,16 +33,10 @@ import {
   cancelReservation,
   reviewReservationReceipt,
   completeReservationHandover,
-  adjustInventoryForReservation,
   resolveRescheduleRequest,
   updateReservation,
 } from './reservationService';
 
-const resetLookups = () => {
-  mockLookup.product_doc_id = null;
-  mockLookup.sku = null;
-  mockLookup.item = null;
-};
 
 describe('createReservation', () => {
   afterEach(() => mockRpc.mockReset());
@@ -214,91 +177,6 @@ describe('resolveRescheduleRequest', () => {
   });
 });
 
-describe('adjustInventoryForReservation', () => {
-  afterEach(() => {
-    mockRpc.mockReset();
-    resetLookups();
-  });
-
-  test('resolves the inventory row by product_doc_id first and stops there', async () => {
-    mockLookup.product_doc_id = { id: 'inv-1' };
-    mockLookup.sku = { id: 'inv-WRONG' };
-    mockRpc.mockResolvedValue({ error: null });
-
-    await adjustInventoryForReservation('prod-uuid', 'M', 1, false);
-
-    expect(mockRpc).toHaveBeenCalledWith('adjust_inventory_stock', expect.objectContaining({ p_inventory_id: 'inv-1' }));
-  });
-
-  test('falls back to SKU lookup when product_doc_id has no match', async () => {
-    mockLookup.product_doc_id = null;
-    mockLookup.sku = { id: 'inv-2' };
-    mockRpc.mockResolvedValue({ error: null });
-
-    await adjustInventoryForReservation('SKU-123', 'M', 1, false);
-
-    expect(mockRpc).toHaveBeenCalledWith('adjust_inventory_stock', expect.objectContaining({ p_inventory_id: 'inv-2' }));
-  });
-
-  test('falls back to item-name lookup when both product_doc_id and SKU miss', async () => {
-    mockLookup.product_doc_id = null;
-    mockLookup.sku = null;
-    mockLookup.item = { id: 'inv-3' };
-    mockRpc.mockResolvedValue({ error: null });
-
-    await adjustInventoryForReservation('Silk Dress', 'M', 1, false);
-
-    expect(mockRpc).toHaveBeenCalledWith('adjust_inventory_stock', expect.objectContaining({ p_inventory_id: 'inv-3' }));
-  });
-
-  test('returns false and never calls the RPC when no inventory row matches anywhere', async () => {
-    const result = await adjustInventoryForReservation('nonexistent', 'M', 1, false);
-    expect(result).toBe(false);
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-
-  test('release (isConsume=false) sends a positive available delta and matching negative reserved delta', async () => {
-    mockLookup.product_doc_id = { id: 'inv-1' };
-    mockRpc.mockResolvedValue({ error: null });
-
-    await adjustInventoryForReservation('prod-uuid', 'M', 3, false);
-
-    expect(mockRpc).toHaveBeenCalledWith('adjust_inventory_stock', {
-      p_inventory_id: 'inv-1',
-      p_available_delta: 3,
-      p_reserved_delta: -3,
-    });
-  });
-
-  test('consume (isConsume=true) sends matching negative total and reserved deltas, sign-normalized', async () => {
-    mockLookup.product_doc_id = { id: 'inv-1' };
-    mockRpc.mockResolvedValue({ error: null });
-
-    // A negative delta passed in should still normalize to a negative total/reserved delta,
-    // not double-negate -- Math.abs() in the implementation guards exactly this.
-    await adjustInventoryForReservation('prod-uuid', 'M', -2, true);
-
-    expect(mockRpc).toHaveBeenCalledWith('adjust_inventory_stock', {
-      p_inventory_id: 'inv-1',
-      p_total_delta: -2,
-      p_reserved_delta: -2,
-    });
-  });
-
-  test('returns true when the RPC succeeds', async () => {
-    mockLookup.product_doc_id = { id: 'inv-1' };
-    mockRpc.mockResolvedValue({ error: null });
-    const result = await adjustInventoryForReservation('prod-uuid', 'M', 1, false);
-    expect(result).toBe(true);
-  });
-
-  test('returns false (not throw) when the RPC errors, since a caller stock-adjustment failure should not abort the surrounding status change', async () => {
-    mockLookup.product_doc_id = { id: 'inv-1' };
-    mockRpc.mockResolvedValue({ error: new Error('constraint violated') });
-    const result = await adjustInventoryForReservation('prod-uuid', 'M', 1, false);
-    expect(result).toBe(false);
-  });
-});
 
 describe('updateReservation (status transitions)', () => {
   afterEach(() => updateDocument.mockReset());

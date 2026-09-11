@@ -222,41 +222,6 @@ export const adjustInventoryOnHand = async (inventoryId, delta, reason) => {
   return data;
 };
 
-/**
- * Apply total/available/reserved as atomic deltas rather than absolute
- * values -- use this instead of updateInventoryItem whenever the new value
- * is "current + N", not a value the user typed directly (like handleEdit's
- * exact-count form). adjust_inventory_stock applies the delta server-side in
- * a single UPDATE against the row's live value, so two calls close together
- * (a double-click, two staff acting near-simultaneously) can't silently
- * overwrite each other the way reading a JS-side snapshot then writing an
- * absolute number back can.
- * @deprecated Prefer adjustInventoryOnHand for all business adjustments.
- * @returns {{prevTotal, prevAvailable, prevReserved, newTotal, newAvailable, newReserved, productDocId}}
- */
-export const adjustInventoryStockDelta = async (docId, { totalDelta = 0, availableDelta = 0, reservedDelta = 0 } = {}) => {
-  const { data, error } = await supabase.rpc('adjust_inventory_stock', {
-    p_inventory_id: docId,
-    p_total_delta: totalDelta,
-    p_available_delta: availableDelta,
-    p_reserved_delta: reservedDelta,
-  });
-  if (error) throw error;
-  queryCache.invalidateByPrefix('inventory');
-  const row = data?.[0];
-  if (!row) return null;
-  const result = {
-    prevTotal: row.prev_total,
-    prevAvailable: row.prev_available,
-    prevReserved: row.prev_reserved,
-    newTotal: row.new_total,
-    newAvailable: row.new_available,
-    newReserved: row.new_reserved,
-    productDocId: row.out_product_doc_id,
-  };
-  if (result.productDocId) await syncProductStock(result.productDocId);
-  return result;
-};
 
 /**
  * Recalculates and writes aggregated available/reserved/stock back to the
