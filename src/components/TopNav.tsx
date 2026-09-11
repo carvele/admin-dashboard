@@ -13,10 +13,19 @@ import { subscribeToCollection, updateDocument, deleteDocument } from '../lib/su
 import { supabase } from '../lib/supabaseClient';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import './TopNav.css';
-import { User } from '../types';
+
+export interface TopNavUser {
+  id?: string;
+  uid?: string;
+  name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  role?: string | null;
+}
 
 interface TopNavProps {
-  user?: User | null;
+  user?: TopNavUser | null;
   onHamburger: () => void;
 }
 
