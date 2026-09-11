@@ -39,6 +39,8 @@ import {
   markMessagesDelivered,
 } from '../../services/communicationService';
 import { usePresence } from '../../hooks/usePresence';
+import { useTypingIndicator } from '../../hooks/useTypingIndicator';
+import { toast } from 'sonner';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
@@ -132,10 +134,11 @@ const Messages = () => {
   const [editingMsg, setEditingMsg] = useState(null);
 
   const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
-  const [otherTyping, setOtherTyping] = useState(false);
-  const typingChannelRef = useRef(null);
-  const otherTypingTimeoutRef = useRef(null);
-  const lastTypingSentRef = useRef(0);
+  const activeConversationId = activeChat ? (activeChat.id || activeChat.customId) : null;
+  const { isOtherTyping: otherTyping, sendTyping } = useTypingIndicator({
+    conversationId: activeConversationId,
+    userId: user?.uid,
+  });
 
   const [convSearchInput, setConvSearchInput] = useState('');
   const [convSearchTerm, setConvSearchTerm] = useState('');
@@ -349,52 +352,13 @@ const Messages = () => {
     return () => { cancelled = true; };
   }, [messages]);
 
-  // Typing indicator: ephemeral broadcast on a per-conversation channel, not
-  // a DB write. The mobile app joins the exact same channel name/shape
-  // ('typing:<conversationId>', event 'typing', payload { sender_id }) when
-  // it has this conversation open, so typing is visible across both apps.
-  useEffect(() => {
-    setOtherTyping(false);
-    if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
-    if (!activeChat) {
-      typingChannelRef.current = null;
-      return;
-    }
-    const convKey = activeChat.id || activeChat.customId;
-    const channel = supabase.channel(`typing:${convKey}`);
-    channel
-      .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        if (payload?.sender_id === user?.uid) return;
-        setOtherTyping(true);
-        if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
-        otherTypingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 4000);
-      })
-      .subscribe();
-    typingChannelRef.current = channel;
-
-    return () => {
-      supabase.removeChannel(channel);
-      typingChannelRef.current = null;
-      if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current);
-    };
-    // Same reasoning as the message-subscription effect above: depends on
-    // the specific fields used, not activeChat's object identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChat?.id, activeChat?.customId, user?.uid]);
-
   // Throttled so every keystroke doesn't open a broadcast -- one every 2s is
   // plenty to keep the other side's "typing..." indicator alive.
   const handleMessageInputChange = (val) => {
     setNewMessage(val);
-    if (editingMsg) return;
-    const now = Date.now();
-    if (now - lastTypingSentRef.current < 2000) return;
-    lastTypingSentRef.current = now;
-    typingChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { sender_id: user?.uid },
-    });
+    if (!editingMsg) {
+      sendTyping();
+    }
   };
 
   // ── Send text ──────────────────────────────────────────────────────────
@@ -506,10 +470,9 @@ const Messages = () => {
   const handleReaction = async (msg, emoji) => {
     setReactionPopover(null);
     if (!msg.docId) return;
-    try {
-      await addReaction(msg.docId, user?.uid || 'staff', emoji);
-    } catch (err) {
-      console.error('Reaction failed:', err);
+    const res = await addReaction(msg.docId, user?.uid || 'staff', emoji);
+    if (!res?.ok) {
+      toast.error('Failed to update reaction');
     }
   };
 
