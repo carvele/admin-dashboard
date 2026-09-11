@@ -2326,7 +2326,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      auto_cancel_expired_reservations: { Args: never; Returns: number }
       can_manage_customers: { Args: never; Returns: boolean }
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
@@ -2339,7 +2338,6 @@ export type Database = {
         }
         Returns: Json
       }
-      check_email_exists: { Args: { lookup_email: string }; Returns: boolean }
       check_rate_limit: {
         Args: {
           p_key: string
@@ -2350,14 +2348,6 @@ export type Database = {
       }
       complete_reservation_handover: {
         Args: { _method?: string; _reservation_id: string }
-        Returns: Json
-      }
-      complete_reservation_pickup: {
-        Args: {
-          _method?: string
-          _pickup_token?: string
-          _reservation_id: string
-        }
         Returns: Json
       }
       create_reservation: {
@@ -2399,7 +2389,6 @@ export type Database = {
       dispatch_pending_push: { Args: never; Returns: number }
       expire_all_stale_reservations: { Args: never; Returns: number }
       expire_stale_payments: { Args: never; Returns: number }
-      expire_unpaid_reservations: { Args: never; Returns: number }
       get_direct_chat_summaries: {
         Args: { p_limit?: number; p_offset?: number }
         Returns: {
@@ -2630,14 +2619,6 @@ export type Database = {
         }
         Returns: Json
       }
-      reschedule_reservation: {
-        Args: {
-          _appointment_time: string
-          _date: string
-          _reservation_id: string
-        }
-        Returns: Json
-      }
       reservation_holds_stock: {
         Args: { _deleted: boolean; _status: string }
         Returns: boolean
@@ -2689,61 +2670,6 @@ export type Database = {
           sort_by?: string
           tag_filters?: string[]
         }
-        Returns: {
-          ar_data: Json
-          base_color: string | null
-          care_instructions: string | null
-          category: string | null
-          category_id: string | null
-          color: string | null
-          created_at: string
-          created_by: string | null
-          dateadded: string | null
-          deleted: boolean | null
-          deleted_at: string | null
-          description: string | null
-          discount_percentage: number | null
-          fit_and_sizing: string | null
-          garment_metadata: Json | null
-          id: string
-          image_url: string | null
-          images: string[] | null
-          is_alterable: boolean | null
-          is_featured: boolean | null
-          is_new_arrival: boolean | null
-          mask_url: string | null
-          material: string | null
-          measurements: Json | null
-          model_3d_url: string | null
-          name: string
-          occasion: string | null
-          on_sale: boolean | null
-          pattern: string | null
-          price: number | null
-          rating: number | null
-          review_count: number | null
-          sale_price: number | null
-          season: string | null
-          sizes: string[] | null
-          status: string | null
-          stock: number | null
-          stockbaseline: number | null
-          style_code: string | null
-          sub_category: string | null
-          tags: string[] | null
-          updated_at: string
-          updated_by: string | null
-          visibility: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "products"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      search_catalog_fuzzy: {
-        Args: { p_limit?: number; search_term: string }
         Returns: {
           ar_data: Json
           base_color: string | null
@@ -2879,10 +2805,6 @@ export type Database = {
         }
         Returns: Json
       }
-      update_staff_role: {
-        Args: { new_role: string; target_user_id: string }
-        Returns: undefined
-      }
       update_staff_role_v2: {
         Args: { new_role: string; target_user_id: string }
         Returns: Json
@@ -2906,7 +2828,6 @@ export type Database = {
         Returns: Json
       }
       update_user_streak: { Args: never; Returns: undefined }
-      verify_pickup: { Args: { _pickup_token: string }; Returns: Json }
       vote_on_review: {
         Args: { p_review_id: string; p_vote_type?: string }
         Returns: Json
