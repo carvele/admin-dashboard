@@ -10,7 +10,7 @@ import { subscribeToProducts } from '../services/productService';
  * to matter, swap the filter below for a server-side search query; the
  * props/selection contract here doesn't need to change either way.
  */
-const ProductPickerModal = ({ isOpen, title = 'Select Products', selectedIds, onToggle, onClose }) => {
+const ProductPickerModal = ({ isOpen, title = 'Select Products', selectedIds, onToggle, onClose, excludeIds = [] }) => {
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState('');
 
@@ -21,10 +21,11 @@ const ProductPickerModal = ({ isOpen, title = 'Select Products', selectedIds, on
   }, [isOpen]);
 
   const filtered = useMemo(() => {
+    const pool = excludeIds.length ? products.filter((p) => !excludeIds.includes(p.docId)) : products;
     const q = query.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
-  }, [products, query]);
+    if (!q) return pool;
+    return pool.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
+  }, [products, query, excludeIds]);
 
   if (!isOpen) return null;
 

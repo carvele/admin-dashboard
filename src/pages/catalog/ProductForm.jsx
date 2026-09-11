@@ -18,6 +18,7 @@ import { routeAndUploadFile } from '../../lib/storage';
 import { getReservationsByProduct } from '../../services/reservationService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
+import CompleteTheLookPanel from '../../components/catalog/CompleteTheLookPanel';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
@@ -1336,6 +1337,12 @@ const ProductForm = ({ readOnly = false }) => {
               </div>
            </div>
         </section>
+
+        {/* ══════════════════════════════════════════════
+            ZONE F.5 — Complete the Look
+            (Curated cross-sell links + styled-look suggestions)
+        ══════════════════════════════════════════════ */}
+        {isEditing && <CompleteTheLookPanel productId={id} readOnly={readOnly} />}
 
         {isEditing && (
         <section className="card p-6">
