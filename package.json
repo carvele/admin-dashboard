@@ -17,7 +17,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "check:migrations": "node -e \"const fs=require('fs'),path=require('path');const dir=path.join(process.cwd(),'supabase','migrations');if(fs.existsSync(dir)){const sqls=fs.readdirSync(dir).filter(f=>f.endsWith('.sql')||f.endsWith('.sql.rollback'));if(sqls.length>0){console.error('Error: SQL migration files found in deprecated supabase/migrations:',sqls);process.exit(1);}}\""
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.1.0",

@@ -669,6 +669,7 @@ export type Database = {
           deleted_at: string | null
           demand_score: number | null
           demand_scored_at: string | null
+          hex_color: string | null
           id: string
           item: string | null
           pattern: string
@@ -692,6 +693,7 @@ export type Database = {
           deleted_at?: string | null
           demand_score?: number | null
           demand_scored_at?: string | null
+          hex_color?: string | null
           id?: string
           item?: string | null
           pattern?: string
@@ -715,6 +717,7 @@ export type Database = {
           deleted_at?: string | null
           demand_score?: number | null
           demand_scored_at?: string | null
+          hex_color?: string | null
           id?: string
           item?: string | null
           pattern?: string
@@ -987,7 +990,9 @@ export type Database = {
           method: string | null
           provider: string
           provider_payment_id: string | null
+          provider_payment_intent_id: string | null
           provider_ref: string | null
+          purpose: string
           refund_required_at: string | null
           requires_refund: boolean
           reservation_id: string
@@ -1006,7 +1011,9 @@ export type Database = {
           method?: string | null
           provider?: string
           provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
           provider_ref?: string | null
+          purpose?: string
           refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id: string
@@ -1025,7 +1032,9 @@ export type Database = {
           method?: string | null
           provider?: string
           provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
           provider_ref?: string | null
+          purpose?: string
           refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id?: string
@@ -1168,6 +1177,60 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_complements: {
+        Row: {
+          complementary_product_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          origin: string
+          product_id: string
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          complementary_product_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          origin?: string
+          product_id: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          complementary_product_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          origin?: string
+          product_id?: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_complements_complementary_product_id_fkey"
+            columns: ["complementary_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_complements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1522,12 +1585,13 @@ export type Database = {
           image_url: string | null
           payment_due_at: string | null
           payment_method: string | null
+          payment_reminder_sent_at: string | null
           payment_status: string | null
           payment_type: string | null
           pickup_token: string | null
           product_id: string | null
           product_name: string | null
-          purchase_mode: string | null
+          purchase_mode: string
           quantity: number | null
           receipt_url: string | null
           rental_price: number | null
@@ -1535,7 +1599,7 @@ export type Database = {
           reschedule_requested_at_time: string | null
           reschedule_requested_date: string | null
           return_date: string | null
-          sales_channel: string | null
+          sales_channel: string
           size: string | null
           staff_id: string | null
           status: string | null
@@ -1569,12 +1633,13 @@ export type Database = {
           image_url?: string | null
           payment_due_at?: string | null
           payment_method?: string | null
+          payment_reminder_sent_at?: string | null
           payment_status?: string | null
           payment_type?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
-          purchase_mode?: string | null
+          purchase_mode?: string
           quantity?: number | null
           receipt_url?: string | null
           rental_price?: number | null
@@ -1582,7 +1647,7 @@ export type Database = {
           reschedule_requested_at_time?: string | null
           reschedule_requested_date?: string | null
           return_date?: string | null
-          sales_channel?: string | null
+          sales_channel?: string
           size?: string | null
           staff_id?: string | null
           status?: string | null
@@ -1616,12 +1681,13 @@ export type Database = {
           image_url?: string | null
           payment_due_at?: string | null
           payment_method?: string | null
+          payment_reminder_sent_at?: string | null
           payment_status?: string | null
           payment_type?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
-          purchase_mode?: string | null
+          purchase_mode?: string
           quantity?: number | null
           receipt_url?: string | null
           rental_price?: number | null
@@ -1629,7 +1695,7 @@ export type Database = {
           reschedule_requested_at_time?: string | null
           reschedule_requested_date?: string | null
           return_date?: string | null
-          sales_channel?: string | null
+          sales_channel?: string
           size?: string | null
           staff_id?: string | null
           status?: string | null
@@ -2282,7 +2348,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      check_unattended_reservations: { Args: never; Returns: undefined }
       complete_reservation_handover: {
         Args: { _method?: string; _reservation_id: string }
         Returns: Json
@@ -2292,17 +2357,6 @@ export type Database = {
           _method?: string
           _pickup_token?: string
           _reservation_id: string
-        }
-        Returns: Json
-      }
-      create_admin_reservation: {
-        Args: {
-          _appointment_time: string
-          _color: string
-          _customer_id: string
-          _payment_status?: string
-          _product_id: string
-          _size: string
         }
         Returns: Json
       }
@@ -2324,6 +2378,18 @@ export type Database = {
           _appointment_time: string
           _customer_id?: string
           _date: string
+          _items: Json
+          _payment_option?: string
+          _receipt_path?: string
+        }
+        Returns: Json
+      }
+      create_reservation_multi_idempotent: {
+        Args: {
+          _appointment_time: string
+          _customer_id?: string
+          _date: string
+          _idempotency_key: string
           _items: Json
           _payment_option?: string
           _receipt_path?: string
@@ -2474,6 +2540,29 @@ export type Database = {
       }
       get_wardrobe_privacy: { Args: { p_user_id: string }; Returns: string }
       get_wishlist_privacy: { Args: { p_user_id: string }; Returns: string }
+      increment_wear_count: {
+        Args: { p_item_id: string }
+        Returns: {
+          category: string | null
+          color_tags: string[] | null
+          created_at: string
+          deleted: boolean | null
+          garment_type: string | null
+          id: string
+          image_url: string | null
+          last_worn_at: string | null
+          product_id: string | null
+          sub_category: string | null
+          user_id: string | null
+          wear_count: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "wardrobe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_admin_or_owner: { Args: never; Returns: boolean }
       is_awaiting_payment_status: {
         Args: { _status: string }
@@ -2499,6 +2588,20 @@ export type Database = {
         Returns: Json
       }
       process_account_deletion: { Args: { _request_id: string }; Returns: Json }
+      promote_product_complement_suggestion: {
+        Args: {
+          p_complementary_product_id: string
+          p_origin: string
+          p_product_id: string
+          p_sort_order?: number
+        }
+        Returns: {
+          out_complementary_product_id: string
+          out_id: string
+          out_product_id: string
+          out_sort_order: number
+        }[]
+      }
       recalculate_inventory_stock: { Args: never; Returns: Json }
       record_boutique_sale: {
         Args: {
@@ -2707,6 +2810,7 @@ export type Database = {
         Args: { _body: string; _title: string; _user_id: string }
         Returns: string
       }
+      send_payment_deadline_reminders: { Args: never; Returns: number }
       set_customer_archive_state: {
         Args: {
           change_reason: string
@@ -2760,6 +2864,18 @@ export type Database = {
           _expected_status: string
           _next_status: string
           _reservation_id: string
+        }
+        Returns: Json
+      }
+      update_profile_and_measurements: {
+        Args: {
+          _fit_preference: string
+          _height?: number
+          _measurement_source?: string
+          _measurements?: Json
+          _per_field_confidence?: Json
+          _scan_confidence?: number
+          _weight?: number
         }
         Returns: Json
       }
