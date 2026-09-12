@@ -443,6 +443,7 @@ export type Database = {
           customer_id: string | null
           id: string
           last_message: string | null
+          last_message_id: string | null
           last_message_time: string | null
           unread_customer: number
           unread_staff: number
@@ -453,6 +454,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           last_message?: string | null
+          last_message_id?: string | null
           last_message_time?: string | null
           unread_customer?: number
           unread_staff?: number
@@ -463,6 +465,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           last_message?: string | null
+          last_message_id?: string | null
           last_message_time?: string | null
           unread_customer?: number
           unread_staff?: number
@@ -474,6 +477,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_last_message_id_fkey"
+            columns: ["last_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
