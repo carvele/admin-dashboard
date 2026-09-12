@@ -2646,7 +2646,7 @@ export type Database = {
         Returns: undefined
       }
       merge_message_reaction: {
-        Args: { p_emoji: string; p_message_id: string; p_user_id: string }
+        Args: { p_emoji: string; p_message_id: string }
         Returns: Json
       }
       process_account_deletion: { Args: { _request_id: string }; Returns: Json }

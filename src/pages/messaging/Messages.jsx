@@ -470,7 +470,7 @@ const Messages = () => {
   const handleReaction = async (msg, emoji) => {
     setReactionPopover(null);
     if (!msg.docId) return;
-    const res = await addReaction(msg.docId, user?.uid || 'staff', emoji);
+    const res = await addReaction(msg.docId, emoji);
     if (!res?.ok) {
       toast.error('Failed to update reaction');
     }

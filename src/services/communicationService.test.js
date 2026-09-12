@@ -28,11 +28,10 @@ describe('communicationService.addReaction', () => {
       error: null,
     });
 
-    const result = await addReaction('msg-123', 'staff-1', '❤️');
+    const result = await addReaction('msg-123', '❤️');
 
     expect(supabase.rpc).toHaveBeenCalledWith('merge_message_reaction', {
       p_message_id: 'msg-123',
-      p_user_id: 'staff-1',
       p_emoji: '❤️',
     });
     expect(result).toEqual({
@@ -49,11 +48,10 @@ describe('communicationService.addReaction', () => {
       error: mockError,
     });
 
-    const result = await addReaction('msg-123', 'staff-1', '❤️');
+    const result = await addReaction('msg-123', '❤️');
 
     expect(supabase.rpc).toHaveBeenCalledWith('merge_message_reaction', {
       p_message_id: 'msg-123',
-      p_user_id: 'staff-1',
       p_emoji: '❤️',
     });
     expect(result).toEqual({
