@@ -441,6 +441,16 @@ export const AuthProvider = ({ children }) => {
         }
 
         if (event === 'SIGNED_IN') {
+          // SIGNED_IN isn't only emitted on an actual login -- Supabase also
+          // re-fires it on multi-tab session sync and tab-focus, confirmed
+          // live: two tabs on the same account were re-triggering each
+          // other's handleDeviceCheck (profile fetch + register_device) in a
+          // tight ~1.5-2s loop, which churned the devices table and flickered
+          // every open Device Management page via Realtime. Only run the
+          // full check when this is actually a different/new user.
+          if (session?.user && userRef.current?.uid === session.user.id) {
+            return;
+          }
           handleDeviceCheck(session?.user ?? null);
           return;
         }
