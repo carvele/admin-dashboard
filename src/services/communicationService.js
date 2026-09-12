@@ -97,13 +97,12 @@ export const sendMessage = (data) => addDocument('messages', data);
  * regardless of which conversation they have open.
  * @param {string[]} messageIds
  */
-export const markMessagesDelivered = async (messageIds) => {
+export const markMessagesDelivered = async (messageIds, conversationId) => {
   if (!messageIds || messageIds.length === 0) return;
-  const { error } = await supabase
-    .from('messages')
-    .update({ delivered_at: new Date().toISOString() })
-    .in('id', messageIds)
-    .is('delivered_at', null);
+  const { error } = await supabase.rpc('mark_support_messages_delivered', {
+    p_conversation_id: conversationId || null,
+    p_message_ids: messageIds,
+  });
   if (error) console.error('[Supabase] markMessagesDelivered failed:', error.message);
 };
 
@@ -114,50 +113,27 @@ export const markMessagesDelivered = async (messageIds) => {
  * became "Seen" no matter how many times staff opened or replied to the
  * conversation, because nothing on the admin side ever touched read_at.
  * @param {string} conversationId
- * @param {string} customerId - only the customer's own messages get marked
+ * @param {string} [customerId] - retained for backwards compatibility
  */
 export const markMessagesRead = async (conversationId, customerId) => {
   if (!conversationId) return;
-  const nowIso = new Date().toISOString();
-
-  // Reading implies delivery
-  let delQuery = supabase
-    .from('messages')
-    .update({ delivered_at: nowIso })
-    .eq('conversation_id', conversationId)
-    .is('delivered_at', null);
-  if (customerId) delQuery = delQuery.eq('sender_id', customerId);
-  await delQuery;
-
-  // Mark messages as read
-  let readQuery = supabase
-    .from('messages')
-    .update({ read_at: nowIso })
-    .eq('conversation_id', conversationId)
-    .is('read_at', null);
-  if (customerId) readQuery = readQuery.eq('sender_id', customerId);
-  const { error } = await readQuery;
+  const { error } = await supabase.rpc('mark_support_conversation_read', {
+    p_conversation_id: conversationId,
+  });
   if (error) console.error('[Supabase] markMessagesRead failed:', error.message);
-
-  // Clear unread count on conversation table
-  const { error: convErr } = await supabase
-    .from('conversations')
-    .update({ unread_staff: 0 })
-    .eq('id', conversationId);
-  if (convErr) console.error('[Supabase] markMessagesRead conversation update failed:', convErr.message);
 };
 
 /**
  * Edit a previously sent text message. Mirrors the mobile app's editMessage:
- * text + edited_at only, no ownership check here -- the caller (Messages.jsx)
- * only ever offers this on the staff's own messages.
+ * text only, no ownership check here -- the caller (Messages.jsx)
+ * only ever offers this on the staff's own messages. Database trigger handles edited_at.
  * @param {string} messageDocId
  * @param {string} text
  */
 export const editMessage = async (messageDocId, text) => {
   const { error } = await supabase
     .from('messages')
-    .update({ text, edited_at: new Date().toISOString() })
+    .update({ text })
     .eq('id', messageDocId);
   if (error) throw error;
 };
