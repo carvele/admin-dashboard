@@ -145,7 +145,7 @@ export const editMessage = async (messageDocId, text) => {
  * @returns {Promise<string>} Public URL
  */
 export const uploadChatImage = async (file, conversationId) => {
-  const filename = `${conversationId}/${Date.now()}_${file.name}`;
+  const filename = `support/${conversationId}/${Date.now()}_${file.name}`;
   const { data, error } = await supabase.storage
     .from('chat-images')
     .upload(filename, file, { upsert: false });
