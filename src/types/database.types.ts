@@ -443,6 +443,7 @@ export type Database = {
           customer_id: string | null
           id: string
           last_message: string | null
+          last_message_id: string | null
           last_message_time: string | null
           unread_customer: number
           unread_staff: number
@@ -453,6 +454,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           last_message?: string | null
+          last_message_id?: string | null
           last_message_time?: string | null
           unread_customer?: number
           unread_staff?: number
@@ -463,6 +465,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           last_message?: string | null
+          last_message_id?: string | null
           last_message_time?: string | null
           unread_customer?: number
           unread_staff?: number
@@ -474,6 +477,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_last_message_id_fkey"
+            columns: ["last_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -2625,6 +2635,14 @@ export type Database = {
       is_staff_or_admin: { Args: never; Returns: boolean }
       mark_direct_message_read: {
         Args: { p_message_id: string }
+        Returns: undefined
+      }
+      mark_support_conversation_read: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
+      mark_support_messages_delivered: {
+        Args: { p_conversation_id?: string; p_message_ids?: string[] }
         Returns: undefined
       }
       merge_message_reaction: {
