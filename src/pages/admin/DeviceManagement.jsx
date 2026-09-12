@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Clock3, Laptop, Pencil, RefreshCw, Scissors, ShieldAlert, ShieldCheck, Trash2, X, XCircle } from 'lucide-react';
 import {
   getDevicesSnapshot,
@@ -43,16 +43,27 @@ const DeviceManagement = () => {
   const [pruneConfirmOpen, setPruneConfirmOpen] = useState(false);
   const [pruneLoading, setPruneLoading] = useState(false);
 
+  // A bulk prune fires one Realtime DELETE event per row -- 28 of them at
+  // once, confirmed live -- and subscribeToDevices calls loadDevices() on
+  // every single one. Without a sequence guard, an earlier (slower) fetch
+  // can resolve after a later (faster) one and overwrite the fresher state
+  // with stale data. requestIdRef makes only the most recently *issued*
+  // request's response allowed to apply.
+  const requestIdRef = useRef(0);
+
   const loadDevices = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await getDevicesSnapshot(201);
+      if (requestId !== requestIdRef.current) return; // superseded by a newer request
       // Realtime trimming contract: cap snapshot at 200
       setDevices(data.slice(0, 200));
     } catch {
+      if (requestId !== requestIdRef.current) return;
       toast.error('Unable to load registered devices.');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -190,7 +201,13 @@ const DeviceManagement = () => {
         ) : (
           <div className="device-list">
             {filteredDevices.map((device) => (
-              <article className="device-item" key={device.fingerprint}>
+              // device.id (the surrogate PK), not fingerprint -- fingerprint
+              // is no longer guaranteed unique across rows now that devices
+              // is keyed by (user_id, fingerprint), and duplicate React keys
+              // make reconciliation unreliable: confirmed live, stale rows
+              // sharing a fingerprint with a since-deleted legacy row kept
+              // rendering as "ghosts" after a prune instead of disappearing.
+              <article className="device-item" key={device.id}>
                 <div className="device-icon-wrap"><Laptop size={22} /></div>
                 <div className="device-info">
                   <div className="device-name-row">
