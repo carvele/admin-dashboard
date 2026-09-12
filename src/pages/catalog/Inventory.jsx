@@ -337,8 +337,7 @@ const Inventory = () => {
 
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
-      // Realtime trimming contract: cap snapshot at 500
-      setInventory(data.slice(0, 500));
+      setInventory(data || []);
       setLoading(false);
     });
     return () => unsub();

@@ -131,11 +131,14 @@ export const markMessagesRead = async (conversationId, _customerId) => {
  * @param {string} text
  */
 export const editMessage = async (messageDocId, text) => {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('messages')
     .update({ text })
-    .eq('id', messageDocId);
+    .eq('id', messageDocId)
+    .select()
+    .single();
   if (error) throw error;
+  return data;
 };
 
 /**

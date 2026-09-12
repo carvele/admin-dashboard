@@ -568,13 +568,8 @@ const ProductForm = ({ readOnly = false }) => {
 
         // Sync inventory: create new variant combos, soft-delete removed ones
         try {
-          const allInv = await getInventory();
-          const productInv = allInv.filter(
-            (inv) =>
-              (inv.productDocId || inv.product_doc_id) === id ||
-              inv.sku === id ||
-              (formData.styleCode && inv.sku === formData.styleCode),
-          );
+          const { getProductVariants } = await import('../../services/variantService');
+          const productInv = await getProductVariants(id);
 
           if (variantColumnsReady && selectedVariants.size > 0) {
             // Variant-aware path: add newly selected combos.
