@@ -225,11 +225,17 @@ export const createVariant = async (productDocId, { size = '', color = '', patte
  * match is how the mobile renderer and any future admin de-duplication
  * would compare two variants' colors.
  *
- * @param {string} variantId inventory row id
+ * Applies to every size of this commercial color at once (matched by
+ * product + color, not a single variant id) -- a customer picking "Navy"
+ * in AR must see the same recolor regardless of which size's inventory row
+ * they happen to be trying on.
+ *
+ * @param {string} productDocId product this variant belongs to
+ * @param {string} colorName variant's color ('' for a colorless product)
  * @param {string|null} hexColor `#RRGGBB` (either case) or null/'' to clear
  */
-export const updateVariantHexColor = async (variantId, hexColor) => {
-  if (!variantId) throw new Error('updateVariantHexColor requires a variant id');
+export const updateVariantHexColor = async (productDocId, colorName, hexColor) => {
+  if (!productDocId) throw new Error('updateVariantHexColor requires a product doc id');
 
   const trimmed = (hexColor ?? '').trim();
   if (trimmed && !HEX_COLOR_PATTERN.test(trimmed)) {
@@ -237,7 +243,11 @@ export const updateVariantHexColor = async (variantId, hexColor) => {
   }
   const normalized = trimmed ? trimmed.toUpperCase() : null;
 
-  const { error } = await supabase.from('inventory').update({ hex_color: normalized }).eq('id', variantId);
+  const { error } = await supabase.from('inventory')
+    .update({ hex_color: normalized })
+    .eq('product_doc_id', productDocId)
+    .eq('color', colorName);
+    
   if (error) throw error;
   return normalized;
 };
