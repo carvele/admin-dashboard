@@ -1,8 +1,19 @@
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, MonitorSmartphone, XCircle } from 'lucide-react';
+import { Shield, MonitorSmartphone, XCircle, RefreshCw } from 'lucide-react';
 
 const PendingDeviceView = () => {
-  const { deviceStatus, deviceFingerprint, logout, isAdminUnlocked } = useAuth();
+  const { deviceStatus, deviceFingerprint, logout, isAdminUnlocked, recheckDeviceStatus } = useAuth();
+  const [checking, setChecking] = useState(false);
+
+  const handleCheckAgain = async () => {
+    setChecking(true);
+    try {
+      await recheckDeviceStatus();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   // If the owner has successfully used their role to bypass
   if (isAdminUnlocked) {
@@ -49,6 +60,11 @@ const PendingDeviceView = () => {
         </div>
 
         <div className="flex gap-3 justify-center">
+          {deviceStatus !== 'revoked' && (
+            <button className="btn-primary flex-1" onClick={handleCheckAgain} disabled={checking}>
+              <RefreshCw size={16} className={checking ? 'spin' : ''} /> Check Again
+            </button>
+          )}
           <button className="btn-outline flex-1" onClick={logout}>
             Sign Out
           </button>

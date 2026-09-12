@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import * as FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { supabase } from '../lib/supabaseClient';
 import { toCamel } from '../lib/supabaseService';
 import SessionTimeoutModal from '../components/auth/SessionTimeoutModal';
@@ -14,76 +13,45 @@ const withTimeout = (promise, ms = 5000) =>
     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
   ]);
 
-// Lightweight pure JS SHA-256 fallback for non-secure contexts where crypto.subtle is undefined
-function fallbackSha256(ascii) {
-  function rightRotate(value, amount) {
-    return (value >>> amount) | (value << (32 - amount));
+// Stable per-browser device identity for the trusted-device workflow.
+//
+// This deliberately does NOT use a computed browser fingerprint (canvas/
+// WebGL/font signature, e.g. FingerprintJS's visitorId). That approach was
+// tried here previously and confirmed broken live: every device row ever
+// recorded had a distinct fingerprint, meaning the "same device" produced a
+// different identity on nearly every visit, so an admin's approval never
+// carried over to the next login. Fingerprints are also explicitly
+// engineered by browsers to drift (anti-tracking measures), so they were
+// never a sound basis for a security-relevant "remember this device"
+// decision in the first place -- a random ID persisted locally, the way
+// GitHub/Google "trusted device" cookies work, is the standard approach.
+const DEVICE_ID_KEY = 'jz_device_id';
+const DEVICE_ID_COOKIE = 'jz_device_id';
+
+function getOrCreateDeviceId() {
+  try {
+    const stored = localStorage.getItem(DEVICE_ID_KEY);
+    if (stored) return stored;
+  } catch { /* localStorage unavailable (private mode, storage partitioning) */ }
+
+  let id = null;
+  try {
+    id = document.cookie.match(new RegExp(`(?:^|; )${DEVICE_ID_COOKIE}=([^;]*)`))?.[1] || null;
+  } catch { /* ignore */ }
+
+  if (!id) {
+    id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
-  const mathPow = Math.pow;
-  const maxWord = mathPow(2, 32);
-  const words = [];
-  const asciiBitLength = ascii.length * 8;
+  try { localStorage.setItem(DEVICE_ID_KEY, id); } catch { /* ignore */ }
+  try {
+    const maxAge = 365 * 24 * 60 * 60;
+    document.cookie = `${DEVICE_ID_COOKIE}=${id}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  } catch { /* cookie write failed */ }
 
-  let hash = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ];
-  const k = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-  ];
-
-  ascii += '\x80';
-  while (ascii.length % 64 !== 56) ascii += '\x00';
-  for (let i = 0; i < ascii.length; i++) {
-    const j = ascii.charCodeAt(i);
-    words[i >> 2] |= j << ((3 - (i % 4)) * 8);
-  }
-  words[words.length] = Math.floor(asciiBitLength / maxWord);
-  words[words.length] = asciiBitLength & 0xffffffff;
-
-  for (let j = 0; j < words.length; j += 16) {
-    const w = words.slice(j, j + 16);
-    const oldHash = [...hash];
-
-    for (let i = 0; i < 64; i++) {
-      if (i >= 16) {
-        const w15 = w[i - 15], w2 = w[i - 2];
-        const s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
-        const s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
-        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
-      }
-
-      const s1 = rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25);
-      const ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
-      const temp1 = (hash[7] + s1 + ch + k[i] + w[i]) | 0;
-      const s0 = rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22);
-      const maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
-      const temp2 = (s0 + maj) | 0;
-
-      hash[7] = hash[6];
-      hash[6] = hash[5];
-      hash[5] = hash[4];
-      hash[4] = (hash[3] + temp1) | 0;
-      hash[3] = hash[2];
-      hash[2] = hash[1];
-      hash[1] = hash[0];
-      hash[0] = (temp1 + temp2) | 0;
-    }
-
-    for (let i = 0; i < 8; i++) {
-      hash[i] = (hash[i] + oldHash[i]) | 0;
-    }
-  }
-
-  return hash.map(h => ((h >>> 0).toString(16).padStart(8, '0'))).join('');
+  return id;
 }
 
 export const AuthProvider = ({ children }) => {
@@ -170,6 +138,39 @@ export const AuthProvider = ({ children }) => {
     () => doSignOut('Logged out successfully'),
     [doSignOut]
   );
+
+  // Lets PendingDeviceView offer "Check Again" instead of requiring a full
+  // sign-out/sign-in cycle to re-poll approval status -- register_device is
+  // idempotent, so calling it again is always safe and just refreshes
+  // last_seen while returning the device's current status.
+  const recheckDeviceStatus = useCallback(async () => {
+    const deviceId = deviceFingerprint || getOrCreateDeviceId();
+    try {
+      const { data, error } = await supabase.rpc('register_device', {
+        _fingerprint: deviceId,
+        _user_agent: navigator.userAgent,
+      });
+      if (error) {
+        toast.error('Could not check device status. Please try again.');
+        return;
+      }
+      if (data) {
+        setDeviceFingerprint(deviceId);
+        setDeviceData(toCamel(data));
+        setDeviceStatus(data.status);
+        if (data.status === 'approved') {
+          toast.success('Device approved.');
+        } else if (data.status === 'pending') {
+          toast.info('Still waiting on admin approval.');
+        } else if (data.status === 'revoked') {
+          toast.error('Access to this device has been revoked.');
+        }
+      }
+    } catch (err) {
+      console.error('recheckDeviceStatus failed:', err);
+      toast.error('Could not check device status. Please try again.');
+    }
+  }, [deviceFingerprint]);
 
   const handleIdleLogout = useCallback(
     () => doSignOut('Your session has expired due to 7 days of inactivity. Please sign in again.', { duration: 6000 }),
@@ -313,90 +314,47 @@ export const AuthProvider = ({ children }) => {
       setUser(nextUser);
       setIsLoading(false);
 
-      // Asynchronous device fingerprinting & registration
+      // Device registration: a stable, locally-persisted device ID (see
+      // getOrCreateDeviceId above), registered through the register_device
+      // RPC -- a real, version-controlled, authorization-scoped function,
+      // replacing an edge function this repo had no source for and that
+      // failed silently (its errors were only ever console.warn'd).
       (async () => {
         try {
-          const hashFP = async (fp) => {
-            if (typeof crypto !== 'undefined' && crypto?.subtle?.digest) {
-              try {
-                const enc = new TextEncoder().encode(fp);
-                const hash = await crypto.subtle.digest('SHA-256', enc);
-                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-              } catch {
-                /* ignore & fallback */
-              }
-            }
-            return fallbackSha256(fp);
-          };
+          const deviceId = getOrCreateDeviceId();
+          setDeviceFingerprint(deviceId);
 
-          let visitorId = null;
-          try {
-            const fp = await withTimeout(FingerprintJS.load(), 6000);
-            const result = await fp.get();
-            visitorId = result.visitorId;
-            const hashed = await hashFP(visitorId);
-            localStorage.setItem('_jz_fp_hash', hashed);
-          } catch {
-            const DEVICE_UUID_KEY = '_jz_device_uuid';
-            const legacyStored = localStorage.getItem('_jz_fp_id');
-            if (legacyStored) {
-              try { visitorId = atob(legacyStored); } catch { /* ignore */ }
-              if (visitorId) {
-                localStorage.setItem(DEVICE_UUID_KEY, visitorId);
-                localStorage.removeItem('_jz_fp_id');
-              }
-            }
-            if (!visitorId) {
-              const storedFallback = localStorage.getItem('_jz_fallback_device_id') || localStorage.getItem(DEVICE_UUID_KEY);
-              const cookieFallback = document.cookie.match(/(?:^|; )_jz_fp_cookie=([^;]*)/)?.[1];
-              visitorId = storedFallback || cookieFallback || null;
-            }
-            if (!visitorId) {
-              const randSuffix = (typeof crypto !== 'undefined' && crypto?.randomUUID)
-                ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-                : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-              visitorId = 'sb_' + randSuffix;
-              localStorage.setItem(DEVICE_UUID_KEY, visitorId);
-            }
-            localStorage.setItem('_jz_fallback_device_id', visitorId);
-            try {
-              const maxAge = 365 * 24 * 60 * 60;
-              document.cookie = `_jz_fp_cookie=${visitorId}; path=/; max-age=${maxAge}; SameSite=Lax`;
-            } catch { /* cookie write failed */ }
-            const hashed = await hashFP(visitorId);
-            localStorage.setItem('_jz_fp_hash', hashed);
-          }
-          setDeviceFingerprint(visitorId);
+          const { data: deviceRow, error: registerError } = await supabase.rpc('register_device', {
+            _fingerprint: deviceId,
+            _user_agent: navigator.userAgent,
+          });
 
-          // Register device through Edge Function
-          try {
-            const { error: registrationError } = await supabase.functions.invoke('register-device', {
-              body: {
-                fingerprint: visitorId,
-                user_agent: navigator.userAgent,
-                staff_name: supabaseUser.user_metadata?.full_name || '',
-              },
-            });
-            if (registrationError) {
-              console.warn('Device registration function returned an error:', registrationError);
-            }
-          } catch (invokeErr) {
-            console.warn('Device registration network call failed:', invokeErr);
+          if (registerError) {
+            console.error('Device registration failed:', registerError);
+            setDeviceStatus('error');
+            return;
           }
 
-          // Live device listener
+          if (deviceRow) {
+            setDeviceData(toCamel(deviceRow));
+            setDeviceStatus(deviceRow.status);
+          }
+
+          // Live device listener -- reflects an admin's approval instantly
+          // via Realtime, without requiring a sign-out/sign-in cycle.
           clearDeviceChannel();
           try {
             const channel = supabase
-              .channel(`device:${visitorId}`)
+              .channel(`device:${supabaseUser.id}:${deviceId}`)
               .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${visitorId}` },
+                { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${deviceId}` },
                 async () => {
                   const { data } = await supabase
                     .from('devices')
                     .select('*')
-                    .eq('fingerprint', visitorId)
+                    .eq('fingerprint', deviceId)
+                    .eq('user_id', supabaseUser.id)
                     .maybeSingle();
                   if (data) {
                     const row = toCamel(data);
@@ -409,25 +367,6 @@ export const AuthProvider = ({ children }) => {
             deviceChannelRef.current = channel;
           } catch (channelErr) {
             console.warn('Failed to subscribe to device realtime channel:', channelErr);
-          }
-
-          // Initial device status fetch
-          try {
-            const { data: deviceRow } = await supabase
-              .from('devices')
-              .select('*')
-              .eq('fingerprint', visitorId)
-              .maybeSingle();
-            if (deviceRow) {
-              const row = toCamel(deviceRow);
-              setDeviceData(row);
-              setDeviceStatus(row.status);
-            } else {
-              setDeviceStatus('pending');
-            }
-          } catch (devLookupErr) {
-            console.warn('Device status lookup failed:', devLookupErr);
-            setDeviceStatus('pending');
           }
         } catch (asyncErr) {
           console.error('Async device check failed:', asyncErr);
@@ -774,6 +713,7 @@ export const AuthProvider = ({ children }) => {
         deviceStatus,
         deviceFingerprint,
         deviceData,
+        recheckDeviceStatus,
         isLoading,
       }}
     >

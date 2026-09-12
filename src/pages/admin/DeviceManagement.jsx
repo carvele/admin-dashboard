@@ -77,11 +77,11 @@ const DeviceManagement = () => {
   const updateStatus = async (device, status) => {
     setBusyId(device.fingerprint);
     try {
-      await updateDeviceStatus(device.fingerprint, status);
+      await updateDeviceStatus(device, status);
       toast.success(`Device ${status}.`);
       await loadDevices();
-    } catch {
-      toast.error('Device status could not be updated.');
+    } catch (err) {
+      toast.error(err?.message || 'Device status could not be updated.');
     } finally {
       setBusyId(null);
     }
@@ -92,12 +92,12 @@ const DeviceManagement = () => {
     if (!deleteTarget) return;
     setBusyId(deleteTarget.fingerprint);
     try {
-      await apiDeleteDevice(deleteTarget.fingerprint);
+      await apiDeleteDevice(deleteTarget);
       toast.success('Device permanently removed.');
       setDeleteTarget(null);
       await loadDevices();
-    } catch {
-      toast.error('Device could not be deleted.');
+    } catch (err) {
+      toast.error(err?.message || 'Device could not be deleted.');
     } finally {
       setBusyId(null);
     }
@@ -114,20 +114,20 @@ const DeviceManagement = () => {
     setEditingName('');
   };
 
-  const saveNickname = async (fingerprint) => {
+  const saveNickname = async (device) => {
     const trimmed = editingName.trim();
     if (!trimmed) {
       toast.error('Device name cannot be empty.');
       return;
     }
-    setBusyId(fingerprint);
+    setBusyId(device.fingerprint);
     try {
-      await apiRenameDevice(fingerprint, trimmed);
+      await apiRenameDevice(device, trimmed);
       toast.success('Device name updated.');
       cancelEditing();
       await loadDevices();
-    } catch {
-      toast.error('Failed to update device name.');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update device name.');
     } finally {
       setBusyId(null);
     }
@@ -204,12 +204,12 @@ const DeviceManagement = () => {
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveNickname(device.fingerprint);
+                            if (e.key === 'Enter') saveNickname(device);
                             if (e.key === 'Escape') cancelEditing();
                           }}
                           aria-label="Device nickname"
                         />
-                        <button className="icon-btn-save" onClick={() => saveNickname(device.fingerprint)} disabled={busyId === device.fingerprint} aria-label="Save name">
+                        <button className="icon-btn-save" onClick={() => saveNickname(device)} disabled={busyId === device.fingerprint} aria-label="Save name">
                           <Check size={16} />
                         </button>
                         <button className="icon-btn-cancel" onClick={cancelEditing} aria-label="Cancel editing">
