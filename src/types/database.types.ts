@@ -2645,12 +2645,10 @@ export type Database = {
         Args: { p_conversation_id?: string; p_message_ids?: string[] }
         Returns: undefined
       }
-      merge_message_reaction:
-        | { Args: { p_emoji: string; p_message_id: string }; Returns: Json }
-        | {
-            Args: { p_emoji: string; p_message_id: string; p_user_id: string }
-            Returns: Json
-          }
+      merge_message_reaction: {
+        Args: { p_emoji: string; p_message_id: string }
+        Returns: Json
+      }
       process_account_deletion: { Args: { _request_id: string }; Returns: Json }
       promote_product_complement_suggestion: {
         Args: {

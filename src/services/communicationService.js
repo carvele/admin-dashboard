@@ -160,18 +160,19 @@ export const uploadChatImage = async (file, conversationId) => {
 /**
  * Add or update an emoji reaction on a message.
  * Reactions are stored as jsonb: { userId: emoji, ... }
- * Uses live stored procedure merge_message_reaction(p_message_id, p_user_id, p_emoji).
+ * Uses live stored procedure merge_message_reaction(p_message_id, p_emoji).
  * @param {string} messageDocId - Supabase message uuid
- * @param {string} userId - User performing the reaction
  * @param {string} emoji - Emoji character to store
+ * @param {string} [_userId] - Legacy user parameter (deprecated, actor derived from auth.uid())
  * @returns {Promise<{ ok: boolean, data?: any, error?: any }>}
  */
-export const addReaction = async (messageDocId, userId, emoji) => {
+export const addReaction = async (messageDocId, emoji, _userId) => {
+  // Support either (messageDocId, emoji) or legacy (messageDocId, userId, emoji)
+  const actualEmoji = typeof _userId === 'string' && emoji ? _userId : emoji;
   try {
     const { data, error } = await supabase.rpc('merge_message_reaction', {
       p_message_id: messageDocId,
-      p_user_id: userId,
-      p_emoji: emoji,
+      p_emoji: actualEmoji,
     });
     if (error) throw error;
     return { ok: true, data };
