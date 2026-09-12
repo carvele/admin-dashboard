@@ -2627,6 +2627,14 @@ export type Database = {
         Args: { p_message_id: string }
         Returns: undefined
       }
+      mark_support_conversation_read: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
+      mark_support_messages_delivered: {
+        Args: { p_conversation_id?: string; p_message_ids?: string[] }
+        Returns: undefined
+      }
       merge_message_reaction: {
         Args: { p_emoji: string; p_message_id: string; p_user_id: string }
         Returns: Json
