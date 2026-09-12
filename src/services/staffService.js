@@ -1,16 +1,18 @@
 /**
  * staffService.js  (Supabase)
- * All profile reads/writes, device management, and HR status management.
+ * All profile reads/writes and HR status management.
  *
  * Staff     = public.profiles rows with role IN ('staff','owner').
  * History   = public.staff_status_history (write via RPC only).
- * Devices   = public.devices.  Logs = public.logs.
+ * Device management lives in deviceService.js (backed by the
+ * register_device/admin_manage_device RPCs) -- this file used to have its
+ * own parallel, unused implementation that wrote directly to public.devices
+ * and had drifted from the real (RPC-based) path.
  */
 
 import { supabase } from '../lib/supabaseClient';
 import {
   subscribeToCollection,
-  subscribeToDocument,
   logAction,
   toCamel,
 } from '../lib/supabaseService';
@@ -133,82 +135,6 @@ export const getStaffStatusHistory = async (staffId) => {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
-};
-
-// ── Device management ───────────────────────────────────────
-
-/** Subscribe to all devices in real-time. */
-export const subscribeToDevices = (callback) => {
-  return subscribeToCollection('devices', (rows) => {
-    // Convert fingerprint PK → docId for UI compatibility
-    callback(rows.map((r) => ({ ...r, docId: r.fingerprint ?? r.id, id: r.fingerprint ?? r.id })));
-  });
-};
-
-/**
- * Subscribe to a single device row by its fingerprint.
- * Uses Supabase Realtime filter on the PK column.
- */
-export const subscribeToDeviceStatus = (fingerprint, callback) => {
-  return subscribeToDocument('devices', 'fingerprint', fingerprint, (row) => {
-    if (row) callback({ ...row, docId: fingerprint, id: fingerprint });
-    else callback(null);
-  });
-};
-
-/** Register or update a device fingerprint. */
-export const registerDevice = async (fingerprint, userAgent, staffEmail = '', staffName = '') => {
-  const now = new Date().toISOString();
-  const { data: existing } = await supabase
-    .from('devices')
-    .select('fingerprint, login_history')
-    .eq('fingerprint', fingerprint)
-    .maybeSingle();
-
-  if (!existing) {
-    await supabase.from('devices').insert({
-      fingerprint,
-      status: 'pending',
-      user_agent: userAgent,
-      last_seen: now,
-      name: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
-      staff_email: staffEmail,
-      staff_name: staffName,
-      failed_attempts: 0,
-      lockout_until: null,
-      login_history: [{ email: staffEmail, time: now }],
-    });
-  } else {
-    const history = Array.isArray(existing.login_history) ? existing.login_history : [];
-    await supabase.from('devices').update({
-      last_seen: now,
-      updated_at: now,
-      ...(staffEmail && {
-        staff_email: staffEmail,
-        staff_name: staffName,
-        login_history: [...history, { email: staffEmail, time: now }].slice(-20),
-      }),
-    }).eq('fingerprint', fingerprint);
-  }
-};
-
-/** Approve or revoke a device by its fingerprint. */
-export const updateDeviceStatus = async (fingerprint, status) => {
-  const { error } = await supabase
-    .from('devices')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('fingerprint', fingerprint);
-  if (error) throw error;
-};
-
-/** Update failed-attempt / lockout counters on a device. */
-export const updateDeviceSecurity = async (fingerprint, attempts, lockoutTime) => {
-  const { error } = await supabase.from('devices').update({
-    failed_attempts: attempts,
-    lockout_until: lockoutTime,
-    updated_at: new Date().toISOString(),
-  }).eq('fingerprint', fingerprint);
-  if (error) throw error;
 };
 
 // ── Audit log ───────────────────────────────────────────────

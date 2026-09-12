@@ -483,6 +483,7 @@ export type Database = {
           created_at: string | null
           failed_attempts: number | null
           fingerprint: string
+          id: string
           last_seen: string | null
           lockout_until: string | null
           login_history: Json | null
@@ -493,11 +494,13 @@ export type Database = {
           status: string | null
           updated_at: string | null
           user_agent: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
           failed_attempts?: number | null
           fingerprint: string
+          id?: string
           last_seen?: string | null
           lockout_until?: string | null
           login_history?: Json | null
@@ -508,11 +511,13 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
           failed_attempts?: number | null
           fingerprint?: string
+          id?: string
           last_seen?: string | null
           lockout_until?: string | null
           login_history?: Json | null
@@ -523,8 +528,17 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       direct_chat_participants: {
         Row: {
@@ -2313,7 +2327,12 @@ export type Database = {
         Returns: Json
       }
       admin_manage_device: {
-        Args: { _action: string; _fingerprint: string; _value?: string }
+        Args: {
+          _action: string
+          _fingerprint: string
+          _user_id: string
+          _value?: string
+        }
         Returns: undefined
       }
       admin_prune_devices: { Args: { _cutoff: string }; Returns: number }
@@ -2605,6 +2624,32 @@ export type Database = {
       record_reservation_balance: {
         Args: { _method?: string; _reservation_id: string }
         Returns: Json
+      }
+      register_device: {
+        Args: { _fingerprint: string; _user_agent?: string }
+        Returns: {
+          created_at: string | null
+          failed_attempts: number | null
+          fingerprint: string
+          id: string
+          last_seen: string | null
+          lockout_until: string | null
+          login_history: Json | null
+          name: string | null
+          session_id: string | null
+          staff_email: string | null
+          staff_name: string | null
+          status: string | null
+          updated_at: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reject_account_deletion_request: {
         Args: { _request_id: string }
