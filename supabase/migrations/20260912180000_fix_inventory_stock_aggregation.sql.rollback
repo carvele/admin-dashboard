@@ -1,6 +1,0 @@
--- ============================================================================
--- Rollback Migration: Fix Inventory Stock Aggregation (INV-001)
--- ============================================================================
-
-DROP TRIGGER IF EXISTS trg_sync_product_stock ON public.inventory;
-DROP FUNCTION IF EXISTS public.trigger_sync_product_stock();
