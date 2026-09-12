@@ -142,6 +142,7 @@ const GroupedInvRow = ({
   setSaleIdempotencyKey,
   setArchiveConfirm,
   setArColorModal,
+  canManageLookups,
   productMetaById,
 }) => {
   const [selectedColor, setSelectedColor] = useState('ALL');
@@ -221,16 +222,18 @@ const GroupedInvRow = ({
                   <span>{cName}</span>
                   <span className="chip-count">{avail}</span>
                 </button>
-                <button
-                  type="button"
-                  className="icon-btn-small"
-                  title={v.hexColor ? `AR Color: ${v.hexColor} (click to edit)` : 'Set AR Color'}
-                  aria-label={`Set AR Color for ${cName}`}
-                  onClick={() => setArColorModal(v)}
-                  style={{ padding: 2 }}
-                >
-                  <Palette size={12} />
-                </button>
+                {canManageLookups && (
+                  <button
+                    type="button"
+                    className="icon-btn-small"
+                    title={v.hexColor ? `AR Color: ${v.hexColor} (click to edit)` : 'Set AR Color'}
+                    aria-label={`Set AR Color for ${cName}`}
+                    onClick={() => setArColorModal(v)}
+                    style={{ padding: 2 }}
+                  >
+                    <Palette size={12} />
+                  </button>
+                )}
               </span>
             );
           })}
@@ -828,6 +831,7 @@ const Inventory = () => {
         setSaleIdempotencyKey={setSaleIdempotencyKey}
         setArchiveConfirm={setArchiveConfirm}
         setArColorModal={setArColorModal}
+        canManageLookups={canManageLookups}
         productMetaById={productMetaById}
       />
     );
