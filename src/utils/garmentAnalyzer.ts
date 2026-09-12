@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STANDARD_BONES } from './garmentIngestor';
+import type { GarmentCategory } from '../types/garment';
 
 export interface Vec3 { x: number; y: number; z: number; }
 
@@ -30,7 +31,7 @@ export interface GLBAnalysis {
 }
 
 export class GarmentAnalyzer {
-  public static analyze(scene: THREE.Object3D): GLBAnalysis {
+  public static analyze(scene: THREE.Object3D, category?: GarmentCategory): GLBAnalysis {
     let meshCount = 0;
     let skinnedMeshCount = 0;
     let vertexCount = 0;
@@ -84,7 +85,13 @@ export class GarmentAnalyzer {
       }
     }
 
-    const required = ['Spine', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm'];
+    // A pants/skirt garment is legitimately built with no upper-body bones at
+    // all (see the proxy-mannequin export workflow) -- the shirt/jacket/dress
+    // requirement below would reject it outright even when its own required
+    // bones (hip + upper legs) are perfectly mapped.
+    const required = category === 'pants' || category === 'skirt'
+      ? ['Hips', 'LeftUpLeg', 'RightUpLeg']
+      : ['Spine', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm'];
     const missing: string[] = [];
     for (const req of required) {
       if (!boneMap[req]) {

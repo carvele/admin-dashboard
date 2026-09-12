@@ -16,6 +16,11 @@ export const STANDARD_BONES = [
   'RightShoulder',
   'RightArm',
   'RightForeArm',
+  'Hips',
+  'LeftUpLeg',
+  'LeftLeg',
+  'RightUpLeg',
+  'RightLeg',
 ];
 
 export class GarmentIngestor {
@@ -73,7 +78,7 @@ export class GarmentIngestor {
     this.normalizeSceneScale(scene);
 
     // 1. Analyze Geometry and Skeleton
-    const analysis = GarmentAnalyzer.analyze(scene);
+    const analysis = GarmentAnalyzer.analyze(scene, category);
     
     if (analysis.route === 'UNSUPPORTED') {
       return this.createFailureResult(id, category, 'NOT_AR_COMPATIBLE');
@@ -155,18 +160,20 @@ export class GarmentIngestor {
       return d > 0.01 ? d : null;
     };
 
-    const restPoseMetricWidth =
-      pairWidth('LeftArm', 'RightArm') ??
-      pairWidth('LeftShoulder', 'RightShoulder') ??
-      analysis.boundingSize.x;
+    // Pants/skirt are sized and anchored off the hips, not the shoulders --
+    // a bottoms-only GLB's Arm/Shoulder bones (if present at all, e.g. from
+    // the proxy-mannequin export workflow) carry no real relationship to the
+    // garment's own fit. Every other category keeps the exact prior chain.
+    const isBottomGarment = category === 'pants' || category === 'skirt';
 
     const anchorOffset = { x: 0, y: 0.5, z: 0 };
     let anchorConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
-    
-    if (boneMap['Spine2'] && bones[boneMap['Spine2']]) {
-      const spine2 = bones[boneMap['Spine2']];
+    const anchorBoneKey = isBottomGarment ? 'Hips' : 'Spine2';
+
+    if (boneMap[anchorBoneKey] && bones[boneMap[anchorBoneKey]]) {
+      const anchorBone = bones[boneMap[anchorBoneKey]];
       const pos = new THREE.Vector3();
-      spine2.getWorldPosition(pos);
+      anchorBone.getWorldPosition(pos);
       anchorOffset.x = pos.x;
       anchorOffset.y = pos.y;
       anchorOffset.z = pos.z;
@@ -176,6 +183,22 @@ export class GarmentIngestor {
       anchorOffset.y = analysis.boundingBox.max.y;
       anchorOffset.z = analysis.center.z;
     }
+
+    // LeftUpLeg-to-RightUpLeg is the hip JOINT separation (where the femur
+    // meets the pelvis) -- confirmed live to be roughly half of a real
+    // waistband width, since MediaPipe's own hip landmark (what the wearer's
+    // real-world width gets measured against at runtime) sits at the pelvis
+    // SURFACE, well outside the joint. Using the joint distance as if it were
+    // the surface width rendered a real test pair of jeans visibly,
+    // consistently oversized. Measuring the mesh's own physical width in a
+    // thin slice at the waistband height is the width that actually
+    // corresponds to what a landmark-to-landmark measurement is comparing
+    // against. Whole-mesh bounding width (the fallback) overcounts too, in
+    // the other direction, on a T/A-pose stance whose legs splay wider at the
+    // ankle than the waist actually is.
+    const restPoseMetricWidth = isBottomGarment
+      ? (this.measureSliceWidth(scene, anchorOffset.y) ?? pairWidth('LeftUpLeg', 'RightUpLeg') ?? analysis.boundingSize.x)
+      : (pairWidth('LeftArm', 'RightArm') ?? pairWidth('LeftShoulder', 'RightShoulder') ?? analysis.boundingSize.x);
 
     return {
       id,
@@ -191,6 +214,32 @@ export class GarmentIngestor {
       autoRigged: false,
       sleeveType: 'UNKNOWN'
     };
+  }
+
+  // The garment mesh's own physical width in a thin horizontal slice at a
+  // given world-space height -- e.g. the actual waistband width, not a bone
+  // distance or a whole-object bounding box. See the call site's comment for
+  // why this matters specifically for pants/skirt calibration.
+  private static measureSliceWidth(scene: any, sliceCenterY: number): number | null {
+    const SLICE_HALF_HEIGHT = 0.04; // 4cm band, generous enough to catch a few rows of vertices
+    let minX = Infinity, maxX = -Infinity;
+    const v = new THREE.Vector3();
+    scene.traverse((child: any) => {
+      const position = child.geometry?.attributes?.position;
+      if (!child.isMesh || !position) return;
+      child.updateMatrixWorld();
+      for (let i = 0; i < position.count; i++) {
+        v.fromBufferAttribute(position, i);
+        v.applyMatrix4(child.matrixWorld);
+        if (Math.abs(v.y - sliceCenterY) <= SLICE_HALF_HEIGHT) {
+          if (v.x < minX) minX = v.x;
+          if (v.x > maxX) maxX = v.x;
+        }
+      }
+    });
+    if (!isFinite(minX) || !isFinite(maxX)) return null;
+    const width = maxX - minX;
+    return width > 0.01 ? width : null;
   }
 
   // Un-baked FBX/Mixamo root scale is common in third-party GLBs and silently

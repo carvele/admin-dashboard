@@ -28,6 +28,23 @@ import { supabase } from '../../lib/supabaseClient';
 import '@google/model-viewer';
 import './ARAssets.css';
 
+// products.category/subCategory are catalog display taxonomy ("Bottoms",
+// "Pants / trousers"), not the GarmentCategory enum garmentIngestor.ts
+// actually branches on ('shirt'|'dress'|'jacket'|'pants'|'skirt'). Passing
+// the raw display string straight through (as every call site here used to)
+// meant every category === 'pants'/'skirt' check in the ingestion pipeline
+// silently never matched a single real catalog product -- confirmed live:
+// "Straight-Leg Jeans" is category="Bottoms", subCategory="Pants / trousers",
+// neither of which is the literal string 'pants'.
+function resolveGarmentCategory(product) {
+  const text = `${product?.subCategory || ''} ${product?.category || ''}`.toLowerCase();
+  if (text.includes('skirt')) return 'skirt';
+  if (text.includes('pant') || text.includes('trouser') || text.includes('jean') || text.includes('short') || text.includes('bottom')) return 'pants';
+  if (text.includes('dress') || text.includes('jumpsuit')) return 'dress';
+  if (text.includes('jacket') || text.includes('blazer') || text.includes('coat') || text.includes('outerwear')) return 'jacket';
+  return 'shirt';
+}
+
 
 
 const ARAssets = () => {
@@ -158,7 +175,7 @@ const ARAssets = () => {
     if (asset.model_3dUrl) {
       setIngestionData({
         productId: asset.docId,
-        category: asset.category || 'shirt',
+        category: resolveGarmentCategory(asset),
         glbUrl: asset.model_3dUrl,
         productName: asset.name,
         existingMetadata: asset.garment_metadata || null,
@@ -204,7 +221,7 @@ const ARAssets = () => {
         if (assetType === '3D Model') {
           setIngestionData({
             productId: window._targetProduct.docId,
-            category: window._targetProduct.category || 'shirt',
+            category: resolveGarmentCategory(window._targetProduct),
             glbUrl: downloadURL,
             productName: window._targetProduct.name
           });
