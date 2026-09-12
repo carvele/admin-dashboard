@@ -2139,6 +2139,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_color_profiles: {
+        Row: {
+          avoided_colors: string[]
+          created_at: string
+          personalization_consented_at: string | null
+          preferred_colors: string[]
+          undertone: string
+          undertone_confidence: number
+          undertone_source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avoided_colors?: string[]
+          created_at?: string
+          personalization_consented_at?: string | null
+          preferred_colors?: string[]
+          undertone?: string
+          undertone_confidence?: number
+          undertone_source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avoided_colors?: string[]
+          created_at?: string
+          personalization_consented_at?: string | null
+          preferred_colors?: string[]
+          undertone?: string
+          undertone_confidence?: number
+          undertone_source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_measurements: {
         Row: {
           created_at: string
