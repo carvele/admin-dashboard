@@ -115,7 +115,7 @@ export const markMessagesDelivered = async (messageIds, conversationId) => {
  * @param {string} conversationId
  * @param {string} [customerId] - retained for backwards compatibility
  */
-export const markMessagesRead = async (conversationId, customerId) => {
+export const markMessagesRead = async (conversationId, _customerId) => {
   if (!conversationId) return;
   const { error } = await supabase.rpc('mark_support_conversation_read', {
     p_conversation_id: conversationId,
