@@ -487,7 +487,7 @@ const Inventory = () => {
     if (!arColorModal) return;
     setSavingArColor(true);
     try {
-      await updateVariantHexColor(arColorModal.id, arColorInput);
+      await updateVariantHexColor(arColorModal.productDocId, arColorModal.color, arColorInput);
       toast.success(`AR Color updated for ${arColorModal.item} (${arColorModal.color || 'Standard'})`);
       setArColorModal(null);
     } catch (err) {
@@ -1428,10 +1428,9 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleSaveArColor}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                The color the AR Try-On viewer renders for this exact variant. This is a rendering approximation --
-                lighting, display, and the 3D model&apos;s own texture all affect what customers actually see, so treat it
-                as a close match rather than an exact swatch. If this commercial color has other sizes, set the same
-                value on each for a consistent look in AR.
+                The color the AR Try-On viewer renders for this commercial color variant. This is a rendering approximation --
+                lighting, display, and the 3D model&apos;s own texture all affect what customers actually see. 
+                <strong> This hex code will be automatically applied to all sizes of this color.</strong>
               </p>
               <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{arColorModal.item}</strong>
