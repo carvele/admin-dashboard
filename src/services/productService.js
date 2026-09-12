@@ -519,7 +519,7 @@ export const recalculateAllInventoryStock = async () => {
       for (const p of prods) {
         if (!p.color || !p.sizes || !Array.isArray(p.sizes)) continue;
         const colors = typeof p.color === 'string' ? p.color.split(',').map(c => c.trim()).filter(Boolean) : (Array.isArray(p.color) ? p.color : []);
-        if (colors.length <= 1) continue;
+        if (colors.length < 1) continue;
 
         const prodInv = existingInv.filter(i => (i.product_doc_id === p.id || i.product_doc_id === p.doc_id || i.sku === p.id));
         const existingCombos = new Set(prodInv.map(i => i.size + '|||' + (i.color || '')));
