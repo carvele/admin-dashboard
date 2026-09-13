@@ -1,30 +1,33 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
- 
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search,
-  Plus,
   Download,
   PackageOpen,
   Package,
+  PackagePlus,
   AlertTriangle,
   Archive,
   ArchiveRestore,
   RefreshCw,
   ShoppingCart,
-  Info,
-  Flame,
   ChevronDown,
   ChevronRight,
   Settings2,
   Palette,
+  Copy,
+  Check,
+  MoreHorizontal,
+  Globe,
+  Layers,
+  List,
 } from 'lucide-react';
 import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockStatus';
 import {
   subscribeToInventory,
   subscribeToProducts,
-  updateInventoryItem,
   adjustInventoryOnHand,
   archiveInventoryItem,
   restoreInventoryItem,
@@ -50,52 +53,14 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
 import './Inventory.css';
 
-// Garment sizes don't sort alphabetically in a useful order (S, M, L, XL — not
-// L, M, S, XL). Anything not in this list (numeric sizes, "One Size", etc.)
-// sorts after the named sizes, alphabetically among themselves.
+// Garment sizes standard sorting order
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 const sizeRank = (s) => {
   const i = SIZE_ORDER.indexOf(s);
   return i === -1 ? SIZE_ORDER.length : i;
 };
 
-const TABLE_COLUMNS = 10;
-
-// Helper to group flat inventory rows by (productDocId || item, size)
-const groupInventoryRows = (rows) => {
-  const map = new Map();
-  rows.forEach((r) => {
-    const key = `${r.productDocId || r.item}|||${r.size}`;
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        productDocId: r.productDocId,
-        sku: r.sku,
-        variantSku: r.variantSku || r.sku,
-        item: r.item,
-        category: r.category,
-        size: r.size,
-        deleted: r.deleted,
-        variants: [],
-      });
-    }
-    map.get(key).variants.push(r);
-  });
-  // Variants arrive in whatever order the DB query happened to return them --
-  // no ORDER BY on color, so it tracks incidental insertion timing rather
-  // than anything meaningful. Confirmed live: the same product's size rows
-  // showed Black-then-White for one size and White-then-Black for another,
-  // purely because their color variants were created in a different order.
-  // Sorting alphabetically here (once, at the source) makes every row's
-  // color-chip order deterministic and consistent for every consumer of
-  // group.variants, not just this one render site.
-  for (const group of map.values()) {
-    group.variants.sort((a, b) => (a.color || '').localeCompare(b.color || ''));
-  }
-  return Array.from(map.values()).sort(
-    (a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size)
-  );
-};
+const TABLE_COLUMNS = 9;
 
 const COLOR_DOT_MAP = {
   blue: '#3b82f6',
@@ -129,8 +94,13 @@ const getChipColorDot = (name) => {
   return '#cbd5e1';
 };
 
-const GroupedInvRow = ({
-  group,
+/**
+ * VariantInvRow: Single compact row per sellable inventory variant.
+ * 1 row = 1 physical SKU, size, color, and stock count.
+ * Zero dead space, uniform 48px min-height, unambiguous restock/sell targets.
+ */
+const VariantInvRow = ({
+  item,
   isAdminUnlocked,
   handleRestore,
   handlePublishProduct,
@@ -144,176 +114,217 @@ const GroupedInvRow = ({
   setArColorModal,
   canManageLookups,
   productMetaById,
+  activeMenuId,
+  setActiveMenuId,
 }) => {
-  const [selectedColor, setSelectedColor] = useState('ALL');
+  const [copied, setCopied] = useState(false);
+  const skuDisplay = item.variantSku || item.variant_sku || item.sku || item.id || '--';
 
-  const activeVariant = useMemo(() => {
-    if (selectedColor === 'ALL') return null;
-    return group.variants.find((v) => (v.color || 'Standard') === selectedColor) || null;
-  }, [group.variants, selectedColor]);
+  const copySku = (e) => {
+    e.stopPropagation();
+    if (!navigator?.clipboard) return;
+    navigator.clipboard.writeText(skuDisplay);
+    setCopied(true);
+    toast.success(`Copied SKU: ${skuDisplay}`);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-  const displayedTotal = useMemo(() => {
-    if (activeVariant) return activeVariant.total;
-    return group.variants.reduce((sum, v) => sum + (v.total || 0), 0);
-  }, [group.variants, activeVariant]);
+  const isMenuOpen = activeMenuId === item.id;
+  const isArchived = item.deleted === true;
+  const available = item.available ?? 0;
+  const total = item.total ?? 0;
+  const reserved = item.reserved ?? 0;
 
-  const displayedReserved = useMemo(() => {
-    if (activeVariant) return activeVariant.reserved || 0;
-    return group.variants.reduce((sum, v) => sum + (v.reserved || 0), 0);
-  }, [group.variants, activeVariant]);
-
-  const displayedAvailable = useMemo(() => {
-    if (activeVariant) return activeVariant.available || 0;
-    return group.variants.reduce((sum, v) => sum + (v.available || 0), 0);
-  }, [group.variants, activeVariant]);
-
-  const health = getStockHealth(displayedAvailable, displayedTotal, displayedReserved);
-  const targetInv = activeVariant || group.variants[0] || group;
-  const skuDisplay =
-    activeVariant?.variantSku ||
-    activeVariant?.variant_sku ||
-    targetInv.variantSku ||
-    targetInv.variant_sku ||
-    targetInv.sku ||
-    targetInv.id;
+  const colorName = item.color || 'Standard';
+  const swatchBg = item.hexColor || getChipColorDot(colorName);
 
   return (
-    <tr key={group.key} className="inv-row">
+    <tr className={`inv-row ${isArchived ? 'archived-row' : ''}`}>
+      {/* 1. Variant SKU with 1-click copy */}
       <td className="sku-cell">
-        <span className="sku-code" title={skuDisplay}>
-          {skuDisplay}
-        </span>
+        <div className="sku-badge-wrap">
+          <button
+            type="button"
+            className="sku-code"
+            title={`Click to copy: ${skuDisplay}`}
+            onClick={copySku}
+          >
+            {skuDisplay}
+          </button>
+          <button
+            type="button"
+            className="sku-copy-btn"
+            title="Copy SKU"
+            aria-label={`Copy SKU ${skuDisplay}`}
+            onClick={copySku}
+          >
+            {copied ? <Check size={11} className="text-success" /> : <Copy size={11} />}
+          </button>
+        </div>
       </td>
-      <td className="cell-product font-medium">{group.item}</td>
-      <td className="cell-category text-secondary">{group.category}</td>
+
+      {/* 2. Product Name and Category */}
+      <td className="cell-product">
+        <div className="product-identity-group">
+          <span className="product-title" title={item.item}>
+            {item.item}
+          </span>
+          <span className="product-category-sub" title={item.category}>
+            {item.category || 'Uncategorized'}
+          </span>
+        </div>
+      </td>
+
+      {/* 3. Size */}
       <td className="cell-size text-center">
-        <span className="size-badge">{group.size}</span>
+        <span className="size-badge">{item.size || '--'}</span>
       </td>
+
+      {/* 4. Color Swatch and Name */}
       <td className="cell-color">
-        <div className="color-chips-row">
-          {group.variants.length > 1 && (
+        <div className="color-indicator-wrap" title={`Color: ${colorName}`}>
+          <span
+            className="color-swatch-dot"
+            style={{ backgroundColor: swatchBg }}
+          />
+          <span className="color-name-label">{colorName}</span>
+        </div>
+      </td>
+
+      {/* 5. Total Stock */}
+      <td className="text-right cell-num">{total}</td>
+
+      {/* 6. Reserved Stock */}
+      <td className={`text-right cell-num ${reserved > 0 ? 'text-reserved-active' : 'text-secondary'}`}>
+        {reserved}
+      </td>
+
+      {/* 7. Available Stock */}
+      <td className={`text-right cell-num font-semibold ${available <= 0 ? 'text-danger' : 'text-success'}`}>
+        {available}
+      </td>
+
+      {/* 8. Stock Status */}
+      <td className="stock-cell">
+        <StockStatusBadge
+          available={available}
+          total={total}
+          reserved={reserved}
+        />
+      </td>
+
+      {/* 9. Actions */}
+      <td className="cell-actions text-right">
+        <div className="action-buttons justify-end">
+          {isArchived ? (
             <button
               type="button"
-              className={`color-chip-btn ${selectedColor === 'ALL' ? 'active' : ''}`}
-              onClick={() => setSelectedColor('ALL')}
-            >
-              <span>All</span>
-              <span className="chip-count">
-                {group.variants.reduce((s, v) => s + (v.available || 0), 0)}
-              </span>
-            </button>
-          )}
-          {group.variants.map((v) => {
-            const cName = v.color || 'Standard';
-            const isSel = selectedColor === cName;
-            const avail = v.available || 0;
-            return (
-              <span key={v.id || cName} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                <button
-                  type="button"
-                  className={`color-chip-btn ${isSel ? 'active' : ''} ${avail === 0 ? 'out-of-stock' : ''}`}
-                  onClick={() => setSelectedColor(cName)}
-                  title={`${cName}: ${avail} available`}
-                >
-                  <span
-                    className="chip-dot"
-                    style={v.hexColor ? { backgroundColor: v.hexColor } : { backgroundColor: getChipColorDot(cName) }}
-                  />
-                  <span>{cName}</span>
-                  <span className="chip-count">{avail}</span>
-                </button>
-                {canManageLookups && (
-                  <button
-                    type="button"
-                    className="icon-btn-small"
-                    title={v.hexColor ? `AR Color: ${v.hexColor} (click to edit)` : 'Set AR Color'}
-                    aria-label={`Set AR Color for ${cName}`}
-                    onClick={() => setArColorModal(v)}
-                    style={{ padding: 2 }}
-                  >
-                    <Palette size={12} />
-                  </button>
-                )}
-              </span>
-            );
-          })}
-        </div>
-      </td>
-      <td className="text-right cell-num">{displayedTotal}</td>
-      <td className="text-right cell-num text-secondary">{displayedReserved}</td>
-      <td className="text-right cell-num font-semibold">{displayedAvailable}</td>
-      <td className="stock-cell">
-        <div className="urgency-tooltip-wrap">
-          <StockStatusBadge
-            available={displayedAvailable}
-            total={displayedTotal}
-            reserved={displayedReserved}
-          />
-          {(health.demandLevel === 'moderate' || health.demandLevel === 'high') && (
-            <span className={`demand-badge ${health.demandLevel}`}>
-              <span aria-hidden="true">🔥</span> {health.demandLevel === 'high' ? 'High' : 'Mod.'} Demand
-            </span>
-          )}
-          <Info size={13} style={{ color: health.color, flexShrink: 0, opacity: 0.75 }} />
-          <span className="urgency-tip">{health.urgencyTooltip}</span>
-        </div>
-      </td>
-      <td className="text-right cell-actions">
-        <div className="action-buttons justify-end">
-          {targetInv.deleted ? (
-            <button
               className="icon-btn-small text-success"
-              title="Restore"
-              onClick={() => handleRestore(targetInv)}
+              title="Restore Variant"
+              aria-label="Restore Variant"
+              onClick={() => handleRestore(item)}
             >
-              <ArchiveRestore size={15} />
+              <ArchiveRestore size={16} />
             </button>
           ) : (
             <>
+              {/* Primary Action 1: Restock exact variant */}
               <button
-                className="icon-btn-small"
-                title="Add / Publish"
-                onClick={() => handlePublishProduct(targetInv)}
-                style={{ opacity: displayedAvailable > 0 ? 1 : 0.4 }}
-              >
-                <Plus size={15} />
-              </button>
-              <button
+                type="button"
                 className="icon-btn-small restock-btn"
-                title="Restock"
+                title="Restock this variant"
+                aria-label={`Restock ${item.item} (${item.size}, ${colorName})`}
                 onClick={() => {
-                  setRestockModal(targetInv);
+                  setRestockModal(item);
                   setRestockQty('');
                 }}
               >
-                <Package size={15} />
+                <PackagePlus size={16} />
               </button>
+
+              {/* Primary Action 2: Record Boutique POS Sale */}
               <button
-                className="icon-btn-small"
-                title="Record Boutique Sale"
+                type="button"
+                className="icon-btn-small sell-btn"
+                title={available > 0 ? "Record Boutique Sale" : "Out of stock - cannot sell"}
+                aria-label={`Record Sale for ${item.item} (${item.size}, ${colorName})`}
                 onClick={() => {
-                  setSellModal(targetInv);
+                  setSellModal(item);
                   setRestockQty('1');
-                  // inventory rows have no price column of their own -- the
-                  // catalog price lives on products, joined via productDocId.
-                  setSalePriceInput(productMetaById[targetInv.productDocId]?.price || '');
+                  setSalePriceInput(productMetaById[item.productDocId]?.price || '');
                   setSalePaymentMethod('cash');
                   setSaleIdempotencyKey(crypto.randomUUID());
                 }}
-                style={{ color: 'var(--status-approved-text)', opacity: displayedAvailable > 0 ? 1 : 0.4 }}
-                disabled={displayedAvailable <= 0}
+                disabled={available <= 0}
+                style={{ opacity: available > 0 ? 1 : 0.35 }}
               >
-                <ShoppingCart size={15} />
+                <ShoppingCart size={16} />
               </button>
-              {isAdminUnlocked && (
+
+              {/* Secondary Actions Menu */}
+              <div className="dropdown-action-wrap">
                 <button
-                  className="icon-btn-small text-warning"
-                  title="Archive"
-                  onClick={() => setArchiveConfirm(targetInv)}
+                  type="button"
+                  className={`icon-btn-small more-menu-btn ${isMenuOpen ? 'active' : ''}`}
+                  title="More actions"
+                  aria-label="More actions"
+                  aria-expanded={isMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuId(isMenuOpen ? null : item.id);
+                  }}
                 >
-                  <Archive size={15} />
+                  <MoreHorizontal size={16} />
                 </button>
-              )}
+
+                {isMenuOpen && (
+                  <div
+                    className="inv-action-popover"
+                    role="menu"
+                  >
+                    {canManageLookups && (
+                      <button
+                        type="button"
+                        className="inv-popover-item"
+                        onClick={() => {
+                          setActiveMenuId(null);
+                          setArColorModal(item);
+                        }}
+                      >
+                        <Palette size={14} />
+                        <span>{item.hexColor ? `AR Color (${item.hexColor})` : 'Configure AR Color'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="inv-popover-item"
+                      title="Publish product to mobile app"
+                      onClick={() => {
+                        setActiveMenuId(null);
+                        handlePublishProduct(item);
+                      }}
+                    >
+                      <Globe size={14} />
+                      <span>Publish to Mobile App</span>
+                    </button>
+
+                    {isAdminUnlocked && (
+                      <button
+                        type="button"
+                        className="inv-popover-item text-danger"
+                        onClick={() => {
+                          setActiveMenuId(null);
+                          setArchiveConfirm(item);
+                        }}
+                      >
+                        <Archive size={14} />
+                        <span>Archive Variant</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -335,6 +346,15 @@ const Inventory = () => {
   const [waitlistDemand, setWaitlistDemand] = useState([]);
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
 
+  // Active dropdown action popover ID
+  const [activeMenuId, setActiveMenuId] = useState(null);
+
+  useEffect(() => {
+    const handleWindowClick = () => setActiveMenuId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
+
   React.useEffect(() => {
     const unsub = subscribeToInventory((data) => {
       setInventory(data || []);
@@ -347,23 +367,17 @@ const Inventory = () => {
     if (activeTab === 'waitlist' && waitlistDemand.length === 0) {
       setLoadingWaitlist(true);
       getWaitlistDemand()
-        .then(data => {
+        .then((data) => {
           setWaitlistDemand(data);
           setLoadingWaitlist(false);
         })
-        .catch(err => {
+        .catch((err) => {
           console.error(err);
           setLoadingWaitlist(false);
         });
     }
   }, [activeTab, waitlistDemand.length]);
 
-  // Product list — needed to map each inventory row to its category/subcategory
-  // (category_id lives on products, not on inventory rows) and to feed the
-  // stock-baseline picker in the admin panel below. includeDeleted=true so
-  // archived inventory rows (viewMode === 'archived') still resolve their
-  // real category instead of falling into "Uncategorized" just because
-  // their parent product is soft-deleted.
   React.useEffect(() => {
     const unsub = subscribeToProducts((data) => {
       setProducts(data);
@@ -376,13 +390,13 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'All');
   const [colorFilter, setColorFilter] = useState(() => searchParams.get('color') || 'All');
-  const [categoryTree, setCategoryTree] = useState([]); // [{id,name,subcategories:[{id,name}]}]
-  const [expandedCategories, setExpandedCategories] = useState(new Set());
-  const [sortConfig, setSortConfig] = useState({ key: 'stockStatus', direction: 'ascending' });
+  const [stockQuickFilter, setStockQuickFilter] = useState('all'); // 'all' | 'alerts' | 'reserved'
+  const [viewGrouping, setViewGrouping] = useState('flat'); // 'flat' | 'grouped'
+  const [categoryTree, setCategoryTree] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: 'item', direction: 'ascending' });
   const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'active'); // 'active' | 'archived'
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '0', 10) || 0);
 
-  // Sync state changes back to URL search params
   useEffect(() => {
     const params = new URLSearchParams();
     if (searchTerm.trim()) params.set('search', searchTerm.trim());
@@ -393,10 +407,9 @@ const Inventory = () => {
     setSearchParams(params, { replace: true });
   }, [searchTerm, categoryFilter, colorFilter, viewMode, page, setSearchParams]);
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, categoryFilter, colorFilter, viewMode]);
+  }, [searchTerm, categoryFilter, colorFilter, viewMode, stockQuickFilter, viewGrouping]);
 
   const [serverSearchResults, setServerSearchResults] = useState(null);
   const [serverSearchLoading, setServerSearchLoading] = useState(false);
@@ -429,7 +442,6 @@ const Inventory = () => {
     };
   }, [searchTerm, viewMode, categoryFilter, colorFilter, page]);
 
-  // Extract unique colors for filter
   const uniqueColors = useMemo(() => {
     const set = new Set();
     inventory.forEach((item) => {
@@ -438,45 +450,35 @@ const Inventory = () => {
     return ['All', ...Array.from(set).sort()];
   }, [inventory]);
 
-  // Subscribe to the real category tree for both the filter dropdown and the
-  // Category → Subcategory grouping below.
   React.useEffect(() => {
     const unsub = subscribeToCategories((tree) => setCategoryTree(tree));
     return () => unsub();
   }, []);
 
   // Modals
-  const [restockModal, setRestockModal] = useState(null); // inv item or null
-  const [sellModal, setSellModal] = useState(null); // Added for POS
+  const [restockModal, setRestockModal] = useState(null);
+  const [sellModal, setSellModal] = useState(null);
   const [archiveConfirm, setArchiveConfirm] = useState(null);
-  const [arColorModal, setArColorModal] = useState(null); // inv variant or null
+  const [arColorModal, setArColorModal] = useState(null);
   const [arColorInput, setArColorInput] = useState('');
   const [savingArColor, setSavingArColor] = useState(false);
-
-  // Form state
   const [restockQty, setRestockQty] = useState('');
   const [salePriceInput, setSalePriceInput] = useState('');
   const [salePaymentMethod, setSalePaymentMethod] = useState('cash');
-  // One key per sale attempt -- kept across Confirm/retry/timeout, replaced
-  // only when the modal opens fresh or is cancelled (never mid-attempt).
-  const [saleIdempotencyKey, setSaleIdempotencyKey] = useState(null);
+  const [saleIdempotencyKey, setSaleIdempotencyKey] = useState('');
 
-  // Handle escape key for open modals
   useEffect(() => {
     const onEsc = (e) => {
       if (e.key !== 'Escape') return;
       if (restockModal) setRestockModal(null);
       else if (sellModal) setSellModal(null);
       else if (arColorModal) setArColorModal(null);
+      else if (activeMenuId) setActiveMenuId(null);
     };
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
-  }, [restockModal, sellModal, arColorModal]);
+  }, [restockModal, sellModal, arColorModal, activeMenuId]);
 
-  // Opening the modal seeds the input from the variant's current value
-  // (already-normalized uppercase from the service, or '') rather than
-  // starting blank every time -- editing an existing color should show
-  // what's there, not look cleared.
   useEffect(() => {
     setArColorInput(arColorModal?.hexColor || '');
   }, [arColorModal]);
@@ -496,21 +498,17 @@ const Inventory = () => {
     }
   };
 
-  // Derived stats (Active inventory only)
   const activeInventory = inventory.filter((i) => i.deleted !== true);
-  const totalItems = activeInventory.length;
-  const totalStock = activeInventory.reduce((sum, i) => sum + i.total, 0);
-  const totalReserved = activeInventory.reduce((sum, i) => sum + i.reserved, 0);
+  const totalVariants = activeInventory.length;
+  const totalStock = activeInventory.reduce((sum, i) => sum + (i.total || 0), 0);
+  const totalReserved = activeInventory.reduce((sum, i) => sum + (i.reserved || 0), 0);
 
-  // 5-tier breakdown — used for stat card + sorting
   const stockBreakdown = getStockBreakdown(
     activeInventory.map((i) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
   );
-  const lowStockCount = stockBreakdown.alerts; // very-low + critical + no-stock
+  const lowStockCount = stockBreakdown.alerts;
+  const reservedCount = activeInventory.filter((i) => (i.reserved || 0) > 0).length;
 
-  // Detect active catalog products that have NO inventory rows at all.
-  // These are data-integrity gaps: the catalog shows them as a product but
-  // there is nothing to restock, sell, or track against.
   const inventoryProductIds = useMemo(() => {
     const ids = new Set();
     inventory.forEach((r) => { if (r.productDocId) ids.add(r.productDocId); });
@@ -518,15 +516,11 @@ const Inventory = () => {
   }, [inventory]);
 
   const productsWithNoInventory = useMemo(() =>
-    products.filter(
-      (p) => !p.deleted && !inventoryProductIds.has(p.id)
-    ),
+    products.filter((p) => !p.deleted && !inventoryProductIds.has(p.id)),
     [products, inventoryProductIds]
   );
 
-  // Extract unique categories for filter - Sync with DB categories
   const dropdownCategories = ['All', ...categoryTree.map((c) => c.name)];
-
   const [noInvBannerDismissed, setNoInvBannerDismissed] = useState(false);
 
   const handleSort = (key) => {
@@ -544,145 +538,123 @@ const Inventory = () => {
         ? 'ascending'
         : 'descending';
 
-  // Sorting uses the shared getStockPriority from the stockStatus utility
-  // (demand-aware priority: 1 = worst, 5 = best)
-
-  const sortedInv = [...inventory].sort((a, b) => {
-    if (sortConfig.key === 'stockStatus') {
-      const priorityA = getStockPriority(a.available, a.total, a.reserved || 0);
-      const priorityB = getStockPriority(b.available, b.total, b.reserved || 0);
-      if (priorityA !== priorityB) {
-        return sortConfig.direction === 'ascending' ? priorityA - priorityB : priorityB - priorityA;
-      }
-      return (a.item || '').localeCompare(b.item || '');
-    }
-
-    if (a[sortConfig.key] < b[sortConfig.key]) {
-      return sortConfig.direction === 'ascending' ? -1 : 1;
-    }
-    if (a[sortConfig.key] > b[sortConfig.key]) {
-      return sortConfig.direction === 'ascending' ? 1 : -1;
-    }
-    return 0;
-  });
-
-  const filteredInv = sortedInv.filter((item) => {
-    // Filter by view mode (active vs archived)
-    const isArchived = item.deleted === true;
-    if (viewMode === 'active' && isArchived) return false;
-    if (viewMode === 'archived' && !isArchived) return false;
-
-    const term = (searchTerm || '').toLowerCase();
-    const matchesSearch =
-      (item.item || '').toLowerCase().includes(term) ||
-      (item.sku || '').toLowerCase().includes(term) ||
-      (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
-      (item.color || '').toLowerCase().includes(term) ||
-      (item.id || '').toLowerCase().includes(term);
-
-    const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
-    const matchesColor = colorFilter === 'All' || (item.color || '') === colorFilter;
-
-    return matchesSearch && matchesCategory && matchesColor;
-  });
-
-  const PAGE_SIZE = 25;
-  const isServerSearch = !!searchTerm.trim();
-  const filteredGroups = useMemo(() => groupInventoryRows(filteredInv), [filteredInv]);
-  const serverSearchGroups = useMemo(
-    () => (serverSearchResults ? groupInventoryRows(serverSearchResults.items) : []),
-    [serverSearchResults]
-  );
-
-  const totalPages = isServerSearch
-    ? Math.max(1, Math.ceil((serverSearchResults?.totalCount ?? 0) / 50))
-    : Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
-
-  const pagedGroups = useMemo(() => {
-    if (isServerSearch) return serverSearchGroups;
-    return filteredGroups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  }, [isServerSearch, serverSearchGroups, filteredGroups, page]);
-
-  // ── Category → Subcategory grouping (the "browsing" view) ──────────────────
-  // Only used when search, category, and color filters are default.
-  const isBrowsingMode =
-    !searchTerm.trim() &&
-    categoryFilter === 'All' &&
-    colorFilter === 'All';
-
   const productMetaById = useMemo(() => {
     const map = {};
     products.forEach((p) => { map[p.id] = p; });
     return map;
   }, [products]);
 
-  const hierarchy = useMemo(() => {
-    if (!isBrowsingMode) return [];
-    const scopedRows = inventory.filter((i) => (i.deleted === true) === (viewMode === 'archived'));
+  // Primary filtering and sorting across all discrete variants
+  const sortedAndFilteredInv = useMemo(() => {
+    let list = [...inventory];
 
-    return categoryTree
-      .map((cat) => {
-        const subcats = cat.subcategories
-          .map((sub) => {
-            const rows = scopedRows
-              .filter((r) => productMetaById[r.productDocId]?.categoryId === sub.id)
-              .sort((a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size));
-            return {
-              ...sub,
-              rows,
-              alertCount: rows.filter((r) => isStockAlert(r.available, r.total, r.reserved || 0)).length,
-            };
-          })
-          .filter((sub) => sub.rows.length > 0);
+    // Filter by active/archived
+    list = list.filter((item) => (viewMode === 'archived' ? item.deleted === true : item.deleted !== true));
 
-        return {
-          ...cat,
-          subcats,
-          rowCount: subcats.reduce((s, sc) => s + sc.rows.length, 0),
-          alertCount: subcats.reduce((s, sc) => s + sc.alertCount, 0),
-        };
-      })
-      .filter((cat) => cat.subcats.length > 0);
-  }, [isBrowsingMode, inventory, viewMode, productMetaById, categoryTree]);
+    // Search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter((item) =>
+        (item.item || '').toLowerCase().includes(term) ||
+        (item.sku || '').toLowerCase().includes(term) ||
+        (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
+        (item.color || '').toLowerCase().includes(term) ||
+        (item.size || '').toLowerCase().includes(term) ||
+        (item.category || '').toLowerCase().includes(term)
+      );
+    }
 
-  const uncategorizedRows = useMemo(() => {
-    if (!isBrowsingMode) return [];
-    const scopedRows = inventory.filter((i) => (i.deleted === true) === (viewMode === 'archived'));
-    return scopedRows
-      .filter((r) => !productMetaById[r.productDocId]?.categoryId)
-      .sort((a, b) => a.item.localeCompare(b.item) || sizeRank(a.size) - sizeRank(b.size));
-  }, [isBrowsingMode, inventory, viewMode, productMetaById]);
+    // Category filter
+    if (categoryFilter !== 'All') {
+      list = list.filter((item) => item.category === categoryFilter);
+    }
 
-  const toggleCategory = useCallback((id) => {
-    setExpandedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
+    // Color filter
+    if (colorFilter !== 'All') {
+      list = list.filter((item) => (item.color || 'Standard') === colorFilter);
+    }
+
+    // Stock Quick Filters (All / Alerts / Reserved)
+    if (stockQuickFilter === 'alerts') {
+      list = list.filter((item) => isStockAlert(item.available, item.total, item.reserved || 0));
+    } else if (stockQuickFilter === 'reserved') {
+      list = list.filter((item) => (item.reserved || 0) > 0);
+    }
+
+    // Sorting
+    list.sort((a, b) => {
+      if (sortConfig.key === 'stockStatus') {
+        const pA = getStockPriority(a.available, a.total, a.reserved || 0);
+        const pB = getStockPriority(b.available, b.total, b.reserved || 0);
+        if (pA !== pB) {
+          return sortConfig.direction === 'ascending' ? pA - pB : pB - pA;
+        }
+        return (a.item || '').localeCompare(b.item || '');
+      }
+
+      if (sortConfig.key === 'size') {
+        const diff = sizeRank(a.size) - sizeRank(b.size);
+        return sortConfig.direction === 'ascending' ? diff : -diff;
+      }
+
+      let valA = a[sortConfig.key];
+      let valB = b[sortConfig.key];
+      if (valA === undefined || valA === null) valA = '';
+      if (valB === undefined || valB === null) valB = '';
+
+      if (typeof valA === 'string') {
+        const cmp = valA.localeCompare(valB);
+        if (cmp !== 0) return sortConfig.direction === 'ascending' ? cmp : -cmp;
+      } else {
+        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+
+      // Tie-breaker: Product name -> size -> color
+      return (
+        (a.item || '').localeCompare(b.item || '') ||
+        sizeRank(a.size) - sizeRank(b.size) ||
+        (a.color || '').localeCompare(b.color || '')
+      );
     });
-  }, []);
 
-  // getStockStatus is replaced by the shared getStockHealth() from stockStatus.js
+    return list;
+  }, [inventory, viewMode, searchTerm, categoryFilter, colorFilter, stockQuickFilter, sortConfig]);
 
-  // --- ACTIONS ---
+  const PAGE_SIZE = 50;
+  const isServerSearch = !!searchTerm.trim();
+  const displayItems = isServerSearch && serverSearchResults ? serverSearchResults.items : sortedAndFilteredInv;
+
+  const totalPages = isServerSearch
+    ? Math.max(1, Math.ceil((serverSearchResults?.totalCount ?? 0) / 50))
+    : Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE));
+
+  const pagedItems = useMemo(() => {
+    if (isServerSearch) return displayItems;
+    return displayItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  }, [isServerSearch, displayItems, page]);
+
+  // Actions
   const handleRestock = async (e) => {
     e.preventDefault();
     const qty = parseInt(restockQty, 10);
     if (!qty || qty <= 0) {
-      toast.error('Enter a valid quantity');
+      toast.error('Enter a valid quantity greater than zero');
       return;
     }
+    if (!restockModal) return;
 
     try {
       await adjustInventoryOnHand(
-        restockModal.docId,
+        restockModal.docId || restockModal.id,
         qty,
-        'Restock delivery shipment',
+        'Restock delivery shipment'
       );
-      toast.success(`Restocked ${restockModal.item} (${restockModal.size}) +${qty} units`);
+      toast.success(`Restocked ${restockModal.item} (${restockModal.size}, ${restockModal.color || 'Standard'}) +${qty} units`);
       setRestockModal(null);
       setRestockQty('');
     } catch (err) {
-      toast.error('Failed to restock items: ' + (err?.message || ''));
+      toast.error('Failed to restock variant: ' + (err?.message || ''));
     }
   };
 
@@ -694,7 +666,7 @@ const Inventory = () => {
       return;
     }
     if (qty > sellModal.available) {
-      toast.error('Cannot sell more than available stock');
+      toast.error(`Cannot sell more than available stock (${sellModal.available} available). Reserved stock is protected.`);
       return;
     }
     if (!salePaymentMethod) {
@@ -706,7 +678,6 @@ const Inventory = () => {
     try {
       const price = parseFloat(salePriceInput) || 0;
       await recordBoutiqueSale(sellModal, qty, user, price, salePaymentMethod, saleIdempotencyKey);
-
       toast.success(`Recorded sale: ${sellModal.item} x${qty}`, { id: toastId });
       setSellModal(null);
       setRestockQty('');
@@ -718,9 +689,10 @@ const Inventory = () => {
 
   const handleArchive = async () => {
     const item = archiveConfirm;
+    if (!item) return;
     try {
-      await archiveInventoryItem(item.docId, 'Season decommission');
-      toast.success(`Archived ${item.item} (${item.size}) from inventory`);
+      await archiveInventoryItem(item.docId || item.id, 'Season decommission');
+      toast.success(`Archived ${item.item} (${item.size}, ${item.color || 'Standard'})`);
     } catch (err) {
       toast.error('Failed to archive item: ' + (err?.message || ''));
     } finally {
@@ -730,8 +702,8 @@ const Inventory = () => {
 
   const handleRestore = async (item) => {
     try {
-      await restoreInventoryItem(item.docId, 'Inventory reactivated');
-      toast.success(`Restored ${item.item} (${item.size}) to active inventory`);
+      await restoreInventoryItem(item.docId || item.id, 'Inventory reactivated');
+      toast.success(`Restored ${item.item} (${item.size}, ${item.color || 'Standard'}) to active inventory`);
     } catch (err) {
       toast.error('Failed to restore item: ' + (err?.message || ''));
     }
@@ -758,7 +730,7 @@ const Inventory = () => {
 
   const handlePublishProduct = async (inv) => {
     if (inv.available <= 0) {
-      toast.error('Cannot add to end user app without available stock');
+      toast.error('Cannot add to mobile app without available stock');
       return;
     }
     try {
@@ -775,28 +747,23 @@ const Inventory = () => {
       await updateProduct(productDocId, { visibility: 'public' });
       await logAction(user, 'Added product to user app', {
         itemName: inv.item,
-        sku: inv.sku
+        sku: inv.sku,
       });
-      toast.success(`Product ${inv.item} has been added/published`);
+      toast.success(`Product "${inv.item}" is now public on the mobile app`);
     } catch {
-      toast.error('Failed to add product to app');
+      toast.error('Failed to publish product to mobile app');
     }
   };
 
-
   const csvField = (value) => {
     let s = String(value ?? '').replace(/"/g, '""');
-    // Neutralize spreadsheet formula injection (OWASP CSV Injection)
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return `"${s}"`;
   };
 
   const handleExportCSV = () => {
-    // Exports filteredInv, not the raw inventory list, so the file matches
-    // whatever search/category/active-archived view the staff member is
-    // currently looking at rather than silently dumping everything.
     const header = ['SKU/Variant', 'Product', 'Category', 'Size', 'Color', 'Pattern', 'Total', 'Reserved', 'Available'].join(',');
-    const rows = filteredInv.map((i) =>
+    const rows = sortedAndFilteredInv.map((i) =>
       [
         csvField(i.variantSku || i.variant_sku || i.sku || i.id),
         csvField(i.item),
@@ -806,67 +773,34 @@ const Inventory = () => {
         csvField(i.pattern || 'Solid'),
         i.total,
         i.reserved || 0,
-        i.available
-      ].join(','),
+        i.available,
+      ].join(',')
     );
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(`JezSy_Inventory_${viewMode}_${timestamp}.csv`, [header, ...rows].join('\n'));
     toast.success('Inventory exported as CSV');
   };
 
-  const renderGroupedInvRow = (group) => {
-    return (
-      <GroupedInvRow
-        key={group.key}
-        group={group}
-        isAdminUnlocked={isAdminUnlocked}
-        handleRestore={handleRestore}
-        handlePublishProduct={handlePublishProduct}
-        setRestockModal={setRestockModal}
-        setRestockQty={setRestockQty}
-        setSellModal={setSellModal}
-        setSalePriceInput={setSalePriceInput}
-        setSalePaymentMethod={setSalePaymentMethod}
-        setSaleIdempotencyKey={setSaleIdempotencyKey}
-        setArchiveConfirm={setArchiveConfirm}
-        setArColorModal={setArColorModal}
-        canManageLookups={canManageLookups}
-        productMetaById={productMetaById}
-      />
-    );
-  };
-
-  const renderGroupHeaderRow = (key, label, rowCount, alertCount, isExpanded, onClick, depth) => (
-    <tr
-      key={key}
-      className={`inv-group-header depth-${depth}`}
-    >
-      <td colSpan={TABLE_COLUMNS}>
-        <button
-          type="button"
-          className="inv-group-header-content inv-group-toggle-btn"
-          onClick={onClick}
-          aria-expanded={isExpanded}
-        >
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span className="inv-group-label">{label}</span>
-          <span className="inv-group-count">{rowCount} {rowCount === 1 ? 'item' : 'items'}</span>
-          {alertCount > 0 && (
-            <span className="inv-group-alert">
-              <AlertTriangle size={12} /> {alertCount} need{alertCount === 1 ? 's' : ''} attention
-            </span>
-          )}
-        </button>
-      </td>
-    </tr>
-  );
+  // Grouping helper when viewGrouping === 'grouped'
+  const groupedSections = useMemo(() => {
+    if (viewGrouping !== 'grouped') return null;
+    const sections = new Map();
+    pagedItems.forEach((item) => {
+      const cat = item.category || 'Uncategorized';
+      if (!sections.has(cat)) {
+        sections.set(cat, []);
+      }
+      sections.get(cat).push(item);
+    });
+    return Array.from(sections.entries());
+  }, [viewGrouping, pagedItems]);
 
   return (
     <div className="page-container">
       <PageHeader
         breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Inventory' }]}
         title="Inventory Management"
-        subtitle="Track stock levels and quantities per size across all products"
+        subtitle="Track stock levels and quantities per exact variant across all products"
         category="OPERATIONS"
         actions={
           <div className="flex-center gap-2">
@@ -904,14 +838,15 @@ const Inventory = () => {
         />
       )}
 
+      {/* Metric Summary Cards */}
       <div className="inv-summary-grid">
         <div className="card inv-stat-card">
           <div className="icon-bg-soft blue">
             <PackageOpen size={24} />
           </div>
           <div className="inv-stat-content">
-            <p className="stat-label">Total Unique Items</p>
-            <h3>{totalItems}</h3>
+            <p className="stat-label">Total Active Variants</p>
+            <h3>{totalVariants}</h3>
           </div>
         </div>
         <div className="card inv-stat-card">
@@ -962,7 +897,7 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* ── Products-with-no-inventory warning banner ── */}
+      {/* Catalog products missing inventory warning */}
       {!loading && !loadingProducts && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
         <div
           style={{
@@ -988,7 +923,7 @@ const Inventory = () => {
               </span>
             ))}
             <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-              — Open each product in the Catalog and add size variants, or add rows directly through the Admin panel.
+              -- Open each product in the Catalog and add size variants, or add rows directly through the Admin panel.
             </span>
           </div>
           <button
@@ -1001,16 +936,17 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* Main Table Card */}
       <div className="card mt-2">
         <div className="catalog-toolbar" style={{ borderBottom: '1px solid var(--border-color)', padding: '1rem' }}>
-          <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+          <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
             <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
               <button
                 className={`archive-toggle-btn ${activeTab === 'inventory' ? 'active' : ''}`}
                 onClick={() => setActiveTab('inventory')}
                 style={{ margin: 0 }}
               >
-                Inventory View
+                Inventory Grid
               </button>
               <button
                 className={`archive-toggle-btn ${activeTab === 'waitlist' ? 'active' : ''}`}
@@ -1029,7 +965,7 @@ const Inventory = () => {
                     id="inventory-search-input"
                     name="inventorySearch"
                     type="text"
-                    placeholder="Search Variant SKU, Name, Color..."
+                    placeholder="Search SKU, Product, Color..."
                     aria-label="Search variant SKU, product name, or color"
                     autoComplete="off"
                     value={searchTerm}
@@ -1037,7 +973,10 @@ const Inventory = () => {
                     className="input-field pl-10"
                   />
                 </div>
-                <select autoComplete="off" id="field_l7bea6x" name="field_l7bea6x"
+
+                <select
+                  id="field_inv_category"
+                  name="field_inv_category"
                   className="input-field category-filter"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
@@ -1049,8 +988,11 @@ const Inventory = () => {
                     </option>
                   ))}
                 </select>
+
                 {uniqueColors.length > 1 && (
-                  <select autoComplete="off" id="field_fjj2yfc" name="field_fjj2yfc"
+                  <select
+                    id="field_inv_color"
+                    name="field_inv_color"
                     className="input-field category-filter"
                     value={colorFilter}
                     onChange={(e) => setColorFilter(e.target.value)}
@@ -1063,6 +1005,29 @@ const Inventory = () => {
                     ))}
                   </select>
                 )}
+
+                {/* View Grouping Toggle */}
+                <div className="view-mode-toggle" style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    type="button"
+                    className={`btn-outline btn-sm ${viewGrouping === 'flat' ? 'active' : ''}`}
+                    onClick={() => setViewGrouping('flat')}
+                    title="Flat discrete list"
+                    aria-label="Flat discrete list"
+                  >
+                    <List size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-outline btn-sm ${viewGrouping === 'grouped' ? 'active' : ''}`}
+                    onClick={() => setViewGrouping('grouped')}
+                    title="Group by category divider"
+                    aria-label="Group by category divider"
+                  >
+                    <Layers size={15} />
+                  </button>
+                </div>
+
                 {isAdminUnlocked && (
                   <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '4px' }}>
                     <button
@@ -1070,24 +1035,46 @@ const Inventory = () => {
                       onClick={() => setViewMode('active')}
                       style={{ margin: 0 }}
                     >
-                      Active ({inventory.filter(i => i.deleted !== true).length})
+                      Active ({inventory.filter((i) => i.deleted !== true).length})
                     </button>
                     <button
                       className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
                       onClick={() => setViewMode('archived')}
                       style={{ margin: 0 }}
                     >
-                      <Archive size={14} /> Archived ({inventory.filter(i => i.deleted === true).length})
+                      <Archive size={14} /> Archived ({inventory.filter((i) => i.deleted === true).length})
                     </button>
                   </div>
                 )}
               </>
             )}
           </div>
-          {activeTab === 'inventory' && isBrowsingMode && (
-            <p className="inv-mode-hint text-secondary text-xs mt-3">
-              Grouped by category — search or filter above to switch to a flat sortable list.
-            </p>
+
+          {/* Quick Filter Status Bar (Requirement 7) */}
+          {activeTab === 'inventory' && (
+            <div className="inv-quick-filters-bar" style={{ display: 'flex', gap: '8px', marginTop: '0.85rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`quick-filter-chip ${stockQuickFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setStockQuickFilter('all')}
+              >
+                All Variants ({sortedAndFilteredInv.length})
+              </button>
+              <button
+                type="button"
+                className={`quick-filter-chip alert-chip ${stockQuickFilter === 'alerts' ? 'active' : ''}`}
+                onClick={() => setStockQuickFilter('alerts')}
+              >
+                <AlertTriangle size={13} /> Stock Alerts ({lowStockCount})
+              </button>
+              <button
+                type="button"
+                className={`quick-filter-chip reserved-chip ${stockQuickFilter === 'reserved' ? 'active' : ''}`}
+                onClick={() => setStockQuickFilter('reserved')}
+              >
+                Reserved ({reservedCount})
+              </button>
+            </div>
           )}
         </div>
 
@@ -1099,26 +1086,27 @@ const Inventory = () => {
               <table className="table inv-table">
                 <thead>
                   <tr>
-                    <th>Product Name</th>
-                    <th>Size</th>
-                    <th className="text-right">Customers Waiting</th>
+                    <th>Product</th>
+                    <th>Color / Size</th>
+                    <th className="text-right">Interested Customers</th>
                   </tr>
                 </thead>
                 <tbody>
                   {waitlistDemand.length === 0 ? (
                     <tr>
-                      <td colSpan="3">
-                        <div className="empty-state flex-col flex-center gap-3 p-8">
-                          <p className="text-secondary">No active waitlist requests found.</p>
-                        </div>
+                      <td colSpan={3} className="text-center p-8 text-secondary">
+                        No customer waitlist requests recorded.
                       </td>
                     </tr>
                   ) : (
-                    waitlistDemand.map((req, idx) => (
-                      <tr key={idx}>
-                        <td className="font-medium">{req.productName}</td>
-                        <td><span className="size-badge">{req.size}</span></td>
-                        <td className="text-right font-bold text-danger">{req.count}</td>
+                    waitlistDemand.map((w) => (
+                      <tr key={w.id || w.productId + w.size}>
+                        <td className="font-medium">{w.productName}</td>
+                        <td>
+                          {w.color && <span className="color-badge mr-2">{w.color}</span>}
+                          {w.size && <span className="size-badge">{w.size}</span>}
+                        </td>
+                        <td className="text-right font-semibold text-primary">{w.count}</td>
                       </tr>
                     ))
                   )}
@@ -1127,189 +1115,211 @@ const Inventory = () => {
             )}
           </div>
         ) : (
-          <>
-        {loading || (isServerSearch && serverSearchLoading) ? (
-          <div className="p-4"><SkeletonTable columns={TABLE_COLUMNS} rows={6} /></div>
-        ) : (
           <div className="table-container">
-            {isServerSearch && (
-              <div style={{ padding: '8px 16px', background: 'var(--surface-muted, #f1f5f9)', borderBottom: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Search results across complete inventory (Server — Page {page + 1} of {totalPages})
-              </div>
-            )}
-            <table className="table inv-table">
-              <thead>
-                <tr>
-                  <th scope="col" className="th-sku" aria-sort={ariaSort('sku')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn"
-                      onClick={() => handleSort('sku')}
-                    >
-                      Variant SKU
-                      {sortConfig.key === 'sku' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-product" aria-sort={ariaSort('item')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn"
-                      onClick={() => handleSort('item')}
-                    >
-                      Product Name
-                      {sortConfig.key === 'item' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-category" aria-sort={ariaSort('category')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn"
-                      onClick={() => handleSort('category')}
-                    >
-                      Category
-                      {sortConfig.key === 'category' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-size text-center">Size</th>
-                  <th scope="col" className="th-color">Color</th>
-                  <th scope="col" className="th-num text-right" aria-sort={ariaSort('total')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn justify-end"
-                      onClick={() => handleSort('total')}
-                    >
-                      Total
-                      {sortConfig.key === 'total' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-num text-right">Reserved</th>
-                  <th scope="col" className="th-num text-right" aria-sort={ariaSort('available')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn justify-end"
-                      onClick={() => handleSort('available')}
-                    >
-                      Available
-                      {sortConfig.key === 'available' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-stock" aria-sort={ariaSort('stockStatus')}>
-                    <button
-                      type="button"
-                      className="th-sort-btn"
-                      onClick={() => handleSort('stockStatus')}
-                    >
-                      Stock Level
-                      {sortConfig.key === 'stockStatus' && (
-                        <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th scope="col" className="th-actions text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isBrowsingMode ? (
-                  hierarchy.length === 0 && uncategorizedRows.length === 0 ? (
+            {loading ? (
+              <SkeletonTable columns={TABLE_COLUMNS} rows={8} />
+            ) : (
+              <table className="table inv-table">
+                <thead>
+                  <tr>
+                    <th scope="col" className="th-sku" aria-sort={ariaSort('sku')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => handleSort('sku')}
+                      >
+                        Variant SKU
+                        {sortConfig.key === 'sku' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-product" aria-sort={ariaSort('item')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => handleSort('item')}
+                      >
+                        Product & Category
+                        {sortConfig.key === 'item' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-size text-center" aria-sort={ariaSort('size')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn justify-center"
+                        onClick={() => handleSort('size')}
+                      >
+                        Size
+                        {sortConfig.key === 'size' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-color" aria-sort={ariaSort('color')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => handleSort('color')}
+                      >
+                        Color
+                        {sortConfig.key === 'color' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-num text-right" aria-sort={ariaSort('total')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn justify-end"
+                        onClick={() => handleSort('total')}
+                      >
+                        Total
+                        {sortConfig.key === 'total' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-num text-right" aria-sort={ariaSort('reserved')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn justify-end"
+                        onClick={() => handleSort('reserved')}
+                      >
+                        Reserved
+                        {sortConfig.key === 'reserved' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-num text-right" aria-sort={ariaSort('available')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn justify-end"
+                        onClick={() => handleSort('available')}
+                      >
+                        Available
+                        {sortConfig.key === 'available' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-stock" aria-sort={ariaSort('stockStatus')}>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => handleSort('stockStatus')}
+                      >
+                        Stock Status
+                        {sortConfig.key === 'stockStatus' && (
+                          <span aria-hidden="true">{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
+                      </button>
+                    </th>
+
+                    <th scope="col" className="th-actions text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedItems.length === 0 ? (
                     <tr>
                       <td colSpan={TABLE_COLUMNS}>
                         <div className="empty-state flex-col flex-center gap-3 p-8">
                           <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
                             <PackageOpen size={48} opacity={0.5} />
                           </div>
-                          <h3 className="text-lg font-medium">
-                            No {viewMode === 'archived' ? 'archived' : ''} inventory yet
-                          </h3>
+                          <h3 className="text-lg font-medium">No inventory items found</h3>
+                          <p className="text-secondary text-center max-w-sm">
+                            We couldn&apos;t find any inventory records matching your active filters.
+                          </p>
+                          {(searchTerm || categoryFilter !== 'All' || colorFilter !== 'All' || stockQuickFilter !== 'all') && (
+                            <button
+                              className="btn-outline mt-2"
+                              onClick={() => {
+                                setSearchTerm('');
+                                setCategoryFilter('All');
+                                setColorFilter('All');
+                                setStockQuickFilter('all');
+                              }}
+                            >
+                              Reset Filters
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
+                  ) : viewGrouping === 'grouped' && groupedSections ? (
+                    groupedSections.map(([categoryName, items]) => (
+                      <React.Fragment key={categoryName}>
+                        <tr className="inv-category-divider">
+                          <td colSpan={TABLE_COLUMNS}>
+                            <div className="inv-category-divider-content">
+                              <span className="divider-label">{categoryName}</span>
+                              <span className="divider-count">{items.length} {items.length === 1 ? 'variant' : 'variants'}</span>
+                            </div>
+                          </td>
+                        </tr>
+                        {items.map((item) => (
+                          <VariantInvRow
+                            key={item.id || item.sku}
+                            item={item}
+                            isAdminUnlocked={isAdminUnlocked}
+                            handleRestore={handleRestore}
+                            handlePublishProduct={handlePublishProduct}
+                            setRestockModal={setRestockModal}
+                            setRestockQty={setRestockQty}
+                            setSellModal={setSellModal}
+                            setSalePriceInput={setSalePriceInput}
+                            setSalePaymentMethod={setSalePaymentMethod}
+                            setSaleIdempotencyKey={setSaleIdempotencyKey}
+                            setArchiveConfirm={setArchiveConfirm}
+                            setArColorModal={setArColorModal}
+                            canManageLookups={canManageLookups}
+                            productMetaById={productMetaById}
+                            activeMenuId={activeMenuId}
+                            setActiveMenuId={setActiveMenuId}
+                          />
+                        ))}
+                      </React.Fragment>
+                    ))
                   ) : (
-                    <>
-                      {hierarchy.map((cat) => {
-                        const catExpanded = expandedCategories.has(cat.id);
-                        return (
-                          <React.Fragment key={cat.id}>
-                            {renderGroupHeaderRow(
-                              cat.id,
-                              cat.name,
-                              cat.rowCount,
-                              cat.alertCount,
-                              catExpanded,
-                              () => toggleCategory(cat.id),
-                              0,
-                            )}
-                            {catExpanded && cat.subcats.map((sub) => {
-                              const groupedRows = groupInventoryRows(sub.rows);
-                              return (
-                                <React.Fragment key={sub.id}>
-                                  {renderGroupHeaderRow(
-                                    sub.id,
-                                    sub.name,
-                                    groupedRows.length,
-                                    sub.alertCount,
-                                    expandedCategories.has(sub.id),
-                                    () => toggleCategory(sub.id),
-                                    1,
-                                  )}
-                                  {expandedCategories.has(sub.id) && groupedRows.map(renderGroupedInvRow)}
-                                </React.Fragment>
-                              );
-                            })}
-                          </React.Fragment>
-                        );
-                      })}
-                      {uncategorizedRows.length > 0 && (
-                        <React.Fragment>
-                          {renderGroupHeaderRow(
-                            'uncategorized',
-                            'Uncategorized',
-                            groupInventoryRows(uncategorizedRows).length,
-                            uncategorizedRows.filter((r) => isStockAlert(r.available, r.total, r.reserved || 0)).length,
-                            expandedCategories.has('uncategorized'),
-                            () => toggleCategory('uncategorized'),
-                            0,
-                          )}
-                          {expandedCategories.has('uncategorized') && groupInventoryRows(uncategorizedRows).map(renderGroupedInvRow)}
-                        </React.Fragment>
-                      )}
-                    </>
-                  )
-                ) : filteredGroups.length === 0 ? (
-                  <tr>
-                    <td colSpan={TABLE_COLUMNS}>
-                      <div className="empty-state flex-col flex-center gap-3 p-8">
-                        <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                          <PackageOpen size={48} opacity={0.5} />
-                        </div>
-                        <h3 className="text-lg font-medium">No inventory items found</h3>
-                        <p className="text-secondary text-center max-w-sm">
-                          We couldn&apos;t find any inventory records matching your current search. Try
-                          adjusting your filters.
-                        </p>
-                        {searchTerm && (
-                          <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
-                            Clear Search
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  pagedGroups.map(renderGroupedInvRow)
-                )}
-              </tbody>
-            </table>
-            {!isBrowsingMode && (isServerSearch ? (serverSearchResults?.totalCount ?? 0) > 50 : filteredGroups.length > PAGE_SIZE) && (
+                    pagedItems.map((item) => (
+                      <VariantInvRow
+                        key={item.id || item.sku}
+                        item={item}
+                        isAdminUnlocked={isAdminUnlocked}
+                        handleRestore={handleRestore}
+                        handlePublishProduct={handlePublishProduct}
+                        setRestockModal={setRestockModal}
+                        setRestockQty={setRestockQty}
+                        setSellModal={setSellModal}
+                        setSalePriceInput={setSalePriceInput}
+                        setSalePaymentMethod={setSalePaymentMethod}
+                        setSaleIdempotencyKey={setSaleIdempotencyKey}
+                        setArchiveConfirm={setArchiveConfirm}
+                        setArColorModal={setArColorModal}
+                        canManageLookups={canManageLookups}
+                        productMetaById={productMetaById}
+                        activeMenuId={activeMenuId}
+                        setActiveMenuId={setActiveMenuId}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
               <div className="inv-pagination" role="navigation" aria-label="Inventory table pagination">
                 <button
                   type="button"
@@ -1321,7 +1331,7 @@ const Inventory = () => {
                   ← Previous
                 </button>
                 <span className="inv-pagination-info text-sm text-secondary">
-                  Page {page + 1} of {totalPages} ({isServerSearch ? serverSearchResults?.totalCount ?? 0 : filteredGroups.length} items)
+                  Page {page + 1} of {totalPages} ({displayItems.length} variants)
                 </span>
                 <button
                   type="button"
@@ -1336,11 +1346,9 @@ const Inventory = () => {
             )}
           </div>
         )}
-        </>
-        )}
       </div>
 
-      {/* ===== RESTOCK MODAL ===== */}
+      {/* ===== RESTOCK MODAL (Operates strictly on exact selected variant) ===== */}
       {restockModal && (
         <div
           className="modal-overlay"
@@ -1365,24 +1373,28 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleRestock}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                Adds units to this exact variant only — other sizes or colors of this product are unaffected.
+                Adds inventory on hand to this exact variant. Other sizes or colors are unaffected.
               </p>
               <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
                 {restockModal.color && <span className="color-badge">{restockModal.color}</span>}
+                <span className="sku-code">{restockModal.variantSku || restockModal.sku}</span>
               </div>
-              <p className="text-secondary text-sm" style={{ marginTop: '0.5rem' }}>
-                Current Stock: <strong>{restockModal.available}</strong> / {restockModal.total}
-              </p>
+              <div className="stock-metrics-box" style={{ background: 'var(--cream, #f9fafb)', padding: '0.75rem', borderRadius: '6px', margin: '0.75rem 0', display: 'flex', justifyContent: 'space-between' }}>
+                <div>Available: <strong className="text-success">{restockModal.available}</strong></div>
+                <div>Reserved: <strong className="text-reserved-active">{restockModal.reserved || 0}</strong></div>
+                <div>Total On Hand: <strong>{restockModal.total}</strong></div>
+              </div>
               <div className="form-group">
                 <label className="label" htmlFor="restock-qty">Quantity to Add</label>
-                <input autoComplete="off"
+                <input
+                  autoComplete="off"
                   id="restock-qty"
                   type="number"
                   className="input-field"
                   min="1"
-                  placeholder="Enter quantity"
+                  placeholder="e.g. 10"
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
                   required
@@ -1402,87 +1414,7 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* ===== AR COLOR MODAL ===== */}
-      {arColorModal && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setArColorModal(null); }}
-          role="button"
-          tabIndex={0}
-          aria-label="Close AR Color dialog"
-          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setArColorModal(null); } }}
-        >
-          <div
-            className="modal-content"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ar-color-dialog-title"
-            style={{ maxWidth: 420 }}
-          >
-            <div className="modal-header">
-              <h2 id="ar-color-dialog-title">AR Color</h2>
-              <button className="close-btn" onClick={() => setArColorModal(null)} aria-label="Close dialog">
-                &times;
-              </button>
-            </div>
-            <form className="modal-body" onSubmit={handleSaveArColor}>
-              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                The color the AR Try-On viewer renders for this commercial color variant. This is a rendering approximation --
-                lighting, display, and the 3D model&apos;s own texture all affect what customers actually see. 
-                <strong> This hex code will be automatically applied to all sizes of this color.</strong>
-              </p>
-              <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <strong>{arColorModal.item}</strong>
-                <span className="size-badge">{arColorModal.size}</span>
-                {arColorModal.color && <span className="color-badge">{arColorModal.color}</span>}
-              </div>
-              <div className="form-group" style={{ marginTop: '0.75rem' }}>
-                <label className="label" htmlFor="ar-color-hex">Hex Color</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="color"
-                    aria-label="Pick AR color"
-                    value={/^#[0-9a-fA-F]{6}$/.test(arColorInput) ? arColorInput : '#808080'}
-                    onChange={(e) => setArColorInput(e.target.value)}
-                    style={{ width: 40, height: 40, padding: 0, border: 'none', cursor: 'pointer', flexShrink: 0 }}
-                  />
-                  <input autoComplete="off"
-                    id="ar-color-hex"
-                    type="text"
-                    className="input-field"
-                    placeholder="#18233F"
-                    value={arColorInput}
-                    onChange={(e) => setArColorInput(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                </div>
-                <p className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
-                  Leave blank to clear -- the AR viewer falls back to the 3D model&apos;s own authored appearance.
-                </p>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setArColorModal(null)} disabled={savingArColor}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={savingArColor}>
-                  {savingArColor ? 'Saving...' : 'Save AR Color'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        isOpen={!!archiveConfirm}
-        title="Archive Item?"
-        message={`Move ${archiveConfirm?.item} (${archiveConfirm?.size}${archiveConfirm?.color ? ` · ${archiveConfirm.color}` : ''}) to the archive? History and reservation metrics will be preserved. You can restore it anytime.`}
-        confirmText="Archive"
-        onConfirm={handleArchive}
-        onCancel={() => setArchiveConfirm(null)}
-      />
-
-      {/* ===== SELL / POS MODAL ===== */}
+      {/* ===== SELL / POS MODAL (Guards against overselling & protects reserved units) ===== */}
       {sellModal && (
         <div
           className="modal-overlay"
@@ -1510,21 +1442,28 @@ const Inventory = () => {
             </div>
             <form className="modal-body" onSubmit={handleSell}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem' }}>
-                Records a walk-in sale and deducts it from available stock for this variant.
+                Deducts physical stock for a walk-in boutique sale for this exact variant.
               </p>
               <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{sellModal.item}</strong>
                 <span className="size-badge">{sellModal.size}</span>
                 {sellModal.color && <span className="color-badge">{sellModal.color}</span>}
+                <span className="sku-code">{sellModal.variantSku || sellModal.sku}</span>
               </div>
-              <div className="p-3 bg-light rounded-lg mt-2 mb-4">
-                <div className="d-flex justify-between text-sm mb-1">
+              <div className="p-3 bg-light rounded-lg mt-2 mb-4" style={{ background: 'var(--cream, #f9fafb)', borderRadius: '8px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
                   <span className="text-secondary">Available Stock:</span>
-                  <span className="font-bold">{sellModal.available} units</span>
+                  <span className="font-bold text-success">{sellModal.available} units</span>
                 </div>
-                <div className="d-flex justify-between text-sm">
+                {sellModal.reserved > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px', color: 'var(--stock-low)' }}>
+                    <span>Reserved for Orders (Protected):</span>
+                    <span>{sellModal.reserved} units</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                   <span className="text-secondary">Expected Price:</span>
-                  <span className="font-bold text-success">
+                  <span className="font-bold">
                     ₱{productMetaById[sellModal.productDocId]?.price
                       ? Number(productMetaById[sellModal.productDocId].price).toLocaleString()
                       : '--'}
@@ -1532,10 +1471,11 @@ const Inventory = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="label" htmlFor="sell-unit-price">Actual Unit Price (₱)</label>
-                  <input autoComplete="off"
+                  <input
+                    autoComplete="off"
                     id="sell-unit-price"
                     type="number"
                     className="input-field"
@@ -1547,7 +1487,8 @@ const Inventory = () => {
                 </div>
                 <div className="form-group">
                   <label className="label" htmlFor="sell-qty">Quantity Sold</label>
-                  <input autoComplete="off"
+                  <input
+                    autoComplete="off"
                     id="sell-qty"
                     type="number"
                     className="input-field"
@@ -1561,7 +1502,7 @@ const Inventory = () => {
                 </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group" style={{ marginTop: '0.75rem' }}>
                 <label className="label" htmlFor="sell-payment-method">Payment Method</label>
                 <select
                   id="sell-payment-method"
@@ -1576,25 +1517,23 @@ const Inventory = () => {
                 </select>
               </div>
 
-              {restockQty && parseInt(restockQty) > 0 && (
-                <div className="p-3 bg-emerald-50 rounded-lg mt-2 mb-4 border border-emerald-100">
-                  <div className="d-flex justify-between text-base">
-                    <span className="font-semibold text-emerald-900">Total Transaction:</span>
-                    <span className="font-bold text-emerald-700">
-                      ₱{((parseFloat(salePriceInput) || 0) * parseInt(restockQty || 0)).toLocaleString()}
-                    </span>
+              {restockQty && parseInt(restockQty, 10) > 0 && (
+                <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '0.75rem', marginTop: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: '#065f46' }}>
+                    <span>Total Transaction:</span>
+                    <span>₱{((parseFloat(salePriceInput) || 0) * parseInt(restockQty, 10)).toLocaleString()}</span>
                   </div>
-                  <div className="text-xs text-emerald-600 mt-1">
-                    Remaining Stock: {sellModal.available - parseInt(restockQty)} units
+                  <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '4px' }}>
+                    Remaining Stock: {sellModal.available - parseInt(restockQty, 10)} units
                   </div>
                 </div>
               )}
 
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ marginTop: '1rem' }}>
                 <button type="button" className="btn-outline" onClick={() => setSellModal(null)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" style={{ backgroundColor: 'var(--stock-high)' }}>
+                <button type="submit" className="btn-primary" style={{ backgroundColor: 'var(--stock-healthy, #10b981)' }}>
                   Confirm Sale
                 </button>
               </div>
@@ -1602,6 +1541,79 @@ const Inventory = () => {
           </div>
         </div>
       )}
+
+      {/* ===== AR COLOR MODAL ===== */}
+      {arColorModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setArColorModal(null); }}
+          role="button"
+          tabIndex={0}
+          aria-label="Close AR Color dialog"
+          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setArColorModal(null); } }}
+        >
+          <div className="modal-content" style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h2 id="ar-color-dialog-title">Configure AR Try-On Color</h2>
+              <button className="close-btn" onClick={() => setArColorModal(null)} aria-label="Close dialog">
+                &times;
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleSaveArColor}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem' }}>
+                Sets the approximate hex color applied when customers try on this garment color in AR.
+              </p>
+              <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <strong>{arColorModal.item}</strong>
+                <span className="color-badge">{arColorModal.color || 'Standard'}</span>
+              </div>
+              <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                <label className="label" htmlFor="ar-color-hex">Hex Color Code</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="color"
+                    aria-label="Pick AR color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(arColorInput) ? arColorInput : '#808080'}
+                    onChange={(e) => setArColorInput(e.target.value)}
+                    style={{ width: 40, height: 40, padding: 0, border: 'none', cursor: 'pointer', flexShrink: 0, borderRadius: '4px' }}
+                  />
+                  <input
+                    autoComplete="off"
+                    id="ar-color-hex"
+                    type="text"
+                    className="input-field"
+                    placeholder="#18233F"
+                    value={arColorInput}
+                    onChange={(e) => setArColorInput(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                <p className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                  Leave blank to restore the 3D model&apos;s authored appearance.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-outline" onClick={() => setArColorModal(null)} disabled={savingArColor}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={savingArColor}>
+                  {savingArColor ? 'Saving...' : 'Save AR Color'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Archive Dialog */}
+      <ConfirmDialog
+        isOpen={!!archiveConfirm}
+        title="Archive Variant?"
+        message={`Archive ${archiveConfirm?.item} (${archiveConfirm?.size}, ${archiveConfirm?.color || 'Standard'})? Historical metrics will be preserved and you can restore it anytime.`}
+        confirmText="Archive"
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveConfirm(null)}
+      />
     </div>
   );
 };
