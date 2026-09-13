@@ -844,7 +844,200 @@ const Reservations = () => {
         }
       />
 
+      {/* Metric KPI Summary Cards for List View */}
+      {viewMode === 'table' && (
+        scopeFilter === 'active' ? (
+          <div className="res-summary-grid">
+            <div
+              className={`card res-stat-card ${statusFilter === 'All' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('All')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('All');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Show all active reservations"
+            >
+              <div className="icon-bg-soft blue">
+                <Clock size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Active Queue</p>
+                <h3>{activeCount}</h3>
+                <span className="stat-sub">Currently open reservations</span>
+              </div>
+            </div>
+            <div
+              className={`card res-stat-card ${statusFilter === 'To Pay' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('To Pay')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('To Pay');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Filter to reservations awaiting payment"
+            >
+              <div className="icon-bg-soft orange">
+                <DollarSign size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">To Pay</p>
+                <h3>{toPayCount}</h3>
+                <span className="stat-sub">Awaiting payment</span>
+              </div>
+            </div>
+            <div
+              className={`card res-stat-card ${statusFilter === 'Preparing' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('Preparing')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('Preparing');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Filter to reservations being prepared"
+            >
+              <div className="icon-bg-soft purple">
+                <Package size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Preparing</p>
+                <h3>{preparingCount}</h3>
+                <span className="stat-sub">Being prepared</span>
+              </div>
+            </div>
+            <div
+              className={`card res-stat-card ${statusFilter === 'To Pickup' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('To Pickup')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('To Pickup');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Filter to reservations ready for pickup"
+            >
+              <div className="icon-bg-soft green">
+                <PackageCheck size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">To Pickup</p>
+                <h3>{toPickupCount}</h3>
+                <span className="stat-sub">Ready for pickup</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="res-summary-grid archive-grid">
+            <div
+              className={`card res-stat-card ${statusFilter === 'All' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('All')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('All');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Show all historical reservations"
+            >
+              <div className="icon-bg-soft purple">
+                <Archive size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Archived</p>
+                <h3>{archivedCount}</h3>
+                <span className="stat-sub">Historical reservations</span>
+              </div>
+            </div>
+            <div
+              className={`card res-stat-card ${statusFilter === 'Completed' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('Completed')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('Completed');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Filter to completed reservations"
+            >
+              <div className="icon-bg-soft green">
+                <CheckCircle size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Completed</p>
+                <h3>{completedCount}</h3>
+                <span className="stat-sub">Successfully completed</span>
+              </div>
+            </div>
+            <div
+              className={`card res-stat-card ${statusFilter === 'Cancelled' ? 'active-stat' : ''}`}
+              onClick={() => setStatusFilter('Cancelled')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter('Cancelled');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="Filter to cancelled reservations"
+            >
+              <div className="icon-bg-soft red">
+                <XCircle size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Cancelled</p>
+                <h3>{cancelledCount}</h3>
+                <span className="stat-sub">Cancelled reservations</span>
+              </div>
+            </div>
+          </div>
+        )
+      )}
+
       <div className="card">
+        {/* Scope Bar: Active Queue vs Archive */}
+        {viewMode === 'table' && (
+          <div className="res-scope-bar">
+            <div className="res-scope-tabs" role="tablist" aria-label="Reservation Scope">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scopeFilter === 'active'}
+                className={`res-scope-tab ${scopeFilter === 'active' ? 'active' : ''}`}
+                onClick={() => handleScopeChange('active')}
+              >
+                <span>Active Queue</span>
+                <span className="res-scope-count">{activeCount}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scopeFilter === 'archived'}
+                className={`res-scope-tab ${scopeFilter === 'archived' ? 'active' : ''}`}
+                onClick={() => handleScopeChange('archived')}
+              >
+                <span>Archive</span>
+                <span className="res-scope-count">{archivedCount}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="card-toolbar">
           <div className="search-box">
             <Search size={18} className="search-icon" />
@@ -863,23 +1056,32 @@ const Reservations = () => {
           <div className="flex-center gap-2">
             <select autoComplete="off" id="field_015bxhd" name="field_015bxhd"
               className="input-field"
-              style={{ width: 'auto', minWidth: 150 }}
+              style={{ width: 'auto', minWidth: 160 }}
               value={statusFilter}
               onChange={(e) => {
                 const val = e.target.value;
                 setStatusFilter(val);
                 if ((val === 'Cancelled' || val === 'Completed') && viewMode === 'board') {
                   setViewMode('table');
+                  setScopeFilter('archived');
                 }
               }}
               aria-label="Filter by reservation status"
             >
-              <option value="All">All Statuses</option>
-              <option value="To Pay">To Pay</option>
-              <option value="Preparing">Preparing</option>
-              <option value="To Pickup">To Pickup (Confirmed)</option>
-              <option value="Completed">Completed / Returned</option>
-              <option value="Cancelled">Cancelled</option>
+              {scopeFilter === 'active' ? (
+                <>
+                  <option value="All">All Active Statuses</option>
+                  <option value="To Pay">To Pay</option>
+                  <option value="Preparing">Preparing</option>
+                  <option value="To Pickup">To Pickup</option>
+                </>
+              ) : (
+                <>
+                  <option value="All">All Archived</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -994,13 +1196,16 @@ const Reservations = () => {
                       : `ORD-${resYear}-${String(res.id || '').slice(0, 5).toUpperCase().padStart(5, '0')}`);
 
                   return (
-                    <tr key={res.id}>
+                    <tr key={res.id} className={`res-row ${(res.displayStatus === 'Completed' || res.displayStatus === 'Cancelled') ? 'archived-row' : ''}`}>
                       <td className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>
                         <div className="flex items-center gap-1">
                           {hasMultipleLines && (
                             <button
                               type="button"
-                              onClick={() => toggleExpandRow(res.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleExpandRow(res.id);
+                              }}
                               className="p-0.5 hover:bg-gray-100 rounded text-gray-500"
                               title={isExpanded ? "Collapse items" : "Expand items"}
                               aria-expanded={isExpanded}
@@ -1009,12 +1214,35 @@ const Reservations = () => {
                               {isExpanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
                             </button>
                           )}
-                          <span>{formattedId}</span>
+                          <div className="res-id-wrap">
+                            <span className="res-id-mono" title={res.id}>{formattedId}</span>
+                            <button
+                              type="button"
+                              className="res-id-copy"
+                              title="Copy reservation ID"
+                              aria-label="Copy reservation ID"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (navigator?.clipboard) {
+                                  navigator.clipboard.writeText(res.id);
+                                  toast.success('Reservation ID copied');
+                                }
+                              }}
+                            >
+                              <Copy size={11} aria-hidden="true" />
+                            </button>
+                          </div>
                         </div>
                       </td>
                       <td>
                         <div className="res-customer-cell">
-                          <div className="res-cust-name">{res.displayName}</div>
+                          <div className="res-cust-avatar" aria-hidden="true">
+                            {getInitials(res.displayName)}
+                          </div>
+                          <div className="res-cust-meta">
+                            <div className="res-cust-name">{res.displayName}</div>
+                            <div className="res-cust-role">Customer</div>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -1024,10 +1252,12 @@ const Reservations = () => {
                           )}
                           <div className="res-item-info">
                             {(hasMultipleLines && !isExpanded ? res.lines.slice(0, 1) : res.lines).map((line, index) => (
-                              <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary pt-1 border-t border-dashed mt-1' : 'font-medium'}>
-                                {line.productName || res.productName || res.outfit}
-                                {line.size && <span className="size-pill ml-1">{line.size}</span>}
-                                {(line.quantity ?? 1) > 1 && <span className="text-secondary text-sm"> ×{line.quantity}</span>}
+                              <div key={line.id ?? `${line.productId}-${index}`} className={index > 0 ? 'text-sm text-secondary pt-1 border-t border-dashed mt-1' : ''}>
+                                <div className="res-item-name">{line.productName || res.productName || res.outfit}</div>
+                                <div className="res-item-sub">
+                                  {line.size && <span className="size-pill">Size {line.size}</span>}
+                                  <span className="qty-pill">Qty {line.quantity ?? 1}</span>
+                                </div>
                               </div>
                             ))}
                             {hasMultipleLines && !isExpanded && (
@@ -1124,8 +1354,37 @@ const Reservations = () => {
                 })}
                 {pagedReservations.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-secondary">
-                      No reservations found
+                    <td colSpan="7" className="text-center py-10 text-secondary">
+                      <div className="res-empty-state">
+                        <div className="res-empty-icon">
+                          {scopeFilter === 'archived' ? <Archive size={28} /> : <Clock size={28} />}
+                        </div>
+                        <h4>
+                          {searchTerm || statusFilter !== 'All'
+                            ? (scopeFilter === 'archived' ? 'No archived reservations found' : 'No active reservations found')
+                            : (scopeFilter === 'archived' ? 'Archive is clear' : 'All caught up')}
+                        </h4>
+                        <p className="text-secondary text-sm">
+                          {searchTerm || statusFilter !== 'All'
+                            ? 'Try clearing your search query or status filter to view other records.'
+                            : (scopeFilter === 'archived'
+                                ? 'Completed and cancelled reservations will appear here.'
+                                : 'There are no active reservations waiting for payment, preparation, or pickup.')}
+                        </p>
+                        {(searchTerm || statusFilter !== 'All') && (
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm mt-3"
+                            onClick={() => {
+                              setSearchInput('');
+                              setSearchTerm('');
+                              setStatusFilter('All');
+                            }}
+                          >
+                            Clear Filters
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
