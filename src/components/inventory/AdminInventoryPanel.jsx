@@ -20,6 +20,7 @@ import {
 } from '../../services/productService';
 import { uploadToCloudinary } from '../../lib/storage';
 import ConfirmDialog from '../ConfirmDialog';
+import './AdminInventoryPanel.css';
 
 // ── Inline error dialog (replaces window.alert for deletion errors) ──────────
 const ErrorDialog = ({ message, onClose }) => (

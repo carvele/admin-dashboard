@@ -1,0 +1,380 @@
+﻿/* ──────────────────────────────────────────────────────────────────────────
+   Admin Inventory Panel (.aip-*)
+   Dedicated stylesheet for the inventory administration card & taxonomy.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.aip-panel {
+  margin-bottom: 1.5rem;
+  background-color: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(31, 28, 24, 0.04);
+}
+
+.aip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color, #efe9db);
+}
+
+.aip-header h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--charcoal, #1f1c18);
+}
+
+.aip-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--status-cancelled-bg, #fef2f2);
+  color: var(--status-cancelled-text, #991b1b);
+  border: 1px solid rgba(153, 27, 27, 0.15);
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.aip-error-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+/* ── Section cards ── */
+
+.aip-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.aip-section {
+  background-color: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(31, 28, 24, 0.03);
+}
+
+.aip-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.aip-section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: var(--beige, #f5eedc);
+  color: var(--accent, #d4af37);
+  flex-shrink: 0;
+}
+
+.aip-section-title {
+  margin: 0;
+  font-size: 0.975rem;
+  font-weight: 700;
+  color: var(--charcoal, #1f1c18);
+  line-height: 1.3;
+}
+
+.aip-section-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #544b45);
+  line-height: 1.4;
+}
+
+/* ── Grids ── */
+
+.aip-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+/* Product select / baseline qty / save button on one desktop row */
+.aip-baseline-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+@media (max-width: 900px) {
+  .aip-grid-2,
+  .aip-baseline-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Fields ── */
+
+.aip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.aip-field > .label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+  margin: 0;
+}
+
+.aip-field .input-field {
+  font-size: 0.875rem;
+  width: 100%;
+}
+
+.aip-col-title {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--charcoal, #1f1c18);
+  margin-bottom: 0.5rem;
+}
+
+.aip-save-btn {
+  padding: 0.6rem 1.5rem;
+  white-space: nowrap;
+}
+
+/* ── Add forms ── */
+
+.aip-add-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.aip-add-form .input-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.aip-add-form .btn-primary {
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.aip-add-form-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.aip-add-form-stacked .input-field {
+  font-size: 0.875rem;
+}
+
+.aip-add-form-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.aip-add-form-row .input-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.aip-add-form-row .btn-primary {
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Scrollable lists ── */
+
+.aip-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  padding: 0.5rem;
+  background-color: var(--cream, #fdfbf7);
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.aip-empty {
+  color: var(--text-secondary, #544b45);
+  text-align: center;
+  font-size: 0.8125rem;
+  padding: 1.25rem 0.5rem;
+}
+
+.aip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  background-color: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.aip-item:hover {
+  border-color: var(--border-light, #dcd3b6);
+  box-shadow: 0 1px 3px rgba(31, 28, 24, 0.04);
+}
+
+.aip-item-indent {
+  margin-left: 0.75rem;
+}
+
+/* flex:1 + min-width:0 so long names truncate instead of overflowing the row */
+.aip-item-name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.875rem;
+  color: var(--charcoal, #1f1c18);
+  text-overflow: ellipsis;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.aip-item-name-bold {
+  font-weight: 600;
+}
+
+.aip-item-name:focus {
+  background-color: var(--cream, #fdfbf7);
+  border-color: var(--accent, #d4af37);
+  outline: none;
+}
+
+.aip-delete {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #dc2626;
+  background-color: transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aip-delete:hover {
+  background-color: rgba(220, 38, 38, 0.08);
+  border-color: #dc2626;
+}
+
+/* ── Category group header inside the subcategory list ── */
+
+.aip-group-label {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary, #544b45);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--beige, #f5eedc);
+  border-radius: 4px;
+}
+
+/* ── Category thumbnail + upload control ── */
+
+.aip-thumb-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.aip-thumb,
+.aip-thumb-empty {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.aip-thumb {
+  object-fit: cover;
+  border: 1px solid var(--border-color, #efe9db);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.aip-thumb-empty {
+  background-color: var(--cream, #fdfbf7);
+  border: 1px dashed var(--border-color, #efe9db);
+}
+
+.aip-upload {
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  padding: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.aip-upload:hover {
+  color: var(--accent, #d4af37);
+  background-color: var(--beige, #f5eedc);
+}
+
+.aip-upload-busy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.75);
+  border-radius: 6px;
+}
+
+/* Visually hidden but announced by screen readers. Scoped rather than a global
+   .sr-only so it can't collide with a utility added elsewhere. */
+.aip-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
