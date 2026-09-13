@@ -13,11 +13,16 @@ import {
   Trash2,
   Crown,
   Eye,
+  EyeOff,
   ShieldAlert,
   Archive,
   ArchiveRestore,
   X,
-  Clock,
+  Copy,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import {
   subscribeToStaff,
@@ -55,7 +60,6 @@ const StaffManagement = () => {
   const [removeConfirm, setRemoveConfirm] = useState(null);
 
   // ── Archived-tab extras ───────────────────────────────────────────────────
-  // Map<staffId, latestNote> — loaded once when switching to archived tab
   const [historyNotes, setHistoryNotes] = useState({});
 
   // ── Reactivate modal ──────────────────────────────────────────────────────
@@ -63,15 +67,17 @@ const StaffManagement = () => {
   const [reactivateNote, setReactivateNote] = useState('');
   const [reactivating, setReactivating] = useState(false);
 
-  // ── Create modal ──────────────────────────────────────────────────────────
+  // ── Create / Credentials Modal ────────────────────────────────────────────
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
   const [creating, setCreating] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState(null);
+  const [showTempPassword, setShowTempPassword] = useState(true);
+  const [copiedType, setCopiedType] = useState(null); // 'password' | 'credentials' | 'message'
 
   // ── Subscribe to ALL staff (including deleted) ────────────────────────────
   useEffect(() => {
     const unsub = subscribeToStaff((data) => {
-      // Realtime trimming contract: cap snapshot at 100
       setStaff(data.slice(0, 100));
       setLoading(false);
     });
@@ -92,7 +98,6 @@ const StaffManagement = () => {
 
         if (error) throw error;
 
-        // Keep only the most-recent note per staff member
         const noteMap = {};
         (data ?? []).forEach((h) => {
           if (!noteMap[h.staff_id]) noteMap[h.staff_id] = h.note;
@@ -155,39 +160,56 @@ const StaffManagement = () => {
       );
       const result = await res.json();
       if (!res.ok) {
-        if (result.error?.includes('already registered') || res.status === 409) {
-          toast.error(result.error || 'This email is already registered.');
-        } else {
-          toast.error('Failed to create account: ' + (result.error ?? 'Unknown error'));
-        }
+        toast.error(result.error || 'Failed to create staff account');
         return;
       }
-      await logAction(user, 'Invited new staff account', {
+
+      await logAction(user, 'Created new staff account with temporary credentials', {
         targetType: 'profile',
         targetId: result.userId,
         email: createForm.email,
         role: createForm.role,
       });
 
-      if (result.resent) {
-        toast.success(
-          `Previous pending invitation was refreshed. A fresh invite email has been sent to ${createForm.email}!`,
-          { duration: 7000 },
-        );
-      } else {
-        toast.success(
-          `Invite sent to ${createForm.email}. They'll verify their email via the link and set a password before their account activates.`,
-          { duration: 7000 },
-        );
-      }
+      // Advance to Step 2: Show Credentials Card
+      setCreatedCredentials({
+        email: result.email || createForm.email,
+        role: result.role || createForm.role,
+        tempPassword: result.tempPassword,
+        loginUrl: result.loginUrl || `${window.location.origin}/login`,
+      });
 
-      setIsCreateModalOpen(false);
-      setCreateForm({ email: '', role: 'staff' });
+      toast.success(`Staff account for ${createForm.email} created successfully!`);
     } catch (err) {
       console.error('Staff creation error:', err);
       toast.error('Failed to create staff account: ' + err.message);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setCreatedCredentials(null);
+    setCreateForm({ email: '', role: 'staff' });
+    setCopiedType(null);
+  };
+
+  const copyToClipboard = async (text, type) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      toast.success(
+        type === 'password'
+          ? 'Temporary password copied!'
+          : type === 'credentials'
+          ? 'Login credentials copied!'
+          : 'Full invitation message copied!',
+      );
+      setTimeout(() => setCopiedType(null), 2500);
+    } catch (err) {
+      console.error('Copy error:', err);
+      toast.error('Failed to copy to clipboard');
     }
   };
 
@@ -266,7 +288,6 @@ const StaffManagement = () => {
 
     setReactivating(true);
     try {
-      // 1. Restore the staff account via secured RPC (must happen before status update)
       const { error: archiveError } = await supabase.rpc('set_staff_archive_state', {
         target_user_id: reactivateMember.id,
         archived: false,
@@ -274,7 +295,6 @@ const StaffManagement = () => {
       });
       if (archiveError) throw archiveError;
 
-      // 2. Update employment_status -> 'active' via secured RPC
       await updateStaffStatus(reactivateMember.id, 'active', false, reactivateNote.trim());
 
       toast.success(`${getDisplayName(reactivateMember)} has been reactivated.`);
@@ -577,7 +597,10 @@ const StaffManagement = () => {
           viewMode === 'active' && (
             <button
               className="btn-primary flex-center gap-2"
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => {
+                setCreatedCredentials(null);
+                setIsCreateModalOpen(true);
+              }}
             >
               <UserPlus size={18} /> Invite Staff Member
             </button>
@@ -708,78 +731,198 @@ const StaffManagement = () => {
         </div>
       </div>
 
-      {/* Create Staff Modal */}
+      {/* ── Two-Step Create Staff / Credentials Modal ── */}
       {isCreateModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content staff-modal-content" style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <div>
-                <h2>Invite Staff Member</h2>
-                <p className="modal-subtitle">Send an email invitation to join the admin team</p>
+            {!createdCredentials ? (
+              /* Step 1: Invite Form */
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2>Invite Staff Member</h2>
+                    <p className="modal-subtitle">Generate credentials to grant admin dashboard access</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="close-btn"
+                    onClick={handleCloseCreateModal}
+                    disabled={creating}
+                  >
+                    &times;
+                  </button>
+                </div>
+                <form onSubmit={handleCreateAccount} className="modal-body">
+                  <div className="form-group">
+                    <label className="label" htmlFor="create-staff-email">
+                      Email Address <span style={{ color: 'var(--color-danger)' }}>*</span>
+                    </label>
+                    <input
+                      id="create-staff-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="e.g. staff.member@gmail.com"
+                      className="input-field"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                      required
+                      disabled={creating}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="create-staff-role">
+                      Access Role <span style={{ color: 'var(--color-danger)' }}>*</span>
+                    </label>
+                    <select
+                      autoComplete="off"
+                      id="create-staff-role"
+                      className="input-field"
+                      value={createForm.role}
+                      onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                      disabled={creating}
+                    >
+                      <option value="staff">Sales Staff</option>
+                      <option value="owner">Owner (Full Access)</option>
+                    </select>
+                  </div>
+                  <div className="staff-invite-info-callout">
+                    <KeyRound size={18} className="text-secondary" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <p>
+                      The system will generate a secure 10-character temporary password and pre-confirm the account. You will receive the login credentials on the next screen to copy and provide to the staff member.
+                    </p>
+                  </div>
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={handleCloseCreateModal}
+                      disabled={creating}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={creating}>
+                      {creating ? 'Generating...' : 'Generate & Send Invite'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              /* Step 2: Credentials Card */
+              <div className="credentials-card-step">
+                <div className="modal-header">
+                  <div className="flex-center gap-2">
+                    <div className="cred-success-icon-wrap">
+                      <CheckCircle2 size={22} className="text-success" />
+                    </div>
+                    <div>
+                      <h2>Staff Account Ready</h2>
+                      <p className="modal-subtitle">Account created & pre-confirmed for immediate login</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="close-btn"
+                    onClick={handleCloseCreateModal}
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="modal-body credentials-card-body">
+                  <div className="credentials-display-box">
+                    <div className="cred-field-row">
+                      <span className="cred-field-label">Portal URL:</span>
+                      <a
+                        href={createdCredentials.loginUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cred-portal-link"
+                      >
+                        {createdCredentials.loginUrl} <ExternalLink size={12} />
+                      </a>
+                    </div>
+                    <div className="cred-field-row">
+                      <span className="cred-field-label">Staff Email:</span>
+                      <span className="cred-field-value font-mono">{createdCredentials.email}</span>
+                    </div>
+                    <div className="cred-field-row cred-password-row">
+                      <span className="cred-field-label">Temporary Password:</span>
+                      <div className="cred-password-ctrl">
+                        <span className="cred-password-text font-mono">
+                          {showTempPassword ? createdCredentials.tempPassword : '••••••••••'}
+                        </span>
+                        <button
+                          type="button"
+                          className="cred-icon-action-btn"
+                          onClick={() => setShowTempPassword(!showTempPassword)}
+                          title={showTempPassword ? 'Hide password' : 'Show password'}
+                          aria-label={showTempPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showTempPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                        <button
+                          type="button"
+                          className="cred-icon-action-btn"
+                          onClick={() => copyToClipboard(createdCredentials.tempPassword, 'password')}
+                          title="Copy Password"
+                          aria-label="Copy Password"
+                        >
+                          {copiedType === 'password' ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="staff-invite-info-callout" style={{ marginTop: '1rem' }}>
+                    <Shield size={16} style={{ color: 'var(--color-gold)', flexShrink: 0, marginTop: 2 }} />
+                    <p>
+                      The staff member can log in directly at <strong>/login</strong> using this temporary password. Upon login, they can change their password under <strong>Settings &gt; Security</strong>.
+                    </p>
+                  </div>
+
+                  <div className="credentials-action-buttons">
+                    <button
+                      type="button"
+                      className="btn-outline flex-center gap-2 w-full"
+                      onClick={() =>
+                        copyToClipboard(
+                          `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.tempPassword}\nPortal: ${createdCredentials.loginUrl}`,
+                          'credentials',
+                        )
+                      }
+                    >
+                      {copiedType === 'credentials' ? <Check size={16} /> : <Copy size={16} />}
+                      <span>Copy Login Credentials</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn-primary flex-center gap-2 w-full"
+                      onClick={() =>
+                        copyToClipboard(
+                          `Welcome to the JezSy Collection Admin Team!\n\nYour staff account has been set up with the following login details:\n• Portal URL: ${createdCredentials.loginUrl}\n• Email: ${createdCredentials.email}\n• Temporary Password: ${createdCredentials.tempPassword}\n\nPlease log in and update your password under Settings > Security.`,
+                          'message',
+                        )
+                      }
+                    >
+                      {copiedType === 'message' ? <Check size={16} /> : <Copy size={16} />}
+                      <span>Copy Full Invite Message</span>
+                    </button>
+                  </div>
+
+                  <div className="modal-footer" style={{ borderTop: 'none', padding: '0.5rem 0 0 0' }}>
+                    <button
+                      type="button"
+                      className="btn-outline w-full text-center"
+                      onClick={handleCloseCreateModal}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => !creating && setIsCreateModalOpen(false)}
-                disabled={creating}
-              >
-                &times;
-              </button>
-            </div>
-            <form onSubmit={handleCreateAccount} className="modal-body">
-              <div className="form-group">
-                <label className="label" htmlFor="create-staff-email">
-                  Email Address <span style={{ color: 'var(--color-danger)' }}>*</span>
-                </label>
-                <input
-                  id="create-staff-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="e.g. staff.member@gmail.com"
-                  className="input-field"
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                  required
-                  disabled={creating}
-                />
-              </div>
-              <div className="form-group">
-                <label className="label" htmlFor="create-staff-role">
-                  Access Role <span style={{ color: 'var(--color-danger)' }}>*</span>
-                </label>
-                <select
-                  autoComplete="off"
-                  id="create-staff-role"
-                  className="input-field"
-                  value={createForm.role}
-                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-                  disabled={creating}
-                >
-                  <option value="staff">Sales Staff</option>
-                  <option value="owner">Owner (Full Access)</option>
-                </select>
-              </div>
-              <div className="staff-invite-info-callout">
-                <Shield size={16} className="text-secondary" style={{ flexShrink: 0, marginTop: 2 }} />
-                <p>
-                  We will email a verification link to this address. Once the invitee clicks the link and creates their password, their profile activates and they will appear in Team Management.
-                </p>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  disabled={creating}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={creating}>
-                  {creating ? 'Sending Invite...' : 'Send Invite'}
-                </button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,10 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
-import { useState, useEffect } from 'react';
+import {
+  ShieldCheck,
+  KeyRound,
+  Check,
+  EyeOff,
+  Eye, useState, useEffect } from 'react';
 import {
   Save,
   Shield,
@@ -19,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { fetchSettings, fetchStoreHours, fetchStoreClosures, upsertStoreHour, insertStoreClosure, deleteStoreClosure, upsertSettings, requestPasswordReset } from '../../services/settingsService';
 import { logAction } from '../../lib/supabaseService';
+import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
@@ -27,7 +33,22 @@ import './Settings.css';
 const Settings = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('boutique');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Security / Change Password state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   // Store Hours & Closures state
   const [weeklyHours, setWeeklyHours] = useState([
     { day_of_week: 0, day_name: 'Sunday', open_time: '10:00:00', close_time: '17:00:00', is_closed: true, slot_capacity: 3 },
@@ -286,6 +307,67 @@ const Settings = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
+  };
+
+    // ── Password Strength & Update ──────────────────────────────────────────────
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (pwd.length >= 8) score += 1;
+    if (pwd.length >= 12) score += 1;
+    if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+
+    if (score <= 2) return { score: 1, label: 'Weak', color: 'var(--color-danger, #ef4444)' };
+    if (score <= 3) return { score: 2, label: 'Fair', color: '#f59e0b' };
+    if (score === 4) return { score: 3, label: 'Good', color: '#3b82f6' };
+    return { score: 4, label: 'Strong', color: 'var(--color-success, #10b981)' };
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword);
+
+  const handleUpdatePassword = async () => {
+    if (!newPassword) {
+      toast.error('Please enter a new password.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match. Please verify and try again.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        data: {
+          must_change_password: false,
+        },
+      });
+
+      if (error) {
+        toast.error(error.message || 'Failed to update password');
+        return;
+      }
+
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+
+      toast.success('Your password has been changed successfully!');
+      await logAction(user, 'Updated account password');
+    } catch (err) {
+      console.error('[Settings] Password update error:', err);
+      toast.error('Unexpected error updating password: ' + (err?.message || 'Please try again.'));
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const handlePasswordReset = async () => {
@@ -1084,6 +1166,154 @@ const Settings = () => {
                       ⚠️ Automatic acknowledgment is currently disabled. Customers will wait for a manual staff reply.
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+                    {activeTab === 'security' && (
+            <div className="animate-fade-in max-w-lg">
+              <div className="section-header-icon">
+                <ShieldCheck size={20} className="text-secondary" />
+                <h3 className="section-title mb-0">Security & Authentication</h3>
+              </div>
+
+              <div className="security-overview-card">
+                <div className="security-overview-icon">
+                  <KeyRound size={22} />
+                </div>
+                <div className="security-overview-text">
+                  <h4>Change Password</h4>
+                  <p>
+                    Set a secure permanent password for your staff account. Your new password must be at least 8 characters long.
+                  </p>
+                </div>
+              </div>
+
+              <div className="security-form-box">
+                <div className="form-group">
+                  <label className="label" htmlFor="newPassword">
+                    New Password <span className="text-danger">*</span>
+                  </label>
+                  <div className="password-input-wrapper">
+                    <input
+                      id="newPassword"
+                      name="newPassword"
+                      type={showNewPassword ? 'text' : 'password'}
+                      className="input-field"
+                      placeholder="Enter new password (min. 8 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={isUpdatingPassword}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      tabIndex={-1}
+                      aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {newPassword && (
+                  <div className="password-strength-container">
+                    <div className="password-strength-meter">
+                      <div
+                        className="password-strength-bar"
+                        style={{
+                          width: `${(passwordStrength.score / 4) * 100}%`,
+                          backgroundColor: passwordStrength.color,
+                        }}
+                      />
+                    </div>
+                    <div className="password-strength-info">
+                      <span className="text-xs text-secondary">Password strength:</span>
+                      <span className="text-xs font-semibold" style={{ color: passwordStrength.color }}>
+                        {passwordStrength.label}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group mt-3">
+                  <label className="label" htmlFor="confirmPassword">
+                    Confirm New Password <span className="text-danger">*</span>
+                  </label>
+                  <div className="password-input-wrapper">
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      className="input-field"
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={isUpdatingPassword}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {confirmPassword && newPassword !== confirmPassword && (
+                    <p className="text-xs text-danger mt-1">Passwords do not match</p>
+                  )}
+                  {confirmPassword && newPassword === confirmPassword && (
+                    <p className="text-xs text-success mt-1 flex-center gap-1" style={{ justifyContent: 'flex-start' }}>
+                      <Check size={12} /> Passwords match
+                    </p>
+                  )}
+                </div>
+
+                <div className="password-guidelines-box">
+                  <span className="guidelines-title">Requirements checklist:</span>
+                  <ul className="guidelines-list">
+                    <li className={newPassword.length >= 8 ? 'req-met' : ''}>
+                      {newPassword.length >= 8 ? <Check size={13} className="text-success" /> : <span className="req-bullet">•</span>}
+                      <span>At least 8 characters</span>
+                    </li>
+                    <li className={/[A-Z]/.test(newPassword) ? 'req-met' : ''}>
+                      {/[A-Z]/.test(newPassword) ? <Check size={13} className="text-success" /> : <span className="req-bullet">•</span>}
+                      <span>At least one uppercase letter (A-Z)</span>
+                    </li>
+                    <li className={/[0-9]/.test(newPassword) ? 'req-met' : ''}>
+                      {/[0-9]/.test(newPassword) ? <Check size={13} className="text-success" /> : <span className="req-bullet">•</span>}
+                      <span>At least one number (0-9)</span>
+                    </li>
+                    <li className={/[^A-Za-z0-9]/.test(newPassword) ? 'req-met' : ''}>
+                      {/[^A-Za-z0-9]/.test(newPassword) ? <Check size={13} className="text-success" /> : <span className="req-bullet">•</span>}
+                      <span>At least one special character (!@#$%&*)</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleUpdatePassword}
+                    disabled={isUpdatingPassword || !newPassword || newPassword.length < 8 || newPassword !== confirmPassword}
+                  >
+                    {isUpdatingPassword ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 inline animate-spin" /> Updating Password...
+                      </>
+                    ) : (
+                      'Update Password'
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

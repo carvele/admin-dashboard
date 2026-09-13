@@ -1,25 +1,19 @@
 // create-staff-account
 //
-// Invites a new staff member by email only. Does NOT create a `profiles` row —
-// that happens client-side on the SetPassword page once the invitee verifies
-// their email (by clicking the invite link) and chooses a password. This is
-// what keeps unverified invites out of Team Management and unable to log in.
+// Creates a pre-confirmed staff member account with a secure temporary password.
+// Upserts their active public.profiles row immediately so they appear in Team
+// Management right away, and returns the credentials to the store owner so they
+// can be provided to the new staff member to log in at /login.
 //
-// Caller must be an authenticated admin or owner (checked against their own
-// `profiles` row, not the client-supplied body).
+// Caller must be an authenticated owner (checked against their own profiles row).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.1';
 
-// CORS origin allow-list. Set ALLOWED_ORIGINS in the function's env (comma-
-// separated, e.g. "https://admin.jezsy.com,https://staging.jezsy.com") to lock
-// this down. Defaults to '*' so behaviour is unchanged until configured.
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '*')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 
-// Supports a leading wildcard segment, e.g. "https://*.admin-dashboard-byq.pages.dev"
-// to match Cloudflare Pages preview-deployment subdomains.
 function originMatches(origin: string, pattern: string): boolean {
   if (!pattern.includes('*')) return origin === pattern;
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*');
@@ -45,6 +39,48 @@ function json(req: Request, body: unknown, status: number) {
   });
 }
 
+function generateTemporaryPassword(): string {
+  const uppercaseChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowercaseChars = 'abcdefghijkmnopqrstuvwxyz';
+  const numberChars = '23456789';
+  const specialChars = '!@#$%&*+=-';
+  const allChars = uppercaseChars + lowercaseChars + numberChars + specialChars;
+
+  // Guarantee at least 1 uppercase, 1 lowercase, 1 number, and 1 special char
+  const getRandomChar = (chars: string): string => {
+    const randomByte = new Uint8Array(1);
+    crypto.getRandomValues(randomByte);
+    return chars[randomByte[0] % chars.length];
+  };
+
+  const passwordChars = [
+    getRandomChar(uppercaseChars),
+    getRandomChar(lowercaseChars),
+    getRandomChar(numberChars),
+    getRandomChar(specialChars),
+  ];
+
+  // Fill up to 10 characters from the full pool
+  const remainingCount = 10 - passwordChars.length;
+  const randomBytes = new Uint8Array(remainingCount);
+  crypto.getRandomValues(randomBytes);
+  for (let i = 0; i < remainingCount; i++) {
+    passwordChars.push(allChars[randomBytes[i] % allChars.length]);
+  }
+
+  // Fisher-Yates shuffle using cryptographically secure random values
+  const shuffleBytes = new Uint8Array(passwordChars.length);
+  crypto.getRandomValues(shuffleBytes);
+  for (let i = passwordChars.length - 1; i > 0; i--) {
+    const j = shuffleBytes[i] % (i + 1);
+    const temp = passwordChars[i];
+    passwordChars[i] = passwordChars[j];
+    passwordChars[j] = temp;
+  }
+
+  return passwordChars.join('');
+}
+
 const ALLOWED_INVITE_ROLES = ['staff', 'owner'];
 
 Deno.serve(async (req) => {
@@ -62,7 +98,7 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Missing authorization header' }, 401);
     }
 
-    // Client bound to the caller's own JWT — used only to identify who is calling.
+    // Client bound to the caller's own JWT — identifies who is calling
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -71,7 +107,7 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Invalid or expired session' }, 401);
     }
 
-    // Admin client — only ever used after the caller's own role is confirmed below.
+    // Admin client bound to service role
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: callerProfile, error: profileError } = await adminClient
@@ -103,129 +139,109 @@ Deno.serve(async (req) => {
     }
 
     const siteUrl = clientSiteUrl ?? Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
+    const tempPassword = generateTemporaryPassword();
 
-    let inviteResult = await adminClient.auth.admin.inviteUserByEmail(
-      email,
-      {
-        // user_metadata (spoofable by the user) — kept only for display/redirect.
-        // The authoritative role lives in app_metadata, set below.
-        data: { role, staff_role: role },
-        redirectTo: `${siteUrl}/set-password`,
-      },
+    // 1. Check if user already exists in public.profiles
+    const { data: existingProfile } = await adminClient
+      .from('profiles')
+      .select('id, role, deleted')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingProfile) {
+      if (existingProfile.role === 'customer') {
+        return json(
+          req,
+          {
+            error:
+              'This email address belongs to an existing customer account. Please use a distinct email address for staff access.',
+          },
+          409,
+        );
+      }
+      return json(
+        req,
+        {
+          error:
+            'A staff member with this email address already exists in Team Management.',
+        },
+        409,
+      );
+    }
+
+    // 2. Check if there is a stale orphan auth record without a profile
+    const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const existingAuthUser = listData?.users?.find(
+      (u: { email?: string }) => u.email?.toLowerCase() === email,
     );
 
-    let wasResent = false;
+    if (existingAuthUser) {
+      const { data: idProfile } = await adminClient
+        .from('profiles')
+        .select('id')
+        .eq('id', existingAuthUser.id)
+        .maybeSingle();
 
-    if (inviteResult.error) {
-      const inviteError = inviteResult.error;
-      if (inviteError.status === 422 || /already registered/i.test(inviteError.message)) {
-        // Check if there is an existing profile row in public.profiles
-        const { data: existingProfile } = await adminClient
-          .from('profiles')
-          .select('id, role')
-          .eq('email', email)
-          .maybeSingle();
-
-        if (existingProfile) {
-          if (existingProfile.role === 'customer') {
-            return json(
-              req,
-              {
-                error:
-                  'This email address belongs to an existing customer account. Please use a distinct email address for staff access.',
-              },
-              409,
-            );
-          }
-          return json(
-            req,
-            {
-              error:
-                'This email is already registered as an active staff member in Team Management.',
-            },
-            409,
-          );
-        }
-
-        // The user is registered in auth.users, but has NO profiles row.
-        // This is a stale or interrupted pending invitation (e.g. from an expired link
-        // or a previous signup attempt before password completion).
-        // Find their auth.users entry, remove the stale unactivated auth record, and reissue a fresh invite.
-        const { data: listData, error: listError } = await adminClient.auth.admin.listUsers({
-          perPage: 1000,
-        });
-
-        const pendingAuthUser = (!listError && listData?.users)
-          ? listData.users.find((u: { email?: string }) => u.email?.toLowerCase() === email)
-          : null;
-
-        if (pendingAuthUser) {
-          // Double check they definitely have no profile by user ID
-          const { data: idProfile } = await adminClient
-            .from('profiles')
-            .select('id')
-            .eq('id', pendingAuthUser.id)
-            .maybeSingle();
-
-          if (!idProfile) {
-            console.log(
-              `[create-staff-account] Stale unactivated auth user found (${pendingAuthUser.id}). Deleting to reissue fresh invite for ${email}`,
-            );
-            const { error: delError } = await adminClient.auth.admin.deleteUser(pendingAuthUser.id);
-            if (!delError) {
-              const { data: retryData, error: retryError } = await adminClient.auth.admin.inviteUserByEmail(
-                email,
-                {
-                  data: { role, staff_role: role },
-                  redirectTo: `${siteUrl}/set-password`,
-                },
-              );
-
-              if (!retryError && retryData?.user) {
-                inviteResult = { data: retryData, error: null };
-                wasResent = true;
-              } else if (retryError) {
-                console.error('[create-staff-account] Retry invite failed:', retryError);
-                return json(req, { error: `Failed to reissue invite: ${retryError.message}` }, 500);
-              }
-            } else {
-              console.error('[create-staff-account] Failed to delete stale user:', delError);
-            }
-          }
-        }
-
-        if (!inviteResult.data?.user) {
-          return json(
-            req,
-            {
-              error:
-                'This email is already registered. If a previous invite was pending, please retry in a moment.',
-            },
-            409,
-          );
-        }
-      } else {
-        return json(req, { error: inviteError.message }, 500);
+      if (!idProfile) {
+        console.log(`[create-staff-account] Cleaning up stale auth user ${existingAuthUser.id} without profile`);
+        await adminClient.auth.admin.deleteUser(existingAuthUser.id);
       }
     }
 
-    if (!inviteResult.data?.user) {
-      return json(req, { error: 'Failed to issue invite.' }, 500);
+    // 3. Create the staff user with the temporary password and pre-confirmed email
+    const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      app_metadata: { staff_role: role },
+      user_metadata: {
+        role,
+        staff_role: role,
+        must_change_password: true,
+      },
+    });
+
+    if (createError || !createData?.user) {
+      console.error('[create-staff-account] User creation error:', createError);
+      return json(req, { error: createError?.message || 'Failed to create staff user account.' }, 500);
     }
 
-    // Authoritative role assignment. app_metadata is writable ONLY by the service
-    // role — a user cannot change it via auth.updateUser (unlike user_metadata) —
-    // so activate-staff-account can trust staff_role when it creates the profile.
-    const { error: metaError } = await adminClient.auth.admin.updateUserById(
-      inviteResult.data.user.id,
-      { app_metadata: { staff_role: role } },
+    const newUserId = createData.user.id;
+
+    // 4. Create/upsert the active profile row in public.profiles
+    const nowIso = new Date().toISOString();
+    const { error: profileUpsertError } = await adminClient.from('profiles').upsert(
+      {
+        id: newUserId,
+        email: email,
+        role: role,
+        deleted: false,
+        is_blocked: false,
+        employment_status: 'active',
+        created_at: nowIso,
+        updated_at: nowIso,
+      },
+      { onConflict: 'id' },
     );
-    if (metaError) {
-      console.error('[create-staff-account] Failed to set app_metadata:', metaError);
-      return json(req, { error: 'Invite sent but role assignment failed. Please retry.' }, 500);
+
+    if (profileUpsertError) {
+      console.error('[create-staff-account] Profile upsert error:', profileUpsertError);
+      return json(req, { error: 'Staff account created but profile setup failed. Please retry.' }, 500);
     }
 
-    return json(req, { userId: inviteResult.data.user.id, resent: wasResent }, 200);
+    // 5. Return the temporary credentials securely to the admin
+    const loginUrl = `${siteUrl}/login`;
+    return json(
+      req,
+      {
+        userId: newUserId,
+        email: email,
+        role: role,
+        tempPassword: tempPassword,
+        loginUrl: loginUrl,
+      },
+      200,
+    );
   } catch (err) {
     console.error('[create-staff-account] Unexpected error:', err);
     return json(req, { error: 'Unexpected server error' }, 500);
