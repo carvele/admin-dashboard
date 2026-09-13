@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
 
     const siteUrl = clientSiteUrl ?? Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
 
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    let inviteResult = await adminClient.auth.admin.inviteUserByEmail(
       email,
       {
         // user_metadata (spoofable by the user) — kept only for display/redirect.
@@ -114,26 +114,110 @@ Deno.serve(async (req) => {
       },
     );
 
-    if (inviteError) {
+    let wasResent = false;
+
+    if (inviteResult.error) {
+      const inviteError = inviteResult.error;
       if (inviteError.status === 422 || /already registered/i.test(inviteError.message)) {
-        return json(
-          req,
-          {
-            error:
-              'This email already has an account (e.g. a customer sign-up). Invite a fresh address, ' +
-              'or use a + alias like name+staff@gmail.com for testing.',
-          },
-          409,
-        );
+        // Check if there is an existing profile row in public.profiles
+        const { data: existingProfile } = await adminClient
+          .from('profiles')
+          .select('id, role')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (existingProfile) {
+          if (existingProfile.role === 'customer') {
+            return json(
+              req,
+              {
+                error:
+                  'This email address belongs to an existing customer account. Please use a distinct email address for staff access.',
+              },
+              409,
+            );
+          }
+          return json(
+            req,
+            {
+              error:
+                'This email is already registered as an active staff member in Team Management.',
+            },
+            409,
+          );
+        }
+
+        // The user is registered in auth.users, but has NO profiles row.
+        // This is a stale or interrupted pending invitation (e.g. from an expired link
+        // or a previous signup attempt before password completion).
+        // Find their auth.users entry, remove the stale unactivated auth record, and reissue a fresh invite.
+        const { data: listData, error: listError } = await adminClient.auth.admin.listUsers({
+          perPage: 1000,
+        });
+
+        const pendingAuthUser = (!listError && listData?.users)
+          ? listData.users.find((u: { email?: string }) => u.email?.toLowerCase() === email)
+          : null;
+
+        if (pendingAuthUser) {
+          // Double check they definitely have no profile by user ID
+          const { data: idProfile } = await adminClient
+            .from('profiles')
+            .select('id')
+            .eq('id', pendingAuthUser.id)
+            .maybeSingle();
+
+          if (!idProfile) {
+            console.log(
+              `[create-staff-account] Stale unactivated auth user found (${pendingAuthUser.id}). Deleting to reissue fresh invite for ${email}`,
+            );
+            const { error: delError } = await adminClient.auth.admin.deleteUser(pendingAuthUser.id);
+            if (!delError) {
+              const { data: retryData, error: retryError } = await adminClient.auth.admin.inviteUserByEmail(
+                email,
+                {
+                  data: { role, staff_role: role },
+                  redirectTo: `${siteUrl}/set-password`,
+                },
+              );
+
+              if (!retryError && retryData?.user) {
+                inviteResult = { data: retryData, error: null };
+                wasResent = true;
+              } else if (retryError) {
+                console.error('[create-staff-account] Retry invite failed:', retryError);
+                return json(req, { error: `Failed to reissue invite: ${retryError.message}` }, 500);
+              }
+            } else {
+              console.error('[create-staff-account] Failed to delete stale user:', delError);
+            }
+          }
+        }
+
+        if (!inviteResult.data?.user) {
+          return json(
+            req,
+            {
+              error:
+                'This email is already registered. If a previous invite was pending, please retry in a moment.',
+            },
+            409,
+          );
+        }
+      } else {
+        return json(req, { error: inviteError.message }, 500);
       }
-      return json(req, { error: inviteError.message }, 500);
+    }
+
+    if (!inviteResult.data?.user) {
+      return json(req, { error: 'Failed to issue invite.' }, 500);
     }
 
     // Authoritative role assignment. app_metadata is writable ONLY by the service
     // role — a user cannot change it via auth.updateUser (unlike user_metadata) —
     // so activate-staff-account can trust staff_role when it creates the profile.
     const { error: metaError } = await adminClient.auth.admin.updateUserById(
-      inviteData.user.id,
+      inviteResult.data.user.id,
       { app_metadata: { staff_role: role } },
     );
     if (metaError) {
@@ -141,10 +225,9 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Invite sent but role assignment failed. Please retry.' }, 500);
     }
 
-    return json(req, { userId: inviteData.user.id }, 200);
+    return json(req, { userId: inviteResult.data.user.id, resent: wasResent }, 200);
   } catch (err) {
     console.error('[create-staff-account] Unexpected error:', err);
     return json(req, { error: 'Unexpected server error' }, 500);
   }
 });
-

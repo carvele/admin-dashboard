@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
- 
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   UserPlus,
   UserMinus,
+  Users,
   Shield,
   ShieldCheck,
   Search,
@@ -15,6 +16,8 @@ import {
   ShieldAlert,
   Archive,
   ArchiveRestore,
+  X,
+  Clock,
 } from 'lucide-react';
 import {
   subscribeToStaff,
@@ -39,11 +42,11 @@ const StaffManagement = () => {
   const { user, isAdminUnlocked } = useAuth();
   const navigate = useNavigate();
 
-  // ── Data ────────────────────────────────────────────────────
+  // ── Data ──────────────────────────────────────────────────────────────────
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ── UI state ─────────────────────────────────────────────────
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -51,20 +54,21 @@ const StaffManagement = () => {
   const [roleToggleConfirm, setRoleToggleConfirm] = useState(null);
   const [removeConfirm, setRemoveConfirm] = useState(null);
 
-  // ── Archived-tab extras ──────────────────────────────────────
+  // ── Archived-tab extras ───────────────────────────────────────────────────
   // Map<staffId, latestNote> — loaded once when switching to archived tab
   const [historyNotes, setHistoryNotes] = useState({});
 
-  // ── Reactivate modal ─────────────────────────────────────────
+  // ── Reactivate modal ──────────────────────────────────────────────────────
   const [reactivateMember, setReactivateMember] = useState(null);
   const [reactivateNote, setReactivateNote] = useState('');
   const [reactivating, setReactivating] = useState(false);
 
-  // ── Create modal ─────────────────────────────────────────────
+  // ── Create modal ──────────────────────────────────────────────────────────
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
+  const [creating, setCreating] = useState(false);
 
-  // ── Subscribe to ALL staff (including deleted) ───────────────
+  // ── Subscribe to ALL staff (including deleted) ────────────────────────────
   useEffect(() => {
     const unsub = subscribeToStaff((data) => {
       // Realtime trimming contract: cap snapshot at 100
@@ -74,20 +78,12 @@ const StaffManagement = () => {
     return () => unsub();
   }, []);
 
-  // ── Fetch latest history notes when Archived tab is opened ───
+  // ── Fetch latest history notes when Archived tab is opened ────────────────
   useEffect(() => {
     if (viewMode !== 'archived') return;
 
     const fetchNotes = async () => {
       try {
-        // log_staff_status_change() (DB trigger) writes a separate row per
-        // changed field -- employment_status and block_status can each get
-        // their own row from the same update_staff_status() call, sharing
-        // the same note text and near-identical timestamp. Scoping to
-        // employment_status here matters when they *don't* share a note: an
-        // archived member whose block status was toggled afterward, in a
-        // separate action with its own note, would otherwise show that
-        // later, unrelated block-status note as their "Archive Reason".
         const { data, error } = await supabase
           .from('staff_status_history')
           .select('staff_id, note, created_at')
@@ -110,14 +106,14 @@ const StaffManagement = () => {
     fetchNotes();
   }, [viewMode, staff]);
 
-  // ── Derived lists ─────────────────────────────────────────────
+  // ── Derived lists ─────────────────────────────────────────────────────────
   const activeStaff   = staff.filter((s) => s.deleted !== true);
   const archivedStaff = staff.filter((s) => s.deleted === true);
 
   const getDisplayName = (m) =>
     m ? ([m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown') : 'Unknown';
   const getDisplayRole = (role) =>
-    role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff';
+    role === 'owner' ? 'Owner' : 'Sales Staff';
 
   const filteredActive = activeStaff.filter(
     (s) =>
@@ -133,10 +129,11 @@ const StaffManagement = () => {
       (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
-  // ── Actions: Active tab ───────────────────────────────────────
+  // ── Actions: Active tab ───────────────────────────────────────────────────
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
+    setCreating(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -159,7 +156,7 @@ const StaffManagement = () => {
       const result = await res.json();
       if (!res.ok) {
         if (result.error?.includes('already registered') || res.status === 409) {
-          toast.error('This email is already registered.');
+          toast.error(result.error || 'This email is already registered.');
         } else {
           toast.error('Failed to create account: ' + (result.error ?? 'Unknown error'));
         }
@@ -171,15 +168,26 @@ const StaffManagement = () => {
         email: createForm.email,
         role: createForm.role,
       });
-      toast.success(
-        `Invite sent to ${createForm.email}. They'll verify their email via the link and set a password before their account is activated — they'll appear here once that's done.`,
-        { duration: 7000 },
-      );
+
+      if (result.resent) {
+        toast.success(
+          `Previous pending invitation was refreshed. A fresh invite email has been sent to ${createForm.email}!`,
+          { duration: 7000 },
+        );
+      } else {
+        toast.success(
+          `Invite sent to ${createForm.email}. They'll verify their email via the link and set a password before their account activates.`,
+          { duration: 7000 },
+        );
+      }
+
       setIsCreateModalOpen(false);
       setCreateForm({ email: '', role: 'staff' });
     } catch (err) {
       console.error('Staff creation error:', err);
       toast.error('Failed to create staff account: ' + err.message);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -241,7 +249,7 @@ const StaffManagement = () => {
     setRemoveConfirm(member);
   };
 
-  // ── Actions: Archived tab ─────────────────────────────────────
+  // ── Actions: Archived tab ─────────────────────────────────────────────────
 
   const openReactivateModal = (member) => {
     setReactivateMember(member);
@@ -279,13 +287,18 @@ const StaffManagement = () => {
     }
   };
 
-  // ── Shared table rows ─────────────────────────────────────────
+  // ── Table rows ────────────────────────────────────────────────────────────
 
   const renderActiveRows = () => {
     if (loading) {
       return (
         <tr>
-          <td colSpan="6" className="text-center py-8">Loading team...</td>
+          <td colSpan="6" className="text-center py-8">
+            <div className="staff-loading-wrap">
+              <div className="staff-loading-spinner" />
+              <span className="text-secondary text-sm">Loading team members...</span>
+            </div>
+          </td>
         </tr>
       );
     }
@@ -293,17 +306,26 @@ const StaffManagement = () => {
       return (
         <tr>
           <td colSpan="6">
-            <div className="empty-state flex-col flex-center gap-3 p-8">
-              <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                <UserMinus size={48} opacity={0.5} />
+            <div className="staff-empty-state">
+              <div className="staff-empty-icon">
+                <UserMinus size={32} />
               </div>
-              <h3 className="text-lg font-medium">No staff members found</h3>
-              <p className="text-secondary text-center max-w-sm">
-                There are no active staff members matching your current search.
+              <h4>No staff members found</h4>
+              <p className="text-secondary text-sm">
+                {searchTerm || roleFilter !== 'all'
+                  ? 'There are no active staff members matching your current filters.'
+                  : 'No active staff members registered in the system.'}
               </p>
-              {searchTerm && (
-                <button className="btn-outline mt-2" onClick={() => setSearchTerm('')}>
-                  Clear Search
+              {(searchTerm || roleFilter !== 'all') && (
+                <button
+                  type="button"
+                  className="btn-outline staff-empty-btn"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setRoleFilter('all');
+                  }}
+                >
+                  Clear Filters
                 </button>
               )}
             </div>
@@ -313,24 +335,23 @@ const StaffManagement = () => {
     }
 
     return filteredActive.map((member) => (
-      <tr key={member.id}>
+      <tr key={member.id} className="staff-table-row">
         <td>
           <div className="member-info">
             <div
-              className="avatar small-av"
-              style={{ backgroundColor: 'var(--color-gold)', color: 'var(--on-accent)' }}
+              className={`staff-avatar ${member.role === 'owner' ? 'avatar-owner' : 'avatar-staff'}`}
             >
-              {(getDisplayName(member) || 'U')[0]}
+              {(getDisplayName(member) || 'U')[0].toUpperCase()}
             </div>
-            <div>
-              <div className="font-medium">{getDisplayName(member)}</div>
-              <div className="text-secondary text-xs">{member.email}</div>
+            <div className="member-details">
+              <div className="member-name">{getDisplayName(member)}</div>
+              <div className="member-email">{member.email}</div>
             </div>
           </div>
         </td>
         <td>
           <div
-            className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}
+            className={`role-chip ${member.role === 'owner' ? 'owner-chip' : 'staff-chip'}`}
             onClick={() => toggleRole(member)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -341,50 +362,70 @@ const StaffManagement = () => {
             role="button"
             tabIndex={0}
             style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
-            title={member.role === 'owner' ? 'Role locked' : 'Click to toggle role'}
+            title={member.role === 'owner' ? 'Master owner role locked' : 'Click to change role'}
           >
-            {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
-            {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
-            <span style={{ fontWeight: member.role === 'owner' ? 700 : 500 }}>
+            {member.role === 'owner' && <Crown size={13} className="owner-crown-icon" />}
+            {member.role !== 'owner' && <Shield size={13} className="staff-shield-icon" />}
+            <span className="role-chip-text">
               {getDisplayRole(member.role)}
             </span>
           </div>
         </td>
         <td>
           {(() => {
-            const es = member.employmentStatus;
-            const m = EMPLOYMENT_STATUS_META[es];
-            return es
-              ? <span className={`emp-badge ${m?.cls ?? ''}`}>{m?.label ?? es}</span>
-              : <span className="text-secondary text-sm">—</span>;
+            const es = member.employmentStatus || 'active';
+            const m = EMPLOYMENT_STATUS_META[es] || { label: es, cls: 'emp-active' };
+            return (
+              <span className={`emp-badge ${m.cls}`}>
+                <span className="emp-dot" />
+                {m.label}
+              </span>
+            );
           })()}
         </td>
         <td>
-          {member.isBlocked
-            ? <span className="emp-badge emp-blocked"><ShieldAlert size={12} /> Blocked</span>
-            : <span className="emp-badge emp-clear"><ShieldCheck size={12} /> Clear</span>
-          }
+          {member.isBlocked ? (
+            <span className="emp-badge emp-blocked">
+              <ShieldAlert size={12} /> Blocked
+            </span>
+          ) : (
+            <span className="emp-badge emp-clear">
+              <ShieldCheck size={12} /> Clear
+            </span>
+          )}
         </td>
         <td className="text-secondary text-sm">
-          {member.createdAt ? new Date(member.createdAt).toLocaleDateString() : 'N/A'}
+          {member.createdAt
+            ? new Date(member.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : 'N/A'}
         </td>
-        <td className="text-right" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-          <button
-            className="icon-btn-small"
-            onClick={() => navigate(`/staff/${member.id}`)}
-            title="View Profile"
-          >
-            <Eye size={16} />
-          </button>
-          {member.role !== 'owner' && (
+        <td className="text-right">
+          <div className="staff-actions-cell">
             <button
-              className="icon-btn-small text-danger"
-              onClick={() => handleRemove(member)}
-              title="Archive Staff Member"
+              type="button"
+              className="icon-btn-small staff-action-btn"
+              onClick={() => navigate(`/staff/${member.id}`)}
+              title="View Staff Profile"
+              aria-label="View Staff Profile"
             >
-              <Trash2 size={16} />
+              <Eye size={16} />
             </button>
-          )}
+            {member.role !== 'owner' && (
+              <button
+                type="button"
+                className="icon-btn-small staff-action-btn text-danger"
+                onClick={() => handleRemove(member)}
+                title="Archive Staff Member"
+                aria-label="Archive Staff Member"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
         </td>
       </tr>
     ));
@@ -394,7 +435,12 @@ const StaffManagement = () => {
     if (loading) {
       return (
         <tr>
-          <td colSpan="7" className="text-center py-8">Loading archived members...</td>
+          <td colSpan="7" className="text-center py-8">
+            <div className="staff-loading-wrap">
+              <div className="staff-loading-spinner" />
+              <span className="text-secondary text-sm">Loading archived members...</span>
+            </div>
+          </td>
         </tr>
       );
     }
@@ -402,14 +448,26 @@ const StaffManagement = () => {
       return (
         <tr>
           <td colSpan="7">
-            <div className="empty-state flex-col flex-center gap-3 p-8">
-              <div className="icon-bg-large bg-light text-secondary mb-2 rounded-full p-4">
-                <Archive size={48} opacity={0.5} />
+            <div className="staff-empty-state">
+              <div className="staff-empty-icon">
+                <Archive size={32} />
               </div>
-              <h3 className="text-lg font-medium">No archived members</h3>
-              <p className="text-secondary text-center max-w-sm">
+              <h4>No archived members</h4>
+              <p className="text-secondary text-sm">
                 Archived staff will appear here. Use the archive action on the Active tab to move someone here.
               </p>
+              {(searchTerm || roleFilter !== 'all') && (
+                <button
+                  type="button"
+                  className="btn-outline staff-empty-btn"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setRoleFilter('all');
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           </td>
         </tr>
@@ -417,74 +475,96 @@ const StaffManagement = () => {
     }
 
     return filteredArchived.map((member) => (
-      <tr key={member.id} style={{ opacity: 0.85 }}>
+      <tr key={member.id} className="staff-table-row archived-row">
         <td>
           <div className="member-info">
-            <div
-              className="avatar small-av"
-              style={{ backgroundColor: 'var(--stock-none)', color: 'var(--on-accent)' }}
-            >
-              {(getDisplayName(member) || 'U')[0]}
+            <div className="staff-avatar avatar-archived">
+              {(getDisplayName(member) || 'U')[0].toUpperCase()}
             </div>
-            <div>
-              <div className="font-medium">{getDisplayName(member)}</div>
-              <div className="text-secondary text-xs">{member.email}</div>
+            <div className="member-details">
+              <div className="member-name">{getDisplayName(member)}</div>
+              <div className="member-email">{member.email}</div>
             </div>
           </div>
         </td>
         <td>
-          <div className={`role-chip ${member.role === 'owner' ? 'owner-chip' : ''}`}>
-            {member.role === 'owner' && <Crown size={14} style={{ color: 'var(--color-gold)' }} />}
-            {member.role === 'staff' && <Shield size={14} className="text-secondary" />}
-            <span>{getDisplayRole(member.role)}</span>
+          <div className={`role-chip ${member.role === 'owner' ? 'owner-chip' : 'staff-chip'}`}>
+            {member.role === 'owner' && <Crown size={13} className="owner-crown-icon" />}
+            {member.role !== 'owner' && <Shield size={13} className="staff-shield-icon" />}
+            <span className="role-chip-text">{getDisplayRole(member.role)}</span>
           </div>
         </td>
         <td>
           {(() => {
-            const es = member.employmentStatus;
-            const m = EMPLOYMENT_STATUS_META[es];
-            return es
-              ? <span className={`emp-badge ${m?.cls ?? ''}`}>{m?.label ?? es}</span>
-              : <span className="text-secondary text-sm">—</span>;
+            const es = member.employmentStatus || 'resigned';
+            const m = EMPLOYMENT_STATUS_META[es] || { label: es, cls: 'emp-resigned' };
+            return (
+              <span className={`emp-badge ${m.cls}`}>
+                <span className="emp-dot" />
+                {m.label}
+              </span>
+            );
           })()}
         </td>
-        <td className="text-secondary text-sm" style={{ maxWidth: 200 }}>
-          {historyNotes[member.id]
-            ? <span title={historyNotes[member.id]} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {historyNotes[member.id]}
-              </span>
-            : <span className="text-secondary" style={{ fontStyle: 'italic' }}>No note</span>
-          }
-        </td>
-        <td className="text-secondary text-sm">
-          {member.createdAt ? new Date(member.createdAt).toLocaleDateString() : 'N/A'}
-        </td>
-        <td className="text-secondary text-sm">
-          {member.updatedAt ? new Date(member.updatedAt).toLocaleDateString() : 'N/A'}
-        </td>
-        <td className="text-right" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-          <button
-            className="icon-btn-small"
-            onClick={() => navigate(`/staff/${member.id}`)}
-            title="View Profile"
-          >
-            <Eye size={16} />
-          </button>
-          {isAdminUnlocked && (
-            <button
-              className="icon-btn-small text-success"
-              onClick={() => openReactivateModal(member)}
-              title="Reactivate Account"
+        <td className="text-secondary text-sm" style={{ maxWidth: 220 }}>
+          {historyNotes[member.id] ? (
+            <span
+              title={historyNotes[member.id]}
+              className="archive-note-text"
             >
-              <ArchiveRestore size={16} />
-            </button>
+              {historyNotes[member.id]}
+            </span>
+          ) : (
+            <span className="text-secondary" style={{ fontStyle: 'italic' }}>No note</span>
           )}
+        </td>
+        <td className="text-secondary text-sm">
+          {member.createdAt
+            ? new Date(member.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : 'N/A'}
+        </td>
+        <td className="text-secondary text-sm">
+          {member.updatedAt
+            ? new Date(member.updatedAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : 'N/A'}
+        </td>
+        <td className="text-right">
+          <div className="staff-actions-cell">
+            <button
+              type="button"
+              className="icon-btn-small staff-action-btn"
+              onClick={() => navigate(`/staff/${member.id}`)}
+              title="View Staff Profile"
+              aria-label="View Staff Profile"
+            >
+              <Eye size={16} />
+            </button>
+            {isAdminUnlocked && (
+              <button
+                type="button"
+                className="icon-btn-small staff-action-btn text-success"
+                onClick={() => openReactivateModal(member)}
+                title="Reactivate Account"
+                aria-label="Reactivate Account"
+              >
+                <ArchiveRestore size={16} />
+              </button>
+            )}
+          </div>
         </td>
       </tr>
     ));
   };
 
-  // ── Render ────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="page-container">
@@ -505,55 +585,98 @@ const StaffManagement = () => {
         }
       />
 
-      <div className="card">
-        {/* ── Tab toggle ── */}
-        <div className="archive-toggle-row" style={{ margin: '1rem 1.5rem 0.5rem 1.5rem' }}>
-          <button
-            className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
-            onClick={() => setViewMode('active')}
-          >
-            Active ({activeStaff.length})
-          </button>
-          <button
-            className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
-            onClick={() => setViewMode('archived')}
-          >
-            <Archive size={14} /> Archived ({archivedStaff.length})
-          </button>
+      <div className="card staff-card">
+        {/* Scope Bar: Active vs Archived */}
+        <div className="staff-scope-bar">
+          <div className="staff-scope-tabs" role="tablist" aria-label="Staff Scope">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'active'}
+              className={`staff-scope-tab ${viewMode === 'active' ? 'active' : ''}`}
+              onClick={() => setViewMode('active')}
+            >
+              <Users size={15} />
+              <span>Active Team</span>
+              <span className="staff-scope-count">{activeStaff.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'archived'}
+              className={`staff-scope-tab ${viewMode === 'archived' ? 'active' : ''}`}
+              onClick={() => setViewMode('archived')}
+            >
+              <Archive size={15} />
+              <span>Archived</span>
+              <span className="staff-scope-count">{archivedStaff.length}</span>
+            </button>
+          </div>
         </div>
 
-        {/* ── Search and Filter ── */}
-        <div className="card-toolbar" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div className="search-box">
-            <Search size={18} className="search-icon" />
+        {/* Toolbar: Search and Filter */}
+        <div className="staff-toolbar">
+          <div className="staff-search-box">
+            <Search size={17} className="staff-search-icon" />
             <input
               id="staff-search-input"
               name="staffSearch"
               type="text"
-              placeholder="Search by name or email..."
+              placeholder={
+                viewMode === 'archived'
+                  ? 'Search archived staff by name or email...'
+                  : 'Search staff by name or email...'
+              }
               aria-label="Search staff by name or email"
               autoComplete="off"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
+              className="staff-search-input"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                className="staff-search-clear"
+                onClick={() => setSearchTerm('')}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          <select autoComplete="off" id="field_nieasx2" name="field_nieasx2" 
-            className="input-field" 
-            value={roleFilter} 
-            onChange={(e) => setRoleFilter(e.target.value)}
-            style={{ minWidth: '150px' }}
-          >
-            <option value="all">All Roles</option>
-            <option value="owner">Owner</option>
-            <option value="staff">Staff</option>
-          </select>
+          <div className="staff-filter-group">
+            <select
+              autoComplete="off"
+              id="staff-role-filter"
+              name="staffRoleFilter"
+              className="staff-role-select"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              aria-label="Filter by role"
+            >
+              <option value="all">All Roles</option>
+              <option value="owner">Owner</option>
+              <option value="staff">Sales Staff</option>
+            </select>
+            {(searchTerm || roleFilter !== 'all') && (
+              <button
+                type="button"
+                className="staff-reset-btn"
+                onClick={() => {
+                  setSearchTerm('');
+                  setRoleFilter('all');
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* ── Table ── */}
-        <div className="table-container">
+        {/* Table */}
+        <div className="table-container staff-table-container">
           {viewMode === 'active' ? (
-            <table className="table">
+            <table className="table staff-table">
               <thead>
                 <tr>
                   <th>Member</th>
@@ -567,7 +690,7 @@ const StaffManagement = () => {
               <tbody>{renderActiveRows()}</tbody>
             </table>
           ) : (
-            <table className="table">
+            <table className="table staff-table">
               <thead>
                 <tr>
                   <th>Member</th>
@@ -585,64 +708,90 @@ const StaffManagement = () => {
         </div>
       </div>
 
-      {/* ── Create Staff Modal ── */}
+      {/* Create Staff Modal */}
       {isCreateModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: 540 }}>
+          <div className="modal-content staff-modal-content" style={{ maxWidth: 520 }}>
             <div className="modal-header">
-              <h2>Invite Staff Member</h2>
-              <button className="close-btn" onClick={() => setIsCreateModalOpen(false)}>
+              <div>
+                <h2>Invite Staff Member</h2>
+                <p className="modal-subtitle">Send an email invitation to join the admin team</p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => !creating && setIsCreateModalOpen(false)}
+                disabled={creating}
+              >
                 &times;
               </button>
             </div>
             <form onSubmit={handleCreateAccount} className="modal-body">
               <div className="form-group">
-                <label className="label" htmlFor="create-staff-email">Email Address</label>
+                <label className="label" htmlFor="create-staff-email">
+                  Email Address <span style={{ color: 'var(--color-danger)' }}>*</span>
+                </label>
                 <input
                   id="create-staff-email"
                   name="email"
                   type="email"
                   autoComplete="email"
+                  placeholder="e.g. staff.member@gmail.com"
                   className="input-field"
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                   required
+                  disabled={creating}
                 />
               </div>
               <div className="form-group">
-                <label className="label" htmlFor="create-staff-role">Access Role</label>
-                <select autoComplete="off"
+                <label className="label" htmlFor="create-staff-role">
+                  Access Role <span style={{ color: 'var(--color-danger)' }}>*</span>
+                </label>
+                <select
+                  autoComplete="off"
                   id="create-staff-role"
                   className="input-field"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  disabled={creating}
                 >
                   <option value="staff">Sales Staff</option>
                   <option value="owner">Owner (Full Access)</option>
                 </select>
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem' }}>
-                We&apos;ll email a verification link to this address. Once they click it and set a
-                password, their account activates and they&apos;ll appear in Team Management.
-              </p>
+              <div className="staff-invite-info-callout">
+                <Shield size={16} className="text-secondary" style={{ flexShrink: 0, marginTop: 2 }} />
+                <p>
+                  We will email a verification link to this address. Once the invitee clicks the link and creates their password, their profile activates and they will appear in Team Management.
+                </p>
+              </div>
               <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setIsCreateModalOpen(false)}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  disabled={creating}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">Send Invite</button>
+                <button type="submit" className="btn-primary" disabled={creating}>
+                  {creating ? 'Sending Invite...' : 'Send Invite'}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ── Reactivate Modal ── */}
+      {/* Reactivate Modal */}
       {reactivateMember && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: 540 }}>
+          <div className="modal-content staff-modal-content" style={{ maxWidth: 540 }}>
             <div className="modal-header">
               <h2>Reactivate Staff Account</h2>
               <button
+                type="button"
                 className="close-btn"
                 onClick={() => setReactivateMember(null)}
                 disabled={reactivating}
@@ -661,7 +810,8 @@ const StaffManagement = () => {
                 <label className="label" htmlFor="reactivate-note">
                   Reactivation Note <span style={{ color: 'var(--color-danger)' }}>*</span>
                 </label>
-                <textarea autoComplete="off"
+                <textarea
+                  autoComplete="off"
                   id="reactivate-note"
                   className="input-field"
                   rows={3}
@@ -685,7 +835,7 @@ const StaffManagement = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={reactivating}>
-                  {reactivating ? 'Reactivating…' : 'Reactivate Account'}
+                  {reactivating ? 'Reactivating...' : 'Reactivate Account'}
                 </button>
               </div>
             </form>
