@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -69,6 +69,11 @@ const StaffManagement = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
   const [creating, setCreating] = useState(false);
+
+  // ── Resend Invite State ───────────────────────────────────────────────────
+  const [authStatuses, setAuthStatuses] = useState({});
+  const [resendingEmail, setResendingEmail] = useState(null);
+  const [resendConfirm, setResendConfirm] = useState(null);
 
   // ── Subscribe to ALL staff (including deleted) ────────────────────────────
   useEffect(() => {
@@ -337,101 +342,125 @@ const StaffManagement = () => {
       );
     }
 
-    return filteredActive.map((member) => (
-      <tr key={member.id} className="staff-table-row">
-        <td>
-          <div className="member-info">
+    return filteredActive.map((member) => {
+      const authInfo = authStatuses[member.id] || (member.email ? authStatuses[member.email.toLowerCase()] : null);
+      const isInvitePending = member.role !== 'owner' && authInfo && !authInfo.hasLoggedIn;
+
+      return (
+        <tr key={member.id} className="staff-table-row">
+          <td>
+            <div className="member-info">
+              <div
+                className={`staff-avatar ${member.role === 'owner' ? 'avatar-owner' : 'avatar-staff'}`}
+              >
+                {(getDisplayName(member) || 'U')[0].toUpperCase()}
+              </div>
+              <div className="member-details">
+                <div className="member-name">{getDisplayName(member)}</div>
+                <div className="member-email-row">
+                  <span className="member-email">{member.email}</span>
+                  {isInvitePending && (
+                    <span className="emp-badge emp-pending-invite" title="Staff member has never logged in yet">
+                      <Mail size={10} /> Invite Pending
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td>
             <div
-              className={`staff-avatar ${member.role === 'owner' ? 'avatar-owner' : 'avatar-staff'}`}
+              className={`role-chip ${member.role === 'owner' ? 'owner-chip' : 'staff-chip'}`}
+              onClick={() => toggleRole(member)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleRole(member);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
+              title={member.role === 'owner' ? 'Master owner role locked' : 'Click to change role'}
             >
-              {(getDisplayName(member) || 'U')[0].toUpperCase()}
-            </div>
-            <div className="member-details">
-              <div className="member-name">{getDisplayName(member)}</div>
-              <div className="member-email">{member.email}</div>
-            </div>
-          </div>
-        </td>
-        <td>
-          <div
-            className={`role-chip ${member.role === 'owner' ? 'owner-chip' : 'staff-chip'}`}
-            onClick={() => toggleRole(member)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleRole(member);
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
-            title={member.role === 'owner' ? 'Master owner role locked' : 'Click to change role'}
-          >
-            {member.role === 'owner' && <Crown size={13} className="owner-crown-icon" />}
-            {member.role !== 'owner' && <Shield size={13} className="staff-shield-icon" />}
-            <span className="role-chip-text">
-              {getDisplayRole(member.role)}
-            </span>
-          </div>
-        </td>
-        <td>
-          {(() => {
-            const es = member.employmentStatus || 'active';
-            const m = EMPLOYMENT_STATUS_META[es] || { label: es, cls: 'emp-active' };
-            return (
-              <span className={`emp-badge ${m.cls}`}>
-                <span className="emp-dot" />
-                {m.label}
+              {member.role === 'owner' && <Crown size={13} className="owner-crown-icon" />}
+              {member.role !== 'owner' && <Shield size={13} className="staff-shield-icon" />}
+              <span className="role-chip-text">
+                {getDisplayRole(member.role)}
               </span>
-            );
-          })()}
-        </td>
-        <td>
-          {member.isBlocked ? (
-            <span className="emp-badge emp-blocked">
-              <ShieldAlert size={12} /> Blocked
-            </span>
-          ) : (
-            <span className="emp-badge emp-clear">
-              <ShieldCheck size={12} /> Clear
-            </span>
-          )}
-        </td>
-        <td className="text-secondary text-sm">
-          {member.createdAt
-            ? new Date(member.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-              })
-            : 'N/A'}
-        </td>
-        <td className="text-right">
-          <div className="staff-actions-cell">
-            <button
-              type="button"
-              className="icon-btn-small staff-action-btn"
-              onClick={() => navigate(`/staff/${member.id}`)}
-              title="View Staff Profile"
-              aria-label="View Staff Profile"
-            >
-              <Eye size={16} />
-            </button>
-            {member.role !== 'owner' && (
+            </div>
+          </td>
+          <td>
+            {(() => {
+              const es = member.employmentStatus || 'active';
+              const m = EMPLOYMENT_STATUS_META[es] || { label: es, cls: 'emp-active' };
+              return (
+                <span className={`emp-badge ${m.cls}`}>
+                  <span className="emp-dot" />
+                  {m.label}
+                </span>
+              );
+            })()}
+          </td>
+          <td>
+            {member.isBlocked ? (
+              <span className="emp-badge emp-blocked">
+                <ShieldAlert size={12} /> Blocked
+              </span>
+            ) : (
+              <span className="emp-badge emp-clear">
+                <ShieldCheck size={12} /> Clear
+              </span>
+            )}
+          </td>
+          <td className="text-secondary text-sm">
+            {member.createdAt
+              ? new Date(member.createdAt).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })
+              : 'N/A'}
+          </td>
+          <td className="text-right">
+            <div className="staff-actions-cell">
+              {member.role !== 'owner' && isInvitePending && (
+                <button
+                  type="button"
+                  className="icon-btn-small staff-action-btn staff-resend-btn"
+                  onClick={() => setResendConfirm(member)}
+                  disabled={resendingEmail === member.id}
+                  title="Resend invitation email with new temporary password"
+                  aria-label="Resend invitation email"
+                >
+                  <Mail size={16} />
+                </button>
+              )}
               <button
                 type="button"
-                className="icon-btn-small staff-action-btn text-danger"
-                onClick={() => handleRemove(member)}
-                title="Archive Staff Member"
-                aria-label="Archive Staff Member"
+                className="icon-btn-small staff-action-btn"
+                onClick={() => navigate(`/staff/${member.id}`)}
+                title="View Staff Profile"
+                aria-label="View Staff Profile"
               >
-                <Trash2 size={16} />
+                <Eye size={16} />
               </button>
-            )}
-          </div>
-        </td>
-      </tr>
-    ));
+              {member.role !== 'owner' && (
+                <button
+                  type="button"
+                  className="icon-btn-small staff-action-btn text-danger"
+                  onClick={() => handleRemove(member)}
+                  title="Archive Staff Member"
+                  aria-label="Archive Staff Member"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </td>
+        </tr>
+      );
+    });
   };
 
   const renderArchivedRows = () => {
