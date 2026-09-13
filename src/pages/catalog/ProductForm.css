@@ -331,3 +331,37 @@
 }
 .relative { position: relative; }
 .absolute { position: absolute; }
+
+/* ── Product Form Premium Clearance & Actions Bar ── */
+.product-form-container {
+  padding-bottom: 7rem;
+}
+
+.product-actions-bar {
+  background: rgba(253, 251, 247, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 24px rgba(31, 28, 24, 0.08);
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  padding: 1rem 2rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+:root.dark .product-actions-bar {
+  background: rgba(18, 18, 18, 0.94);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.product-sku-pill {
+  background: var(--surface);
+  color: var(--charcoal);
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}

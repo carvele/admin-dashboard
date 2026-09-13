@@ -2,7 +2,7 @@
  
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame } from 'lucide-react';
+import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -193,16 +193,74 @@ const ClothingCatalog = () => {
     return matchesSearch && matchesCat && matchesColor && matchesTag;
   });
 
-  const PAGE_SIZE = 24;
+  const [sortBy, setSortBy] = useState('newest');
+  const [pageSize, setPageSize] = useState(24);
   const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(filteredCatalog.length / PAGE_SIZE));
+
+  const sortedCatalog = React.useMemo(() => {
+    const list = [...filteredCatalog];
+    if (sortBy === 'price-asc') {
+      list.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    } else if (sortBy === 'price-desc') {
+      list.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+    } else if (sortBy === 'name-asc') {
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } else if (sortBy === 'name-desc') {
+      list.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+    } else if (sortBy === 'stock-low') {
+      list.sort((a, b) => {
+        const aStock = inventoryMap[a.docId]?.available ?? a.stock ?? 0;
+        const bStock = inventoryMap[b.docId]?.available ?? b.stock ?? 0;
+        return aStock - bStock;
+      });
+    } else if (sortBy === 'stock-high') {
+      list.sort((a, b) => {
+        const aStock = inventoryMap[a.docId]?.available ?? a.stock ?? 0;
+        const bStock = inventoryMap[b.docId]?.available ?? b.stock ?? 0;
+        return bStock - aStock;
+      });
+    } else {
+      // 'newest' default
+      list.sort((a, b) => {
+        const aTime = new Date(a.createdAt || a.created_at || 0).getTime();
+        const bTime = new Date(b.createdAt || b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+    }
+    return list;
+  }, [filteredCatalog, sortBy, inventoryMap]);
+
+  const effectivePageSize = pageSize === 'all' ? Math.max(1, sortedCatalog.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(sortedCatalog.length / effectivePageSize));
   const pagedCatalog = React.useMemo(() => {
-    return filteredCatalog.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  }, [filteredCatalog, page]);
+    return sortedCatalog.slice(page * effectivePageSize, (page + 1) * effectivePageSize);
+  }, [sortedCatalog, page, effectivePageSize]);
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    window.scrollTo({ top: 120, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, activeCategory, activeColor, activeTag, viewMode]);
+  }, [searchTerm, activeCategory, activeColor, activeTag, sortBy, viewMode, pageSize]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() ||
+    activeCategory !== 'All' ||
+    activeColor !== 'All Colors' ||
+    activeTag !== 'All Tags' ||
+    sortBy !== 'newest'
+  );
+
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setActiveCategory('All');
+    setActiveColor('All Colors');
+    setActiveTag('All Tags');
+    setSortBy('newest');
+    setPage(0);
+  };
 
   // --- ARCHIVE PRODUCT ---
   const handleArchive = async () => {
@@ -367,6 +425,35 @@ const ClothingCatalog = () => {
               ))}
             </select>
           </div>
+
+          <div className="sort-filter">
+            <select autoComplete="off" id="catalog-sort-select" name="catalogSort"
+              className="input-field"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort products by"
+            >
+              <option value="newest">Sort: Newest First</option>
+              <option value="price-asc">Sort: Price (Low → High)</option>
+              <option value="price-desc">Sort: Price (High → Low)</option>
+              <option value="name-asc">Sort: Name (A → Z)</option>
+              <option value="name-desc">Sort: Name (Z → A)</option>
+              <option value="stock-low">Sort: Stock (Low → High)</option>
+              <option value="stock-high">Sort: Stock (High → Low)</option>
+            </select>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="clear-filters-btn flex-center gap-1"
+              title="Clear all search and filter conditions"
+              aria-label="Clear all filters"
+            >
+              <X size={14} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -642,27 +729,82 @@ const ClothingCatalog = () => {
         ) : null}
       </div>
 
-      {totalPages > 1 && (
-        <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem', marginBottom: '2rem' }}>
-          <button
-            className="btn-outline btn-sm"
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
-          >
-            Previous
-          </button>
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Page {page + 1} of {totalPages} ({filteredCatalog.length} total)
-          </span>
-          <button
-            className="btn-outline btn-sm"
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
-          >
-            Next
-          </button>
+      {/* Premium Pagination & Range Navigator */}
+      <div className="catalog-pagination-bar">
+        <div className="pagination-range">
+          {sortedCatalog.length === 0 ? (
+            '0 products'
+          ) : (
+            <>
+              Showing <strong>{page * effectivePageSize + 1}</strong>–<strong>{Math.min(sortedCatalog.length, (page + 1) * effectivePageSize)}</strong> of <strong>{sortedCatalog.length}</strong> items
+            </>
+          )}
         </div>
-      )}
+
+        {totalPages > 1 && (
+          <div className="pagination-controls-pills">
+            <button
+              className="pagination-pill-arrow"
+              onClick={() => handlePageChange(Math.max(0, page - 1))}
+              disabled={page === 0}
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => {
+              if (
+                i === 0 ||
+                i === totalPages - 1 ||
+                (i >= page - 1 && i <= page + 1)
+              ) {
+                return (
+                  <button
+                    key={i}
+                    className={`pagination-pill-btn ${page === i ? 'active' : ''}`}
+                    onClick={() => handlePageChange(i)}
+                    aria-current={page === i ? 'page' : undefined}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              }
+              if (i === page - 2 || i === page + 2) {
+                return <span key={i} className="pagination-pill-ellipsis">…</span>;
+              }
+              return null;
+            })}
+
+            <button
+              className="pagination-pill-arrow"
+              onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
+              disabled={page >= totalPages - 1}
+              aria-label="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+
+        <div className="pagination-size-wrapper">
+          <label htmlFor="catalog-pagesize-select" className="text-xs text-secondary">Display:</label>
+          <select
+            id="catalog-pagesize-select"
+            className="pagination-size-select"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value));
+              setPage(0);
+            }}
+            aria-label="Items per page"
+          >
+            <option value={12}>12 per page</option>
+            <option value={24}>24 per page</option>
+            <option value={48}>48 per page</option>
+            <option value="all">View All ({sortedCatalog.length})</option>
+          </select>
+        </div>
+      </div>
 
       <ConfirmDialog
         isOpen={!!archiveConfirm}
