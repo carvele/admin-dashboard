@@ -17,6 +17,9 @@ import {
   Calendar,
   Heart,
   Users,
+  Eye,
+  EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
@@ -28,7 +31,6 @@ import {
   sendNotification,
   getPaginatedCustomers,
   getCustomerMeasurements,
-  saveCustomerMeasurements,
   getCustomerStatsBatch,
   getCustomerWishlistStats,
   ENGAGEMENT_FORMULA,
@@ -232,16 +234,36 @@ const Customers = () => {
   // Body metrics live in `user_measurements`, not on the profile row — load them
   // separately whenever a customer profile is opened.
   const [custMeasurements, setCustMeasurements] = useState(null);
+  const [measurementLoading, setMeasurementLoading] = useState(false);
+  const [measurementAccessDenied, setMeasurementAccessDenied] = useState(false);
+  const [measurementsRevealed, setMeasurementsRevealed] = useState(false);
 
   React.useEffect(() => {
     if (!selectedCustomer?.docId) {
       setCustMeasurements(null);
+      setMeasurementAccessDenied(false);
+      setMeasurementsRevealed(false);
       return;
     }
     let cancelled = false;
+    setMeasurementLoading(true);
+    setMeasurementAccessDenied(false);
+    setMeasurementsRevealed(false);
     getCustomerMeasurements(selectedCustomer.docId)
-      .then((row) => { if (!cancelled) setCustMeasurements(row); })
-      .catch(() => { if (!cancelled) setCustMeasurements(null); });
+      .then((row) => {
+        if (!cancelled) setCustMeasurements(row);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          if (err?.code === '42501' || err?.message?.includes('UNAUTHORIZED_MEASUREMENT_ACCESS')) {
+            setMeasurementAccessDenied(true);
+          }
+          setCustMeasurements(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMeasurementLoading(false);
+      });
     return () => { cancelled = true; };
   }, [selectedCustomer?.docId]);
 
@@ -307,74 +329,32 @@ const Customers = () => {
 
   // --- EDIT CUSTOMER ---
   const startEdit = () => {
-    const m = custMeasurements?.measurements || {};
     setEditForm({
       firstName: selectedCustomer.firstName || selectedCustomer.first_name || '',
       lastName: selectedCustomer.lastName || selectedCustomer.last_name || '',
       email: selectedCustomer.email,
       phone: selectedCustomer.phone,
       status: selectedCustomer.isBlocked ? 'Inactive' : 'Active',
-      // Read canonical jsonb keys, unwrapping any { valueCm } objects to numbers
-      topBust: extractNumericMeasurement(m.bust ?? m.topBust),
-      underBust: extractNumericMeasurement(m.underBust),
-      waist: extractNumericMeasurement(m.waist),
-      hip: extractNumericMeasurement(m.hips ?? m.hip),
-      neck: extractNumericMeasurement(m.neck ?? m.neckBase),
-      shoulderWidth: extractNumericMeasurement(m.shoulderWidth),
-      armLength: extractNumericMeasurement(m.armLength),
-      backLength: extractNumericMeasurement(m.torsoLength ?? m.backLength),
-      insideLegLength: extractNumericMeasurement(m.inseam ?? m.insideLegLength),
-      height: extractNumericMeasurement(custMeasurements?.height),
-      weight: extractNumericMeasurement(custMeasurements?.weight),
     });
     setIsEditing(true);
   };
 
   const handleEditSave = async () => {
-    const toNum = (v) => (v === '' || v === null || v === undefined ? null : parseFloat(v));
-
     const firstName = (editForm.firstName || '').trim();
     const lastName = (editForm.lastName || '').trim();
     const fullName = `${firstName} ${lastName}`.trim();
 
     // Personal details only. Status is handled separately via admin RPC setCustomerBlockState.
     // Email is managed via Auth and excluded from profile updates.
+    // Customer measurements are canonical and read-only to staff; alterations belong to reservation records.
     const personalUpdates = {
       firstName,
       lastName,
       phone: editForm.phone,
     };
 
-    const saveMeasure = (existing, val) => {
-      const num = toNum(val);
-      if (num === null) return null;
-      if (typeof existing === 'object' && existing !== null) {
-        return { ...existing, valueCm: num };
-      }
-      return { valueCm: num };
-    };
-
-    const existingM = custMeasurements?.measurements || {};
-    // Body metrics → user_measurements. Merge onto the existing jsonb so any
-    // keys the admin form doesn't surface (confidence, etc.) survive.
-    const measurements = {
-      ...existingM,
-      bust: saveMeasure(existingM.bust ?? existingM.topBust, editForm.topBust),
-      underBust: saveMeasure(existingM.underBust, editForm.underBust),
-      waist: saveMeasure(existingM.waist, editForm.waist),
-      hips: saveMeasure(existingM.hips ?? existingM.hip, editForm.hip),
-      neck: saveMeasure(existingM.neck ?? existingM.neckBase, editForm.neck),
-      shoulderWidth: saveMeasure(existingM.shoulderWidth, editForm.shoulderWidth),
-      armLength: saveMeasure(existingM.armLength, editForm.armLength),
-      torsoLength: saveMeasure(existingM.torsoLength ?? existingM.backLength, editForm.backLength),
-      inseam: saveMeasure(existingM.inseam ?? existingM.insideLegLength, editForm.insideLegLength),
-    };
-    const height = toNum(editForm.height);
-    const weight = toNum(editForm.weight);
-
     try {
       await updateCustomerDetails(selectedCustomer.docId, personalUpdates);
-      await saveCustomerMeasurements(selectedCustomer.docId, { height, weight, measurements });
 
       // Moderation: only admin/owner can change block state via setCustomerBlockState
       let nextIsBlocked = selectedCustomer.isBlocked;
@@ -417,7 +397,6 @@ const Customers = () => {
         isBlocked: nextIsBlocked,
       };
       setSelectedCustomer(patched);
-      setCustMeasurements({ ...(custMeasurements || {}), height, weight, measurements });
       setCustomers((prev) => prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...patched } : c)));
       setIsEditing(false);
       toast.success(`Updated ${fullName}`);
@@ -855,7 +834,6 @@ const Customers = () => {
                       if ((selectedCustomer.reservationCount || 0) >= 5) tags.push({ label: '🔁 Frequent', color: 'var(--status-completed-text)', bg: 'var(--status-completed-bg)' });
                       const hasFitProfile = custMeasurements && (
                         custMeasurements.height ||
-                        custMeasurements.weight ||
                         (custMeasurements.measurements && Object.values(custMeasurements.measurements).some((v) => extractNumericMeasurement(v) !== ''))
                       );
                       if (hasFitProfile) tags.push({ label: '📏 Fit Profile', color: 'var(--status-approved-text)', bg: 'var(--status-approved-bg)' });
@@ -1006,100 +984,56 @@ const Customers = () => {
                   </div>
                 </div>
 
-                {/* Measurements – Full Android AI Scanner profile */}
+                {/* Measurements – Boutique Sizing & Fit Profile (Canonical & Read-Only to Staff) */}
                 <div className="profile-section">
-                  <h4 className="section-title flex-center gap-2 justify-start">
-                    <Ruler size={18} /> Saved Measurements
-                  </h4>
+                  <div className="flex-center justify-between mb-2">
+                    <h4 className="section-title flex-center gap-2 justify-start mb-0">
+                      <Ruler size={18} /> Sizing & Fit Profile
+                    </h4>
+                    {!isEditing && !measurementAccessDenied && custMeasurements && (
+                      <button
+                        type="button"
+                        className="btn-outline small flex-center gap-1"
+                        style={{ padding: '3px 8px', fontSize: '12px' }}
+                        onClick={() => setMeasurementsRevealed((prev) => !prev)}
+                        title={measurementsRevealed ? "Hide sensitive measurements" : "Reveal sensitive measurements for fitting advisory"}
+                      >
+                        {measurementsRevealed ? <EyeOff size={13} /> : <Eye size={13} />}
+                        {measurementsRevealed ? 'Hide Details' : 'View Fitting Profile'}
+                      </button>
+                    )}
+                  </div>
+
                   {isEditing ? (
-                    <div className="measurements-grid">
-                      <div className="measure-box">
-                        <span>Bust</span>
-                        <input autoComplete="off" id="cust-measure-topBust" name="topBust" type="number" className="input-field" value={editForm.topBust || ''}
-                          onChange={(e) => setEditForm({ ...editForm, topBust: e.target.value })}
-                          placeholder="—"
-                        />
+                    <div className="text-secondary text-xs italic p-3 bg-gray-50 rounded border border-dashed">
+                      Customer body profiles are canonical and read-only to boutique staff. Garment alterations, hem adjustments, and boutique-confirmed measurements must be recorded directly on specific reservation fitting records.
+                    </div>
+                  ) : measurementAccessDenied ? (
+                    <div className="text-secondary text-xs italic p-3 bg-gray-50 rounded">
+                      🔒 Restricted: Viewing customer body measurements requires administrative or fitting privileges.
+                    </div>
+                  ) : measurementLoading ? (
+                    <div className="text-secondary text-xs p-3">Loading fitting profile...</div>
+                  ) : !custMeasurements ? (
+                    <div className="empty-state">No scan or sizing measurements saved yet.</div>
+                  ) : !measurementsRevealed ? (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200">
+                      <div>
+                        <span className="font-semibold text-xs text-primary block">Fitting Data Protected</span>
+                        <p className="text-xs text-secondary mt-0.5">Sensitive personal measurements are collapsed to protect customer privacy. Reveal only when preparing garments.</p>
                       </div>
-                      <div className="measure-box">
-                        <span>Under Bust</span>
-                        <input autoComplete="off" id="cust-measure-underBust" name="underBust" type="number" className="input-field" value={editForm.underBust || ''}
-                          onChange={(e) => setEditForm({ ...editForm, underBust: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Waist</span>
-                        <input autoComplete="off" id="cust-measure-waist" name="waist" type="number" className="input-field" value={editForm.waist || ''}
-                          onChange={(e) => setEditForm({ ...editForm, waist: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Hips</span>
-                        <input autoComplete="off" id="cust-measure-hip" name="hip" type="number" className="input-field" value={editForm.hip || ''}
-                          onChange={(e) => setEditForm({ ...editForm, hip: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Neck</span>
-                        <input autoComplete="off" id="cust-measure-neck" name="neck" type="number" className="input-field" value={editForm.neck || ''}
-                          onChange={(e) => setEditForm({ ...editForm, neck: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Shoulder</span>
-                        <input autoComplete="off" id="cust-measure-shoulderWidth" name="shoulderWidth" type="number" className="input-field" value={editForm.shoulderWidth || ''}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, shoulderWidth: e.target.value })
-                          }
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Arm Length</span>
-                        <input autoComplete="off" id="cust-measure-armLength" name="armLength" type="number" className="input-field" value={editForm.armLength || ''}
-                          onChange={(e) => setEditForm({ ...editForm, armLength: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Back Length</span>
-                        <input autoComplete="off" id="cust-measure-backLength" name="backLength" type="number" className="input-field" value={editForm.backLength || ''}
-                          onChange={(e) => setEditForm({ ...editForm, backLength: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Inside Leg</span>
-                        <input autoComplete="off" id="cust-measure-insideLegLength" name="insideLegLength" type="number" className="input-field" value={editForm.insideLegLength || ''}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, insideLegLength: e.target.value })
-                          }
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Height (cm)</span>
-                        <input autoComplete="off" id="cust-measure-height" name="height" type="number" className="input-field" value={editForm.height || ''}
-                          onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
-                      <div className="measure-box">
-                        <span>Weight (kg)</span>
-                        <input autoComplete="off" id="cust-measure-weight" name="weight" type="number" className="input-field" value={editForm.weight || ''}
-                          onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
-                          placeholder="—"
-                        />
-                      </div>
+                      <button
+                        type="button"
+                        className="btn-outline small flex-center gap-1 flex-shrink-0 ml-3"
+                        onClick={() => setMeasurementsRevealed(true)}
+                      >
+                        <Eye size={13} /> View Fitting Profile
+                      </button>
                     </div>
                   ) : (
                     (() => {
                       const m = custMeasurements?.measurements || {};
                       const height = custMeasurements?.height;
-                      const weight = custMeasurements?.weight;
 
                       const rawRows = [
                         { label: 'Bust', raw: m.bust ?? m.topBust },
@@ -1112,7 +1046,6 @@ const Customers = () => {
                         { label: 'Arm Length', raw: m.armLength },
                         { label: 'Inseam', raw: m.inseam ?? m.insideLegLength ?? m.legLength },
                         { label: 'Height', raw: height, defaultUnit: 'cm' },
-                        { label: 'Weight', raw: weight, defaultUnit: 'kg' },
                       ];
 
                       const rows = rawRows
@@ -1128,20 +1061,47 @@ const Customers = () => {
                         .filter(Boolean);
 
                       if (rows.length === 0) {
-                        return <div className="empty-state">No AI scan or measurements saved yet.</div>;
+                        return <div className="empty-state">No scan or sizing measurements saved yet.</div>;
                       }
 
+                      const sourceLabel = custMeasurements.measurement_source === 'ai_scan'
+                        ? 'AI Body Scan'
+                        : (custMeasurements.measurement_source || 'Customer Entered');
+                      const captureDate = custMeasurements.scanned_at || custMeasurements.created_at;
+
                       return (
-                        <div className="measurements-grid">
-                          {rows.map((r) => (
-                            <div className="measure-box" key={r.label}>
-                              <span>{r.label}</span>
-                              <strong>
-                                {r.value}
-                                {r.unit ? (r.unit === '"' ? '"' : ` ${r.unit}`) : ''}
-                              </strong>
+                        <div>
+                          {/* Provenance & Quality Badges */}
+                          <div className="flex-center justify-between text-xs text-secondary mb-2.5 pb-2 border-b">
+                            <span>Source: <strong className="text-primary">{sourceLabel}</strong></span>
+                            {captureDate && <span>Captured: {formatDate(captureDate)}</span>}
+                            <span className={`status-chip status-chip-${custMeasurements.requires_review ? 'pending' : 'completed'}`}>
+                              {custMeasurements.quality_status === 'needs_review' ? 'Needs Review' : 'Verified'}
+                            </span>
+                          </div>
+
+                          {/* Canonical Anomaly / Quality Banner */}
+                          {custMeasurements.requires_review && (
+                            <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-xs flex items-center gap-2">
+                              <AlertTriangle size={16} className="text-amber-600 flex-shrink-0" />
+                              <span>
+                                <strong>Measurement Review Required:</strong> This scan is flagged for calibration or posture variation and requires manual verification before sizing or alterations.
+                              </span>
                             </div>
-                          ))}
+                          )}
+
+                          {/* Sizing Grid (Centimeters only - Weight strictly excluded) */}
+                          <div className="measurements-grid">
+                            {rows.map((r) => (
+                              <div className="measure-box" key={r.label}>
+                                <span>{r.label}</span>
+                                <strong>
+                                  {r.value}
+                                  {r.unit ? (r.unit === '"' ? '"' : ` ${r.unit}`) : ''}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       );
                     })()

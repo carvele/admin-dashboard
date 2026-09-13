@@ -278,39 +278,119 @@ export const getCustomerWishlistStats = async (customerIds) => {
 // NOTE: body metrics live in the dedicated `user_measurements` table, NOT on
 // `profiles`. The jsonb `measurements` column uses the same canonical keys the
 // mobile app reads/writes (bust, waist, hips, inseam, shoulderWidth, armLength,
-// torsoLength, legLength). height/weight are top-level numeric columns.
+// torsoLength, legLength). height is a top-level numeric column. Weight is strictly
+// excluded from the staff read RPC to uphold purpose limitation and least operational exposure.
 
-/** Fetch the single measurements row for a customer (or null). */
+/**
+ * Fetch the sanitized measurements for a customer via authorized SECURITY DEFINER RPC.
+ * Strictly enforces can_view_customer_measurements() and writes durable access audit log.
+ */
 export const getCustomerMeasurements = async (userId) => {
   if (!userId) return null;
+  const { data, error } = await supabase.rpc('get_customer_measurements_for_staff', {
+    _customer_id: userId,
+  });
+  if (error) {
+    if (error.code === '42501' || error.message?.includes('Insufficient permissions')) {
+      const err = new Error('UNAUTHORIZED_MEASUREMENT_ACCESS');
+      err.code = '42501';
+      throw err;
+    }
+    throw error;
+  }
+  return data ?? null;
+};
+
+/**
+ * DEPRECATED / DISALLOWED DIRECT WRITE:
+ * Staff cannot mutate or overwrite canonical customer body measurements.
+ * Tailoring adjustments and confirmed measurements must be recorded on reservation fitting records.
+ */
+export const saveCustomerMeasurements = async () => {
+  throw new Error('Direct mutation of customer body profiles is discontinued. Use reservation fitting records for tailoring adjustments.');
+};
+
+// ── Reservation Fitting Sessions & Garment Alterations ─────────
+
+/**
+ * Save or update a reservation-level fitting session record (confirmed tape measurements, status, notes).
+ */
+export const saveReservationFittingRecord = async ({
+  reservationId,
+  confirmedBodyMeasurements = {},
+  fittingStatus = 'fitted',
+  customerFittingSummary = '',
+  staffInternalNotes = '',
+}) => {
+  const { data, error } = await supabase.rpc('save_reservation_fitting_record', {
+    _reservation_id: reservationId,
+    _confirmed_body_measurements: confirmedBodyMeasurements,
+    _fitting_status: fittingStatus,
+    _customer_fitting_summary: customerFittingSummary,
+    _staff_internal_notes: staffInternalNotes,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Fetch the reservation-level fitting record.
+ */
+export const getReservationFitting = async (reservationId) => {
+  if (!reservationId) return null;
   const { data, error } = await supabase
-    .from('user_measurements')
+    .from('reservation_fitting_records')
     .select('*')
-    .eq('user_id', userId)
+    .eq('reservation_id', reservationId)
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
 };
 
 /**
- * Upsert a customer's measurements. `measurements` is merged onto whatever the
- * caller passes — callers should spread the existing jsonb first so keys the
- * admin form doesn't surface (e.g. confidence data) are preserved.
- * Writes raw column names directly (NO camel→snake conversion) so the jsonb
- * inner keys keep their camelCase form the mobile app expects.
+ * Save or update an item-level garment alteration record.
  */
-export const saveCustomerMeasurements = async (userId, { height, weight, measurements }) => {
-  const payload = {
-    user_id: userId,
-    height: height ?? null,
-    weight: weight ?? null,
-    measurements: measurements ?? {},
-    measurement_source: 'admin_manual',
-  };
-  const { error } = await supabase
-    .from('user_measurements')
-    .upsert(payload, { onConflict: 'user_id' });
+export const saveReservationItemAlteration = async ({
+  reservationItemId,
+  reservationId,
+  productId,
+  hemAdjustmentCm = 0,
+  sleeveAdjustmentCm = 0,
+  waistAdjustmentCm = 0,
+  shouldersAdjustmentCm = 0,
+  otherAdjustments = {},
+  alterationStatus = 'pending',
+  customerSummary = '',
+  staffNotes = '',
+}) => {
+  const { data, error } = await supabase.rpc('save_reservation_item_alteration', {
+    _reservation_item_id: reservationItemId,
+    _reservation_id: reservationId,
+    _product_id: productId,
+    _hem_cm: hemAdjustmentCm,
+    _sleeve_cm: sleeveAdjustmentCm,
+    _waist_cm: waistAdjustmentCm,
+    _shoulders_cm: shouldersAdjustmentCm,
+    _other_adjustments: otherAdjustments,
+    _alteration_status: alterationStatus,
+    _customer_summary: customerSummary,
+    _staff_notes: staffNotes,
+  });
   if (error) throw error;
+  return data;
+};
+
+/**
+ * Fetch all item-level alterations for a reservation.
+ */
+export const getReservationItemAlterations = async (reservationId) => {
+  if (!reservationId) return [];
+  const { data, error } = await supabase
+    .from('reservation_item_alterations')
+    .select('*')
+    .eq('reservation_id', reservationId);
+  if (error) throw error;
+  return data ?? [];
 };
 
 // ── Reservations (re-exported from reservationService) ───────

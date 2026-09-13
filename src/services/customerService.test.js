@@ -40,6 +40,9 @@ import {
   updateCustomerDetails,
   setCustomerBlockState,
   setCustomerArchiveState,
+  getCustomerMeasurements,
+  saveCustomerMeasurements,
+  saveReservationFittingRecord,
 } from './customerService';
 
 const CUST = 'cust-1';
@@ -283,6 +286,60 @@ describe('customerService B2A-4 commands', () => {
       await expect(
         setCustomerArchiveState('cust-789', false, 'Restoring customer')
       ).rejects.toThrow('Cannot modify block state');
+    });
+  });
+
+  describe('measurement privacy & fitting records', () => {
+    test('getCustomerMeasurements calls get_customer_measurements_for_staff RPC and omits weight', async () => {
+      const sanitized = {
+        height: 160,
+        measurements: { bust: 88, waist: 70 },
+        quality_status: 'verified',
+        requires_review: false,
+      };
+      mockRpc.mockResolvedValueOnce({ data: sanitized, error: null });
+
+      const result = await getCustomerMeasurements('cust-101');
+      expect(mockRpc).toHaveBeenCalledWith('get_customer_measurements_for_staff', {
+        _customer_id: 'cust-101',
+      });
+      expect(result).toEqual(sanitized);
+      expect(result.weight).toBeUndefined();
+    });
+
+    test('getCustomerMeasurements converts 42501 error into UNAUTHORIZED_MEASUREMENT_ACCESS', async () => {
+      const pgrstError = new Error('Insufficient permissions to view customer measurements');
+      pgrstError.code = '42501';
+      mockRpc.mockResolvedValueOnce({ data: null, error: pgrstError });
+
+      await expect(getCustomerMeasurements('cust-101')).rejects.toThrow('UNAUTHORIZED_MEASUREMENT_ACCESS');
+    });
+
+    test('saveCustomerMeasurements rejects direct profile overwriting', async () => {
+      await expect(saveCustomerMeasurements()).rejects.toThrow(
+        'Direct mutation of customer body profiles is discontinued'
+      );
+    });
+
+    test('saveReservationFittingRecord delegates to RPC', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 'fitting-uuid-1', error: null });
+
+      const res = await saveReservationFittingRecord({
+        reservationId: 'res-123',
+        confirmedBodyMeasurements: { bust: 88, waist: 70 },
+        fittingStatus: 'fitted',
+        customerFittingSummary: 'Fitting confirmed',
+        staffInternalNotes: 'Customer requested loose waist',
+      });
+
+      expect(mockRpc).toHaveBeenCalledWith('save_reservation_fitting_record', {
+        _reservation_id: 'res-123',
+        _confirmed_body_measurements: { bust: 88, waist: 70 },
+        _fitting_status: 'fitted',
+        _customer_fitting_summary: 'Fitting confirmed',
+        _staff_internal_notes: 'Customer requested loose waist',
+      });
+      expect(res).toBe('fitting-uuid-1');
     });
   });
 });

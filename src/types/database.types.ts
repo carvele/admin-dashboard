@@ -1607,6 +1607,159 @@ export type Database = {
         }
         Relationships: []
       }
+      reservation_fitting_records: {
+        Row: {
+          confirmed_body_measurements: Json | null
+          created_at: string
+          customer_fitting_summary: string | null
+          customer_id: string
+          fitted_at: string | null
+          fitted_by: string | null
+          fitted_by_name: string | null
+          fitting_status: string
+          id: string
+          reservation_id: string
+          staff_internal_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          confirmed_body_measurements?: Json | null
+          created_at?: string
+          customer_fitting_summary?: string | null
+          customer_id: string
+          fitted_at?: string | null
+          fitted_by?: string | null
+          fitted_by_name?: string | null
+          fitting_status?: string
+          id?: string
+          reservation_id: string
+          staff_internal_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confirmed_body_measurements?: Json | null
+          created_at?: string
+          customer_fitting_summary?: string | null
+          customer_id?: string
+          fitted_at?: string | null
+          fitted_by?: string | null
+          fitted_by_name?: string | null
+          fitting_status?: string
+          id?: string
+          reservation_id?: string
+          staff_internal_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_fitting_records_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_fitting_records_fitted_by_fkey"
+            columns: ["fitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_fitting_records_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: true
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_item_alterations: {
+        Row: {
+          alteration_status: string
+          assigned_tailor_id: string | null
+          assigned_tailor_name: string | null
+          created_at: string
+          customer_alteration_summary: string | null
+          hem_adjustment_cm: number | null
+          id: string
+          other_adjustments: Json | null
+          product_id: string | null
+          reservation_id: string
+          reservation_item_id: string
+          shoulders_adjustment_cm: number | null
+          sleeve_adjustment_cm: number | null
+          staff_internal_notes: string | null
+          updated_at: string
+          waist_adjustment_cm: number | null
+        }
+        Insert: {
+          alteration_status?: string
+          assigned_tailor_id?: string | null
+          assigned_tailor_name?: string | null
+          created_at?: string
+          customer_alteration_summary?: string | null
+          hem_adjustment_cm?: number | null
+          id?: string
+          other_adjustments?: Json | null
+          product_id?: string | null
+          reservation_id: string
+          reservation_item_id: string
+          shoulders_adjustment_cm?: number | null
+          sleeve_adjustment_cm?: number | null
+          staff_internal_notes?: string | null
+          updated_at?: string
+          waist_adjustment_cm?: number | null
+        }
+        Update: {
+          alteration_status?: string
+          assigned_tailor_id?: string | null
+          assigned_tailor_name?: string | null
+          created_at?: string
+          customer_alteration_summary?: string | null
+          hem_adjustment_cm?: number | null
+          id?: string
+          other_adjustments?: Json | null
+          product_id?: string | null
+          reservation_id?: string
+          reservation_item_id?: string
+          shoulders_adjustment_cm?: number | null
+          sleeve_adjustment_cm?: number | null
+          staff_internal_notes?: string | null
+          updated_at?: string
+          waist_adjustment_cm?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_item_alterations_assigned_tailor_id_fkey"
+            columns: ["assigned_tailor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_item_alterations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_item_alterations_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_item_alterations_reservation_item_id_fkey"
+            columns: ["reservation_item_id"]
+            isOneToOne: true
+            referencedRelation: "reservation_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservation_items: {
         Row: {
           color: string | null
@@ -2362,6 +2515,8 @@ export type Database = {
           measurement_source: string | null
           measurements: Json | null
           per_field_confidence: Json | null
+          quality_status: string
+          requires_review: boolean
           scan_confidence: number | null
           scanned_at: string | null
           user_id: string
@@ -2374,6 +2529,8 @@ export type Database = {
           measurement_source?: string | null
           measurements?: Json | null
           per_field_confidence?: Json | null
+          quality_status?: string
+          requires_review?: boolean
           scan_confidence?: number | null
           scanned_at?: string | null
           user_id: string
@@ -2386,6 +2543,8 @@ export type Database = {
           measurement_source?: string | null
           measurements?: Json | null
           per_field_confidence?: Json | null
+          quality_status?: string
+          requires_review?: boolean
           scan_confidence?: number | null
           scanned_at?: string | null
           user_id?: string
@@ -2575,10 +2734,12 @@ export type Database = {
         Returns: undefined
       }
       can_manage_customers: { Args: never; Returns: boolean }
+      can_manage_fitting_records: { Args: never; Returns: boolean }
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
       can_operate_inventory: { Args: never; Returns: boolean }
       can_operate_reservations: { Args: never; Returns: boolean }
+      can_view_customer_measurements: { Args: never; Returns: boolean }
       cancel_reservation_as_manager: {
         Args: {
           _expected_status: string
@@ -2669,6 +2830,14 @@ export type Database = {
           display_id: string
           reservation_id: string
         }[]
+      }
+      get_customer_measurements_for_staff: {
+        Args: { _customer_id: string }
+        Returns: Json
+      }
+      get_customer_reservation_fitting: {
+        Args: { _reservation_id: string }
+        Returns: Json
       }
       get_direct_chat_summaries: {
         Args: { p_limit?: number; p_offset?: number }
@@ -2996,6 +3165,32 @@ export type Database = {
           p_style_tags?: string[]
         }
         Returns: undefined
+      }
+      save_reservation_fitting_record: {
+        Args: {
+          _confirmed_body_measurements: Json
+          _customer_fitting_summary: string
+          _fitting_status: string
+          _reservation_id: string
+          _staff_internal_notes: string
+        }
+        Returns: string
+      }
+      save_reservation_item_alteration: {
+        Args: {
+          _alteration_status: string
+          _customer_summary: string
+          _hem_cm: number
+          _other_adjustments: Json
+          _product_id: string
+          _reservation_id: string
+          _reservation_item_id: string
+          _shoulders_cm: number
+          _sleeve_cm: number
+          _staff_notes: string
+          _waist_cm: number
+        }
+        Returns: string
       }
       search_catalog: {
         Args: {
