@@ -1,10 +1,11 @@
 // supabase/functions/create-staff-account/index.ts
 //
-// Creates a new staff member account with a cryptographically secure 10-character
-// temporary password, marks the account as pre-confirmed, assigns staff role
-// metadata, creates/upserts the public.profiles row, dispatches a professional
-// branded invitation email via Resend directly to the invited email, and returns
-// the credentials and delivery status securely to the authorized administrator.
+// Creates or re-invites a staff member account with a cryptographically secure
+// 10-character temporary password. If an account was previously invited but has
+// never logged in yet (last_sign_in_at is null), the invitation is allowed and
+// fresh temporary credentials are generated and dispatched.
+//
+// An account is only treated as already registered if it has successfully logged in.
 //
 // Caller must be an authenticated owner (checked against their own profiles row).
 
@@ -152,78 +153,91 @@ Deno.serve(async (req) => {
     const loginUrl = siteUrl + '/login';
     const tempPassword = generateTemporaryPassword();
 
-    // 1. Check if user already exists in public.profiles
+    // 1. Check if email belongs to an existing customer account
     const { data: existingProfile } = await adminClient
       .from('profiles')
       .select('id, role, deleted')
       .eq('email', email)
       .maybeSingle();
 
-    if (existingProfile) {
-      if (existingProfile.role === 'customer') {
-        return json(
-          req,
-          {
-            error:
-              'This email address belongs to an existing customer account. Please use a distinct email address for staff access.',
-          },
-          409,
-        );
-      }
+    if (existingProfile && existingProfile.role === 'customer') {
       return json(
         req,
         {
           error:
-            'A staff member with this email address already exists in Team Management.',
+            'This email address belongs to an existing customer account. Please use a distinct email address for staff access.',
         },
         409,
       );
     }
 
-    // 2. Check if there is a stale orphan auth record without a profile
+    // 2. Check auth.users to see if an account exists and whether it has ever logged in
     const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
     const existingAuthUser = listData?.users?.find(
-      (u: { email?: string }) => u.email?.toLowerCase() === email,
+      (u: { email?: string; last_sign_in_at?: string | null }) => u.email?.toLowerCase() === email,
     );
 
+    // If the account exists AND has already logged in at least once:
+    if (existingAuthUser && existingAuthUser.last_sign_in_at) {
+      return json(
+        req,
+        {
+          error:
+            'A staff member with this email address has already registered and logged in to Team Management.',
+        },
+        409,
+      );
+    }
+
+    let userId: string;
+
     if (existingAuthUser) {
-      const { data: idProfile } = await adminClient
-        .from('profiles')
-        .select('id')
-        .eq('id', existingAuthUser.id)
-        .maybeSingle();
+      // Account exists but has NEVER logged in: re-issue fresh temporary password
+      console.log('[create-staff-account] Unauthenticated account found (' + existingAuthUser.id + '). Updating with fresh credentials.');
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(existingAuthUser.id, {
+        password: tempPassword,
+        email_confirm: true,
+        app_metadata: { staff_role: role },
+        user_metadata: {
+          role,
+          staff_role: role,
+          must_change_password: true,
+        },
+      });
 
-      if (!idProfile) {
-        console.log('[create-staff-account] Cleaning up stale auth user ' + existingAuthUser.id + ' without profile');
-        await adminClient.auth.admin.deleteUser(existingAuthUser.id);
+      if (updateError) {
+        console.error('[create-staff-account] User update error:', updateError.message);
+        return json(req, { error: 'Failed to update credentials for unauthenticated staff account.' }, 500);
       }
+
+      userId = existingAuthUser.id;
+    } else {
+      // Brand new staff user creation
+      const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        app_metadata: { staff_role: role },
+        user_metadata: {
+          role,
+          staff_role: role,
+          must_change_password: true,
+        },
+      });
+
+      if (createError || !createData?.user) {
+        console.error('[create-staff-account] User creation error:', createError?.message);
+        return json(req, { error: createError?.message || 'Failed to create staff user account.' }, 500);
+      }
+
+      userId = createData.user.id;
     }
 
-    // 3. Create the staff user with the temporary password and pre-confirmed email
-    const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      app_metadata: { staff_role: role },
-      user_metadata: {
-        role,
-        staff_role: role,
-        must_change_password: true,
-      },
-    });
-
-    if (createError || !createData?.user) {
-      console.error('[create-staff-account] User creation error:', createError?.message);
-      return json(req, { error: createError?.message || 'Failed to create staff user account.' }, 500);
-    }
-
-    const newUserId = createData.user.id;
-
-    // 4. Create/upsert the active profile row in public.profiles
+    // 3. Create or refresh the active profile row in public.profiles
     const nowIso = new Date().toISOString();
     const { error: profileUpsertError } = await adminClient.from('profiles').upsert(
       {
-        id: newUserId,
+        id: userId,
         email: email,
         role: role,
         deleted: false,
@@ -237,10 +251,10 @@ Deno.serve(async (req) => {
 
     if (profileUpsertError) {
       console.error('[create-staff-account] Profile upsert error:', profileUpsertError.message);
-      return json(req, { error: 'Staff account created but profile setup failed. Please retry.' }, 500);
+      return json(req, { error: 'Staff credentials created but profile synchronization failed.' }, 500);
     }
 
-    // 5. Send professional invitation email via Resend API directly to the invited email
+    // 4. Send branded credentials email directly to Gmail via Resend
     let emailSent = false;
     let emailError: string | null = null;
 
@@ -379,11 +393,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. Return response to authorized administrator
+    // 5. Return response to authorized administrator
     return json(
       req,
       {
-        userId: newUserId,
+        userId: userId,
         email: email,
         role: role,
         tempPassword: tempPassword,
