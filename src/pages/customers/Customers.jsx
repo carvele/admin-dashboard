@@ -53,6 +53,28 @@ import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './Customers.css';
 
+// Semantic labels for known audit action keys — past-tense because an audit
+// timeline describes something that already occurred. Generic title-case is
+// used as the fallback for any action not explicitly listed here.
+const AUDIT_ACTION_LABELS = {
+  view_customer_measurements:   'Viewed Customer Measurements',
+  view_customer_profile:        'Viewed Customer Profile',
+  update_reservation_status:    'Updated Reservation Status',
+  review_reservation_receipt:   'Reviewed Payment Receipt',
+  verify_pickup:                'Verified Pickup',
+  block_customer:               'Blocked Customer',
+  unblock_customer:             'Unblocked Customer',
+  delete_customer:              'Deleted Customer',
+  send_message:                 'Sent Message',
+  record_boutique_sale:         'Recorded Boutique Sale',
+};
+
+const formatAuditAction = (action) =>
+  AUDIT_ACTION_LABELS[action] ??
+  (action
+    ?.replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase()) ?? 'Activity');
+
 // Safe extraction of numeric measurement value (handles { valueCm: 88.5 }, { valueInches: 34 }, { value: 88.5 }, or primitive 88.5)
 const extractNumericMeasurement = (val) => {
   if (val === null || val === undefined || val === '') return '';
@@ -281,9 +303,10 @@ const Customers = () => {
         setCustHistory(
           logs.map((l) => ({
             id: l.id,
-            typeLabel: `📝 ${l.action}`,
+            typeLabel: `📝 ${formatAuditAction(l.action)}`,
             note: l.details?.note || null,
             actorName: l.userName,
+            actorRole: l.details?.actorRole || null,
             timestamp: l.timestamp,
           })),
         );
