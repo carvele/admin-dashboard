@@ -388,14 +388,70 @@ export const cancelReservation = async (reservationId, expectedStatus, reason) =
   return data;
 };
 
-export const reviewReservationReceipt = async (reservationId, approve) => {
+export const reviewReservationReceipt = async (reservationId, approve, reasonCode = null, staffNote = null) => {
   if (approve) await expireReservationPaymentSessions(reservationId);
   const { data, error } = await supabase.rpc('review_reservation_receipt', {
     _reservation_id: reservationId,
     _approve: approve,
+    _reason_code: approve ? null : reasonCode,
+    _staff_note: approve ? null : staffNote,
   });
   if (error) throw error;
   return data;
+};
+
+/**
+ * Cancels a reservation whose receipt is currently under review, for a
+ * structured reason (including, but not limited to, suspected fraud). A
+ * thin wrapper over cancel_reservation_for_fraud -- it does not accept an
+ * arbitrary status/payment_status write; the RPC itself only permits this
+ * while payment_status is submitted/processing, and delegates the actual
+ * cancellation to the same canonical cancel_reservation_as_manager every
+ * other staff cancellation uses, so its financial/inventory guards apply
+ * unchanged here too.
+ */
+export const cancelReservationForFraud = async (reservationId, expectedStatus, reasonCode, staffNote = null) => {
+  const { data, error } = await supabase.rpc('cancel_reservation_for_fraud', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _reason_code: reasonCode,
+    _staff_note: staffNote,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Staff-only warning surface: does another reservation already carry a
+ * verified payment under this same reference number? Never an automatic
+ * verdict -- the RPC itself refuses non-admin callers.
+ */
+export const findDuplicatePaymentReference = async (referenceNumber, excludeReservationId = null) => {
+  if (!referenceNumber) return [];
+  const { data, error } = await supabase.rpc('find_duplicate_payment_reference', {
+    _reference_number: referenceNumber,
+    _exclude_reservation_id: excludeReservationId,
+  });
+  if (error) throw error;
+  return data ?? [];
+};
+
+/**
+ * Payment review history for one reservation, read from the general audit
+ * log (public.logs) rather than a dedicated table -- these three actions
+ * already write there via review_reservation_receipt / cancel_reservation_*,
+ * so this reuses that trail instead of standing up a parallel one.
+ */
+export const getPaymentReviewHistory = async (reservationId) => {
+  const { data, error } = await supabase
+    .from('logs')
+    .select('*')
+    .eq('target_type', 'reservation')
+    .eq('target_id', reservationId)
+    .in('action', ['Approved reservation receipt', 'Rejected reservation receipt', 'Cancelled reservation'])
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return toCamel(data ?? []);
 };
 
 export const completeReservationHandover = async (reservationId, method = 'cash') => {
