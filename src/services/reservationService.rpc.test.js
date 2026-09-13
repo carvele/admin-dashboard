@@ -6,15 +6,20 @@
 
 const mockRpc = jest.fn();
 const mockInvoke = jest.fn().mockResolvedValue({ data: { expired: 0 }, error: null });
+const mockFrom = jest.fn();
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: {
     rpc: (...args) => mockRpc(...args),
     functions: { invoke: (...args) => mockInvoke(...args) },
+    from: (...args) => mockFrom(...args),
   },
 }));
 
-afterEach(() => mockInvoke.mockClear());
+afterEach(() => {
+  mockInvoke.mockClear();
+  mockFrom.mockReset();
+});
 
 jest.mock('../lib/supabaseService', () => ({
   subscribeToCollection: jest.fn(),
@@ -37,6 +42,7 @@ import {
   completeReservationHandover,
   resolveRescheduleRequest,
   updateReservation,
+  getPaymentReviewHistory,
 } from './reservationService';
 
 
@@ -107,6 +113,23 @@ describe('settleReservationBalance', () => {
   test('throws when the RPC returns an error', async () => {
     mockRpc.mockResolvedValue({ data: null, error: new Error('Balance already settled') });
     await expect(settleReservationBalance('res-1')).rejects.toThrow('Balance already settled');
+  });
+
+  test('unwraps error message from edge function if payments-expire fails', async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: {
+          json: async () => ({ error: 'Payment has already been completed by customer.' }),
+        },
+      },
+    });
+
+    await expect(settleReservationBalance('res-1')).rejects.toThrow(
+      'Payment has already been completed by customer.',
+    );
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
 
@@ -248,3 +271,46 @@ describe('updateReservation (status transitions)', () => {
     expect(payload.appointmentTime).toBeUndefined();
   });
 });
+
+describe('getPaymentReviewHistory', () => {
+  test('queries logs ordered by timestamp and maps createdAt', async () => {
+    const mockChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'log-1',
+            action: 'Approved reservation receipt',
+            timestamp: '2026-09-14T01:00:00.000Z',
+          },
+        ],
+        error: null,
+      }),
+    };
+    mockFrom.mockReturnValue(mockChain);
+
+    const history = await getPaymentReviewHistory('res-1');
+
+    expect(mockFrom).toHaveBeenCalledWith('logs');
+    expect(mockChain.select).toHaveBeenCalledWith('*');
+    expect(mockChain.eq).toHaveBeenCalledWith('target_type', 'reservation');
+    expect(mockChain.eq).toHaveBeenCalledWith('target_id', 'res-1');
+    expect(mockChain.in).toHaveBeenCalledWith('action', [
+      'Approved reservation receipt',
+      'Rejected reservation receipt',
+      'Cancelled reservation',
+    ]);
+    expect(mockChain.order).toHaveBeenCalledWith('timestamp', { ascending: true });
+    expect(history).toEqual([
+      {
+        id: 'log-1',
+        action: 'Approved reservation receipt',
+        timestamp: '2026-09-14T01:00:00.000Z',
+        createdAt: '2026-09-14T01:00:00.000Z',
+      },
+    ]);
+  });
+});
+

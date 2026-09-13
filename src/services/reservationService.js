@@ -449,9 +449,12 @@ export const getPaymentReviewHistory = async (reservationId) => {
     .eq('target_type', 'reservation')
     .eq('target_id', reservationId)
     .in('action', ['Approved reservation receipt', 'Rejected reservation receipt', 'Cancelled reservation'])
-    .order('created_at', { ascending: true });
+    .order('timestamp', { ascending: true });
   if (error) throw error;
-  return toCamel(data ?? []);
+  return (data ?? []).map((row) => ({
+    ...toCamel(row),
+    createdAt: row.timestamp,
+  }));
 };
 
 export const completeReservationHandover = async (reservationId, method = 'cash') => {
@@ -468,7 +471,20 @@ const expireReservationPaymentSessions = async (reservationId) => {
   const { error } = await supabase.functions.invoke('payments-expire', {
     body: { reservation_id: reservationId },
   });
-  if (error) throw error;
+  if (error) {
+    let message = error.message;
+    try {
+      if ('context' in error && error.context && typeof error.context.json === 'function') {
+        const errorBody = await error.context.json();
+        if (errorBody?.error && typeof errorBody.error === 'string') {
+          message = errorBody.error;
+        }
+      }
+    } catch {
+      // Fall back to original error message
+    }
+    throw new Error(message || 'Failed to expire active payment sessions.');
+  }
 };
 
 /**
