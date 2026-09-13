@@ -6,8 +6,13 @@ import './HistoryTimeline.css';
  * Extracted from StaffProfile.jsx so product, customer, and staff history
  * panels can all render through one component.
  *
- * Each entry: { id, dotVariant?, typeLabel, previousValue?, newValue?, note?, actorName?, timestamp }
- * previousValue/newValue are optional — omit both to render a plain action entry with no before/after row.
+ * Each entry: { id, dotVariant?, typeLabel, previousValue?, newValue?, note?,
+ *               actorName?, actorRole?, timestamp }
+ * actorRole is optional — present only on records produced after the
+ * fix_audit_actor_attribution migration (2026-09-14). Historical records
+ * without it degrade gracefully.
+ * previousValue/newValue are optional — omit both to render a plain action
+ * entry with no before/after row.
  */
 const HistoryTimeline = ({ entries, loading, emptyText = 'No history recorded yet.' }) => {
   if (loading) {
@@ -20,6 +25,10 @@ const HistoryTimeline = ({ entries, loading, emptyText = 'No history recorded ye
   if (!entries?.length) {
     return <div className="ht-empty">{emptyText}</div>;
   }
+
+  const formatRole = (role) =>
+    role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : null;
+
   return (
     <ul className="ht-timeline">
       {entries.map((entry) => (
@@ -43,7 +52,12 @@ const HistoryTimeline = ({ entries, loading, emptyText = 'No history recorded ye
               </div>
             )}
             {entry.note && <p className="ht-note">&quot;{entry.note}&quot;</p>}
-            <span className="ht-actor">by {entry.actorName || 'System'}</span>
+            <span className="ht-actor">
+              by {entry.actorName || 'System'}
+              {entry.actorRole && formatRole(entry.actorRole) && (
+                <span className="ht-actor-role"> · {formatRole(entry.actorRole)}</span>
+              )}
+            </span>
           </div>
         </li>
       ))}
