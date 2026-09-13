@@ -69,6 +69,16 @@ const StaffManagement = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
   const [creating, setCreating] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedType, setCopiedType] = useState(null);
+
+  const copyToClipboard = (text, type) => {
+    navigator.clipboard.writeText(text);
+    setCopiedType(type);
+    toast.success('Copied to clipboard!');
+    setTimeout(() => setCopiedType(null), 2000);
+  };
 
   // ── Resend Invite State ───────────────────────────────────────────────────
   const [authStatuses, setAuthStatuses] = useState({});
