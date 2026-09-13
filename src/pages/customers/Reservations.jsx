@@ -279,16 +279,17 @@ const Reservations = () => {
   useEffect(() => {
     const params = new URLSearchParams();
     if (viewMode && viewMode !== 'board') params.set('view', viewMode);
+    if (viewMode === 'table') params.set('scope', scopeFilter);
     if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
     if (searchTerm.trim()) params.set('search', searchTerm.trim());
     if (viewMode === 'table' && page > 0) params.set('page', String(page + 1));
     setSearchParams(params, { replace: true });
-  }, [viewMode, statusFilter, searchTerm, page, setSearchParams]);
+  }, [viewMode, scopeFilter, statusFilter, searchTerm, page, setSearchParams]);
 
-  // Reset page to first whenever search, status filter, or view mode changes
+  // Reset page to first whenever search, status filter, scope, or view mode changes
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, statusFilter, viewMode]);
+  }, [searchTerm, statusFilter, viewMode, scopeFilter]);
 
   // Dismiss topmost modal on Escape key (WCAG 2.1.2)
   useEffect(() => {
@@ -475,7 +476,14 @@ const Reservations = () => {
     else if (statusFilter.startsWith('Completed')) matchesStatus = r.displayStatus === 'Completed';
     else matchesStatus = r.displayStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    // Scope filter: in table view, separate Active Queue from Archive
+    let matchesScope = true;
+    if (viewMode === 'table') {
+      const isArchived = r.displayStatus === 'Completed' || r.displayStatus === 'Cancelled';
+      matchesScope = scopeFilter === 'archived' ? isArchived : !isArchived;
+    }
+
+    return matchesSearch && matchesStatus && matchesScope;
   });
 
   const sortedReservations = [...filteredReservations].sort((a, b) => {
