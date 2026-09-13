@@ -18,10 +18,7 @@ import {
   Archive,
   ArchiveRestore,
   X,
-  Copy,
   Check,
-  CheckCircle2,
-  ExternalLink,
   KeyRound,
   Mail,
 } from 'lucide-react';
@@ -72,9 +69,6 @@ const StaffManagement = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
   const [creating, setCreating] = useState(false);
-  const [createdCredentials, setCreatedCredentials] = useState(null);
-  const [showTempPassword, setShowTempPassword] = useState(true);
-  const [copiedType, setCopiedType] = useState(null); // 'password' | 'credentials' | 'message'
 
   // ── Subscribe to ALL staff (including deleted) ────────────────────────────
   useEffect(() => {
@@ -172,16 +166,23 @@ const StaffManagement = () => {
         role: createForm.role,
       });
 
-      // Advance to Step 2: Show Credentials Card
-      setCreatedCredentials({
-        email: result.email || createForm.email,
-        role: result.role || createForm.role,
-        tempPassword: result.tempPassword,
-        loginUrl: result.loginUrl || `${window.location.origin}/login`,
-        emailSent: Boolean(result.emailSent),
-      });
+      // Close modal and reset form
+      handleCloseCreateModal();
 
-      toast.success(`Staff account for ${createForm.email} created successfully!`);
+      if (result.emailSent) {
+        toast.success(
+          `Invitation email sent directly to ${createForm.email} with login credentials and portal link!`,
+          { duration: 5000 },
+        );
+      } else {
+        toast.success(`Staff account for ${createForm.email} created successfully!`);
+        if (result.emailError) {
+          toast.warning(
+            `Email delivery notice: ${result.emailError}. Ensure RESEND_API_KEY is configured in Supabase secrets.`,
+            { duration: 6000 },
+          );
+        }
+      }
     } catch (err) {
       console.error('Staff creation error:', err);
       toast.error('Failed to create staff account: ' + err.message);
@@ -192,27 +193,7 @@ const StaffManagement = () => {
 
   const handleCloseCreateModal = () => {
     setIsCreateModalOpen(false);
-    setCreatedCredentials(null);
     setCreateForm({ email: '', role: 'staff' });
-    setCopiedType(null);
-  };
-
-  const copyToClipboard = async (text, type) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedType(type);
-      toast.success(
-        type === 'password'
-          ? 'Temporary password copied!'
-          : type === 'credentials'
-          ? 'Login credentials copied!'
-          : 'Full invitation message copied!',
-      );
-      setTimeout(() => setCopiedType(null), 2500);
-    } catch (err) {
-      console.error('Copy error:', err);
-      toast.error('Failed to copy to clipboard');
-    }
   };
 
   const confirmRoleToggle = async () => {
@@ -600,7 +581,6 @@ const StaffManagement = () => {
             <button
               className="btn-primary flex-center gap-2"
               onClick={() => {
-                setCreatedCredentials(null);
                 setIsCreateModalOpen(true);
               }}
             >
