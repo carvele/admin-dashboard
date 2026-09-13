@@ -928,3 +928,44 @@
   max-width: 420px;
   margin: 0 auto;
 }
+
+/* ==========================================================================
+   Pickup Schedule & Date Cell Enhancements
+   ========================================================================== */
+.res-schedule-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.res-schedule-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.res-schedule-icon {
+  color: var(--primary, #c9933b);
+  flex-shrink: 0;
+}
+
+.res-schedule-date {
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+}
+
+.res-schedule-time {
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8125rem;
+}
+
+.res-schedule-booked {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 2px;
+}

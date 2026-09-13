@@ -80,6 +80,19 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+const formatAppointmentTime = (timeStr, dateObj) => {
+  if (timeStr && /^\d{1,2}:\d{2}/.test(timeStr)) {
+    const [h, m] = timeStr.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+  }
+  if (dateObj && typeof dateObj.toLocaleTimeString === 'function') {
+    return dateObj.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' });
+  }
+  return timeStr || '';
+};
+
 // Matches the CHECK constraint on reservations.last_receipt_rejection_reason
 // (and cancel_reservation_for_fraud's accepted values) exactly -- keep in sync.
 const REASON_CODE_LABELS = {
@@ -1164,8 +1177,8 @@ const Reservations = () => {
                     scope="col"
                     aria-sort={listSort.key === 'date' ? (listSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
-                    <button className="sort-header-btn" onClick={() => toggleSort('date')}>
-                      Date &amp; Time <ArrowUpDown size={13} aria-hidden="true" />
+                    <button className="sort-header-btn" onClick={() => toggleSort('date')} title="Sort by pickup date">
+                      Pickup Schedule <ArrowUpDown size={13} aria-hidden="true" />
                     </button>
                   </th>
                   <th scope="col">Status</th>
@@ -1281,25 +1294,30 @@ const Reservations = () => {
                         </div>
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        <div className="font-medium">
-                          {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
-                        </div>
-                        <div className="text-secondary text-sm">
-                          {res.appointmentTime || res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
-                        </div>
-                        {(res.createdAt || res.created_at) && (
-                          <div className="text-[11px] text-secondary mt-1">
-                            Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} {parseDate(res.createdAt || res.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                        <div className="res-schedule-cell">
+                          <div className="res-schedule-primary">
+                            <Calendar size={13} className="res-schedule-icon" aria-hidden="true" />
+                            <span className="res-schedule-date">
+                              {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
+                            </span>
+                            <span className="res-schedule-time">
+                              • {formatAppointmentTime(res.appointmentTime, res.displayDate)}
+                            </span>
                           </div>
-                        )}
-                        {res.countdown && (res.displayStatus === 'Pending') && (
-                          <CountdownTimer targetDate={res.reservationDate || res.date} />
-                        )}
-                        {deadline && (
-                          <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
-                            {deadline.label}
-                          </div>
-                        )}
+                          {(res.createdAt || res.created_at) && (
+                            <div className="res-schedule-booked">
+                              <span>Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}</span>
+                            </div>
+                          )}
+                          {res.countdown && (res.displayStatus === 'Pending') && (
+                            <CountdownTimer targetDate={res.reservationDate || res.date} />
+                          )}
+                          {deadline && (
+                            <div className={`text-xs mt-1 font-medium ${deadline.urgent ? 'text-danger' : 'text-gold'}`}>
+                              {deadline.label}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
