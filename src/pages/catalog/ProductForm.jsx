@@ -8,6 +8,7 @@ import {
   updateProduct,
   getProductById,
   createInventoryItem,
+  archiveInventoryItem,
   getInventory,
   getStockMovements,
 } from '../../services/productService';
@@ -620,11 +621,11 @@ const ProductForm = ({ readOnly = false }) => {
               return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0; 
             });
             if (toSoftDelete.length > 0) {
-              const now = new Date().toISOString();
-              await supabase
-                .from('inventory')
-                .update({ deleted: true, deleted_at: now, updated_at: now })
-                .in('id', toSoftDelete.map((inv) => inv.id));
+              await Promise.all(
+                toSoftDelete.map((inv) =>
+                  archiveInventoryItem(inv.id, 'Soft-deleted unstocked variant from ProductForm'),
+                ),
+              );
               Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
             }
             await syncProductAttributesFromVariants(id);
@@ -638,7 +639,7 @@ const ProductForm = ({ readOnly = false }) => {
                 newSizes.map((size) =>
                   createInventoryItem({
                     productDocId: id,
-                    sku: payload.id || payload.styleCode,
+                    sku: payload.styleCode || payload.id,
                     item: payload.name,
                     category: payload.category,
                     size,
@@ -657,11 +658,11 @@ const ProductForm = ({ readOnly = false }) => {
                 Number(inv.total ?? 0) === 0,
             );
             if (removedInventory.length > 0) {
-              const now = new Date().toISOString();
-              await supabase
-                .from('inventory')
-                .update({ deleted: true, deleted_at: now, updated_at: now })
-                .in('id', removedInventory.map((inv) => inv.id));
+              await Promise.all(
+                removedInventory.map((inv) =>
+                  archiveInventoryItem(inv.id, 'Soft-deleted removed size from ProductForm'),
+                ),
+              );
               Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
             }
           }
@@ -706,7 +707,7 @@ const ProductForm = ({ readOnly = false }) => {
             const inventoryPromises = payload.sizes.map((size) =>
               createInventoryItem({
                 productDocId: newDocId,
-                sku: payload.id || payload.styleCode,
+                sku: payload.styleCode || payload.id,
                 item: payload.name,
                 category: payload.category,
                 size: size,
