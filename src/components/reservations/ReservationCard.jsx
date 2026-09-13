@@ -85,7 +85,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
             was still owed at the counter. */}
         <span className={`res-card-total${balance > 0 ? ' res-card-balance' : ''}`}>
           {balance > 0
-            ? `${formatCurrency(balance)} to collect`
+            ? (res.balancePaymentStatus === 'submitted' ? 'Balance proof to check' : `${formatCurrency(balance)} to collect`)
             : res.paymentStatus === 'Paid'
               ? 'Paid in full'
               : awaitingReceipt
@@ -138,9 +138,9 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
             // payment verified without the receipt image ever having been
             // opened. Now opens the detail modal instead, where the receipt
             // renders next to its own dedicated Verify Payment button.
-            onClick={() => (primary.action === 'review_receipt' ? onView() : onAction(res.id, primary.action))}
+            onClick={() => (primary.action === 'review_receipt' || res.balancePaymentStatus === 'submitted' ? onView() : onAction(res.id, primary.action))}
           >
-            {awaitingReceipt ? 'Verify receipt' : primary.label}
+            {awaitingReceipt ? 'Verify receipt' : res.balancePaymentStatus === 'submitted' ? 'Verify balance proof' : primary.label}
           </button>
         )}
         <button className="btn-outline res-card-icon" onClick={onView} aria-label="View details" title="View details">

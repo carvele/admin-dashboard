@@ -805,6 +805,88 @@ export type Database = {
           },
         ]
       }
+      manual_payment_submissions: {
+        Row: {
+          amount_claimed: number
+          attempt_number: number
+          created_at: string
+          customer_id: string
+          id: string
+          method: string
+          purpose: string
+          receipt_url: string
+          reference_number: string
+          rejection_reason: string | null
+          reservation_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          staff_note: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_claimed: number
+          attempt_number?: number
+          created_at?: string
+          customer_id: string
+          id?: string
+          method: string
+          purpose: string
+          receipt_url: string
+          reference_number: string
+          rejection_reason?: string | null
+          reservation_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          staff_note?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_claimed?: number
+          attempt_number?: number
+          created_at?: string
+          customer_id?: string
+          id?: string
+          method?: string
+          purpose?: string
+          receipt_url?: string
+          reference_number?: string
+          rejection_reason?: string | null
+          reservation_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          staff_note?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_payment_submissions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_payment_submissions_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_payment_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           context_label: string | null
@@ -1011,12 +1093,15 @@ export type Database = {
           id: string
           last_event: Json | null
           last_event_id: string | null
+          metadata: Json
           method: string | null
           provider: string
           provider_payment_id: string | null
           provider_payment_intent_id: string | null
           provider_ref: string | null
           purpose: string
+          receipt_url: string | null
+          reference_number: string | null
           refund_required_at: string | null
           requires_refund: boolean
           reservation_id: string
@@ -1032,12 +1117,15 @@ export type Database = {
           id?: string
           last_event?: Json | null
           last_event_id?: string | null
+          metadata?: Json
           method?: string | null
           provider?: string
           provider_payment_id?: string | null
           provider_payment_intent_id?: string | null
           provider_ref?: string | null
           purpose?: string
+          receipt_url?: string | null
+          reference_number?: string | null
           refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id: string
@@ -1053,12 +1141,15 @@ export type Database = {
           id?: string
           last_event?: Json | null
           last_event_id?: string | null
+          metadata?: Json
           method?: string | null
           provider?: string
           provider_payment_id?: string | null
           provider_payment_intent_id?: string | null
           provider_ref?: string | null
           purpose?: string
+          receipt_url?: string | null
+          reference_number?: string | null
           refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id?: string
@@ -1584,11 +1675,20 @@ export type Database = {
         Row: {
           appointment_time: string | null
           assigned_staff_id: string | null
+          balance_amount_claimed: number | null
           balance_method: string | null
+          balance_payment_issue: string | null
+          balance_payment_method: string | null
+          balance_payment_status: string | null
+          balance_receipt_attempt_count: number
+          balance_receipt_url: string | null
+          balance_reference_number: string | null
+          balance_rejected_at: string | null
           balance_settled_at: string | null
           balance_settled_by: string | null
           balance_settled_by_name: string | null
           balance_settled_method: string | null
+          balance_submission_id: string | null
           cancellation_reason: string | null
           color: string | null
           confirmed_at: string | null
@@ -1601,6 +1701,7 @@ export type Database = {
           date: string | null
           deleted: boolean | null
           deposit: number | null
+          deposit_submission_id: string | null
           display_id: string | null
           hidden_in_cancelled: boolean | null
           hidden_in_history: boolean | null
@@ -1638,11 +1739,20 @@ export type Database = {
         Insert: {
           appointment_time?: string | null
           assigned_staff_id?: string | null
+          balance_amount_claimed?: number | null
           balance_method?: string | null
+          balance_payment_issue?: string | null
+          balance_payment_method?: string | null
+          balance_payment_status?: string | null
+          balance_receipt_attempt_count?: number
+          balance_receipt_url?: string | null
+          balance_reference_number?: string | null
+          balance_rejected_at?: string | null
           balance_settled_at?: string | null
           balance_settled_by?: string | null
           balance_settled_by_name?: string | null
           balance_settled_method?: string | null
+          balance_submission_id?: string | null
           cancellation_reason?: string | null
           color?: string | null
           confirmed_at?: string | null
@@ -1655,6 +1765,7 @@ export type Database = {
           date?: string | null
           deleted?: boolean | null
           deposit?: number | null
+          deposit_submission_id?: string | null
           display_id?: string | null
           hidden_in_cancelled?: boolean | null
           hidden_in_history?: boolean | null
@@ -1692,11 +1803,20 @@ export type Database = {
         Update: {
           appointment_time?: string | null
           assigned_staff_id?: string | null
+          balance_amount_claimed?: number | null
           balance_method?: string | null
+          balance_payment_issue?: string | null
+          balance_payment_method?: string | null
+          balance_payment_status?: string | null
+          balance_receipt_attempt_count?: number
+          balance_receipt_url?: string | null
+          balance_reference_number?: string | null
+          balance_rejected_at?: string | null
           balance_settled_at?: string | null
           balance_settled_by?: string | null
           balance_settled_by_name?: string | null
           balance_settled_method?: string | null
+          balance_submission_id?: string | null
           cancellation_reason?: string | null
           color?: string | null
           confirmed_at?: string | null
@@ -1709,6 +1829,7 @@ export type Database = {
           date?: string | null
           deleted?: boolean | null
           deposit?: number | null
+          deposit_submission_id?: string | null
           display_id?: string | null
           hidden_in_cancelled?: boolean | null
           hidden_in_history?: boolean | null
@@ -1752,6 +1873,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reservations_balance_submission_id_fkey"
+            columns: ["balance_submission_id"]
+            isOneToOne: false
+            referencedRelation: "manual_payment_submissions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "reservations_confirmed_by_id_fkey"
             columns: ["confirmed_by_id"]
             isOneToOne: false
@@ -1763,6 +1891,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_deposit_submission_id_fkey"
+            columns: ["deposit_submission_id"]
+            isOneToOne: false
+            referencedRelation: "manual_payment_submissions"
             referencedColumns: ["id"]
           },
           {
@@ -1826,6 +1961,7 @@ export type Database = {
       reviews: {
         Row: {
           admin_reply: string | null
+          color: string | null
           comment: string | null
           created_at: string
           dislikes: number | null
@@ -1835,13 +1971,16 @@ export type Database = {
           likes: number | null
           product_id: string
           rating: number
+          reservation_item_id: string | null
           reviewer_name: string | null
+          size: string | null
           updated_at: string | null
           user_id: string
           verified_purchase: boolean
         }
         Insert: {
           admin_reply?: string | null
+          color?: string | null
           comment?: string | null
           created_at?: string
           dislikes?: number | null
@@ -1851,13 +1990,16 @@ export type Database = {
           likes?: number | null
           product_id: string
           rating: number
+          reservation_item_id?: string | null
           reviewer_name?: string | null
+          size?: string | null
           updated_at?: string | null
           user_id: string
           verified_purchase?: boolean
         }
         Update: {
           admin_reply?: string | null
+          color?: string | null
           comment?: string | null
           created_at?: string
           dislikes?: number | null
@@ -1867,7 +2009,9 @@ export type Database = {
           likes?: number | null
           product_id?: string
           rating?: number
+          reservation_item_id?: string | null
           reviewer_name?: string | null
+          size?: string | null
           updated_at?: string | null
           user_id?: string
           verified_purchase?: boolean
@@ -1878,6 +2022,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_reservation_item_id_fkey"
+            columns: ["reservation_item_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_items"
             referencedColumns: ["id"]
           },
           {
@@ -2386,6 +2537,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _settle_reservation_balance_internal: {
+        Args: {
+          _actor_id: string
+          _actor_name: string
+          _metadata?: Json
+          _method: string
+          _provider: string
+          _provider_ref: string
+          _receipt_url?: string
+          _reference_number?: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       adjust_inventory_on_hand: {
         Args: { p_delta: number; p_inventory_id: string; p_reason: string }
         Returns: Json
@@ -2413,6 +2578,7 @@ export type Database = {
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
       can_operate_inventory: { Args: never; Returns: boolean }
+      can_operate_reservations: { Args: never; Returns: boolean }
       cancel_reservation_as_manager: {
         Args: {
           _expected_status: string
@@ -2479,6 +2645,21 @@ export type Database = {
         Returns: Json
       }
       dispatch_pending_push: { Args: never; Returns: number }
+      enqueue_admin_notification: {
+        Args: { _message: string; _title: string; _type?: string }
+        Returns: string
+      }
+      enqueue_customer_notification: {
+        Args: {
+          _body: string
+          _data?: Json
+          _is_read?: boolean
+          _title: string
+          _type: string
+          _user_id: string
+        }
+        Returns: string
+      }
       expire_all_stale_reservations: { Args: never; Returns: number }
       expire_stale_payments: { Args: never; Returns: number }
       find_duplicate_payment_reference: {
@@ -2547,11 +2728,25 @@ export type Database = {
           wardrobe_privacy: string
         }[]
       }
+      get_review_filter_facets: {
+        Args: { p_product_id: string }
+        Returns: Json
+      }
       get_review_stats: { Args: { p_product_id: string }; Returns: Json }
       get_reviews_with_user_vote: {
-        Args: { p_limit?: number; p_offset?: number; p_product_id: string }
+        Args: {
+          p_color?: string
+          p_limit?: number
+          p_offset?: number
+          p_photos_only?: boolean
+          p_product_id: string
+          p_rating?: number
+          p_size?: string
+          p_sort?: string
+        }
         Returns: {
           review: Database["public"]["Tables"]["reviews"]["Row"]
+          total_filtered_count: number
           user_vote: string
         }[]
       }
@@ -2766,6 +2961,15 @@ export type Database = {
         Returns: Json
       }
       resolve_username: { Args: { p_username: string }; Returns: string }
+      review_reservation_balance_receipt: {
+        Args: {
+          _approve: boolean
+          _reason_code?: string
+          _reservation_id: string
+          _staff_note?: string
+        }
+        Returns: Json
+      }
       review_reservation_receipt: {
         Args: {
           _approve: boolean
@@ -2919,6 +3123,16 @@ export type Database = {
         Args: { _method?: string; _reservation_id: string }
         Returns: Json
       }
+      submit_reservation_balance_receipt: {
+        Args: {
+          _amount_claimed: number
+          _method: string
+          _receipt_path: string
+          _reference_number: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       submit_reservation_receipt: {
         Args: {
           _amount_claimed: number
@@ -2928,6 +3142,39 @@ export type Database = {
           _reservation_id: string
         }
         Returns: Json
+      }
+      submit_verified_review: {
+        Args: {
+          p_comment?: string
+          p_images?: string[]
+          p_rating: number
+          p_reservation_item_id: string
+        }
+        Returns: {
+          admin_reply: string | null
+          color: string | null
+          comment: string | null
+          created_at: string
+          dislikes: number | null
+          id: string
+          images: string[] | null
+          is_pinned: boolean | null
+          likes: number | null
+          product_id: string
+          rating: number
+          reservation_item_id: string | null
+          reviewer_name: string | null
+          size: string | null
+          updated_at: string | null
+          user_id: string
+          verified_purchase: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       sync_product_stock: { Args: { p_product_id: string }; Returns: undefined }
       transition_reservation_status: {

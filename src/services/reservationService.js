@@ -400,6 +400,18 @@ export const reviewReservationReceipt = async (reservationId, approve, reasonCod
   return data;
 };
 
+export const reviewReservationBalanceReceipt = async (reservationId, approve, reasonCode = null, staffNote = null) => {
+  if (approve) await expireReservationPaymentSessions(reservationId);
+  const { data, error } = await supabase.rpc('review_reservation_balance_receipt', {
+    _reservation_id: reservationId,
+    _approve: approve,
+    _reason_code: approve ? null : reasonCode,
+    _staff_note: approve ? null : staffNote,
+  });
+  if (error) throw error;
+  return data;
+};
+
 /**
  * Cancels a reservation whose receipt is currently under review, for a
  * structured reason (including, but not limited to, suspected fraud). A
