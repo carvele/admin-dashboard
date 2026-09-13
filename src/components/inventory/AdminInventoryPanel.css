@@ -378,3 +378,27 @@
   white-space: nowrap !important;
   border: 0 !important;
 }
+/* ── Parent filter for subcategories list ── */
+.aip-filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.aip-filter-row .label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #544b45);
+}
+
+.aip-select-filter {
+  font-size: 0.85rem !important;
+  padding: 0.45rem 0.65rem !important;
+  border-radius: 6px !important;
+  border-color: var(--border-color, #efe9db) !important;
+  background-color: var(--beige, #f5eedc) !important;
+  color: var(--charcoal, #1f1c18) !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
