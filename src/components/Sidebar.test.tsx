@@ -23,6 +23,6 @@ describe('Sidebar Component', () => {
         <Sidebar isOpen={true} onClose={() => {}} />
       </BrowserRouter>,
     );
-    expect(screen.getByText('JezSy Couture')).toBeInTheDocument();
+    expect(screen.getByText('JezSy Collection')).toBeInTheDocument();
   });
 });

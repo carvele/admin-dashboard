@@ -129,12 +129,14 @@ const StyleInspiration = () => {
       return;
     }
     setSaving(true);
+    let uploadedNewImage = false;
     try {
       let finalImageUrl = editingPose?.imageUrl || null;
       let finalImageStoragePath = editingPose?.imageStoragePath || null;
 
       if (selectedFile) {
         finalImageUrl = await uploadToSupabase(selectedFile, POSE_IMAGES_BUCKET, 'pose-guides');
+        uploadedNewImage = true;
         // Captured once, right here, from the URL we ourselves just
         // uploaded -- this is the one moment ownership can be established
         // with certainty. From here on, every delete/replace decision reads
@@ -174,7 +176,11 @@ const StyleInspiration = () => {
       closeModal();
     } catch (e) {
       console.error(e);
-      toast.error(selectedFile ? 'Image uploaded, but saving the pose failed -- try again' : 'Failed to save pose');
+      toast.error(
+        uploadedNewImage
+          ? 'Image uploaded, but saving the pose failed -- try again'
+          : (e?.message || 'Failed to save pose')
+      );
     } finally {
       setSaving(false);
     }
