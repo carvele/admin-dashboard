@@ -153,7 +153,12 @@ export const searchInventoryPage = async (searchTerm, filters = {}, page = 0, pa
 
   if (searchTerm && searchTerm.trim()) {
     const term = searchTerm.trim();
-    q = q.or(`item.ilike.%${term}%,sku.ilike.%${term}%,variant_sku.ilike.%${term}%,color.ilike.%${term}%`);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(term);
+    let orQuery = `item.ilike.%${term}%,sku.ilike.%${term}%,variant_sku.ilike.%${term}%,color.ilike.%${term}%`;
+    if (isUuid) {
+      orQuery += `,id.eq.${term}`;
+    }
+    q = q.or(orQuery);
   }
 
   q = q.order('created_at', { ascending: false }).order('id', { ascending: false });

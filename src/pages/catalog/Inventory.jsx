@@ -558,6 +558,7 @@ const Inventory = () => {
         (item.item || '').toLowerCase().includes(term) ||
         (item.sku || '').toLowerCase().includes(term) ||
         (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
+        (item.id || item.docId || '').toLowerCase().includes(term) ||
         (item.color || '').toLowerCase().includes(term) ||
         (item.size || '').toLowerCase().includes(term) ||
         (item.category || '').toLowerCase().includes(term)

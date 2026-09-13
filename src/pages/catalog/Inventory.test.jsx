@@ -111,7 +111,16 @@ jest.mock('../../services/productService', () => ({
   updateProduct: jest.fn(() => Promise.resolve()),
   recalculateAllInventoryStock: jest.fn(() => Promise.resolve()),
   recordBoutiqueSale: jest.fn(() => Promise.resolve()),
-  searchInventoryPage: jest.fn(() => Promise.resolve({ items: [], totalCount: 0 })),
+  searchInventoryPage: jest.fn((term) => {
+    const lower = (term || '').toLowerCase();
+    const items = mockInventoryData.filter((i) =>
+      (i.item || '').toLowerCase().includes(lower) ||
+      (i.sku || '').toLowerCase().includes(lower) ||
+      (i.variantSku || '').toLowerCase().includes(lower) ||
+      (i.id || '').toLowerCase().includes(lower)
+    );
+    return Promise.resolve({ items, totalCount: items.length });
+  }),
 }));
 
 jest.mock('../../services/variantService', () => ({
@@ -240,5 +249,16 @@ describe('Inventory Modernized Grid', () => {
     expect(screen.getByText('Configure AR Color')).toBeInTheDocument();
     expect(screen.getByText('Publish to Mobile App')).toBeInTheDocument();
     expect(screen.getByText('Archive Variant')).toBeInTheDocument();
+  });
+
+  it('finds variant when searching by fallback record ID', async () => {
+    renderInventory();
+
+    const searchInput = screen.getByLabelText('Search variant SKU, product name, or color');
+    fireEvent.change(searchInput, { target: { value: 'inv-1' } });
+
+    // Should find Leather Belt Black (id: inv-1)
+    expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
+    expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
   });
 });
