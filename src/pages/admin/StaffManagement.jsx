@@ -120,19 +120,23 @@ const StaffManagement = () => {
   const getDisplayRole = (role) =>
     role === 'owner' ? 'Owner' : 'Sales Staff';
 
-  const filteredActive = activeStaff.filter(
-    (s) =>
-      (roleFilter === 'all' || s.role === roleFilter) &&
-      (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
-  );
+  const filteredActive = activeStaff
+    .filter(
+      (s) =>
+        (roleFilter === 'all' || s.role === roleFilter) &&
+        (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
+    )
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-  const filteredArchived = archivedStaff.filter(
-    (s) =>
-      (roleFilter === 'all' || s.role === roleFilter) &&
-      (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
-  );
+  const filteredArchived = archivedStaff
+    .filter(
+      (s) =>
+        (roleFilter === 'all' || s.role === roleFilter) &&
+        (getDisplayName(s).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())),
+    )
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   // ── Actions: Active tab ───────────────────────────────────────────────────
 
