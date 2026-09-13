@@ -93,6 +93,15 @@ const formatAppointmentTime = (timeStr, dateObj) => {
   return timeStr || '';
 };
 
+const formatDateTime = (val) => {
+  if (!val) return '';
+  const d = parseDate(val);
+  if (isNaN(d.getTime())) return '';
+  const dateStr = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' });
+  const timeStr = d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' });
+  return `${dateStr} • ${timeStr}`;
+};
+
 // Matches the CHECK constraint on reservations.last_receipt_rejection_reason
 // (and cancel_reservation_for_fraud's accepted values) exactly -- keep in sync.
 const REASON_CODE_LABELS = {
@@ -1304,6 +1313,22 @@ const Reservations = () => {
                               • {formatAppointmentTime(res.appointmentTime, res.displayDate)}
                             </span>
                           </div>
+                          {res.displayStatus === 'Completed' && (res.completedAt || res.balanceSettledAt || res.updatedAt || res.updated_at) && (
+                            <div className="res-schedule-completed" title="Actual completion / pickup handover timestamp">
+                              <CheckCircle size={11} aria-hidden="true" />
+                              <span>
+                                Finished: {formatDateTime(res.completedAt || res.balanceSettledAt || res.updatedAt || res.updated_at)}
+                              </span>
+                            </div>
+                          )}
+                          {res.displayStatus === 'Cancelled' && (res.cancelledAt || res.updatedAt || res.updated_at) && (
+                            <div className="res-schedule-cancelled" title="Cancellation timestamp">
+                              <XCircle size={11} aria-hidden="true" />
+                              <span>
+                                Cancelled: {formatDateTime(res.cancelledAt || res.updatedAt || res.updated_at)}
+                              </span>
+                            </div>
+                          )}
                           {(res.createdAt || res.created_at) && (
                             <div className="res-schedule-booked">
                               <span>Booked: {parseDate(res.createdAt || res.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}</span>
@@ -1904,6 +1929,38 @@ const Reservations = () => {
                 <span className="detail-label">Status</span>
                 <StatusBadge status={viewModal.displayStatus || 'Pending'} />
               </div>
+              {viewModal.displayStatus === 'Completed' && (viewModal.completedAt || viewModal.balanceSettledAt || viewModal.updatedAt || viewModal.updated_at) && (
+                <div className="detail-row">
+                  <span className="detail-label">Actual Finished At</span>
+                  <strong className="text-success">
+                    {parseDate(viewModal.completedAt || viewModal.balanceSettledAt || viewModal.updatedAt || viewModal.updated_at).toLocaleString('en-PH', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              )}
+              {viewModal.displayStatus === 'Cancelled' && (viewModal.cancelledAt || viewModal.updatedAt || viewModal.updated_at) && (
+                <div className="detail-row">
+                  <span className="detail-label">Cancelled At</span>
+                  <strong className="text-danger">
+                    {parseDate(viewModal.cancelledAt || viewModal.updatedAt || viewModal.updated_at).toLocaleString('en-PH', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              )}
               {/* Prominent Payment Status & Controls Card */}
               <div className="payment-action-card">
                 <div className="payment-card-header">
