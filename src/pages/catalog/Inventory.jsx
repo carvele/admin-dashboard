@@ -8,6 +8,7 @@ import {
   PackageOpen,
   Package,
   PackagePlus,
+  PackageMinus,
   AlertTriangle,
   Archive,
   ArchiveRestore,
@@ -61,6 +62,15 @@ const sizeRank = (s) => {
 };
 
 const TABLE_COLUMNS = 9;
+
+const REDUCTION_REASONS = [
+  'Damaged / Defective Garment',
+  'Physical Inventory Discrepancy (Audit Correction)',
+  'Lost / Shrinkage',
+  'Display / Marketing Sample Write-Off',
+  'Customer Return Adjustment',
+  'Other (specify below)',
+];
 
 const COLOR_DOT_MAP = {
   blue: '#3b82f6',
@@ -127,6 +137,9 @@ const VariantInvRow = ({
   handlePublishProduct,
   setRestockModal,
   setRestockQty,
+  setAdjustMode,
+  setAdjustReason,
+  setOtherReasonText,
   setSellModal,
   setSalePriceInput,
   setSalePaymentMethod,
@@ -316,6 +329,23 @@ const VariantInvRow = ({
                     className="inv-action-popover"
                     role="menu"
                   >
+                    <button
+                      type="button"
+                      className="inv-popover-item"
+                      title="Reduce stock for damage, loss, or audit write-off"
+                      onClick={() => {
+                        setActiveMenuId(null);
+                        if (setAdjustMode) setAdjustMode('remove');
+                        if (setAdjustReason) setAdjustReason('Damaged / Defective Garment');
+                        if (setOtherReasonText) setOtherReasonText('');
+                        setRestockModal(item);
+                        setRestockQty('');
+                      }}
+                    >
+                      <PackageMinus size={14} />
+                      <span>Reduce / Write-Off Stock</span>
+                    </button>
+
                     {canManageLookups && (
                       <button
                         type="button"
@@ -489,8 +519,12 @@ const Inventory = () => {
     return () => unsub();
   }, []);
 
-  // Modals
+  // Modals & Adjust Stock
   const [restockModal, setRestockModal] = useState(null);
+  const [adjustMode, setAdjustMode] = useState('add'); // 'add' | 'remove'
+  const [adjustReason, setAdjustReason] = useState('Damaged / Defective Garment');
+  const [otherReasonText, setOtherReasonText] = useState('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
   const [sellModal, setSellModal] = useState(null);
   const [archiveConfirm, setArchiveConfirm] = useState(null);
   const [arColorModal, setArColorModal] = useState(null);
@@ -501,17 +535,26 @@ const Inventory = () => {
   const [salePaymentMethod, setSalePaymentMethod] = useState('cash');
   const [saleIdempotencyKey, setSaleIdempotencyKey] = useState('');
 
+  const handleCloseAdjustModal = useCallback(() => {
+    setRestockModal(null);
+    setRestockQty('');
+    setAdjustMode('add');
+    setAdjustReason('Damaged / Defective Garment');
+    setOtherReasonText('');
+    setIsAdjusting(false);
+  }, []);
+
   useEffect(() => {
     const onEsc = (e) => {
       if (e.key !== 'Escape') return;
-      if (restockModal) setRestockModal(null);
+      if (restockModal) handleCloseAdjustModal();
       else if (sellModal) setSellModal(null);
       else if (arColorModal) setArColorModal(null);
       else if (activeMenuId) setActiveMenuId(null);
     };
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
-  }, [restockModal, sellModal, arColorModal, activeMenuId]);
+  }, [restockModal, sellModal, arColorModal, activeMenuId, handleCloseAdjustModal]);
 
   useEffect(() => {
     setArColorInput(arColorModal?.hexColor || getChipColorDot(arColorModal?.color) || '');
@@ -693,6 +736,35 @@ const Inventory = () => {
     }
     if (!restockModal) return;
 
+    if (adjustMode === 'remove') {
+      if (qty > restockModal.available) {
+        toast.error(`Cannot remove more than available stock (${restockModal.available} units). Reserved units (${restockModal.reserved || 0}) are protected.`);
+        return;
+      }
+      const finalReason = adjustReason === 'Other (specify below)' ? (otherReasonText || '').trim() : adjustReason;
+      if (!finalReason) {
+        toast.error('Please specify a reason for this inventory reduction.');
+        return;
+      }
+      setIsAdjusting(true);
+      try {
+        await adjustInventoryOnHand(
+          restockModal.docId || restockModal.id,
+          -qty,
+          finalReason
+        );
+        toast.success(`Reduced ${restockModal.item} (${restockModal.size}, ${restockModal.color || 'Standard'}) -${qty} units (${finalReason})`);
+        handleCloseAdjustModal();
+      } catch (err) {
+        toast.error('Failed to reduce variant stock: ' + (err?.message || ''));
+      } finally {
+        setIsAdjusting(false);
+      }
+      return;
+    }
+
+    // Default: 'add' (Restock)
+    setIsAdjusting(true);
     try {
       await adjustInventoryOnHand(
         restockModal.docId || restockModal.id,
@@ -700,10 +772,11 @@ const Inventory = () => {
         'Restock delivery shipment'
       );
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}, ${restockModal.color || 'Standard'}) +${qty} units`);
-      setRestockModal(null);
-      setRestockQty('');
+      handleCloseAdjustModal();
     } catch (err) {
       toast.error('Failed to restock variant: ' + (err?.message || ''));
+    } finally {
+      setIsAdjusting(false);
     }
   };
 
@@ -1319,6 +1392,9 @@ const Inventory = () => {
                             handlePublishProduct={handlePublishProduct}
                             setRestockModal={setRestockModal}
                             setRestockQty={setRestockQty}
+                        setAdjustMode={setAdjustMode}
+                        setAdjustReason={setAdjustReason}
+                        setOtherReasonText={setOtherReasonText}
                             setSellModal={setSellModal}
                             setSalePriceInput={setSalePriceInput}
                             setSalePaymentMethod={setSalePaymentMethod}
@@ -1343,6 +1419,9 @@ const Inventory = () => {
                         handlePublishProduct={handlePublishProduct}
                         setRestockModal={setRestockModal}
                         setRestockQty={setRestockQty}
+                        setAdjustMode={setAdjustMode}
+                        setAdjustReason={setAdjustReason}
+                        setOtherReasonText={setOtherReasonText}
                         setSellModal={setSellModal}
                         setSalePriceInput={setSalePriceInput}
                         setSalePaymentMethod={setSalePaymentMethod}
@@ -1390,15 +1469,15 @@ const Inventory = () => {
         )}
       </div>
 
-      {/* ===== RESTOCK MODAL (Operates strictly on exact selected variant) ===== */}
+      {/* ===== ADJUST STOCK MODAL (Add / Restock or Remove / Write-off) ===== */}
       {restockModal && (
         <div
           className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setRestockModal(null); }}
+          onClick={(e) => { if (e.target === e.currentTarget) handleCloseAdjustModal(); }}
           role="button"
           tabIndex={0}
           aria-label="Close restock dialog"
-          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setRestockModal(null); } }}
+          onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleCloseAdjustModal(); } }}
         >
           <div
             className="modal-content"
@@ -1408,47 +1487,140 @@ const Inventory = () => {
             style={{ maxWidth: 480 }}
           >
             <div className="modal-header">
-              <h2 id="restock-dialog-title">Restock Variant</h2>
-              <button className="close-btn" onClick={() => setRestockModal(null)} aria-label="Close dialog">
+              <h2 id="restock-dialog-title">
+                {adjustMode === 'add' ? 'Restock Variant' : 'Reduce Stock (Write-Off)'}
+              </h2>
+              <button className="close-btn" onClick={handleCloseAdjustModal} aria-label="Close dialog">
                 &times;
               </button>
             </div>
             <form className="modal-body" onSubmit={handleRestock}>
-              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                Adds inventory on hand to this exact variant. Other sizes or colors are unaffected.
+              {/* Mode Switcher Toggle */}
+              <div className="adjust-mode-toggle" role="tablist" aria-label="Stock adjustment mode">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={adjustMode === 'add'}
+                  className={`adjust-toggle-btn ${adjustMode === 'add' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAdjustMode('add');
+                    setRestockQty('');
+                  }}
+                >
+                  <PackagePlus size={16} />
+                  <span>Add Stock (Restock)</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={adjustMode === 'remove'}
+                  className={`adjust-toggle-btn ${adjustMode === 'remove' ? 'active danger' : ''}`}
+                  onClick={() => {
+                    setAdjustMode('remove');
+                    setRestockQty('');
+                  }}
+                >
+                  <PackageMinus size={16} />
+                  <span>Remove Stock (Write-Off)</span>
+                </button>
+              </div>
+
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+                {adjustMode === 'add'
+                  ? 'Adds inventory on hand to this exact variant. Other sizes or colors are unaffected.'
+                  : 'Deducts physical stock for damaged garments, audit corrections, or write-offs. Reserved customer units are strictly protected.'}
               </p>
+
               <div className="restock-item-info" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
                 {restockModal.color && <span className="color-badge">{restockModal.color}</span>}
                 <span className="sku-code">{restockModal.variantSku || restockModal.sku}</span>
               </div>
+
               <div className="stock-metrics-box" style={{ background: 'var(--cream, #f9fafb)', padding: '0.75rem', borderRadius: '6px', margin: '0.75rem 0', display: 'flex', justifyContent: 'space-between' }}>
                 <div>Available: <strong className="text-success">{restockModal.available}</strong></div>
                 <div>Reserved: <strong className="text-reserved-active">{restockModal.reserved || 0}</strong></div>
                 <div>Total On Hand: <strong>{restockModal.total}</strong></div>
               </div>
+
               <div className="form-group">
-                <label className="label" htmlFor="restock-qty">Quantity to Add</label>
+                <label className="label" htmlFor="restock-qty">
+                  {adjustMode === 'add' ? 'Quantity to Add' : 'Quantity to Remove'}
+                </label>
                 <input
                   autoComplete="off"
                   id="restock-qty"
                   type="number"
                   className="input-field"
                   min="1"
-                  placeholder="e.g. 10"
+                  max={adjustMode === 'remove' ? restockModal.available : undefined}
+                  placeholder={adjustMode === 'add' ? 'e.g. 10' : `Max ${restockModal.available}`}
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
                   required
+                  disabled={isAdjusting || (adjustMode === 'remove' && restockModal.available <= 0)}
                   style={{ MozAppearance: 'textfield', appearance: 'textfield' }}
                 />
+                {adjustMode === 'remove' && (
+                  <small className="text-secondary" style={{ display: 'block', marginTop: '0.25rem' }}>
+                    {restockModal.available > 0
+                      ? `Maximum removable: ${restockModal.available} units (cannot exceed available stock)`
+                      : 'No available stock to remove. Reserved units cannot be written off.'}
+                  </small>
+                )}
               </div>
+
+              {adjustMode === 'remove' && (
+                <>
+                  <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                    <label className="label" htmlFor="reduction-reason">Reason for Reduction</label>
+                    <select
+                      id="reduction-reason"
+                      className="input-field"
+                      value={adjustReason}
+                      onChange={(e) => setAdjustReason(e.target.value)}
+                      required
+                    >
+                      {REDUCTION_REASONS.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {adjustReason === 'Other (specify below)' && (
+                    <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                      <label className="label" htmlFor="custom-reduction-reason">Specific Reason</label>
+                      <input
+                        autoComplete="off"
+                        id="custom-reduction-reason"
+                        type="text"
+                        className="input-field"
+                        placeholder="e.g. Broken zipper during fitting session"
+                        value={otherReasonText}
+                        onChange={(e) => setOtherReasonText(e.target.value)}
+                        required
+                        maxLength={200}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
               <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setRestockModal(null)}>
+                <button type="button" className="btn-outline" onClick={handleCloseAdjustModal} disabled={isAdjusting}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Confirm Restock
+                <button
+                  type="submit"
+                  className={adjustMode === 'add' ? 'btn-primary' : 'btn-danger'}
+                  disabled={isAdjusting || (adjustMode === 'remove' && restockModal.available <= 0)}
+                >
+                  {isAdjusting
+                    ? 'Saving...'
+                    : adjustMode === 'add'
+                    ? 'Confirm Restock'
+                    : 'Confirm Reduction'}
                 </button>
               </div>
             </form>
