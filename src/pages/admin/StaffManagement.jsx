@@ -899,7 +899,7 @@ const StaffManagement = () => {
                   <div className="staff-invite-info-callout" style={{ marginTop: '1rem' }}>
                     <Shield size={16} style={{ color: 'var(--color-gold)', flexShrink: 0, marginTop: 2 }} />
                     <p>
-                      The staff member can log in directly at <strong>/login</strong> using this temporary password. Upon login, they can change their password under <strong>Settings &gt; Security</strong>.
+                      The staff member can log in directly at <strong>/login</strong> using this temporary password. To change it, they can go to their <strong>Profile page</strong> after logging in.
                     </p>
                   </div>
 
@@ -916,7 +916,7 @@ const StaffManagement = () => {
                           `• Portal URL: ${createdCredentials.loginUrl}\n` +
                           `• Email: ${createdCredentials.email}\n` +
                           `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
-                          `Please log in and update your password under Settings > Security.`
+                          `Please log in and change your password via your Profile page.`
                         );
                         const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(createdCredentials.email)}&su=${subject}&body=${body}`;
                         window.open(gmailUrl, '_blank');
@@ -939,7 +939,7 @@ const StaffManagement = () => {
                           `• Portal URL: ${createdCredentials.loginUrl}\n` +
                           `• Email: ${createdCredentials.email}\n` +
                           `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
-                          `Please log in and update your password under Settings > Security.`
+                          `Please log in and change your password via your Profile page.`
                         );
                         window.location.href = `mailto:${encodeURIComponent(createdCredentials.email)}?subject=${subject}&body=${body}`;
                       }}
@@ -967,7 +967,7 @@ const StaffManagement = () => {
                       className="btn-primary flex-center gap-2 w-full"
                       onClick={() =>
                         copyToClipboard(
-                          `Welcome to the JezSy Collection Admin Team!\n\nYour staff account has been set up with the following login details:\n• Portal URL: ${createdCredentials.loginUrl}\n• Email: ${createdCredentials.email}\n• Temporary Password: ${createdCredentials.tempPassword}\n\nPlease log in and update your password under Settings > Security.`,
+                          `Welcome to the JezSy Collection Admin Team!\n\nYour staff account has been set up with the following login details:\n• Portal URL: ${createdCredentials.loginUrl}\n• Email: ${createdCredentials.email}\n• Temporary Password: ${createdCredentials.tempPassword}\n\nPlease log in and change your password via your Profile page.`,
                           'message',
                         )
                       }
