@@ -1,9 +1,10 @@
-// create-staff-account
+// supabase/functions/create-staff-account/index.ts
 //
-// Creates a pre-confirmed staff member account with a secure temporary password.
-// Upserts their active public.profiles row immediately so they appear in Team
-// Management right away, and returns the credentials to the store owner so they
-// can be provided to the new staff member to log in at /login.
+// Creates a new staff member account with a cryptographically secure 10-character
+// temporary password, marks the account as pre-confirmed, assigns staff role
+// metadata, creates/upserts the public.profiles row, dispatches a professional
+// branded invitation email via Resend directly to the invited email, and returns
+// the credentials and delivery status securely to the authorized administrator.
 //
 // Caller must be an authenticated owner (checked against their own profiles row).
 
@@ -16,8 +17,8 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '*')
 
 function originMatches(origin: string, pattern: string): boolean {
   if (!pattern.includes('*')) return origin === pattern;
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*');
-  return new RegExp(`^${escaped}$`).test(origin);
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp('^' + escaped + '$').test(origin);
 }
 
 function corsHeadersFor(req: Request): Record<string, string> {
@@ -37,6 +38,15 @@ function json(req: Request, body: unknown, status: number) {
     status,
     headers: { ...corsHeadersFor(req), 'Content-Type': 'application/json' },
   });
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function generateTemporaryPassword(): string {
@@ -98,7 +108,7 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Missing authorization header' }, 401);
     }
 
-    // Client bound to the caller's own JWT — identifies who is calling
+    // Client bound to caller's own JWT — verifies identity and permissions
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -107,7 +117,7 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Invalid or expired session' }, 401);
     }
 
-    // Admin client bound to service role
+    // Admin client bound to service role — strictly scoped inside Edge Function
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: callerProfile, error: profileError } = await adminClient
@@ -139,6 +149,7 @@ Deno.serve(async (req) => {
     }
 
     const siteUrl = clientSiteUrl ?? Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
+    const loginUrl = siteUrl + '/login';
     const tempPassword = generateTemporaryPassword();
 
     // 1. Check if user already exists in public.profiles
@@ -183,7 +194,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!idProfile) {
-        console.log(`[create-staff-account] Cleaning up stale auth user ${existingAuthUser.id} without profile`);
+        console.log('[create-staff-account] Cleaning up stale auth user ' + existingAuthUser.id + ' without profile');
         await adminClient.auth.admin.deleteUser(existingAuthUser.id);
       }
     }
@@ -202,7 +213,7 @@ Deno.serve(async (req) => {
     });
 
     if (createError || !createData?.user) {
-      console.error('[create-staff-account] User creation error:', createError);
+      console.error('[create-staff-account] User creation error:', createError?.message);
       return json(req, { error: createError?.message || 'Failed to create staff user account.' }, 500);
     }
 
@@ -225,12 +236,150 @@ Deno.serve(async (req) => {
     );
 
     if (profileUpsertError) {
-      console.error('[create-staff-account] Profile upsert error:', profileUpsertError);
+      console.error('[create-staff-account] Profile upsert error:', profileUpsertError.message);
       return json(req, { error: 'Staff account created but profile setup failed. Please retry.' }, 500);
     }
 
-    // 5. Return the temporary credentials securely to the admin
-    const loginUrl = `${siteUrl}/login`;
+    // 5. Send professional invitation email via Resend API directly to the invited email
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') ?? 'JezSy Collection <onboarding@resend.dev>';
+
+    if (!resendApiKey) {
+      emailError = 'RESEND_API_KEY is not configured in Supabase secrets.';
+      console.warn('[create-staff-account]', emailError);
+    } else {
+      try {
+        const safeEmail = escapeHtml(email);
+        const safeRole = role === 'owner' ? 'Owner' : 'Sales Staff';
+        const safeTempPassword = escapeHtml(tempPassword);
+        const safeLoginUrl = escapeHtml(loginUrl);
+
+        const emailHtml = '<!DOCTYPE html>' +
+'<html>' +
+'<head>' +
+'  <meta charset="utf-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <title>Your Staff Account Invitation - JezSy Collection</title>' +
+'</head>' +
+'<body style="margin: 0; padding: 0; background-color: #f7f4ed; font-family: sans-serif;">' +
+'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f7f4ed; padding: 32px 16px;">' +
+'    <tr>' +
+'      <td align="center">' +
+'        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; background-color: #ffffff; border: 1px solid #efe9db; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">' +
+'          <!-- Header -->' +
+'          <tr>' +
+'            <td style="background: #1f1c18; padding: 28px 32px; text-align: center; border-bottom: 3px solid #d4af37;">' +
+'              <h1 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 0.12em; font-weight: 700; text-transform: uppercase;">JEZSY COLLECTION</h1>' +
+'              <p style="color: #d4af37; margin: 6px 0 0 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;">Staff Management Portal</p>' +
+'            </td>' +
+'          </tr>' +
+'          <!-- Body -->' +
+'          <tr>' +
+'            <td style="padding: 32px 32px 24px 32px;">' +
+'              <h2 style="color: #1f1c18; font-size: 18px; margin: 0 0 12px 0; font-weight: 600;">Welcome to the Team</h2>' +
+'              <p style="color: #544b45; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">' +
+'                Your staff account has been created by an administrator with <strong>' + safeRole + '</strong> access. You can now access the admin dashboard using the login credentials below:' +
+'              </p>' +
+'              <!-- Credentials Card -->' +
+'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fdfbf7; border: 1px solid #efe9db; border-left: 4px solid #d4af37; border-radius: 8px; margin: 0 0 24px 0;">' +
+'                <tr>' +
+'                  <td style="padding: 16px 20px;">' +
+'                    <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
+'                      <tr>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; width: 140px; font-weight: 600;">Portal URL:</td>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #1f1c18; font-family: monospace; font-weight: 600;"><a href="' + safeLoginUrl + '" style="color: #926f1a; text-decoration: underline;">' + safeLoginUrl + '</a></td>' +
+'                      </tr>' +
+'                      <tr>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; width: 140px; font-weight: 600;">Staff Email:</td>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #1f1c18; font-family: monospace; font-weight: 600;">' + safeEmail + '</td>' +
+'                      </tr>' +
+'                      <tr>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; font-weight: 600;">Temporary Password:</td>' +
+'                        <td style="padding: 6px 0;">' +
+'                          <span style="background-color: #f5eedc; border: 1px solid #efe9db; color: #1f1c18; font-family: monospace; font-size: 15px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.05em; display: inline-block;">' + safeTempPassword + '</span>' +
+'                        </td>' +
+'                      </tr>' +
+'                      <tr>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; font-weight: 600;">Access Role:</td>' +
+'                        <td style="padding: 6px 0; font-size: 13px; color: #926f1a; font-weight: 600;">' + safeRole + '</td>' +
+'                      </tr>' +
+'                    </table>' +
+'                  </td>' +
+'                </tr>' +
+'              </table>' +
+'              <!-- Action Button -->' +
+'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 24px 0;">' +
+'                <tr>' +
+'                  <td align="center">' +
+'                    <a href="' + safeLoginUrl + '" target="_blank" style="background-color: #1f1c18; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; letter-spacing: 0.02em;">' +
+'                      Log In to Admin Portal &rarr;' +
+'                    </a>' +
+'                  </td>' +
+'                </tr>' +
+'              </table>' +
+'              <!-- Security Notice -->' +
+'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border: 1px solid #efe9db; border-radius: 6px; margin: 0 0 16px 0;">' +
+'                <tr>' +
+'                  <td style="padding: 14px 16px;">' +
+'                    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #1f1c18; text-transform: uppercase; letter-spacing: 0.04em;">Important Security Instructions</p>' +
+'                    <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #544b45; line-height: 1.5;">' +
+'                      <li>You <strong>must change this temporary password</strong> immediately after your first login under <strong>Settings &gt; Security</strong>.</li>' +
+'                      <li>Do not share, forward, or disclose your login credentials to anyone.</li>' +
+'                      <li>If you did not expect this invitation, please notify the store administrator immediately.</li>' +
+'                    </ul>' +
+'                  </td>' +
+'                </tr>' +
+'              </table>' +
+'            </td>' +
+'          </tr>' +
+'          <!-- Footer -->' +
+'          <tr>' +
+'            <td style="background-color: #fdfbf7; padding: 20px 32px; text-align: center; border-top: 1px solid #efe9db;">' +
+'              <p style="margin: 0; font-size: 11px; color: #888888; line-height: 1.4;">' +
+'                This is an automated administrative notification from JezSy Collection.<br>' +
+'                Please do not reply directly to this email.' +
+'              </p>' +
+'            </td>' +
+'          </tr>' +
+'        </table>' +
+'      </td>' +
+'    </tr>' +
+'  </table>' +
+'</body>' +
+'</html>';
+
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + resendApiKey,
+          },
+          body: JSON.stringify({
+            from: resendFromEmail,
+            to: [email],
+            subject: 'Your Staff Account Invitation & Login Credentials - JezSy Collection',
+            html: emailHtml,
+          }),
+        });
+
+        if (resendResponse.ok) {
+          emailSent = true;
+          console.log('[create-staff-account] Invitation email sent to ' + email + ' via Resend');
+        } else {
+          const errBody = await resendResponse.json().catch(() => ({}));
+          emailError = errBody?.message || ('Resend delivery failed with status ' + resendResponse.status);
+          console.warn('[create-staff-account] Resend error:', emailError);
+        }
+      } catch (err: unknown) {
+        emailError = err instanceof Error ? err.message : 'Network error communicating with Resend';
+        console.warn('[create-staff-account] Resend exception:', emailError);
+      }
+    }
+
+    // 6. Return response to authorized administrator
     return json(
       req,
       {
@@ -239,10 +388,12 @@ Deno.serve(async (req) => {
         role: role,
         tempPassword: tempPassword,
         loginUrl: loginUrl,
+        emailSent: emailSent,
+        emailError: emailError,
       },
       200,
     );
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('[create-staff-account] Unexpected error:', err);
     return json(req, { error: 'Unexpected server error' }, 500);
   }
