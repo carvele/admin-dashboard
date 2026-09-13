@@ -12,6 +12,7 @@ import {
   XCircle,
   Clock,
   Eye,
+  EyeOff,
   Shirt,
   Package,
   MessageSquare,
@@ -27,6 +28,10 @@ import {
   Copy,
   Keyboard,
   Camera,
+  Scissors,
+  Ruler,
+  AlertTriangle,
+  Save,
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
@@ -65,13 +70,39 @@ import {
   resolveRescheduleRequest,
   getPaymentsForReservation,
 } from '../../services/reservationService';
-import { subscribeToCustomers } from '../../services/customerService';
+import {
+  subscribeToCustomers,
+  getCustomerMeasurements,
+  getReservationFitting,
+  saveReservationFittingRecord,
+  getReservationItemAlterations,
+  saveReservationItemAlteration,
+} from '../../services/customerService';
 import { subscribeToProducts } from '../../services/productService';
 import { resolveSignedStorageUrl } from '../../lib/storage';
 import { logAction } from '../../services/staffService';
 import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
+
+// Safe extraction for display (returns { value, unit } where value is ALWAYS a primitive number or string)
+const extractMeasurementDisplay = (val, defaultUnit = 'cm') => {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'object') {
+    if (typeof val.valueCm === 'number') {
+      return { value: Math.round(val.valueCm * 10) / 10, unit: 'cm' };
+    }
+    if (typeof val.valueInches === 'number') {
+      return { value: Math.round(val.valueInches * 10) / 10, unit: '"' };
+    }
+    if (typeof val.value === 'number' || typeof val.value === 'string') {
+      return { value: val.value, unit: val.unit || defaultUnit };
+    }
+    return null;
+  }
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? null : { value: Math.round(parsed * 10) / 10, unit: defaultUnit };
+};
 
 
 const getInitials = (name) => {
@@ -435,6 +466,212 @@ const Reservations = () => {
       .finally(() => { if (!cancelled) setPaymentRecordsLoading(false); });
     return () => { cancelled = true; };
   }, [viewModal?.id, viewModal?.paymentStatus, viewModal?.balanceSettledAt]);
+
+  // Capability check for fitting & alterations (Phase 1 DB policy requires Owner or Admin)
+  const canManageFittings =
+    String(user?.role || '').toLowerCase() === 'owner' ||
+    String(user?.role || '').toLowerCase() === 'admin';
+
+  // Compute canonical item lines for the modal
+  const modalLines = useMemo(() => {
+    if (!viewModal?.id) return [];
+    if (itemsByReservation[viewModal.id]?.length) {
+      return itemsByReservation[viewModal.id];
+    }
+    if (viewModal.lines?.length) {
+      return viewModal.lines;
+    }
+    return [{
+      id: viewModal.id,
+      productId: viewModal.productId,
+      productName: viewModal.productName || viewModal.outfit,
+      size: viewModal.size,
+      color: viewModal.color,
+      quantity: viewModal.quantity ?? 1,
+    }];
+  }, [viewModal, itemsByReservation]);
+
+  // Fitting & Alterations state
+  const [fittingPanelExpanded, setFittingPanelExpanded] = useState(false);
+  const [fittingLoading, setFittingLoading] = useState(false);
+  const [fittingSaving, setFittingSaving] = useState(false);
+  const [fittingRecord, setFittingRecord] = useState(null);
+  const [fittingStatus, setFittingStatus] = useState('fitted');
+  const [customerFittingSummary, setCustomerFittingSummary] = useState('');
+  const [staffInternalNotes, setStaffInternalNotes] = useState('');
+  const [confirmedMeasurements, setConfirmedMeasurements] = useState({
+    bust: '',
+    waist: '',
+    hips: '',
+    inseam: '',
+  });
+
+  // Per-item alterations state: map of itemId -> alteration draft object
+  const [itemAlterations, setItemAlterations] = useState({});
+  const [itemAlterationSaving, setItemAlterationSaving] = useState({});
+
+  // Customer scan measurements baseline
+  const [custScanMeasurements, setCustScanMeasurements] = useState(null);
+  const [custScanLoading, setCustScanLoading] = useState(false);
+  const [custScanAccessDenied, setCustScanAccessDenied] = useState(false);
+  const [custScanRevealed, setCustScanRevealed] = useState(false);
+
+  useEffect(() => {
+    if (!viewModal?.id) {
+      setFittingRecord(null);
+      setItemAlterations({});
+      setCustScanMeasurements(null);
+      setCustScanAccessDenied(false);
+      setCustScanRevealed(false);
+      setFittingPanelExpanded(false);
+      return;
+    }
+
+    const resId = viewModal.id;
+    const customerId = viewModal.customerId || viewModal.customer_id;
+
+    if (customerId) {
+      setCustScanLoading(true);
+      setCustScanAccessDenied(false);
+      setCustScanRevealed(false);
+      getCustomerMeasurements(customerId)
+        .then((data) => {
+          setCustScanMeasurements(data);
+        })
+        .catch((err) => {
+          if (err.code === '42501' || err.message === 'UNAUTHORIZED_MEASUREMENT_ACCESS') {
+            setCustScanAccessDenied(true);
+          } else {
+            console.error('Failed to load customer scan measurements:', err);
+          }
+          setCustScanMeasurements(null);
+        })
+        .finally(() => {
+          setCustScanLoading(false);
+        });
+    } else {
+      setCustScanMeasurements(null);
+    }
+
+    setFittingLoading(true);
+    Promise.all([
+      getReservationFitting(resId).catch((err) => {
+        console.error('Failed to load reservation fitting record:', err);
+        return null;
+      }),
+      getReservationItemAlterations(resId).catch((err) => {
+        console.error('Failed to load reservation item alterations:', err);
+        return [];
+      }),
+    ]).then(([fitting, alterations]) => {
+      if (fitting) {
+        setFittingRecord(fitting);
+        setFittingStatus(fitting.fitting_status || 'fitted');
+        setCustomerFittingSummary(fitting.customer_fitting_summary || '');
+        setStaffInternalNotes(fitting.staff_internal_notes || '');
+        const confirmed = fitting.confirmed_body_measurements || {};
+        setConfirmedMeasurements({
+          bust: confirmed.bust != null ? String(confirmed.bust) : '',
+          waist: confirmed.waist != null ? String(confirmed.waist) : '',
+          hips: confirmed.hips != null ? String(confirmed.hips) : '',
+          inseam: confirmed.inseam != null ? String(confirmed.inseam) : '',
+        });
+      } else {
+        setFittingRecord(null);
+        setFittingStatus('fitted');
+        setCustomerFittingSummary('');
+        setStaffInternalNotes('');
+        setConfirmedMeasurements({ bust: '', waist: '', hips: '', inseam: '' });
+      }
+
+      const altMap = {};
+      if (Array.isArray(alterations)) {
+        for (const alt of alterations) {
+          if (alt.reservation_item_id) {
+            altMap[alt.reservation_item_id] = { ...alt };
+          }
+        }
+      }
+      setItemAlterations(altMap);
+    }).finally(() => {
+      setFittingLoading(false);
+    });
+  }, [viewModal?.id, viewModal?.customerId, viewModal?.customer_id]);
+
+  const handleSaveFittingSession = async () => {
+    if (!viewModal?.id) return;
+    setFittingSaving(true);
+    try {
+      const confirmedObj = {};
+      if (confirmedMeasurements.bust !== '') confirmedObj.bust = parseFloat(confirmedMeasurements.bust) || 0;
+      if (confirmedMeasurements.waist !== '') confirmedObj.waist = parseFloat(confirmedMeasurements.waist) || 0;
+      if (confirmedMeasurements.hips !== '') confirmedObj.hips = parseFloat(confirmedMeasurements.hips) || 0;
+      if (confirmedMeasurements.inseam !== '') confirmedObj.inseam = parseFloat(confirmedMeasurements.inseam) || 0;
+
+      await saveReservationFittingRecord({
+        reservationId: viewModal.id,
+        confirmedBodyMeasurements: confirmedObj,
+        fittingStatus,
+        customerFittingSummary: customerFittingSummary.trim(),
+        staffInternalNotes: staffInternalNotes.trim(),
+      });
+
+      const updated = await getReservationFitting(viewModal.id);
+      if (updated) setFittingRecord(updated);
+      toast.success('Fitting session record saved');
+    } catch (err) {
+      console.error('Failed to save fitting record:', err);
+      toast.error(err.message || 'Failed to save fitting session');
+    } finally {
+      setFittingSaving(false);
+    }
+  };
+
+  const handleUpdateItemAlterationField = (itemId, field, value) => {
+    setItemAlterations((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...(prev[itemId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveItemAlteration = async (item) => {
+    if (!viewModal?.id || !item?.id) return;
+    const itemId = item.id;
+    const currentAlt = itemAlterations[itemId] || {};
+
+    setItemAlterationSaving((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      await saveReservationItemAlteration({
+        reservationItemId: itemId,
+        reservationId: viewModal.id,
+        productId: item.productId || item.product_id || null,
+        hemAdjustmentCm: parseFloat(currentAlt.hem_adjustment_cm) || 0,
+        sleeveAdjustmentCm: parseFloat(currentAlt.sleeve_adjustment_cm) || 0,
+        waistAdjustmentCm: parseFloat(currentAlt.waist_adjustment_cm) || 0,
+        shouldersAdjustmentCm: parseFloat(currentAlt.shoulders_adjustment_cm) || 0,
+        otherAdjustments: currentAlt.other_adjustments || {},
+        alterationStatus: currentAlt.alteration_status || 'pending',
+        customerSummary: (currentAlt.customer_alteration_summary || '').trim(),
+        staffNotes: (currentAlt.staff_internal_notes || '').trim(),
+      });
+
+      const updatedList = await getReservationItemAlterations(viewModal.id);
+      const altMap = {};
+      for (const alt of updatedList) {
+        if (alt.reservation_item_id) altMap[alt.reservation_item_id] = { ...alt };
+      }
+      setItemAlterations(altMap);
+      toast.success(`Alterations saved for ${item.productName || 'garment'}`);
+    } catch (err) {
+      console.error('Failed to save item alteration:', err);
+      toast.error(err.message || 'Failed to save item alteration');
+    } finally {
+      setItemAlterationSaving((prev) => ({ ...prev, [itemId]: false }));
+    }
+  };
 
   const [newRes, setNewRes] = useState({
     customer: '',
@@ -2409,6 +2646,423 @@ const Reservations = () => {
                   ))}
                 </div>
               )}
+
+              {/* ===== FITTING & ALTERATIONS PANEL ===== */}
+              <div className="fitting-action-card">
+                <div
+                  className="fitting-card-header"
+                  onClick={() => setFittingPanelExpanded((prev) => !prev)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setFittingPanelExpanded((prev) => !prev);
+                    }
+                  }}
+                >
+                  <div className="flex-center gap-2">
+                    <Scissors size={18} className="text-primary" />
+                    <div>
+                      <div className="fitting-card-title">Fitting & Alterations</div>
+                      <div className="text-xs text-secondary">
+                        Fit verification, garment tailoring adjustments, and customer profile
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex-center gap-2">
+                    {fittingRecord?.fitting_status && (
+                      <span className={`status-chip status-chip-${
+                        fittingRecord.fitting_status === 'completed' || fittingRecord.fitting_status === 'ready_for_pickup'
+                          ? 'completed'
+                          : fittingRecord.fitting_status === 'alteration_needed'
+                            ? 'pending'
+                            : 'default'
+                      }`}>
+                        {fittingRecord.fitting_status.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                    <span className="btn-icon" style={{ cursor: 'pointer' }}>
+                      {fittingPanelExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </span>
+                  </div>
+                </div>
+
+                {fittingPanelExpanded && (
+                  <div className="fitting-card-body">
+                    {!canManageFittings ? (
+                      <div className="fitting-restricted-note">
+                        🔒 Restricted: Tailoring adjustments and customer fitting records require administrative privileges.
+                      </div>
+                    ) : fittingLoading ? (
+                      <div className="text-secondary text-xs p-3">Loading fitting details...</div>
+                    ) : (
+                      <>
+                        {/* 1. Customer Baseline Body Scan (Read-Only) */}
+                        <div className="fitting-subcard">
+                          <div className="fitting-subcard-header">
+                            <h4 className="fitting-subcard-title">
+                              <Ruler size={15} /> Customer Fit Baseline
+                            </h4>
+                            {!custScanAccessDenied && custScanMeasurements && (
+                              <button
+                                type="button"
+                                className="btn-outline small flex-center gap-1"
+                                style={{ padding: '2px 8px', fontSize: '11px' }}
+                                onClick={() => setCustScanRevealed((prev) => !prev)}
+                              >
+                                {custScanRevealed ? <EyeOff size={12} /> : <Eye size={12} />}
+                                {custScanRevealed ? 'Hide Details' : 'View Fitting Profile'}
+                              </button>
+                            )}
+                          </div>
+
+                          {custScanLoading ? (
+                            <div className="text-secondary text-xs p-2">Loading scan measurements...</div>
+                          ) : custScanAccessDenied ? (
+                            <div className="text-secondary text-xs italic p-2 bg-gray-50 rounded">
+                              🔒 Restricted: Viewing customer measurements requires administrative privileges.
+                            </div>
+                          ) : !custScanMeasurements ? (
+                            <div className="text-secondary text-xs italic p-2 bg-gray-50 rounded">
+                              No sizing scan or body profile saved for this customer.
+                            </div>
+                          ) : !custScanRevealed ? (
+                            <div className="fitting-privacy-shield">
+                              <div>
+                                <span className="font-semibold text-xs text-primary block">Fitting Data Protected</span>
+                                <p className="text-xs text-secondary mt-0.5">
+                                  Sensitive personal measurements are collapsed to protect privacy. Reveal when tailoring garments.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn-outline small flex-center gap-1 flex-shrink-0"
+                                onClick={() => setCustScanRevealed(true)}
+                              >
+                                <Eye size={12} /> View Fitting Profile
+                              </button>
+                            </div>
+                          ) : (
+                            (() => {
+                              const m = custScanMeasurements?.measurements || {};
+                              const height = custScanMeasurements?.height;
+                              const rawRows = [
+                                { label: 'Bust', raw: m.bust ?? m.topBust },
+                                { label: 'Under Bust', raw: m.underBust },
+                                { label: 'Waist', raw: m.waist },
+                                { label: 'Hips', raw: m.hips ?? m.hip },
+                                { label: 'Neck', raw: m.neck ?? m.neckBase },
+                                { label: 'Shoulder', raw: m.shoulderWidth },
+                                { label: 'Back / Torso', raw: m.torsoLength ?? m.backLength },
+                                { label: 'Arm Length', raw: m.armLength },
+                                { label: 'Inseam', raw: m.inseam ?? m.insideLegLength ?? m.legLength },
+                                { label: 'Height', raw: height, defaultUnit: 'cm' },
+                              ];
+                              const rows = rawRows
+                                .map((r) => {
+                                  const extracted = extractMeasurementDisplay(r.raw, r.defaultUnit || 'cm');
+                                  if (!extracted) return null;
+                                  return { label: r.label, value: extracted.value, unit: extracted.unit };
+                                })
+                                .filter(Boolean);
+
+                              const sourceLabel = custScanMeasurements.measurement_source === 'ai_scan'
+                                ? 'AI Body Scan'
+                                : (custScanMeasurements.measurement_source || 'Customer Entered');
+                              const captureDate = custScanMeasurements.scanned_at || custScanMeasurements.created_at;
+
+                              return (
+                                <div>
+                                  <div className="flex-center justify-between text-xs text-secondary mb-2 pb-1 border-b">
+                                    <span>Source: <strong className="text-primary">{sourceLabel}</strong></span>
+                                    {captureDate && <span>Captured: {parseDate(captureDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                                    <span className={`status-chip status-chip-${custScanMeasurements.requires_review ? 'pending' : 'completed'}`}>
+                                      {custScanMeasurements.quality_status === 'needs_review' ? 'Needs Review' : 'Verified'}
+                                    </span>
+                                  </div>
+
+                                  {custScanMeasurements.requires_review && (
+                                    <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 text-xs flex items-center gap-2">
+                                      <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
+                                      <span>
+                                        <strong>Measurement Review Required:</strong> Flagged for calibration variation. Verify manually against tape.
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {rows.length === 0 ? (
+                                    <div className="text-secondary text-xs italic">No individual measurement fields saved.</div>
+                                  ) : (
+                                    <div className="fitting-measurements-grid">
+                                      {rows.map((r) => (
+                                        <div className="fitting-measure-box" key={r.label}>
+                                          <span>{r.label}</span>
+                                          <strong>{r.value}{r.unit ? ` ${r.unit}` : ''}</strong>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="text-xs text-secondary italic mt-1.5">
+                                    Customer body profiles are canonical and read-only. Record tailor-confirmed measurements below.
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
+                        </div>
+
+                        {/* 2. Boutique Fitting Session (Reservation Level) */}
+                        <div className="fitting-subcard">
+                          <div className="fitting-subcard-header">
+                            <h4 className="fitting-subcard-title">
+                              <Shirt size={15} /> Fitting Session Record
+                            </h4>
+                            {fittingRecord?.fitted_by_name && (
+                              <span className="text-xs text-secondary">
+                                Recorded by {fittingRecord.fitted_by_name}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="fitting-form-row">
+                            <div className="fitting-form-field">
+                              <label htmlFor="fitting-status-select" className="fitting-field-label">Fitting Status</label>
+                              <select
+                                id="fitting-status-select"
+                                className="fitting-select"
+                                value={fittingStatus}
+                                onChange={(e) => setFittingStatus(e.target.value)}
+                              >
+                                <option value="scheduled">Scheduled</option>
+                                <option value="fitted">Fitted / Tried On</option>
+                                <option value="alteration_needed">Alteration Needed</option>
+                                <option value="ready_for_pickup">Ready for Pickup</option>
+                                <option value="completed">Completed</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Confirmed in-person tape measurements */}
+                          <div className="mt-2">
+                            <span className="fitting-field-label block">Confirmed Tape Measurements (cm)</span>
+                            <div className="fitting-tape-grid">
+                              <div>
+                                <span className="text-xs text-secondary block mb-1">Bust</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  placeholder="cm"
+                                  aria-label="Confirmed bust in centimeters"
+                                  className="fitting-input"
+                                  value={confirmedMeasurements.bust}
+                                  onChange={(e) => setConfirmedMeasurements((prev) => ({ ...prev, bust: e.target.value }))}
+                                />
+                              </div>
+                              <div>
+                                <span className="text-xs text-secondary block mb-1">Waist</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  placeholder="cm"
+                                  aria-label="Confirmed waist in centimeters"
+                                  className="fitting-input"
+                                  value={confirmedMeasurements.waist}
+                                  onChange={(e) => setConfirmedMeasurements((prev) => ({ ...prev, waist: e.target.value }))}
+                                />
+                              </div>
+                              <div>
+                                <span className="text-xs text-secondary block mb-1">Hips</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  placeholder="cm"
+                                  aria-label="Confirmed hips in centimeters"
+                                  className="fitting-input"
+                                  value={confirmedMeasurements.hips}
+                                  onChange={(e) => setConfirmedMeasurements((prev) => ({ ...prev, hips: e.target.value }))}
+                                />
+                              </div>
+                              <div>
+                                <span className="text-xs text-secondary block mb-1">Inseam</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  placeholder="cm"
+                                  aria-label="Confirmed inseam in centimeters"
+                                  className="fitting-input"
+                                  value={confirmedMeasurements.inseam}
+                                  onChange={(e) => setConfirmedMeasurements((prev) => ({ ...prev, inseam: e.target.value }))}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Fitting Summaries */}
+                          <div className="mt-2">
+                            <label htmlFor="customer-fitting-summary-input" className="fitting-field-label">Customer Fitting Summary (Shared with customer)</label>
+                            <input
+                              id="customer-fitting-summary-input"
+                              type="text"
+                              className="fitting-input"
+                              placeholder="e.g. Sizing verified, hem shortened 3cm for heels"
+                              value={customerFittingSummary}
+                              onChange={(e) => setCustomerFittingSummary(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <label htmlFor="staff-internal-notes-input" className="fitting-field-label">Staff Internal Notes (Tailoring & private notes)</label>
+                            <textarea
+                              id="staff-internal-notes-input"
+                              rows={2}
+                              className="fitting-textarea"
+                              placeholder="e.g. Customer noted snug waist; seam allowance kept at 2cm"
+                              value={staffInternalNotes}
+                              onChange={(e) => setStaffInternalNotes(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="flex justify-end mt-3">
+                            <button
+                              type="button"
+                              className="btn-primary small flex-center gap-1"
+                              disabled={fittingSaving}
+                              onClick={handleSaveFittingSession}
+                            >
+                              <Save size={13} />
+                              {fittingSaving ? 'Saving...' : 'Save Fitting Session'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 3. Garment Alterations (Item Level) */}
+                        <div className="fitting-subcard">
+                          <div className="fitting-subcard-header">
+                            <h4 className="fitting-subcard-title">
+                              <Scissors size={15} /> Item Alterations ({modalLines.length})
+                            </h4>
+                          </div>
+
+                          {modalLines.map((item, index) => {
+                            const itemId = item.id;
+                            const alt = itemAlterations[itemId] || {};
+                            const isSavingAlt = itemAlterationSaving[itemId];
+                            return (
+                              <div key={itemId || index} className="fitting-item-box">
+                                <div className="fitting-item-header">
+                                  <div>
+                                    <strong className="text-sm">{item.productName || 'Garment Item'}</strong>
+                                    <div className="text-xs text-secondary">
+                                      Size: <strong>{item.size || 'N/A'}</strong>
+                                      {item.color ? ` · Color: ${item.color}` : ''}
+                                      {` · Qty: ${item.quantity ?? 1}`}
+                                    </div>
+                                  </div>
+                                  <div className="flex-center gap-2">
+                                    <select
+                                      className="fitting-select small"
+                                      value={alt.alteration_status || 'pending'}
+                                      onChange={(e) => handleUpdateItemAlterationField(itemId, 'alteration_status', e.target.value)}
+                                    >
+                                      <option value="pending">Pending</option>
+                                      <option value="in_progress">In Progress</option>
+                                      <option value="completed">Completed</option>
+                                      <option value="cancelled">Cancelled</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="fitting-adjustments-grid">
+                                  <div>
+                                    <span className="text-xs text-secondary block mb-1">Hem (cm)</span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      placeholder="0"
+                                      className="fitting-input"
+                                      value={alt.hem_adjustment_cm ?? 0}
+                                      onChange={(e) => handleUpdateItemAlterationField(itemId, 'hem_adjustment_cm', e.target.value)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs text-secondary block mb-1">Sleeve (cm)</span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      placeholder="0"
+                                      className="fitting-input"
+                                      value={alt.sleeve_adjustment_cm ?? 0}
+                                      onChange={(e) => handleUpdateItemAlterationField(itemId, 'sleeve_adjustment_cm', e.target.value)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs text-secondary block mb-1">Waist (cm)</span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      placeholder="0"
+                                      className="fitting-input"
+                                      value={alt.waist_adjustment_cm ?? 0}
+                                      onChange={(e) => handleUpdateItemAlterationField(itemId, 'waist_adjustment_cm', e.target.value)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs text-secondary block mb-1">Shoulders (cm)</span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      placeholder="0"
+                                      className="fitting-input"
+                                      value={alt.shoulders_adjustment_cm ?? 0}
+                                      onChange={(e) => handleUpdateItemAlterationField(itemId, 'shoulders_adjustment_cm', e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="mt-2">
+                                  <input
+                                    type="text"
+                                    className="fitting-input"
+                                    placeholder="Customer alteration summary for this piece"
+                                    value={alt.customer_alteration_summary || ''}
+                                    onChange={(e) => handleUpdateItemAlterationField(itemId, 'customer_alteration_summary', e.target.value)}
+                                  />
+                                </div>
+
+                                <div className="mt-2">
+                                  <textarea
+                                    rows={2}
+                                    className="fitting-textarea"
+                                    placeholder="Tailor notes for this specific garment"
+                                    value={alt.staff_internal_notes || ''}
+                                    onChange={(e) => handleUpdateItemAlterationField(itemId, 'staff_internal_notes', e.target.value)}
+                                  />
+                                </div>
+
+                                <div className="flex-center justify-between mt-2 pt-2 border-t">
+                                  <span className="text-xs text-secondary">
+                                    {alt.assigned_tailor_name ? `Tailor: ${alt.assigned_tailor_name}` : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="btn-outline small flex-center gap-1"
+                                    disabled={isSavingAlt}
+                                    onClick={() => handleSaveItemAlteration(item)}
+                                  >
+                                    <Save size={12} />
+                                    {isSavingAlt ? 'Saving...' : 'Save Alteration'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <button
