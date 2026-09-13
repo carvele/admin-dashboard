@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     }
 
     // Trusted role — service-role-only claim, cannot be forged by the client.
-    const staffRole = user.app_metadata?.staff_role;
+    const staffRole = user.app_metadata?.staff_role ?? user.user_metadata?.role ?? user.user_metadata?.staff_role;
     if (!ALLOWED_ROLES.includes(staffRole)) {
       return json(req, { error: 'This account is not a pending staff invite.' }, 403);
     }

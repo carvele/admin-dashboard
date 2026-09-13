@@ -152,6 +152,7 @@ const StaffManagement = () => {
           body: JSON.stringify({
             email: createForm.email.toLowerCase().trim(),
             role: createForm.role,
+            siteUrl: window.location.origin,
           }),
         },
       );

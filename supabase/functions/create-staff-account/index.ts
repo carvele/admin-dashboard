@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const email = (body?.email ?? '').toLowerCase().trim();
     const role = body?.role;
+    const clientSiteUrl = body?.siteUrl;
 
     if (!email || !email.includes('@')) {
       return json(req, { error: 'A valid email address is required.' }, 400);
@@ -101,14 +102,14 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Role must be "staff" or "owner".' }, 400);
     }
 
-    const siteUrl = Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
+    const siteUrl = clientSiteUrl ?? Deno.env.get('SITE_URL') ?? new URL(req.url).origin;
 
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
       {
         // user_metadata (spoofable by the user) — kept only for display/redirect.
         // The authoritative role lives in app_metadata, set below.
-        data: { role },
+        data: { role, staff_role: role },
         redirectTo: `${siteUrl}/set-password`,
       },
     );

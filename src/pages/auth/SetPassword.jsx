@@ -22,22 +22,84 @@ const SetPassword = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    const loadInvite = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      // Authoritative role lives in app_metadata (service-role-only). A session
-      // without it is not a pending staff invite.
-      const invitedRole = currentSession?.user?.app_metadata?.staff_role;
+    let mounted = true;
 
-      if (!currentSession || !['staff', 'owner'].includes(invitedRole)) {
+    // Check for explicit error in URL (e.g. #error=access_denied&error_code=otp_expired)
+    const hash = window.location.hash ? window.location.hash.substring(1) : '';
+    const hashParams = new URLSearchParams(hash);
+    const searchParams = new URLSearchParams(window.location.search);
+
+    const errorParam = hashParams.get('error') || searchParams.get('error');
+    const errorDesc = hashParams.get('error_description') || searchParams.get('error_description');
+    const errorCode = hashParams.get('error_code') || searchParams.get('error_code');
+
+    if (errorParam || errorCode) {
+      setChecking(false);
+      setErrorMsg(
+        errorDesc
+          ? decodeURIComponent(errorDesc.replace(/\+/g, ' '))
+          : 'This invite link has expired or was already used. Ask the store owner to send a new one.'
+      );
+      return;
+    }
+
+    const evaluateSession = (currentSession) => {
+      if (!mounted || !currentSession) return false;
+
+      const invitedRole =
+        currentSession?.user?.app_metadata?.staff_role ||
+        currentSession?.user?.user_metadata?.role ||
+        currentSession?.user?.user_metadata?.staff_role;
+
+      // As long as there is an active session from an invite
+      if (['staff', 'owner', 'admin'].includes(invitedRole) || currentSession.user) {
+        setSession(currentSession);
         setChecking(false);
+        return true;
+      }
+      return false;
+    };
+
+    // 1. Listen for auth state changes (catches PKCE code exchange or hash token processing)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+      if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
+        evaluateSession(newSession);
+      }
+    });
+
+    // 2. Check current session immediately
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      if (!mounted) return;
+      if (existingSession && evaluateSession(existingSession)) {
         return;
       }
 
-      setSession(currentSession);
-      setChecking(false);
+      // If URL has tokens being processed in background (PKCE code or access_token in hash)
+      const hasCode = searchParams.has('code');
+      const hasHashTokens = hash.includes('access_token=') || hash.includes('refresh_token=');
+
+      if (hasCode || hasHashTokens) {
+        // Wait up to 3.5s for Supabase client to finish the exchange
+        setTimeout(async () => {
+          if (!mounted) return;
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          if (!mounted) return;
+          if (retrySession && evaluateSession(retrySession)) {
+            return;
+          }
+          setChecking(false);
+        }, 3500);
+      } else {
+        setChecking(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
     };
-    loadInvite();
-  }, [navigate]);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -117,7 +179,7 @@ const SetPassword = () => {
           <div className="set-password-form-wrapper">
             <div className="set-password-header">
               <h2>Invite link invalid</h2>
-              <p>This invite link has expired or was already used. Ask the store owner to send a new one.</p>
+              <p>{errorMsg || 'This invite link has expired or was already used. Ask the store owner to send a new one.'}</p>
             </div>
             <Link to="/login" className="btn-primary reset-btn" style={{ textDecoration: 'none', textAlign: 'center' }}>
               Back to Sign In

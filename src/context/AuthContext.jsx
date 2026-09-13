@@ -266,9 +266,22 @@ export const AuthProvider = ({ children }) => {
 
       // If no profile was resolved:
       if (!resolvedRole) {
-        // Check for pending invite with unforgeable app_metadata
-        const isPendingInvite = ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role);
+        // If the user is on the /set-password page, DO NOT sign them out!
+        // They are currently accepting an invite to set their password and create their profile.
+        if (window.location.pathname.startsWith('/set-password')) {
+          userRef.current = null;
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // Check for pending invite with unforgeable app_metadata or user_metadata
+        const isPendingInvite =
+          ['staff', 'admin', 'owner'].includes(supabaseUser.app_metadata?.staff_role) ||
+          ['staff', 'admin', 'owner'].includes(supabaseUser.user_metadata?.role) ||
+          ['staff', 'admin', 'owner'].includes(supabaseUser.user_metadata?.staff_role);
         if (isPendingInvite) {
+          userRef.current = null;
           setUser(null);
           setIsLoading(false);
           return;
