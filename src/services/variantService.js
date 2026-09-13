@@ -301,32 +301,78 @@ export const restockVariants = async (entries = [], reason = '') => {
  * splits it on ',' to build its colour picker, so this format is a contract —
  * changing it breaks that picker.
  */
+// syncProductAttributesFromVariants: syncs colors/patterns back to products table
 export const syncProductAttributesFromVariants = async (productDocId) => {
   if (!productDocId) return null;
 
   const variants = await getProductVariants(productDocId);
-  const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
-  const patterns = [...new Set(variants.map((v) => v.pattern).filter(Boolean))];
 
-  // This goes straight to supabase.from(...).update() below, bypassing the
-  // app's usual toSnake() boundary conversion (see updateDocument in
-  // lib/supabaseService.js) — so keys here must already be real column
-  // names, not JS camelCase. products.baseColor is stored as base_color;
-  // writing the camelCase key here would either throw (column not found) or,
-  // worse, silently create nothing and leave the field unsynced.
-  const updates = { updated_at: new Date().toISOString() };
-  // Only write dimensions the product actually uses — an empty variant axis
-  // must not blank out a value the mobile app is still relying on.
+  /*
+   * Inventory colors are expected to represent ONE atomic variant color.
+   *
+   * Older/broken inventory rows may contain a composite value such as:
+   *
+   *   "Black, White, Sky Blue, Blue"
+   *
+   * Those legacy composite values must not be synchronized back into
+   * products.color because doing so duplicates the actual variant colors.
+   *
+   * This is a defensive safeguard. The database trigger fix prevents
+   * new composite rows from being created in the first place.
+   */
+  const colors = [
+    ...new Set(
+      variants
+        .map((v) => (
+          typeof v.color === 'string'
+            ? v.color.trim()
+            : ''
+        ))
+        .filter((c) => c && !c.includes(','))
+    ),
+  ];
+
+  const patterns = [
+    ...new Set(
+      variants
+        .map((v) => (
+          typeof v.pattern === 'string'
+            ? v.pattern.trim()
+            : ''
+        ))
+        .filter(Boolean)
+    ),
+  ];
+
+  const updates = {};
+
   if (colors.length) {
     updates.color = colors.join(', ');
     updates.base_color = colors[0];
   }
+
   if (patterns.length) {
-    updates.pattern = patterns[0];
+    updates.pattern = patterns.join(', ');
   }
 
-  const { error } = await supabase.from('products').update(updates).eq('id', productDocId);
-  if (error) throw error;
+  /*
+   * Nothing to synchronize.
+   *
+   * Preserve the existing behavior of returning null when there are
+   * no product attributes to update.
+   */
+  if (!Object.keys(updates).length) {
+    return null;
+  }
 
-  return { colors, patterns };
+  const { error } = await supabase
+    .from('products')
+    .update(updates)
+    .eq('id', productDocId);
+
+  if (error) {
+    throw error;
+  }
+
+  return updates;
 };
