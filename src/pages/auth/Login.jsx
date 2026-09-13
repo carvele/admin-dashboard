@@ -64,7 +64,7 @@ const Login = () => {
       <div className="login-left">
         <div className="login-brand">
           <div className="brand-logo font-serif">JC</div>
-          <h1 className="font-serif">JezSy Couture</h1>
+          <h1 className="font-serif">JezSy Collection</h1>
           <p className="font-serif accent-pink-text" style={{ fontStyle: 'italic', textTransform: 'none' }}>by Ms. Jholy</p>
         </div>
         <div className="login-testimonial">

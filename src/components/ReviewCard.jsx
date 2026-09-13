@@ -135,7 +135,7 @@ const ReviewCard = ({ review, onDelete, onUpdate, showProductName = false }) => 
         {/* Admin Reply Section */}
         {review.adminReply && !isReplying && (
           <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: 'var(--beige)', borderRadius: '8px', fontSize: '0.85rem' }}>
-            <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--charcoal)' }}>Response from JezSy Couture:</strong>
+            <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--charcoal)' }}>Response from JezSy Collection:</strong>
             <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{review.adminReply}</p>
           </div>
         )}

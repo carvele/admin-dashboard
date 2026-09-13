@@ -203,11 +203,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
         <div className="sidebar-brand">
           {!isCollapsed ? (
             <div className="brand-text">
-              <h2 className="font-serif">JezSy Couture</h2>
+              <h2 className="font-serif">JezSy Collection</h2>
               <span className="brand-subtitle accent-pink-text">by Ms. Jholy</span>
             </div>
           ) : (
-            <div className="brand-collapsed-logo" title="JezSy Couture">
+            <div className="brand-collapsed-logo" title="JezSy Collection">
               <span className="font-serif">JC</span>
             </div>
           )}
