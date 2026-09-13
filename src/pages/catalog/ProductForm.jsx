@@ -24,6 +24,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
+import { normalizeSizes } from '../../utils/sizeOrder';
 import { getColorList } from '../../services/inventoryService';
 import ReservationStatusBadge from '../../components/ReservationStatusBadge';
 import { toDisplayStatus } from '../../utils/reservationStatus';
@@ -197,7 +198,7 @@ const ProductForm = ({ readOnly = false }) => {
                 discountPercentage: docParams.discountPercentage ?? 0,
                 salePrice: docParams.salePrice ?? '',
                 isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
-                sizes: docParams.sizes || [],
+                sizes: normalizeSizes(docParams.sizes || []),
                 colors: mergedColors,
                 images: docParams.images || [],
                 measurements: docParams.measurements || {},
@@ -370,9 +371,12 @@ const ProductForm = ({ readOnly = false }) => {
 
   const toggleSize = (size) => {
     const currentSizes = formData.sizes;
-    const newSizes = currentSizes.includes(size)
+    const rawSizes = currentSizes.includes(size)
       ? currentSizes.filter((s) => s !== size)
       : [...currentSizes, size];
+    const newSizes = normalizeSizes(rawSizes, {
+      onWarning: (msg) => toast.warning(msg),
+    });
     setFormData({ ...formData, sizes: newSizes });
   };
 
@@ -520,13 +524,17 @@ const ProductForm = ({ readOnly = false }) => {
         finalCategoryId = subCat?.id || (!formData.subCategory && parentCat ? parentCat.id : null) || oldData?.category_id || null;
       }
 
+      const normalizedSizes = normalizeSizes(formData.sizes || [], {
+        onWarning: (msg) => toast.warning(msg),
+      });
+
       const payload = {
         name: sanitizeText(formData.name),
         category: formData.category,
         subCategory: formData.subCategory,
         category_id: finalCategoryId,
         price: parseFloat(formData.price),
-        sizes: formData.sizes,
+        sizes: normalizedSizes,
         description: sanitizeText(formData.description),
         material: sanitizeText(formData.material),
         garment_metadata: { fabric_stretch: formData.fabric_stretch },

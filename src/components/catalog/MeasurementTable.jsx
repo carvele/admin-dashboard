@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Ruler, RefreshCw, Copy } from 'lucide-react';
-import { DEFAULT_MEASUREMENT_METRICS, AVAILABLE_SIZES } from '../../utils/constants';
+import { DEFAULT_MEASUREMENT_METRICS } from '../../utils/constants';
+import { normalizeSizes } from '../../utils/sizeOrder';
 import ConfirmDialog from '../ConfirmDialog';
 
 const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory }) => {
@@ -253,9 +254,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
             </tr>
           </thead>
           <tbody>
-            {[...sizes]
-              .sort((a, b) => AVAILABLE_SIZES.indexOf(a) - AVAILABLE_SIZES.indexOf(b))
-              .map(size => (
+            {normalizeSizes(sizes).map(size => (
               <tr key={size} className="hover:bg-slate-50 transition-colors">
                 <td className="px-3 py-1 border-b font-bold bg-light/30">{size}</td>
                 {metrics.map(metric => (
