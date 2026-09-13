@@ -9,6 +9,7 @@ import {
   sendPasswordResetEmail,
 } from '../../services/staffService';
 import { toast } from 'sonner';
+import { supabase } from '../../lib/supabaseClient';
 import {
   ArrowLeft,
   User,
@@ -23,6 +24,9 @@ import {
   Clock,
   Briefcase,
   AlertTriangle,
+  Lock,
+  Eye,
+  EyeOff,
   X,
 } from 'lucide-react';
 import HistoryTimeline from '../../components/HistoryTimeline';
@@ -168,6 +172,12 @@ const StaffProfile = () => {
   const [pendingChange, setPendingChange] = useState(null); // { type, value }
   const [resetSending, setResetSending] = useState(false);
 
+  // Change password (own profile only)
+  const [pwForm, setPwForm] = useState({ newPw: '', confirmPw: '' });
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+
   // ── Load data ────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
     if (!canViewPage) { navigate('/dashboard'); return; }
@@ -225,6 +235,32 @@ const StaffProfile = () => {
   };
 
   // ── Status change flow ────────────────────────────────────────
+  // Change password handler (own profile only)
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (pwForm.newPw.length < 8) {
+      toast.error('Password must be at least 8 characters.');
+      return;
+    }
+    if (pwForm.newPw !== pwForm.confirmPw) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setPwSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwForm.newPw });
+      if (error) throw error;
+      setPwForm({ newPw: '', confirmPw: '' });
+      setShowNewPw(false);
+      setShowConfirmPw(false);
+      toast.success('Password changed successfully!');
+    } catch (err) {
+      toast.error(err.message || 'Failed to change password.');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
   const requestStatusChange = (type, value) => {
     if (!isAdminUnlocked) return;
     if (isOwnProfile) {
@@ -562,6 +598,74 @@ const StaffProfile = () => {
               <Briefcase size={18} /> <h2>Employment Status</h2>
             </div>
             <div className={`sp-status-badge ${meta.color}`}>{meta.label}</div>
+          </section>
+        )}
+
+        {/* Change Password — visible only on own profile */}
+        {isOwnProfile && (
+          <section className="card sp-section">
+            <div className="sp-section-header">
+              <Lock size={18} />
+              <h2>Change Password</h2>
+            </div>
+            <form onSubmit={handleChangePassword} className="sp-form">
+              <div className="sp-form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <div className="sp-field">
+                  <label className="sp-label" htmlFor="sp-new-pw">New Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      id="sp-new-pw"
+                      type={showNewPw ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className="input-field"
+                      placeholder="At least 8 characters"
+                      value={pwForm.newPw}
+                      onChange={(e) => setPwForm({ ...pwForm, newPw: e.target.value })}
+                      required
+                      style={{ paddingRight: '2.5rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(!showNewPw)}
+                      style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                      aria-label={showNewPw ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="sp-field">
+                  <label className="sp-label" htmlFor="sp-confirm-pw">Confirm New Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      id="sp-confirm-pw"
+                      type={showConfirmPw ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className="input-field"
+                      placeholder="Re-enter new password"
+                      value={pwForm.confirmPw}
+                      onChange={(e) => setPwForm({ ...pwForm, confirmPw: e.target.value })}
+                      required
+                      style={{ paddingRight: '2.5rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPw(!showConfirmPw)}
+                      style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                      aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="sp-form-actions">
+                <button type="submit" className="btn-primary flex-center gap-2" disabled={pwSaving}>
+                  {pwSaving ? <Loader size={16} className="spin" /> : <Lock size={16} />}
+                  {pwSaving ? 'Saving...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
           </section>
         )}
       </div>
