@@ -78,6 +78,27 @@ const COLOR_DOT_MAP = {
   purple: '#a855f7',
   orange: '#f97316',
   brown: '#78350f',
+  rust: '#b7410e',
+  terracotta: '#c2593f',
+  burgundy: '#800020',
+  coral: '#f87171',
+  lavender: '#c084fc',
+  sage: '#9aa889',
+  mustard: '#d97706',
+  charcoal: '#374151',
+  khaki: '#c3b091',
+  silver: '#cbd5e1',
+  tan: '#d2b48c',
+  plum: '#701a75',
+  copper: '#b87333',
+  bronze: '#cd7f32',
+  lilac: '#c084fc',
+  mint: '#6ee7b7',
+  ivory: '#fffff0',
+  champagne: '#f7e7ce',
+  rose: '#f43f5e',
+  peach: '#fdba74',
+  taupe: '#b38b6d',
   beige: '#f5f5dc',
   olive: '#84cc16',
   maroon: '#800000',
@@ -136,7 +157,8 @@ const VariantInvRow = ({
   const reserved = item.reserved ?? 0;
 
   const colorName = item.color || 'Standard';
-  const swatchBg = item.hexColor || getChipColorDot(colorName);
+  const naturalColor = getChipColorDot(colorName);
+  const hasArOverride = !!item.hexColor && item.hexColor.toLowerCase() !== naturalColor.toLowerCase();
 
   return (
     <tr className={`inv-row ${isArchived ? 'archived-row' : ''}`}>
@@ -182,12 +204,24 @@ const VariantInvRow = ({
 
       {/* 4. Color Swatch and Name */}
       <td className="cell-color">
-        <div className="color-indicator-wrap" title={`Color: ${colorName}`}>
+        <div
+          className="color-indicator-wrap"
+          title={hasArOverride ? `Fabric: ${colorName} (AR 3D Tint: ${item.hexColor})` : `Color: ${colorName}`}
+        >
           <span
             className="color-swatch-dot"
-            style={{ backgroundColor: swatchBg }}
+            style={{ backgroundColor: naturalColor }}
           />
           <span className="color-name-label">{colorName}</span>
+          {hasArOverride && (
+            <span
+              className="ar-tint-badge"
+              title={`Custom 3D AR Tint: ${item.hexColor}`}
+            >
+              <span className="ar-tint-dot" style={{ backgroundColor: item.hexColor }} />
+              AR
+            </span>
+          )}
         </div>
       </td>
 
@@ -480,8 +514,22 @@ const Inventory = () => {
   }, [restockModal, sellModal, arColorModal, activeMenuId]);
 
   useEffect(() => {
-    setArColorInput(arColorModal?.hexColor || '');
+    setArColorInput(arColorModal?.hexColor || getChipColorDot(arColorModal?.color) || '');
   }, [arColorModal]);
+
+  const handleResetArColor = async () => {
+    if (!arColorModal) return;
+    setSavingArColor(true);
+    try {
+      await updateVariantHexColor(arColorModal.productDocId, arColorModal.color, null);
+      toast.success(`AR Color cleared for ${arColorModal.item} (${arColorModal.color || 'Standard'})`);
+      setArColorModal(null);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to clear AR Color');
+    } finally {
+      setSavingArColor(false);
+    }
+  };
 
   const handleSaveArColor = async (e) => {
     e.preventDefault();
@@ -868,31 +916,19 @@ const Inventory = () => {
             <h3>{totalReserved.toLocaleString()}</h3>
           </div>
         </div>
-        <div className={`card inv-stat-card ${lowStockCount > 0 ? 'border-danger' : ''}`}>
+        <div className="card inv-stat-card">
           <div className="icon-bg-soft red">
             <AlertTriangle size={24} />
           </div>
           <div className="inv-stat-content">
             <p className="stat-label text-danger font-medium">Stock Alerts</p>
             <h3 className="text-danger">{lowStockCount}</h3>
-            {lowStockCount > 0 && (
-              <div className="stock-breakdown-row">
-                {stockBreakdown.noStock > 0 && (
-                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-none-bg)', color: 'var(--stock-none)' }}>
-                    {stockBreakdown.noStock} No Stock
-                  </span>
-                )}
-                {stockBreakdown.critical > 0 && (
-                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-critical-bg)', color: 'var(--stock-critical)' }}>
-                    {stockBreakdown.critical} Critical
-                  </span>
-                )}
-                {stockBreakdown.veryLow > 0 && (
-                  <span className="stock-breakdown-chip" style={{ background: 'var(--stock-very-low-bg)', color: 'var(--stock-very-low)' }}>
-                    {stockBreakdown.veryLow} Very Low
-                  </span>
-                )}
-              </div>
+            {lowStockCount > 0 ? (
+              <p className="stat-subtext text-danger font-medium mt-1">
+                {stockBreakdown.noStock > 0 ? `${stockBreakdown.noStock} out of stock` : `${lowStockCount} items need restock`}
+              </p>
+            ) : (
+              <p className="stat-subtext text-muted mt-1">All stock levels healthy</p>
             )}
           </div>
         </div>
@@ -939,74 +975,28 @@ const Inventory = () => {
 
       {/* Main Table Card */}
       <div className="card mt-2">
-        <div className="catalog-toolbar" style={{ borderBottom: '1px solid var(--border-color)', padding: '1rem' }}>
-          <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-            <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
+        <div className="inv-toolbar">
+          {/* Tier 1: Navigation Tabs & View Controls */}
+          <div className="inv-toolbar-header">
+            <div className="inv-nav-tabs">
               <button
-                className={`archive-toggle-btn ${activeTab === 'inventory' ? 'active' : ''}`}
+                type="button"
+                className={`inv-nav-tab ${activeTab === 'inventory' ? 'active' : ''}`}
                 onClick={() => setActiveTab('inventory')}
-                style={{ margin: 0 }}
               >
-                Inventory Grid
+                <Package size={15} /> Inventory Grid
               </button>
               <button
-                className={`archive-toggle-btn ${activeTab === 'waitlist' ? 'active' : ''}`}
+                type="button"
+                className={`inv-nav-tab ${activeTab === 'waitlist' ? 'active' : ''}`}
                 onClick={() => setActiveTab('waitlist')}
-                style={{ margin: 0 }}
               >
                 Customer Waitlist Demand
               </button>
             </div>
 
             {activeTab === 'inventory' && (
-              <>
-                <div className="search-box">
-                  <Search size={18} className="search-icon" />
-                  <input
-                    id="inventory-search-input"
-                    name="inventorySearch"
-                    type="text"
-                    placeholder="Search SKU, Product, Color..."
-                    aria-label="Search variant SKU, product name, or color"
-                    autoComplete="off"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="input-field pl-10"
-                  />
-                </div>
-
-                <select
-                  id="field_inv_category"
-                  name="field_inv_category"
-                  className="input-field category-filter"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  aria-label="Filter by category"
-                >
-                  {dropdownCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat === 'All' ? 'All Categories' : cat}
-                    </option>
-                  ))}
-                </select>
-
-                {uniqueColors.length > 1 && (
-                  <select
-                    id="field_inv_color"
-                    name="field_inv_color"
-                    className="input-field category-filter"
-                    value={colorFilter}
-                    onChange={(e) => setColorFilter(e.target.value)}
-                    aria-label="Filter by color"
-                  >
-                    {uniqueColors.map((col) => (
-                      <option key={col} value={col}>
-                        {col === 'All' ? 'All Colors' : col}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
+              <div className="inv-toolbar-view-controls">
                 {/* View Grouping Toggle */}
                 <div className="view-mode-toggle" style={{ display: 'flex', gap: '4px' }}>
                   <button
@@ -1030,51 +1020,102 @@ const Inventory = () => {
                 </div>
 
                 {isAdminUnlocked && (
-                  <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '4px' }}>
+                  <div className="archive-toggle-tabs">
                     <button
+                      type="button"
                       className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
                       onClick={() => setViewMode('active')}
-                      style={{ margin: 0 }}
                     >
                       Active ({inventory.filter((i) => i.deleted !== true).length})
                     </button>
                     <button
+                      type="button"
                       className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
                       onClick={() => setViewMode('archived')}
-                      style={{ margin: 0 }}
                     >
                       <Archive size={14} /> Archived ({inventory.filter((i) => i.deleted === true).length})
                     </button>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
 
-          {/* Quick Filter Status Bar (Requirement 7) */}
+          {/* Tier 2: Search, Filters & Quick Status Chips */}
           {activeTab === 'inventory' && (
-            <div className="inv-quick-filters-bar" style={{ display: 'flex', gap: '8px', marginTop: '0.85rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`quick-filter-chip ${stockQuickFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setStockQuickFilter('all')}
-              >
-                All Variants ({sortedAndFilteredInv.length})
-              </button>
-              <button
-                type="button"
-                className={`quick-filter-chip alert-chip ${stockQuickFilter === 'alerts' ? 'active' : ''}`}
-                onClick={() => setStockQuickFilter('alerts')}
-              >
-                <AlertTriangle size={13} /> Stock Alerts ({lowStockCount})
-              </button>
-              <button
-                type="button"
-                className={`quick-filter-chip reserved-chip ${stockQuickFilter === 'reserved' ? 'active' : ''}`}
-                onClick={() => setStockQuickFilter('reserved')}
-              >
-                Reserved ({reservedCount})
-              </button>
+            <div className="inv-toolbar-filter-row">
+              <div className="inv-search-and-dropdowns">
+                <div className="search-box inv-search-box">
+                  <Search size={18} className="search-icon" />
+                  <input
+                    id="inventory-search-input"
+                    name="inventorySearch"
+                    type="text"
+                    placeholder="Search SKU, Product, Color..."
+                    aria-label="Search variant SKU, product name, or color"
+                    autoComplete="off"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="input-field pl-10"
+                  />
+                </div>
+
+                <select
+                  id="field_inv_category"
+                  name="field_inv_category"
+                  className="input-field inv-select-category"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  aria-label="Filter by category"
+                >
+                  {dropdownCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat === 'All' ? 'All Categories' : cat}
+                    </option>
+                  ))}
+                </select>
+
+                {uniqueColors.length > 1 && (
+                  <select
+                    id="field_inv_color"
+                    name="field_inv_color"
+                    className="input-field inv-select-color"
+                    value={colorFilter}
+                    onChange={(e) => setColorFilter(e.target.value)}
+                    aria-label="Filter by color"
+                  >
+                    {uniqueColors.map((col) => (
+                      <option key={col} value={col}>
+                        {col === 'All' ? 'All Colors' : col}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="inv-quick-filters-bar">
+                <button
+                  type="button"
+                  className={`quick-filter-chip ${stockQuickFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setStockQuickFilter('all')}
+                >
+                  All Variants ({sortedAndFilteredInv.length})
+                </button>
+                <button
+                  type="button"
+                  className={`quick-filter-chip alert-chip ${stockQuickFilter === 'alerts' ? 'active' : ''}`}
+                  onClick={() => setStockQuickFilter('alerts')}
+                >
+                  <AlertTriangle size={13} /> Stock Alerts ({lowStockCount})
+                </button>
+                <button
+                  type="button"
+                  className={`quick-filter-chip reserved-chip ${stockQuickFilter === 'reserved' ? 'active' : ''}`}
+                  onClick={() => setStockQuickFilter('reserved')}
+                >
+                  Reserved ({reservedCount})
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1593,13 +1634,27 @@ const Inventory = () => {
                   Leave blank to restore the 3D model&apos;s authored appearance.
                 </p>
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setArColorModal(null)} disabled={savingArColor}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={savingArColor}>
-                  {savingArColor ? 'Saving...' : 'Save AR Color'}
-                </button>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div>
+                  {arColorModal.hexColor && (
+                    <button
+                      type="button"
+                      className="btn-outline text-danger"
+                      onClick={handleResetArColor}
+                      disabled={savingArColor}
+                    >
+                      Clear AR Tint
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="button" className="btn-outline" onClick={() => setArColorModal(null)} disabled={savingArColor}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={savingArColor}>
+                    {savingArColor ? 'Saving...' : 'Save AR Color'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

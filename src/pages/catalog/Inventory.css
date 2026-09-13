@@ -461,3 +461,135 @@
   border-top: 1px solid var(--border-color, #e5e7eb);
   background: var(--surface, #ffffff);
 }
+
+
+/* ===== Refined Two-Tier Toolbar Layout ===== */
+.inv-toolbar {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inv-toolbar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.inv-nav-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: var(--cream, #f3f4f6);
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.inv-nav-tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.inv-nav-tab:hover {
+  color: var(--charcoal, #1f2937);
+}
+
+.inv-nav-tab.active {
+  background: var(--surface, #ffffff);
+  color: var(--charcoal, #111827);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.inv-toolbar-view-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-left: auto;
+}
+
+.inv-toolbar-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.inv-search-and-dropdowns {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.inv-search-box {
+  width: 260px;
+  max-width: 280px;
+  min-width: 180px;
+  flex: 1 1 200px;
+}
+
+.inv-select-category {
+  width: 165px !important;
+  max-width: 165px !important;
+  flex-shrink: 0;
+}
+
+.inv-select-color {
+  width: 140px !important;
+  max-width: 140px !important;
+  flex-shrink: 0;
+}
+
+/* AR Tint Indicator Badge */
+.ar-tint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(168, 85, 247, 0.12);
+  color: #7e22ce;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  margin-left: 4px;
+}
+
+.ar-tint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  display: inline-block;
+}
+
+/* Stat card subtext */
+.stat-subtext {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.stat-subtext.text-danger {
+  color: var(--stock-low, #ef4444);
+}
+
+.stat-subtext.text-muted {
+  color: var(--text-secondary, #6b7280);
+}
