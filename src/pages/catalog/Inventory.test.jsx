@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
@@ -22,6 +22,7 @@ jest.mock('../../components/inventory/AdminInventoryPanel', () => {
 });
 
 import Inventory from './Inventory';
+import { adjustInventoryOnHand } from '../../services/productService';
 
 const mockInventoryData = [
   {
@@ -260,5 +261,73 @@ describe('Inventory Modernized Grid', () => {
     // Should find Leather Belt Black (id: inv-1)
     expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
     expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+  });
+  it('allows switching to Remove Stock mode and submitting reduction with negative delta and audit reason', async () => {
+    renderInventory();
+
+    const restockBrownBtn = await screen.findByLabelText('Restock Leather Belt (S, Brown)');
+    fireEvent.click(restockBrownBtn);
+
+    // Default mode is Add Stock
+    expect(screen.getByRole('heading', { name: 'Restock Variant' })).toBeInTheDocument();
+
+    // Click Remove Stock (Write-Off) tab
+    const removeTab = screen.getByRole('tab', { name: /Remove Stock/i });
+    fireEvent.click(removeTab);
+
+    // Modal updates to reduction mode
+    expect(screen.getByRole('heading', { name: 'Reduce Stock (Write-Off)' })).toBeInTheDocument();
+    const qtyInput = screen.getByLabelText('Quantity to Remove');
+    expect(qtyInput).toBeInTheDocument();
+
+    // Enter quantity and select reason
+    fireEvent.change(qtyInput, { target: { value: '2' } });
+    const reasonSelect = screen.getByLabelText('Reason for Reduction');
+    fireEvent.change(reasonSelect, { target: { value: 'Damaged / Defective Garment' } });
+
+    // Submit reduction
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Reduction' }));
+    });
+
+    expect(adjustInventoryOnHand).toHaveBeenCalledWith(
+      'inv-2',
+      -2,
+      'Damaged / Defective Garment'
+    );
+  });
+
+  it('blocks stock reduction if quantity exceeds available units', async () => {
+    renderInventory();
+
+    // Black belt has available = 8 (total: 10, reserved: 2)
+    const restockBlackBtn = await screen.findByLabelText('Restock Leather Belt (S, Black)');
+    fireEvent.click(restockBlackBtn);
+
+    // Switch to Remove Stock
+    fireEvent.click(screen.getByRole('tab', { name: /Remove Stock/i }));
+    const qtyInput = screen.getByLabelText('Quantity to Remove');
+
+    // Attempt to remove 9 units (which exceeds available 8)
+    fireEvent.change(qtyInput, { target: { value: '9' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Reduction' }));
+
+    // adjustInventoryOnHand must NOT have been called with negative delta
+    expect(adjustInventoryOnHand).not.toHaveBeenCalled();
+  });
+
+  it('opens Write-Off mode directly from the row more actions menu', async () => {
+    renderInventory();
+
+    // Open More Options on first row
+    const moreBtn = (await screen.findAllByTitle('More actions'))[0];
+    fireEvent.click(moreBtn);
+
+    const writeOffBtn = await screen.findByText('Reduce / Write-Off Stock');
+    fireEvent.click(writeOffBtn);
+
+    // Directly in Reduce mode
+    expect(screen.getByRole('heading', { name: 'Reduce Stock (Write-Off)' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Quantity to Remove')).toBeInTheDocument();
   });
 });
