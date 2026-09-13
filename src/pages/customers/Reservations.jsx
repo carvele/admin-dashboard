@@ -44,7 +44,7 @@ import {
 } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { toDisplayStatus } from '../../utils/reservationStatus';
-import { outstandingBalance } from '../../utils/reservationBalance';
+import { outstandingBalance, balanceDue } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
 import {
@@ -57,6 +57,7 @@ import {
   transitionReservationStatus,
   cancelReservation,
   reviewReservationReceipt,
+  reviewReservationBalanceReceipt,
   cancelReservationForFraud,
   findDuplicatePaymentReference,
   getPaymentReviewHistory,
@@ -333,6 +334,9 @@ const Reservations = () => {
   const [resolvedReceiptUrl, setResolvedReceiptUrl] = useState(null);
   const [receiptLoadFailed, setReceiptLoadFailed] = useState(false);
 
+  const [resolvedBalanceReceiptUrl, setResolvedBalanceReceiptUrl] = useState(null);
+  const [balanceReceiptLoadFailed, setBalanceReceiptLoadFailed] = useState(false);
+
   useEffect(() => {
     setResolvedReceiptUrl(null);
     setReceiptLoadFailed(false);
@@ -346,13 +350,26 @@ const Reservations = () => {
     return () => { cancelled = true; };
   }, [viewModal?.receiptUrl]);
 
+  useEffect(() => {
+    setResolvedBalanceReceiptUrl(null);
+    setBalanceReceiptLoadFailed(false);
+    if (!viewModal?.balanceReceiptUrl) return;
+    let cancelled = false;
+    resolveSignedStorageUrl('payment_receipts', viewModal.balanceReceiptUrl).then((url) => {
+      if (cancelled) return;
+      if (url) setResolvedBalanceReceiptUrl(url);
+      else setBalanceReceiptLoadFailed(true);
+    });
+    return () => { cancelled = true; };
+  }, [viewModal?.balanceReceiptUrl]);
+
   // Payment review context: duplicate-reference warning and review history,
   // both fetched whenever the detail modal opens on a reservation that has
   // ever had a manual reference number. Warnings only -- staff decide, this
   // never blocks or auto-rejects anything.
   const [duplicateReferenceMatches, setDuplicateReferenceMatches] = useState([]);
   const [reviewHistory, setReviewHistory] = useState([]);
-  // { mode: 'reject' | 'cancel', reservation } | null
+  // { mode: 'reject' | 'reject_balance' | 'cancel', reservation } | null
   const [reasonModal, setReasonModal] = useState(null);
   const [reasonCode, setReasonCode] = useState('');
   const [reasonNote, setReasonNote] = useState('');
@@ -360,13 +377,14 @@ const Reservations = () => {
 
   useEffect(() => {
     setDuplicateReferenceMatches([]);
-    if (!viewModal?.manualReferenceNumber) return;
+    const refNum = viewModal?.manualReferenceNumber || viewModal?.balanceReferenceNumber;
+    if (!refNum) return;
     let cancelled = false;
-    findDuplicatePaymentReference(viewModal.manualReferenceNumber, viewModal.docId)
+    findDuplicatePaymentReference(refNum, viewModal.docId)
       .then((matches) => { if (!cancelled) setDuplicateReferenceMatches(matches); })
       .catch(() => {}); // non-admin viewers get a permission error here -- silently show no warning
     return () => { cancelled = true; };
-  }, [viewModal?.manualReferenceNumber, viewModal?.docId]);
+  }, [viewModal?.manualReferenceNumber, viewModal?.balanceReferenceNumber, viewModal?.docId]);
 
   useEffect(() => {
     setReviewHistory([]);
@@ -718,6 +736,30 @@ const Reservations = () => {
     setReasonModal({ mode: 'reject', reservation: res });
   };
 
+  const handleVerifyBalancePayment = async (res) => {
+    try {
+      await reviewReservationBalanceReceipt(res.docId, true);
+      setViewModal((prev) => prev ? {
+        ...prev,
+        balancePaymentStatus: 'paid',
+        balanceReceiptUrl: null,
+      } : prev);
+      if (res.docId) {
+        getPaymentsForReservation(res.docId).then(setPaymentRecords).catch(() => {});
+      }
+      toast.success('Balance payment verified');
+    } catch (err) {
+      console.error('Failed to verify balance payment:', err);
+      toast.error(err.message || 'Failed to verify balance payment');
+    }
+  };
+
+  const handleRejectBalanceReceipt = (res) => {
+    setReasonCode('');
+    setReasonNote('');
+    setReasonModal({ mode: 'reject_balance', reservation: res });
+  };
+
   // Distinct from Reject: this ends the reservation entirely (releasing the
   // inventory hold) rather than giving the customer another attempt. Only
   // reachable while a receipt is under review -- cancel_reservation_for_fraud
@@ -740,6 +782,17 @@ const Reservations = () => {
         await reviewReservationReceipt(reservation.docId, false, reasonCode, reasonNote || null);
         setViewModal((prev) => (prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev));
         toast.error('Receipt rejected — the customer can upload another');
+      } else if (mode === 'reject_balance') {
+        await reviewReservationBalanceReceipt(reservation.docId, false, reasonCode, reasonNote || null);
+        setViewModal((prev) => (prev ? {
+          ...prev,
+          balancePaymentStatus: 'rejected',
+          balanceReceiptUrl: null,
+          balancePaymentIssue: reasonCode === 'unreadable_receipt' ? 'image_unclear' :
+                               reasonCode === 'wrong_amount' ? 'amount_mismatch' :
+                               reasonCode === 'invalid_reference' ? 'reference_unverified' : 'verification_failed',
+        } : prev));
+        toast.error('Balance receipt rejected — customer can upload another');
       } else {
         await cancelReservationForFraud(reservation.docId, reservation.status, reasonCode, reasonNote || null);
         setViewModal((prev) => (prev ? { ...prev, status: 'Cancelled' } : prev));
@@ -748,7 +801,7 @@ const Reservations = () => {
       setReasonModal(null);
     } catch (err) {
       console.error(`Failed to ${mode} reservation:`, err);
-      toast.error(err.message || `Failed to ${mode === 'reject' ? 'reject the receipt' : 'cancel the reservation'}`);
+      toast.error(err.message || `Failed to ${mode.startsWith('reject') ? 'reject the receipt' : 'cancel the reservation'}`);
     } finally {
       setReasonSubmitting(false);
     }
@@ -1350,13 +1403,23 @@ const Reservations = () => {
                           {isAwaitingReceipt(res) && (
                             <span className="receipt-badge">📎 Receipt uploaded</span>
                           )}
+                          {res.balancePaymentStatus === 'submitted' && (
+                            <span className="receipt-badge" style={{ background: 'rgba(212, 175, 55, 0.15)', color: '#b8860b' }}>
+                              📎 Balance receipt
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {balance > 0 ? (
-                          <span className="balance-due-pill">
-                            <DollarSign size={11} /> {formatCurrency(balance)} due
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span className="balance-due-pill">
+                              <DollarSign size={11} /> {formatCurrency(balance)} due
+                            </span>
+                            {res.balancePaymentStatus === 'submitted' && (
+                              <span className="text-[11px] font-semibold text-gold">Proof under review</span>
+                            )}
+                          </div>
                         ) : res.paymentStatus === 'Paid' ? (
                           <span className="balance-paid-pill">✓ Paid</span>
                         ) : (
@@ -2240,6 +2303,93 @@ const Reservations = () => {
                 </div>
               )}
 
+              {viewModal.balanceReceiptUrl && (
+                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: '8px' }}>
+                    <span className="detail-label">Remaining Balance Receipt</span>
+                    {viewModal.balancePaymentStatus === 'submitted' && (
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn-primary small"
+                          style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                          onClick={() => handleVerifyBalancePayment(viewModal)}
+                        >
+                          Verify Balance Payment
+                        </button>
+                        <button
+                          className="btn-outline small"
+                          style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
+                          onClick={() => handleRejectBalanceReceipt(viewModal)}
+                        >
+                          Reject &amp; Retry
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Structured balance submission context */}
+                  {(viewModal.balanceAmountClaimed != null || viewModal.balancePaymentMethod || viewModal.balanceReferenceNumber) && (
+                    <div className="restock-item-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', marginBottom: '10px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Expected balance</span>
+                        <strong>{formatCurrency(outstandingBalance(viewModal) || balanceDue(viewModal) || 0)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Claimed amount</span>
+                        <strong style={
+                          viewModal.balanceAmountClaimed != null && Number(viewModal.balanceAmountClaimed) !== Number(outstandingBalance(viewModal) || balanceDue(viewModal) || 0)
+                            ? { color: 'var(--color-danger, #c0392b)' }
+                            : undefined
+                        }>
+                          {viewModal.balanceAmountClaimed != null ? formatCurrency(viewModal.balanceAmountClaimed) : '—'}
+                          {viewModal.balanceAmountClaimed != null && Number(viewModal.balanceAmountClaimed) !== Number(outstandingBalance(viewModal) || balanceDue(viewModal) || 0) && ' ⚠ mismatch'}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Method</span>
+                        <span>{viewModal.balancePaymentMethod === 'gcash' ? 'GCash' : viewModal.balancePaymentMethod === 'bank_transfer' ? 'Bank Transfer' : viewModal.balancePaymentMethod || '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Reference</span>
+                        <span style={{ userSelect: 'text' }}>{viewModal.balanceReferenceNumber || '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Attempt</span>
+                        <span>{viewModal.balanceReceiptAttemptCount || 1}</span>
+                      </div>
+                      {viewModal.balancePaymentIssue && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span className="text-secondary">Current issue</span>
+                          <span style={{ color: 'var(--color-danger, #c0392b)' }}>{viewModal.balancePaymentIssue.replace(/_/g, ' ')}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {balanceReceiptLoadFailed ? (
+                    <div className="text-danger text-sm">
+                      Could not load this receipt. It may have been removed, or you may not have permission to view it.
+                    </div>
+                  ) : resolvedBalanceReceiptUrl ? (
+                    <button
+                      type="button"
+                      className="receipt-thumb-btn"
+                      onClick={() => setReceiptModalUrl(resolvedBalanceReceiptUrl)}
+                      style={{ padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+                      aria-label="View full-size balance receipt"
+                    >
+                      <img
+                        src={resolvedBalanceReceiptUrl}
+                        alt="Remaining Balance Receipt"
+                        style={{ height: '150px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}
+                      />
+                    </button>
+                  ) : (
+                    <div className="text-secondary text-sm">Loading receipt…</div>
+                  )}
+                </div>
+              )}
+
               {reviewHistory.length > 0 && (
                 <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                   <span className="detail-label" style={{ marginBottom: '6px' }}>Payment Review History</span>
@@ -2327,7 +2477,7 @@ const Reservations = () => {
           <div className="modal-content" role="dialog" aria-labelledby="reason-modal-title" style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h3 id="reason-modal-title">
-                {reasonModal.mode === 'reject' ? 'Reject & Retry' : 'Cancel Reservation'}
+                {reasonModal.mode === 'reject' || reasonModal.mode === 'reject_balance' ? 'Reject & Retry' : 'Cancel Reservation'}
               </h3>
               <button className="btn-icon" onClick={() => !reasonSubmitting && setReasonModal(null)} aria-label="Close">
                 <X size={18} />
@@ -2335,7 +2485,9 @@ const Reservations = () => {
             </div>
             <form className="modal-body" onSubmit={handleSubmitReasonModal}>
               <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                {reasonModal.mode === 'reject'
+                {reasonModal.mode === 'reject_balance'
+                  ? 'The customer keeps their reservation and can upload a corrected balance receipt.'
+                  : reasonModal.mode === 'reject'
                   ? 'The customer keeps their reservation and can upload a corrected receipt within the retry window.'
                   : 'This ends the reservation and releases the held item. Use this for a fabricated or reused receipt, or when the customer should not get another attempt.'}
               </p>
@@ -2377,7 +2529,7 @@ const Reservations = () => {
                   style={reasonModal.mode === 'cancel' ? { background: 'var(--color-danger, #c0392b)', borderColor: 'var(--color-danger, #c0392b)' } : undefined}
                   disabled={!reasonCode || reasonSubmitting}
                 >
-                  {reasonSubmitting ? 'Working…' : reasonModal.mode === 'reject' ? 'Reject & Retry' : 'Cancel Reservation'}
+                  {reasonSubmitting ? 'Working…' : reasonModal.mode === 'reject' || reasonModal.mode === 'reject_balance' ? 'Reject & Retry' : 'Cancel Reservation'}
                 </button>
               </div>
             </form>
