@@ -595,3 +595,30 @@
   gap: 0.65rem;
   margin-top: 1.25rem;
 }
+
+.cred-email-sent-banner {
+  background: #def7ec;
+  border: 1px solid #bbf7d0;
+  color: #03543f;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  justify-content: flex-start;
+}
+
+.cred-send-email-section {
+  margin-top: 1rem;
+}
+
+.staff-gmail-send-btn {
+  background: #1f1c18;
+  color: #ffffff;
+  font-weight: 600;
+  border: 1px solid #1f1c18;
+}
+
+.staff-gmail-send-btn:hover {
+  background: #332e29;
+  border-color: #332e29;
+}

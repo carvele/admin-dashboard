@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   ExternalLink,
   KeyRound,
+  Mail,
 } from 'lucide-react';
 import {
   subscribeToStaff,
