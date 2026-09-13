@@ -1,50 +1,52 @@
 .inv-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .inv-stat-card {
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  padding: 1.5rem;
+  padding: 1.25rem;
 }
+
 .border-danger {
   border: 1px solid var(--color-danger);
   background-color: var(--status-cancelled-bg);
 }
 
 .icon-bg-soft {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--spacing-md);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--spacing-md, 8px);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 .icon-bg-soft.blue {
-  background-color: var(--status-approved-bg);
-  color: var(--status-approved-text);
+  background-color: var(--status-approved-bg, #eff6ff);
+  color: var(--status-approved-text, #2563eb);
 }
 .icon-bg-soft.green {
-  background-color: var(--status-completed-bg);
-  color: var(--status-completed-text);
+  background-color: var(--status-completed-bg, #ecfdf5);
+  color: var(--status-completed-text, #059669);
 }
 .icon-bg-soft.orange {
-  background-color: var(--status-pending-bg);
-  color: var(--status-pending-text);
+  background-color: var(--status-pending-bg, #fffbeb);
+  color: var(--status-pending-text, #d97706);
 }
 .icon-bg-soft.red {
-  background-color: var(--status-cancelled-bg);
-  color: var(--stock-low);
+  background-color: var(--status-cancelled-bg, #fef2f2);
+  color: var(--stock-low, #ef4444);
 }
 
 .inv-stat-content h3 {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  color: var(--charcoal);
-  margin-top: 0.25rem;
+  color: var(--charcoal, #1f2937);
+  margin-top: 0.2rem;
 }
 
 .mt-2 {
@@ -53,11 +55,14 @@
 .text-right {
   text-align: right;
 }
-.w-1\/4 {
-  width: 25%;
+
+/* ===== Table Container with Sticky Header & Horizontal Scroll ===== */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
-/* ===== Proportional & Balanced Inventory Table ===== */
 .inv-table {
   width: 100%;
   border-collapse: separate;
@@ -65,53 +70,101 @@
   table-layout: auto;
 }
 
-.inv-table th {
-  padding: 0.75rem 0.85rem;
+.inv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface, #ffffff);
+  padding: 0.65rem 0.85rem;
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   white-space: nowrap;
   vertical-align: middle;
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .inv-table td {
-  padding: 0.65rem 0.85rem;
+  padding: 0.55rem 0.85rem;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-color, #e5e7eb);
   font-size: 0.85rem;
 }
 
+/* Fixed compact 48px row height with zero vertical dead space */
 .inv-table tbody tr.inv-row {
+  min-height: 48px;
   height: 48px;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 
 .inv-table tbody tr.inv-row:hover {
-  background-color: rgba(79, 70, 229, 0.035);
+  background-color: rgba(79, 70, 229, 0.03);
 }
 
-/* Specific column sizing */
+.inv-table tbody tr.archived-row {
+  opacity: 0.65;
+  background-color: var(--cream, #f9fafb);
+}
+
+/* Category Section Divider Row */
+.inv-category-divider td {
+  background: var(--cream, #f9fafb);
+  padding: 0.45rem 0.85rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.inv-category-divider-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.divider-label {
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--charcoal, #1f2937);
+}
+
+.divider-count {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #6b7280);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* Column Sizing & Content */
 .th-sku, .sku-cell {
-  max-width: 150px;
-  min-width: 110px;
+  width: 145px;
+  min-width: 130px;
   white-space: nowrap;
+}
+
+.sku-badge-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sku-code {
   display: inline-block;
-  max-width: 135px;
+  max-width: 125px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
-  font-size: 0.72rem;
-  color: var(--text-secondary, #6b7280);
+  font-size: 0.75rem;
+  color: var(--text-secondary, #4b5563);
   background: var(--cream, #f9fafb);
-  padding: 2px 7px;
-  border-radius: 5px;
+  padding: 2px 6px;
+  border-radius: 4px;
   border: 1px solid var(--border-color, #e5e7eb);
-  letter-spacing: -0.2px;
-  cursor: default;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
 
@@ -121,20 +174,49 @@
   background: #ffffff;
 }
 
+.sku-copy-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary, #9ca3af);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: color 0.15s ease;
+}
+
+.sku-copy-btn:hover {
+  color: var(--color-primary, #4f46e5);
+}
+
 .th-product, .cell-product {
-  min-width: 130px;
-  max-width: 220px;
-  white-space: nowrap;
+  min-width: 160px;
+  max-width: 240px;
+}
+
+.product-identity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.product-title {
   font-weight: 600;
   color: var(--charcoal, #1f2937);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
 }
 
-.th-category, .cell-category {
-  min-width: 90px;
+.product-category-sub {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.82rem;
 }
 
 .th-size, .cell-size {
@@ -147,88 +229,44 @@
   align-items: center;
   justify-content: center;
   min-width: 28px;
-  height: 24px;
+  height: 22px;
   padding: 0 6px;
   background-color: var(--cream, #f9fafb);
   border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 5px;
-  font-size: 0.75rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
   font-weight: 700;
   color: var(--charcoal, #1f2937);
+  white-space: nowrap;
 }
 
-/* Color Chips Row & Badges */
 .th-color, .cell-color {
-  min-width: 170px;
-  max-width: 280px;
+  width: 120px;
+  min-width: 100px;
+  white-space: nowrap;
 }
 
-.color-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-
-.color-chip-btn {
+.color-indicator-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  white-space: nowrap !important;
-  font-size: 0.72rem;
-  font-weight: 500;
-  padding: 2px 8px;
-  height: 24px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  background: var(--cream, #f9fafb);
-  color: var(--text-secondary, #4b5563);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  line-height: 1;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.color-chip-btn:hover {
-  border-color: var(--color-primary, #4f46e5);
-  color: var(--color-primary, #4f46e5);
-  background: #ffffff;
-  transform: translateY(-1px);
-}
-
-.color-chip-btn.active {
-  background: var(--color-primary, #4f46e5);
-  color: #ffffff;
-  border-color: var(--color-primary, #4f46e5);
-  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.25);
-}
-
-.color-chip-btn .chip-dot {
-  width: 7px;
-  height: 7px;
+.color-swatch-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   flex-shrink: 0;
 }
 
-.color-chip-btn .chip-count {
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.06);
-  color: inherit;
+.color-name-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--charcoal, #374151);
 }
 
-.color-chip-btn.active .chip-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
-}
-
-.color-chip-btn.out-of-stock {
-  opacity: 0.55;
-}
-
-/* Numeric Columns */
 .th-num, .cell-num {
   width: 65px;
   font-variant-numeric: tabular-nums;
@@ -236,846 +274,190 @@
   white-space: nowrap;
 }
 
-/* Stock Status Cell */
+.text-reserved-active {
+  color: var(--color-warning, #d97706);
+  font-weight: 600;
+}
+
 .th-stock, .stock-cell {
-  min-width: 135px;
+  width: 115px;
   white-space: nowrap;
 }
 
 .th-actions, .cell-actions {
-  width: 160px;
+  width: 105px;
   white-space: nowrap;
 }
 
-/* Row actions are icon-only (title attr supplies the tooltip), so keep the
-   hit target close to the 15px icon it holds -- the shared 48px
-   .icon-btn-small size left ~90px of dead space per button, which forced
-   this column (table-layout: auto) to balloon past its declared width and
-   steal room from the color-chips column next to it. */
-.cell-actions .action-buttons {
-  gap: 0.35rem;
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-.cell-actions .icon-btn-small {
+
+.icon-btn-small {
   width: 28px;
   height: 28px;
-}
-
-.stock-progress-container {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.stock-progress-bar {
-  flex: 1;
-  height: 6px;
-  background-color: var(--border-color);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.stock-progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-.stock-status-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  width: 110px;  /* wider to fit 'Critical Stock' / 'Very Low Stock' */
-  white-space: nowrap;
-}
-
-/* Inventory action buttons */
-.icon-btn-small {
-  width: var(--spacing-2xl);
-  height: var(--spacing-2xl);
   border-radius: 6px;
-  display: flex;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--surface, #ffffff);
+  color: var(--text-secondary, #4b5563);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
 }
-.icon-btn-small:hover {
-  background-color: var(--cream);
-  color: var(--charcoal);
+
+.icon-btn-small:hover:not(:disabled) {
+  border-color: var(--color-primary, #4f46e5);
+  color: var(--color-primary, #4f46e5);
+  background: rgba(79, 70, 229, 0.05);
 }
-.icon-btn-small.text-danger:hover {
-  background-color: var(--status-cancelled-bg);
-  color: var(--stock-low);
-}
-.icon-btn-small.restock-btn {
-  color: var(--stock-high);
-}
+
 .icon-btn-small.restock-btn:hover {
-  background-color: var(--status-completed-bg);
+  border-color: var(--status-completed-text, #059669);
+  color: var(--status-completed-text, #059669);
+  background: rgba(5, 150, 105, 0.08);
 }
 
-.restock-item-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.125rem;
-}
-.restock-preview {
-  background-color: var(--cream);
-  padding: 0.75rem 1rem;
-  border-radius: var(--spacing-sm);
-  font-size: 0.875rem;
-  color: var(--charcoal);
-  border: 1px dashed var(--border-color);
+.icon-btn-small.sell-btn:hover:not(:disabled) {
+  border-color: var(--color-primary, #4f46e5);
+  color: var(--color-primary, #4f46e5);
+  background: rgba(79, 70, 229, 0.08);
 }
 
-/* Hide native number-input spinners on the restock qty field */
-#restock-qty::-webkit-outer-spin-button,
-#restock-qty::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-#restock-qty {
-  -moz-appearance: textfield;
-  appearance: textfield;
+.icon-btn-small:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
-.delete-icon-wrap {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background-color: var(--status-cancelled-bg);
-  color: var(--stock-low);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 1rem;
-}
-
-.btn-danger {
-  background-color: var(--stock-low);
-  color: var(--on-accent);
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--spacing-sm);
-  font-weight: 500;
-  transition:
-    background-color 0.2s,
-    transform 0.15s;
-}
-.btn-danger:hover {
-  background-color: var(--color-danger);
-  transform: translateY(-1px);
-}
-
-.form-row {
-  display: flex;
-  gap: 1rem;
-}
-.flex-1 {
-  flex: 1;
-}
-.justify-center {
-  justify-content: center;
-}
-.size-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.5rem;
-  background-color: var(--cream);
-  border: 1px solid var(--border-color);
-  border-radius: var(--spacing-xs);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.color-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  background-color: var(--white);
-  border: 1px solid var(--border-color);
-  border-radius: var(--spacing-xs);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--charcoal);
-}
-.pattern-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  background-color: var(--cream);
-  border: 1px solid var(--border-color);
-  border-radius: var(--spacing-xs);
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-.text-xs {
-  font-size: 0.75rem;
-}
-
-
-/* ===== 5-Tier Stock Health Badges ===== */
-.stock-tier-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-.stock-tier-badge.healthy {
-  background-color: var(--stock-healthy-bg);
-  color: var(--stock-healthy);
-}
-.stock-tier-badge.low {
-  background-color: var(--stock-low-bg);
-  color: var(--stock-low);
-}
-.stock-tier-badge.very-low {
-  background-color: var(--stock-very-low-bg);
-  color: var(--stock-very-low);
-}
-.stock-tier-badge.critical {
-  background-color: var(--stock-critical-bg);
-  color: var(--stock-critical);
-  animation: criticalPulse 2s ease-in-out infinite;
-}
-.stock-tier-badge.no-stock {
-  background-color: var(--stock-none-bg);
-  color: var(--stock-none);
-}
-
-@keyframes criticalPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
-  50%       { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
-}
-
-/* ===== Demand Pressure Indicator ===== */
-.demand-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  margin-left: 0.3rem;
-  vertical-align: middle;
-}
-.demand-badge.high {
-  background-color: var(--stock-critical-bg);
-  color: var(--stock-critical);
-}
-.demand-badge.moderate {
-  background-color: var(--stock-very-low-bg);
-  color: var(--stock-very-low);
-}
-.demand-badge.low {
-  background-color: var(--stock-low-bg);
-  color: var(--stock-low);
-}
-
-/* ===== Urgency Tooltip ===== */
-.stock-cell {
+/* Secondary Action Popover */
+.dropdown-action-wrap {
   position: relative;
+  display: inline-block;
 }
-.urgency-tooltip-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: help;
-}
-.urgency-tooltip-wrap .urgency-tip {
-  visibility: hidden;
-  opacity: 0;
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--charcoal);
-  color: var(--cream);
-  font-size: 0.72rem;
-  font-weight: 400;
-  line-height: 1.5;
-  padding: 0.6rem 0.875rem;
-  border-radius: var(--spacing-sm);
-  width: 260px;
-  white-space: normal;
-  pointer-events: none;
-  z-index: 600;
-  transition: opacity 0.18s ease, visibility 0.18s ease;
-  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) rgba(0,0,0,0.25);
-}
-.urgency-tooltip-wrap .urgency-tip::after {
-  content: '';
+
+.inv-action-popover {
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--charcoal);
-}
-.urgency-tooltip-wrap:hover .urgency-tip {
-  visibility: visible;
-  opacity: 1;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  min-width: 175px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-/* ===== Dashboard Stock Alert Breakdown ===== */
-.stock-breakdown-row {
+.inv-popover-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  margin-top: 0.35rem;
-  flex-wrap: wrap;
-}
-.stock-breakdown-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: var(--spacing-md);
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-/* Archive/Segment Toggle styling */
-.archive-toggle-row {
-  display: flex;
-  background-color: var(--cream);
-  padding: 0.25rem;
-  border-radius: var(--spacing-sm);
-  width: fit-content;
-  border: 1px solid var(--border-color);
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.archive-toggle-btn {
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--charcoal, #374151);
   border: none;
   background: transparent;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-
-.archive-toggle-btn:hover {
-  color: var(--charcoal);
-}
-
-.archive-toggle-btn.active {
-  background-color: var(--white);
-  color: var(--charcoal);
-  box-shadow: 0 2px var(--spacing-xs) rgba(31, 28, 24, 0.08);
-}
-
-/* Archive confirm button */
-.btn-archive {
-  background-color: var(--color-warning);
-  color: var(--on-accent);
-  border: none;
-  padding: 0.5rem 1.5rem;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.btn-archive:hover {
-  opacity: 0.9;
-}
-
-/* ===== Category → Subcategory grouping (browsing view) ===== */
-.inv-mode-hint {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.inv-group-header {
-  cursor: pointer;
-  background-color: var(--cream);
-  user-select: none;
-}
-.inv-group-header:hover {
-  background-color: var(--beige);
-}
-.inv-group-header td {
-  padding: 0.7rem 1rem;
-}
-.inv-group-header.depth-1 {
-  background-color: var(--white);
-}
-.inv-group-header.depth-1:hover {
-  background-color: var(--cream);
-}
-
-.inv-group-header-content {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--charcoal);
-}
-.inv-group-header.depth-0 .inv-group-label {
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-.inv-group-header.depth-1 .inv-group-header-content {
-  padding-left: 1.5rem;
-}
-.inv-group-header.depth-1 .inv-group-label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.inv-group-count {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.inv-group-alert {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--stock-critical);
-  background-color: var(--stock-critical-bg);
-  padding: 0.15rem 0.55rem;
-  border-radius: 20px;
-  margin-left: auto;
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Admin Inventory Panel (.aip-*)
-
-   Previously styled entirely with inline styles, which is why the panel read
-   as cramped: three flex-wrap columns fought for width and list rows sat at
-   0.3rem padding while holding a thumbnail, an input and a button. Grid gives
-   predictable columns; the spacing scale below is the deliberate fix.
-   ────────────────────────────────────────────────────────────────────────── */
-
-.aip-panel {
-  margin-bottom: 1.5rem;
-  background-color: var(--cream);
-}
-
-.aip-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.aip-header h3 {
-  font-size: 1.2rem;
-  margin: 0;
-}
-
-.aip-error {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background-color: var(--status-cancelled-bg);
-  color: var(--status-cancelled-text);
-  border: 1px solid rgba(153, 27, 27, 0.1);
-  border-radius: var(--spacing-sm);
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.aip-error-dismiss {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  font-weight: 700;
-  line-height: 1;
-  padding: 0 0.25rem;
-  flex-shrink: 0;
-}
-
-/* ── Section cards ── */
-
-.aip-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.aip-section {
-  background-color: var(--white);
-  border: 1px solid var(--border-color);
-  border-radius: var(--spacing-md);
-  padding: 1.5rem;
-}
-
-.aip-section-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.aip-section-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--spacing-sm);
-  background-color: var(--beige);
-  color: var(--highlight);
-  flex-shrink: 0;
-}
-
-.aip-section-title {
-  margin: 0;
-  font-size: 0.975rem;
-  font-weight: 700;
-  color: var(--charcoal);
-  line-height: 1.3;
-}
-
-.aip-section-subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-/* ── Grids ── */
-
-.aip-grid-2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
-}
-
-/* Product select / baseline qty / save button on one desktop row.
-   align-items:end keeps the button's baseline level with the inputs. */
-.aip-baseline-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr auto;
-  gap: 1rem;
-  align-items: end;
-}
-
-@media (max-width: 900px) {
-  .aip-grid-2,
-  .aip-baseline-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ── Fields ── */
-
-.aip-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.aip-field > .label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--charcoal);
-  margin: 0;
-}
-
-.aip-field .input-field {
-  font-size: 0.875rem;
   width: 100%;
+  text-align: left;
+  transition: background 0.12s ease;
 }
 
-.aip-col-title {
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--charcoal);
-  margin-bottom: 0.6rem;
+.inv-popover-item:hover {
+  background: var(--cream, #f3f4f6);
+  color: var(--color-primary, #4f46e5);
 }
 
-.aip-save-btn {
-  padding: 0.6rem 1.5rem;
-  white-space: nowrap;
+.inv-popover-item.text-danger:hover {
+  color: var(--color-danger, #ef4444);
+  background: #fef2f2;
 }
 
-/* ── Add forms ── */
-
-.aip-add-form {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.aip-add-form .input-field {
-  flex: 1;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-}
-
-.aip-add-form .btn-primary {
-  padding: 0.5rem 1rem;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.aip-add-form-stacked {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.aip-add-form-stacked .input-field {
-  font-size: 0.875rem;
-}
-
-.aip-add-form-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.aip-add-form-row .input-field {
-  flex: 1;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
-}
-
-.aip-add-form-row .btn-primary {
-  padding: 0.5rem 1rem;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-/* ── Scrollable lists ── */
-
-.aip-list {
-  max-height: 280px;
-  overflow-y: auto;
-  border: 1px solid var(--border-color);
-  border-radius: var(--spacing-sm);
-  padding: 0.5rem;
-  background-color: var(--cream);
-  list-style: none;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.aip-empty {
-  color: var(--text-secondary);
-  text-align: center;
-  font-size: 0.8125rem;
-  padding: 1rem 0.5rem;
-}
-
-.aip-item {
+/* Quick Filter Status Bar */
+.inv-quick-filters-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.75rem;
-  background-color: var(--white);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+  gap: 8px;
 }
 
-.aip-item-indent {
-  margin-left: 0.75rem;
-}
-
-/* flex:1 + min-width:0 so long names truncate instead of overflowing the row */
-.aip-item-name {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--charcoal);
-  text-overflow: ellipsis;
-}
-
-.aip-item-name-bold {
-  font-weight: 600;
-}
-
-.aip-item-name:focus {
-  background-color: var(--cream);
-  border-radius: var(--spacing-xs);
-}
-
-.aip-delete {
-  padding: 0.3rem 0.65rem;
-  font-size: 0.75rem;
-  border-color: var(--status-cancelled-text);
-  color: var(--status-cancelled-text);
-  background-color: transparent;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-/* ── Category group header inside the subcategory list ── */
-
-.aip-group-label {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background-color: var(--beige);
-  border-radius: var(--spacing-xs);
-}
-
-/* ── Category thumbnail + upload control ── */
-
-.aip-thumb-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-
-.aip-thumb,
-.aip-thumb-empty {
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-  flex-shrink: 0;
-}
-
-.aip-thumb {
-  object-fit: cover;
-}
-
-.aip-thumb-empty {
-  background-color: var(--cream);
-  border: 1px dashed var(--border-color);
-}
-
-.aip-upload {
-  color: var(--text-secondary);
+.quick-filter-chip {
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--cream, #f9fafb);
+  color: var(--text-secondary, #4b5563);
+  font-size: 0.76rem;
+  font-weight: 500;
   cursor: pointer;
-  padding: 0.35rem;
-  display: flex;
-  border-radius: var(--spacing-xs);
-}
-
-.aip-upload:hover {
-  color: var(--highlight);
-  background-color: var(--beige);
-}
-
-.aip-upload-busy {
-  position: absolute;
-  inset: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  background-color: var(--glass-bg);
-  border-radius: 5px;
+  gap: 5px;
+  transition: all 0.15s ease;
 }
 
-/* Visually hidden but announced by screen readers. Scoped rather than a global
-   .sr-only so it can't collide with a utility added elsewhere. */
-.aip-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.quick-filter-chip:hover {
+  border-color: var(--color-primary, #4f46e5);
+  color: var(--color-primary, #4f46e5);
 }
 
-/* ── Accessible table sort buttons ────────────────────────── */
+.quick-filter-chip.active {
+  background: var(--color-primary, #4f46e5);
+  color: #ffffff;
+  border-color: var(--color-primary, #4f46e5);
+}
+
+.quick-filter-chip.alert-chip.active {
+  background: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.quick-filter-chip.reserved-chip.active {
+  background: var(--color-warning, #d97706);
+  border-color: var(--color-warning, #d97706);
+}
+
+/* Sort button styling */
 .th-sort-btn {
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
   border: none;
+  padding: 0;
   font: inherit;
   color: inherit;
-  text-align: inherit;
   cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  width: 100%;
+}
+
+.th-sort-btn:hover {
+  color: var(--color-primary, #4f46e5);
 }
 
 .th-sort-btn.justify-end {
   justify-content: flex-end;
-}
-
-.th-sort-btn:focus-visible {
-  outline: 2px solid var(--color-primary, #4f46e5);
-  outline-offset: 2px;
-  border-radius: var(--spacing-xs);
-}
-
-/* ── Accessible category group toggle button ──────────────── */
-.inv-group-toggle-btn {
-  background: none;
-  border: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  padding: 0;
   width: 100%;
 }
 
-.inv-group-toggle-btn:focus-visible {
-  outline: 2px solid var(--color-primary, #4f46e5);
-  outline-offset: 2px;
-  border-radius: var(--spacing-xs);
+.th-sort-btn.justify-center {
+  justify-content: center;
+  width: 100%;
 }
 
-/* ── Inventory table pagination ───────────────────────────── */
+/* Pagination */
 .inv-pagination {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color);
-  background-color: var(--card-bg, var(--white));
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  background: var(--surface, #ffffff);
 }
-
-.inv-pagination .btn-sm {
-  padding: 0.35rem 0.85rem;
-  font-size: 0.825rem;
-}
-
-.inv-pagination-info {
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
