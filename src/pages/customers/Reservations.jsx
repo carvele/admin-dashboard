@@ -52,6 +52,9 @@ import {
   transitionReservationStatus,
   cancelReservation,
   reviewReservationReceipt,
+  cancelReservationForFraud,
+  findDuplicatePaymentReference,
+  getPaymentReviewHistory,
   completeReservationHandover,
   resolveRescheduleRequest,
   getPaymentsForReservation,
@@ -63,6 +66,18 @@ import { logAction } from '../../services/staffService';
 import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
+
+// Matches the CHECK constraint on reservations.last_receipt_rejection_reason
+// (and cancel_reservation_for_fraud's accepted values) exactly -- keep in sync.
+const REASON_CODE_LABELS = {
+  unreadable_receipt: 'Unreadable receipt',
+  wrong_amount: 'Wrong amount',
+  invalid_reference: 'Invalid / missing reference',
+  wrong_account: 'Sent to wrong account',
+  duplicate_receipt: 'Duplicate / reused receipt',
+  suspected_fraud: 'Suspected fraudulent proof',
+  other: 'Other',
+};
 
 const parseDate = (d) => {
   if (!d) return new Date();
@@ -276,6 +291,38 @@ const Reservations = () => {
     });
     return () => { cancelled = true; };
   }, [viewModal?.receiptUrl]);
+
+  // Payment review context: duplicate-reference warning and review history,
+  // both fetched whenever the detail modal opens on a reservation that has
+  // ever had a manual reference number. Warnings only -- staff decide, this
+  // never blocks or auto-rejects anything.
+  const [duplicateReferenceMatches, setDuplicateReferenceMatches] = useState([]);
+  const [reviewHistory, setReviewHistory] = useState([]);
+  // { mode: 'reject' | 'cancel', reservation } | null
+  const [reasonModal, setReasonModal] = useState(null);
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonNote, setReasonNote] = useState('');
+  const [reasonSubmitting, setReasonSubmitting] = useState(false);
+
+  useEffect(() => {
+    setDuplicateReferenceMatches([]);
+    if (!viewModal?.manualReferenceNumber) return;
+    let cancelled = false;
+    findDuplicatePaymentReference(viewModal.manualReferenceNumber, viewModal.docId)
+      .then((matches) => { if (!cancelled) setDuplicateReferenceMatches(matches); })
+      .catch(() => {}); // non-admin viewers get a permission error here -- silently show no warning
+    return () => { cancelled = true; };
+  }, [viewModal?.manualReferenceNumber, viewModal?.docId]);
+
+  useEffect(() => {
+    setReviewHistory([]);
+    if (!viewModal?.docId) return;
+    let cancelled = false;
+    getPaymentReviewHistory(viewModal.docId)
+      .then((rows) => { if (!cancelled) setReviewHistory(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [viewModal?.docId]);
 
   // PayMongo transaction history for the reservation currently open in the
   // details modal. See getPaymentsForReservation: this table was never read
@@ -554,13 +601,49 @@ const Reservations = () => {
   // A receipt only leaves 'Submitted' when an owner has looked at it. Rejecting
   // returns it to unpaid rather than cancelling outright, so a customer who
   // sent the wrong image can try again inside whatever time is left -- an
-  // unreadable screenshot is not the same as refusing to pay.
-  const handleRejectReceipt = async (res) => {
+  // unreadable screenshot is not the same as refusing to pay. Requires a
+  // reason code server-side now, so this opens the shared reason modal
+  // rather than firing immediately.
+  const handleRejectReceipt = (res) => {
+    setReasonCode('');
+    setReasonNote('');
+    setReasonModal({ mode: 'reject', reservation: res });
+  };
+
+  // Distinct from Reject: this ends the reservation entirely (releasing the
+  // inventory hold) rather than giving the customer another attempt. Only
+  // reachable while a receipt is under review -- cancel_reservation_for_fraud
+  // itself refuses to run once payment is verified or the reservation is
+  // otherwise resolved, and it always delegates to the same
+  // cancel_reservation_as_manager every other staff cancellation uses.
+  const handleCancelForFraud = (res) => {
+    setReasonCode('');
+    setReasonNote('');
+    setReasonModal({ mode: 'cancel', reservation: res });
+  };
+
+  const handleSubmitReasonModal = async (e) => {
+    e.preventDefault();
+    if (!reasonModal || !reasonCode) return;
+    setReasonSubmitting(true);
+    const { mode, reservation } = reasonModal;
     try {
-      await reviewReservationReceipt(res.docId, false);
-      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev);
-      toast.error('Receipt rejected — the customer can upload another');
-    } catch (err) { console.error('Failed to reject the receipt:', err); toast.error(err.message || 'Failed to reject the receipt'); }
+      if (mode === 'reject') {
+        await reviewReservationReceipt(reservation.docId, false, reasonCode, reasonNote || null);
+        setViewModal((prev) => (prev ? { ...prev, paymentStatus: 'Pending', receiptUrl: null } : prev));
+        toast.error('Receipt rejected — the customer can upload another');
+      } else {
+        await cancelReservationForFraud(reservation.docId, reservation.status, reasonCode, reasonNote || null);
+        setViewModal((prev) => (prev ? { ...prev, status: 'Cancelled' } : prev));
+        toast.error('Reservation cancelled');
+      }
+      setReasonModal(null);
+    } catch (err) {
+      console.error(`Failed to ${mode} reservation:`, err);
+      toast.error(err.message || `Failed to ${mode === 'reject' ? 'reject the receipt' : 'cancel the reservation'}`);
+    } finally {
+      setReasonSubmitting(false);
+    }
   };
 
 
@@ -1599,7 +1682,7 @@ const Reservations = () => {
                         and no receipt could be actioned at all. */}
                     {(viewModal.paymentStatus === 'Submitted' ||
                       viewModal.paymentStatus === 'Processing') && (
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button
                           className="btn-primary small"
                           style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
@@ -1612,11 +1695,82 @@ const Reservations = () => {
                           style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem' }}
                           onClick={() => handleRejectReceipt(viewModal)}
                         >
-                          Reject
+                          Reject & Retry
+                        </button>
+                        <button
+                          className="btn-outline small"
+                          style={{ padding: '0.2rem 0.75rem', fontSize: '0.75rem', color: 'var(--color-danger, #c0392b)', borderColor: 'var(--color-danger, #c0392b)' }}
+                          onClick={() => handleCancelForFraud(viewModal)}
+                        >
+                          Cancel Reservation
                         </button>
                       </div>
                     )}
                   </div>
+
+                  {/* Structured submission context -- staff should not have to
+                      judge a bare image with no numbers to check it against. */}
+                  {(viewModal.manualAmountClaimed != null || viewModal.manualPaymentMethod || viewModal.manualReferenceNumber) && (
+                    <div className="restock-item-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', marginBottom: '10px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Expected amount</span>
+                        <strong>{formatCurrency(viewModal.deposit || 0)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Claimed amount</span>
+                        <strong style={
+                          viewModal.manualAmountClaimed != null && Number(viewModal.manualAmountClaimed) !== Number(viewModal.deposit || 0)
+                            ? { color: 'var(--color-danger, #c0392b)' }
+                            : undefined
+                        }>
+                          {viewModal.manualAmountClaimed != null ? formatCurrency(viewModal.manualAmountClaimed) : '—'}
+                          {viewModal.manualAmountClaimed != null && Number(viewModal.manualAmountClaimed) !== Number(viewModal.deposit || 0) && ' ⚠ mismatch'}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Method</span>
+                        <span>{viewModal.manualPaymentMethod === 'gcash' ? 'GCash' : viewModal.manualPaymentMethod === 'bank_transfer' ? 'Bank Transfer' : '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Reference</span>
+                        <span style={{ userSelect: 'text' }}>{viewModal.manualReferenceNumber || '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-secondary">Attempt</span>
+                        <span>{viewModal.manualReceiptAttemptCount || 1}</span>
+                      </div>
+                      {viewModal.lastReceiptRejectionReason && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span className="text-secondary">Last rejection</span>
+                          <span>{REASON_CODE_LABELS[viewModal.lastReceiptRejectionReason] || viewModal.lastReceiptRejectionReason}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {duplicateReferenceMatches.length > 0 && (
+                    <div
+                      className="text-sm"
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        marginBottom: '10px',
+                        background: 'rgba(192, 57, 43, 0.1)',
+                        color: 'var(--color-danger, #c0392b)',
+                      }}
+                    >
+                      ⚠ Reference already used on a verified payment
+                      {duplicateReferenceMatches.map((m) => (
+                        <div key={m.reservation_id}>
+                          {m.display_id || m.reservation_id.slice(0, 8)}
+                          {m.customer_name ? ` — ${m.customer_name}` : ''}
+                        </div>
+                      ))}
+                      This is a warning, not a verdict -- reference formats can be reused innocently.
+                    </div>
+                  )}
+
                   {receiptLoadFailed ? (
                     <div className="text-danger text-sm">
                       Could not load this receipt. It may have been removed, or you may not have permission to view it.
@@ -1638,6 +1792,26 @@ const Reservations = () => {
                   ) : (
                     <div className="text-secondary text-sm">Loading receipt…</div>
                   )}
+                </div>
+              )}
+
+              {reviewHistory.length > 0 && (
+                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="detail-label" style={{ marginBottom: '6px' }}>Payment Review History</span>
+                  {reviewHistory.map((entry) => (
+                    <div key={entry.id} className="text-sm" style={{ width: '100%', marginBottom: '6px' }}>
+                      <div className="text-secondary text-xs">
+                        {parseDate(entry.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                      </div>
+                      <div>
+                        {entry.action} — {entry.userName}
+                        {entry.details?.reasonCode && ` (${REASON_CODE_LABELS[entry.details.reasonCode] || entry.details.reasonCode})`}
+                      </div>
+                      {entry.details?.staffNote && (
+                        <div className="text-secondary" style={{ fontStyle: 'italic' }}>&quot;{entry.details.staffNote}&quot;</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1690,6 +1864,78 @@ const Reservations = () => {
                 style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: '8px' }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {reasonModal && (
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          aria-label="Close dialog"
+          onClick={(e) => { if (e.target === e.currentTarget && !reasonSubmitting) setReasonModal(null); }}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && !reasonSubmitting) { e.preventDefault(); setReasonModal(null); }
+          }}
+        >
+          <div className="modal-content" role="dialog" aria-labelledby="reason-modal-title" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 id="reason-modal-title">
+                {reasonModal.mode === 'reject' ? 'Reject & Retry' : 'Cancel Reservation'}
+              </h3>
+              <button className="btn-icon" onClick={() => !reasonSubmitting && setReasonModal(null)} aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleSubmitReasonModal}>
+              <p className="text-secondary text-sm" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+                {reasonModal.mode === 'reject'
+                  ? 'The customer keeps their reservation and can upload a corrected receipt within the retry window.'
+                  : 'This ends the reservation and releases the held item. Use this for a fabricated or reused receipt, or when the customer should not get another attempt.'}
+              </p>
+              <label htmlFor="reason-code-select" className="text-sm" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>
+                Reason *
+              </label>
+              <select
+                id="reason-code-select"
+                className="form-input"
+                value={reasonCode}
+                onChange={(e) => setReasonCode(e.target.value)}
+                required
+                style={{ width: '100%', marginBottom: '0.75rem' }}
+              >
+                <option value="" disabled>Select a reason…</option>
+                {Object.entries(REASON_CODE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <label htmlFor="reason-staff-note" className="text-sm" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>
+                Staff note (optional)
+              </label>
+              <textarea
+                id="reason-staff-note"
+                className="form-input"
+                value={reasonNote}
+                onChange={(e) => setReasonNote(e.target.value)}
+                rows={3}
+                style={{ width: '100%', resize: 'vertical' }}
+                placeholder="Any extra context for the record"
+              />
+              <div className="modal-footer" style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button type="button" className="btn-outline" onClick={() => setReasonModal(null)} disabled={reasonSubmitting}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={reasonModal.mode === 'cancel' ? { background: 'var(--color-danger, #c0392b)', borderColor: 'var(--color-danger, #c0392b)' } : undefined}
+                  disabled={!reasonCode || reasonSubmitting}
+                >
+                  {reasonSubmitting ? 'Working…' : reasonModal.mode === 'reject' ? 'Reject & Retry' : 'Cancel Reservation'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

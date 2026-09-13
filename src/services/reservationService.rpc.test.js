@@ -32,6 +32,8 @@ import {
   transitionReservationStatus,
   cancelReservation,
   reviewReservationReceipt,
+  cancelReservationForFraud,
+  findDuplicatePaymentReference,
   completeReservationHandover,
   resolveRescheduleRequest,
   updateReservation,
@@ -143,7 +145,48 @@ describe('reservation lifecycle commands', () => {
     expect(mockRpc).toHaveBeenCalledWith('review_reservation_receipt', {
       _reservation_id: 'res-1',
       _approve: true,
+      _reason_code: null,
+      _staff_note: null,
     });
+  });
+
+  test('rejecting a receipt sends the reason code and staff note', async () => {
+    mockRpc.mockResolvedValue({ data: { approved: false }, error: null });
+    await reviewReservationReceipt('res-1', false, 'wrong_amount', 'Sent less than the deposit');
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalledWith('review_reservation_receipt', {
+      _reservation_id: 'res-1',
+      _approve: false,
+      _reason_code: 'wrong_amount',
+      _staff_note: 'Sent less than the deposit',
+    });
+  });
+
+  test('cancels for suspected fraud through the fraud-cancel command', async () => {
+    mockRpc.mockResolvedValue({ data: { status: 'Cancelled' }, error: null });
+    await cancelReservationForFraud('res-1', 'Confirmed', 'duplicate_receipt', 'Same reference used on R-1198');
+    expect(mockRpc).toHaveBeenCalledWith('cancel_reservation_for_fraud', {
+      _reservation_id: 'res-1',
+      _expected_status: 'Confirmed',
+      _reason_code: 'duplicate_receipt',
+      _staff_note: 'Same reference used on R-1198',
+    });
+  });
+
+  test('looks up a duplicate payment reference', async () => {
+    mockRpc.mockResolvedValue({ data: [{ reservation_id: 'res-2', display_id: 'R-1198' }], error: null });
+    const matches = await findDuplicatePaymentReference('REF123', 'res-1');
+    expect(mockRpc).toHaveBeenCalledWith('find_duplicate_payment_reference', {
+      _reference_number: 'REF123',
+      _exclude_reservation_id: 'res-1',
+    });
+    expect(matches).toEqual([{ reservation_id: 'res-2', display_id: 'R-1198' }]);
+  });
+
+  test('skips the duplicate-reference lookup entirely with no reference number', async () => {
+    const matches = await findDuplicatePaymentReference(null);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(matches).toEqual([]);
   });
 
   test('completes handover through the guarded command', async () => {

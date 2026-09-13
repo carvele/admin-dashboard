@@ -1607,6 +1607,12 @@ export type Database = {
           id: string
           idempotency_key: string | null
           image_url: string | null
+          last_receipt_rejected_at: string | null
+          last_receipt_rejection_reason: string | null
+          manual_amount_claimed: number | null
+          manual_payment_method: string | null
+          manual_receipt_attempt_count: number
+          manual_reference_number: string | null
           payment_due_at: string | null
           payment_method: string | null
           payment_reminder_sent_at: string | null
@@ -1655,6 +1661,12 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           image_url?: string | null
+          last_receipt_rejected_at?: string | null
+          last_receipt_rejection_reason?: string | null
+          manual_amount_claimed?: number | null
+          manual_payment_method?: string | null
+          manual_receipt_attempt_count?: number
+          manual_reference_number?: string | null
           payment_due_at?: string | null
           payment_method?: string | null
           payment_reminder_sent_at?: string | null
@@ -1703,6 +1715,12 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           image_url?: string | null
+          last_receipt_rejected_at?: string | null
+          last_receipt_rejection_reason?: string | null
+          manual_amount_claimed?: number | null
+          manual_payment_method?: string | null
+          manual_receipt_attempt_count?: number
+          manual_reference_number?: string | null
           payment_due_at?: string | null
           payment_method?: string | null
           payment_reminder_sent_at?: string | null
@@ -2403,6 +2421,15 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_reservation_for_fraud: {
+        Args: {
+          _expected_status: string
+          _reason_code: string
+          _reservation_id: string
+          _staff_note?: string
+        }
+        Returns: Json
+      }
       check_rate_limit: {
         Args: {
           p_key: string
@@ -2454,6 +2481,14 @@ export type Database = {
       dispatch_pending_push: { Args: never; Returns: number }
       expire_all_stale_reservations: { Args: never; Returns: number }
       expire_stale_payments: { Args: never; Returns: number }
+      find_duplicate_payment_reference: {
+        Args: { _exclude_reservation_id?: string; _reference_number: string }
+        Returns: {
+          customer_name: string
+          display_id: string
+          reservation_id: string
+        }[]
+      }
       get_direct_chat_summaries: {
         Args: { p_limit?: number; p_offset?: number }
         Returns: {
@@ -2732,7 +2767,12 @@ export type Database = {
       }
       resolve_username: { Args: { p_username: string }; Returns: string }
       review_reservation_receipt: {
-        Args: { _approve: boolean; _reservation_id: string }
+        Args: {
+          _approve: boolean
+          _reason_code?: string
+          _reservation_id: string
+          _staff_note?: string
+        }
         Returns: Json
       }
       save_pose_guide: {
@@ -2880,7 +2920,13 @@ export type Database = {
         Returns: Json
       }
       submit_reservation_receipt: {
-        Args: { _receipt_path: string; _reservation_id: string }
+        Args: {
+          _amount_claimed: number
+          _method: string
+          _receipt_path: string
+          _reference_number: string
+          _reservation_id: string
+        }
         Returns: Json
       }
       sync_product_stock: { Args: { p_product_id: string }; Returns: undefined }
