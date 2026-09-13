@@ -415,10 +415,16 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               </div>
             </div>
 
-            <div className="aip-grid-2">
-              {/* Left: Add top-level category */}
-              <div className="aip-field">
-                <span className="aip-col-title">Top-Level Categories</span>
+            <div className="aip-grid-2 aip-taxonomy-grid">
+              {/* Left: Top-Level Categories */}
+              <div className="aip-field aip-taxonomy-pane">
+                <div className="aip-pane-header">
+                  <div className="aip-pane-title-wrap">
+                    <span className="aip-col-title">Top-Level Categories</span>
+                    <span className="aip-count-badge">{categoryTree.length} categories</span>
+                  </div>
+                </div>
+
                 <form onSubmit={handleAddTopCategory} className="aip-add-form">
                   <input autoComplete="off"
                     name="catName"
@@ -429,14 +435,18 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                   <button className="btn-primary">Add</button>
                 </form>
 
-                <ul className="aip-list">
+                <ul className="aip-list aip-custom-scrollbar">
                   {categoryTree.length === 0 ? (
-                    <li className="aip-empty">No categories yet</li>
+                    <li className="aip-empty aip-empty-card">
+                      <FolderTree size={24} className="aip-empty-icon" />
+                      <p className="aip-empty-title">No categories yet</p>
+                      <p className="aip-empty-subtitle">Use the input above to create your first category.</p>
+                    </li>
                   ) : (
                     categoryTree.map((cat) => (
                       <li key={cat.id} className="aip-item">
                         {renderImageControl(cat)}
-                        <input autoComplete="off" id="field_xoj0xbn" name="field_xoj0xbn"
+                        <input autoComplete="off" id={`field_${cat.id}`} name={`field_${cat.id}`}
                           defaultValue={cat.name}
                           className="input-field aip-item-name aip-item-name-bold"
                           aria-label="Category name"
@@ -456,69 +466,97 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                 </ul>
               </div>
 
-              {/* Right: Add subcategory & filtered list */}
-              <div className="aip-field">
-                <span className="aip-col-title">Sub-Categories</span>
+              {/* Right: Sub-Categories */}
+              <div className="aip-field aip-taxonomy-pane">
+                <div className="aip-pane-header">
+                  <div className="aip-pane-title-wrap">
+                    <span className="aip-col-title">Sub-Categories</span>
+                    <span className="aip-count-badge">
+                      {subParentFilter === 'all'
+                        ? `${categoryTree.reduce((acc, c) => acc + c.subcategories.length, 0)} total`
+                        : `${categoryTree.find((c) => c.id === subParentFilter)?.subcategories.length || 0} items`}
+                    </span>
+                  </div>
+                </div>
 
-                {/* Add Subcategory Form */}
-                <form onSubmit={handleAddSubCategory} className="aip-add-form-stacked">
-                  <select autoComplete="off" id="field_mmntiqy" name="field_mmntiqy"
-                    className="input-field"
-                    value={newSubParentId}
-                    onChange={(e) => {
-                      setNewSubParentId(e.target.value);
-                      if (e.target.value) setSubParentFilter(e.target.value);
-                    }}
-                    aria-label="Select parent category"
-                  >
-                    <option value="">Select parent category...</option>
-                    {categoryTree.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  <div className="aip-add-form-row">
+                {/* Sub-Categories Toolbar Row */}
+                <div className="aip-subcat-toolbar-row">
+                  <div className="aip-filter-control">
+                    <select autoComplete="off"
+                      id="subcat-parent-filter"
+                      className="input-field aip-select-filter"
+                      value={subParentFilter}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSubParentFilter(val);
+                        if (val !== 'all') setNewSubParentId(val);
+                      }}
+                      aria-label="Filter sub-categories by parent category"
+                    >
+                      <option value="all">All Categories ({categoryTree.reduce((acc, c) => acc + c.subcategories.length, 0)})</option>
+                      {categoryTree.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name} ({cat.subcategories.length})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <form onSubmit={handleAddSubCategory} className="aip-subcat-quick-add">
+                    {subParentFilter === 'all' ? (
+                      <select autoComplete="off" id="field_mmntiqy" name="field_mmntiqy"
+                        className="input-field aip-select-parent-compact"
+                        value={newSubParentId}
+                        onChange={(e) => {
+                          setNewSubParentId(e.target.value);
+                          if (e.target.value) setSubParentFilter(e.target.value);
+                        }}
+                        aria-label="Select parent category"
+                      >
+                        <option value="">Parent...</option>
+                        {categoryTree.map((cat) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select autoComplete="off" id="field_mmntiqy" name="field_mmntiqy"
+                        value={newSubParentId}
+                        onChange={(e) => setNewSubParentId(e.target.value)}
+                        aria-label="Select parent category"
+                        className="aip-sr-only"
+                      >
+                        {categoryTree.map((cat) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    )}
                     <input autoComplete="off" id="field_pri0jpv" name="field_pri0jpv"
                       className="input-field"
-                      placeholder="Sub-category name..."
+                      placeholder={
+                        subParentFilter !== 'all'
+                          ? `Add to ${categoryTree.find((c) => c.id === subParentFilter)?.name || 'category'}...`
+                          : 'Sub-category name...'
+                      }
                       value={newSubName}
                       onChange={(e) => setNewSubName(e.target.value)}
                       aria-label="New sub-category name"
                     />
                     <button className="btn-primary">Add</button>
-                  </div>
-                </form>
-
-                {/* Parent Filter Selector for List */}
-                <div className="aip-filter-row">
-                  <label className="label" htmlFor="subcat-parent-filter">Filter List by Parent Category:</label>
-                  <select autoComplete="off"
-                    id="subcat-parent-filter"
-                    className="input-field aip-select-filter"
-                    value={subParentFilter}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSubParentFilter(val);
-                      if (val !== 'all') setNewSubParentId(val);
-                    }}
-                    aria-label="Filter sub-categories by parent category"
-                  >
-                    <option value="all">All Categories ({categoryTree.reduce((acc, c) => acc + c.subcategories.length, 0)} subcategories)</option>
-                    {categoryTree.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name} ({cat.subcategories.length} subcategories)
-                      </option>
-                    ))}
-                  </select>
+                  </form>
                 </div>
 
                 {/* Subcategories list – filtered by chosen parent or grouped all */}
-                <ul className="aip-list">
+                <ul className="aip-list aip-custom-scrollbar">
                   {(subParentFilter === 'all' ? categoryTree : categoryTree.filter((c) => c.id === subParentFilter))
                     .every((c) => c.subcategories.length === 0) ? (
-                    <li className="aip-empty">
-                      {subParentFilter === 'all'
-                        ? 'No sub-categories yet'
-                        : `No sub-categories under ${categoryTree.find((c) => c.id === subParentFilter)?.name || 'this category'}`}
+                    <li className="aip-empty aip-empty-card">
+                      <FolderTree size={24} className="aip-empty-icon" />
+                      <p className="aip-empty-title">
+                        {subParentFilter === 'all'
+                          ? 'No sub-categories yet'
+                          : `No sub-categories in ${categoryTree.find((c) => c.id === subParentFilter)?.name || 'this category'}`}
+                      </p>
+                      <p className="aip-empty-subtitle">Use the input above to add a sub-category.</p>
                     </li>
                   ) : (
                     (subParentFilter === 'all' ? categoryTree : categoryTree.filter((c) => c.id === subParentFilter))
