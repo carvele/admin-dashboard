@@ -25,7 +25,11 @@ const initialsOf = (name) =>
 
 const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage, onResolveReschedule }) => {
   const primary = primaryActionFor(res);
-  const deadline = formatPaymentDeadline(res.paymentDueAt);
+  // payment_due_at is never cleared once paid -- it's the original deposit
+  // deadline, not a pickup timer, so it has nothing meaningful to say once
+  // payment is settled (and would eventually read "Overdue" on a paid item).
+  const deadline =
+    String(res.paymentStatus || '').toLowerCase() === 'paid' ? null : formatPaymentDeadline(res.paymentDueAt);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
   const balance = outstandingBalance(res);
