@@ -185,8 +185,8 @@ const DeviceManagement = () => {
       <div className="device-stats">
         {STATUS_FILTERS.map((filter) => (
           <button key={filter.key} className={`device-stat-card ${statusFilter === filter.key ? 'active' : ''}`} onClick={() => setStatusFilter(filter.key)}>
-            <span className="text-secondary">{filter.label}</span>
-            <strong>{counts[filter.key]}</strong>
+            <strong className="device-stat-count">{counts[filter.key]}</strong>
+            <span className="device-stat-label">{filter.label}</span>
           </button>
         ))}
       </div>
