@@ -622,3 +622,42 @@
   background: #332e29;
   border-color: #332e29;
 }
+
+
+/* Resend Invite & Pending Status styles */
+.member-email-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.emp-badge.emp-pending-invite {
+  background-color: #fff8e6;
+  color: #926f1a;
+  border: 1px solid #f0d98a;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  letter-spacing: 0.02em;
+}
+
+.staff-resend-btn {
+  color: #926f1a !important;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.staff-resend-btn:hover {
+  background-color: #f5eedc !important;
+  color: #6a4f10 !important;
+}
+
+.staff-resend-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
