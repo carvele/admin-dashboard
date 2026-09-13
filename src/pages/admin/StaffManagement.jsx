@@ -178,6 +178,7 @@ const StaffManagement = () => {
         role: result.role || createForm.role,
         tempPassword: result.tempPassword,
         loginUrl: result.loginUrl || `${window.location.origin}/login`,
+        emailSent: Boolean(result.emailSent),
       });
 
       toast.success(`Staff account for ${createForm.email} created successfully!`);
@@ -882,7 +883,51 @@ const StaffManagement = () => {
                     </p>
                   </div>
 
+                  <div className="cred-send-email-section" style={{ marginBottom: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="btn-primary flex-center gap-2 w-full staff-gmail-send-btn"
+                      style={{ padding: '0.75rem 1rem', fontSize: '0.9rem' }}
+                      onClick={() => {
+                        const subject = encodeURIComponent('Your JezSy Collection Staff Login Credentials');
+                        const body = encodeURIComponent(
+                          `Welcome to the JezSy Collection Admin Team!\n\n` +
+                          `Your staff account has been set up with the following login details:\n` +
+                          `• Portal URL: ${createdCredentials.loginUrl}\n` +
+                          `• Email: ${createdCredentials.email}\n` +
+                          `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
+                          `Please log in and update your password under Settings > Security.`
+                        );
+                        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(createdCredentials.email)}&su=${subject}&body=${body}`;
+                        window.open(gmailUrl, '_blank');
+                      }}
+                    >
+                      <Mail size={16} />
+                      <span>Send via Gmail to {createdCredentials.email}</span>
+                    </button>
+                  </div>
+
                   <div className="credentials-action-buttons">
+                    <button
+                      type="button"
+                      className="btn-outline flex-center gap-2 w-full"
+                      onClick={() => {
+                        const subject = encodeURIComponent('Your JezSy Collection Staff Login Credentials');
+                        const body = encodeURIComponent(
+                          `Welcome to the JezSy Collection Admin Team!\n\n` +
+                          `Your staff account has been set up with the following login details:\n` +
+                          `• Portal URL: ${createdCredentials.loginUrl}\n` +
+                          `• Email: ${createdCredentials.email}\n` +
+                          `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
+                          `Please log in and update your password under Settings > Security.`
+                        );
+                        window.location.href = `mailto:${encodeURIComponent(createdCredentials.email)}?subject=${subject}&body=${body}`;
+                      }}
+                      title="Open in default desktop or mobile mail app"
+                    >
+                      <ExternalLink size={15} />
+                      <span>Send via Default Mail App</span>
+                    </button>
                     <button
                       type="button"
                       className="btn-outline flex-center gap-2 w-full"
