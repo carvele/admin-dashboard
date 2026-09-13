@@ -23,11 +23,14 @@ import {
   PackageCheck,
   ChevronDown,
   ChevronUp,
+  Keyboard,
+  Camera,
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
 import ReservationCard from '../../components/reservations/ReservationCard';
 import ReservationCalendar from '../../components/reservations/ReservationCalendar';
+import PickupQrScanner from '../../components/reservations/PickupQrScanner';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
 import '../../components/reservations/ReservationBoard.css';
@@ -219,6 +222,7 @@ const Reservations = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrToken, setQrToken] = useState('');
   const [qrResult, setQrResult] = useState(null);
+  const [qrScanMode, setQrScanMode] = useState('camera');
   // List view sort: { key: string, dir: 'asc'|'desc' }
   const [listSort, setListSort] = useState(() => {
     try {
@@ -453,6 +457,27 @@ const Reservations = () => {
     } catch (e) {
       toast.error(e?.message || 'Could not answer that request.');
     }
+  };
+
+  // The mobile app's pickup pass QR encodes `jezsy-pickup:<pickup_token>`.
+  // Manual entry accepts either the bare token or the customer-visible
+  // display ID, since staff may not have the QR in front of them.
+  const lookupByPickupCode = (rawInput) => {
+    const value = rawInput.trim();
+    const token = value.toLowerCase().startsWith('jezsy-pickup:')
+      ? value.slice('jezsy-pickup:'.length)
+      : value;
+    const found = filteredReservations.find(
+      (r) =>
+        (r.pickupToken && r.pickupToken === token) ||
+        (r.displayId && r.displayId.toUpperCase() === value.toUpperCase()),
+    );
+    setQrResult(found ? { found: true, res: found } : { found: false });
+  };
+
+  const handleQrDecode = (decoded) => {
+    setQrToken(decoded);
+    lookupByPickupCode(decoded);
   };
 
   const handleAction = async (id, action) => {
@@ -1115,20 +1140,50 @@ const Reservations = () => {
               <button className="close-btn" onClick={() => setShowQRModal(false)} aria-label="Close dialog">&times;</button>
             </div>
             <div className="modal-body">
-              <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token (displayed in their app) to verify and complete handover.</p>
-              <div className="form-group">
-                <label className="label" htmlFor="qr-token">Pickup Token / Reservation ID</label>
-                <input autoComplete="off"
-                  id="qr-token"
-                  type="text"
-                  className="input-field font-mono"
-                  placeholder="e.g. ORD-2026-00042"
-                  value={qrToken}
-                  onChange={(e) => { setQrToken(e.target.value.toUpperCase()); setQrResult(null); }}
-                  // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of a just-opened modal
-                  autoFocus
-                />
+              <div className="qr-mode-toggle" role="tablist" aria-label="Pickup verification method">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={qrScanMode === 'camera'}
+                  className={qrScanMode === 'camera' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => { setQrScanMode('camera'); setQrResult(null); }}
+                >
+                  <Camera size={14} /> Scan with camera
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={qrScanMode === 'manual'}
+                  className={qrScanMode === 'manual' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => { setQrScanMode('manual'); setQrResult(null); }}
+                >
+                  <Keyboard size={14} /> Enter manually
+                </button>
               </div>
+
+              {qrScanMode === 'camera' ? (
+                <>
+                  <p className="text-secondary text-sm mb-3">Point the camera at the QR code shown on the customer&apos;s pickup pass.</p>
+                  <PickupQrScanner onDecode={handleQrDecode} />
+                </>
+              ) : (
+                <>
+                  <p className="text-secondary text-sm mb-3">Enter the customer&apos;s pickup token or reservation ID (displayed in their app) to verify and complete handover.</p>
+                  <div className="form-group">
+                    <label className="label" htmlFor="qr-token">Pickup Token / Reservation ID</label>
+                    <input autoComplete="off"
+                      id="qr-token"
+                      type="text"
+                      className="input-field font-mono"
+                      placeholder="e.g. RES-1A09B570B26-586"
+                      value={qrToken}
+                      onChange={(e) => { setQrToken(e.target.value); setQrResult(null); }}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus -- primary input of a just-opened modal
+                      autoFocus
+                    />
+                  </div>
+                </>
+              )}
               {qrResult && (
                 <div className={`qr-result ${qrResult.found ? 'qr-result-found' : 'qr-result-notfound'}`}>
                   {qrResult.found ? (
@@ -1145,20 +1200,15 @@ const Reservations = () => {
               )}
               <div className="modal-footer">
                 <button type="button" className="btn-outline" onClick={() => setShowQRModal(false)}>Cancel</button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    const found = filteredReservations.find(r => r.id?.toUpperCase() === qrToken.trim().toUpperCase());
-                    if (found) {
-                      setQrResult({ found: true, res: found });
-                    } else {
-                      setQrResult({ found: false });
-                    }
-                  }}
-                >
-                  Look Up
-                </button>
+                {qrScanMode === 'manual' && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => lookupByPickupCode(qrToken)}
+                  >
+                    Look Up
+                  </button>
+                )}
                 {qrResult?.found && qrResult.res.displayStatus === 'To Pickup' && (
                   <button
                     type="button"
