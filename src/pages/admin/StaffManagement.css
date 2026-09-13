@@ -1,123 +1,490 @@
-/* Staff Management Specific Styles */
+/* Staff Management Specific Styles - Premium Gold & Charcoal Theme */
 
-.member-info {
+/* ── Container Card ──────────────────────────────────────────────────────── */
+.staff-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  padding: 0 !important;
+}
+
+/* ── Scope Bar & Segmented Tabs (Inventory & Reservations standard) ──────── */
+.staff-scope-bar {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 1rem;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid var(--border-color, #efe9db);
+  background: var(--surface, #ffffff);
+  flex-wrap: wrap;
 }
 
-.role-chip {
+.staff-scope-tabs {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--spacing-xs) 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.role-chip:hover {
-  border-color: var(--color-gold);
-  background: var(--white);
-}
-
-.owner-chip {
-  background: var(--beige);
-  border-color: var(--color-gold);
-  color: var(--color-gold);
-}
-
-.owner-chip:hover {
-  background: var(--beige);
-  cursor: default;
-}
-
-.status-dot {
-  display: inline-block;
-  width: var(--spacing-sm);
-  height: var(--spacing-sm);
-  border-radius: 50%;
-  margin-right: var(--spacing-sm);
-}
-
-.status-dot.invited {
-  background-color: var(--color-warning);
-}
-.status-dot.active {
-  background-color: var(--color-success);
-}
-.status-dot.revoked {
-  background-color: var(--color-danger);
-}
-
-.icon-btn-small {
-  padding: 6px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.icon-btn-small:hover {
-  background: var(--white);
-  border-color: var(--border-color);
-  box-shadow: var(--shadow-sm);
-}
-
-/* ── Employment status badges (Staff Management table) ── */
-.emp-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 20px;
-  padding: 0.2rem 0.65rem;
-  white-space: nowrap;
-}
-.emp-active     { background: var(--status-completed-bg); color: var(--status-completed-text); }
-.emp-leave      { background: var(--status-pending-bg); color: var(--status-pending-text); }
-.emp-resigned   { background: var(--beige); color: var(--text-secondary); }
-.emp-terminated { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
-.emp-blocked    { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
-.emp-clear      { background: var(--status-completed-bg); color: var(--status-completed-text); }
-
-/* ── Archive / Active tab toggle (mirrors Inventory.css) ── */
-.archive-toggle-row {
-  display: flex;
-  background-color: var(--cream);
+  background-color: var(--beige, #f5eedc);
   padding: 0.25rem;
-  border-radius: var(--spacing-sm);
-  width: fit-content;
-  border: 1px solid var(--border-color);
+  border-radius: var(--spacing-sm, 8px);
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
 }
 
-.archive-toggle-btn {
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  display: flex;
+.staff-scope-tab {
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.5rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  color: var(--text-secondary, #544b45);
+  background: transparent;
+  border: none;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
 }
 
-.archive-toggle-btn:hover {
-  color: var(--charcoal);
+.staff-scope-tab:hover {
+  color: var(--charcoal, #1f1c18);
 }
 
-.archive-toggle-btn.active {
-  background-color: var(--white);
-  color: var(--charcoal);
-  box-shadow: 0 2px var(--spacing-xs) rgba(31, 28, 24, 0.08);
+.staff-scope-tab.active {
+  background-color: var(--white, #ffffff);
+  color: var(--charcoal, #1f1c18);
+  box-shadow: 0 1px 3px rgba(31, 28, 24, 0.1);
+}
+
+.staff-scope-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
+}
+
+.staff-scope-tab.active .staff-scope-count {
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+}
+
+/* ── Search & Filter Toolbar ─────────────────────────────────────────────── */
+.staff-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color, #efe9db);
+  background: var(--surface, #ffffff);
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.staff-search-box {
+  position: relative;
+  flex: 1;
+  max-width: 380px;
+  min-width: 240px;
+}
+
+.staff-search-icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary, #544b45);
+  pointer-events: none;
+}
+
+.staff-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 2.25rem 0 2.6rem;
+  background-color: var(--white, #ffffff);
+  color: var(--charcoal, #1f1c18);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.staff-search-input:focus {
+  border-color: var(--color-gold, #d4af37);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+}
+
+.staff-search-clear {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.06);
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.staff-search-clear:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--charcoal, #1f1c18);
+}
+
+.staff-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.staff-role-select {
+  height: 40px;
+  padding: 0 1rem;
+  background-color: var(--white, #ffffff);
+  color: var(--charcoal, #1f1c18);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  outline: none;
+  min-width: 160px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.staff-role-select:focus {
+  border-color: var(--color-gold, #d4af37);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+}
+
+.staff-reset-btn {
+  height: 40px;
+  padding: 0 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #efe9db);
+  background: var(--cream, #fdfbf7);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.staff-reset-btn:hover {
+  background: var(--beige, #f5eedc);
+  color: var(--charcoal, #1f1c18);
+}
+
+/* ── Table & Rows ────────────────────────────────────────────────────────── */
+.staff-table-container {
+  overflow-x: auto;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.staff-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.staff-table th {
+  padding: 0.85rem 1.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #544b45);
+  background: var(--cream, #fdfbf7);
+  border-bottom: 1px solid var(--border-color, #efe9db);
+  white-space: nowrap;
+}
+
+.staff-table td {
+  padding: 1rem 1.5rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color, #efe9db);
+}
+
+.staff-table-row {
+  transition: background-color 0.15s ease;
+}
+
+.staff-table-row:hover {
+  background-color: rgba(245, 238, 220, 0.25);
+}
+
+.archived-row {
+  opacity: 0.85;
+}
+
+/* ── Member Info & Avatar ────────────────────────────────────────────────── */
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.staff-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.avatar-owner {
+  background: linear-gradient(135deg, var(--beige, #f5eedc), var(--color-gold, #d4af37));
+  color: var(--charcoal, #1f1c18);
+}
+
+.avatar-staff {
+  background: linear-gradient(135deg, #f3f4f6, #d1d5db);
+  color: #374151;
+}
+
+.avatar-archived {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.member-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-name {
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+  font-size: 0.9rem;
+}
+
+.member-email {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #544b45);
+  margin-top: 2px;
+}
+
+/* ── Role Chips ──────────────────────────────────────────────────────────── */
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.role-chip-text {
+  line-height: 1;
+}
+
+.owner-chip {
+  background: #fdf8eb;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  color: #926f1a;
+}
+
+.owner-crown-icon {
+  color: var(--color-gold, #d4af37);
+  flex-shrink: 0;
+}
+
+.staff-chip {
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  color: var(--text-secondary, #544b45);
+}
+
+.staff-chip:hover {
+  border-color: var(--color-gold, #d4af37);
+  background: var(--white, #ffffff);
+  color: var(--charcoal, #1f1c18);
+}
+
+.staff-shield-icon {
+  color: var(--text-secondary, #544b45);
+  flex-shrink: 0;
+}
+
+/* ── Status Badges ───────────────────────────────────────────────────────── */
+.emp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 0.25rem 0.7rem;
+  white-space: nowrap;
+}
+
+.emp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.emp-active     { background: var(--status-completed-bg, #def7ec); color: var(--status-completed-text, #03543f); }
+.emp-leave      { background: var(--status-pending-bg, #fef08a); color: var(--status-pending-text, #713f12); }
+.emp-resigned   { background: var(--beige, #f5eedc); color: var(--text-secondary, #544b45); }
+.emp-terminated { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
+.emp-blocked    { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
+.emp-clear      { background: var(--status-completed-bg, #def7ec); color: var(--status-completed-text, #03543f); }
+
+.archive-note-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+.staff-actions-cell {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.staff-action-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.staff-action-btn:hover {
+  background: var(--white, #ffffff);
+  border-color: var(--border-color, #efe9db);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  color: var(--charcoal, #1f1c18);
+}
+
+.staff-action-btn.text-danger:hover {
+  color: var(--color-danger, #ef4444);
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.staff-action-btn.text-success:hover {
+  color: var(--color-success, #10b981);
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+/* ── Empty State ─────────────────────────────────────────────────────────── */
+.staff-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+}
+
+.staff-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #544b45);
+  margin-bottom: 1rem;
+}
+
+.staff-empty-state h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+  margin: 0 0 0.4rem 0;
+}
+
+.staff-empty-btn {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+/* ── Loading Spinner ─────────────────────────────────────────────────────── */
+.staff-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem 0;
+}
+
+.staff-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-color, #efe9db);
+  border-top-color: var(--color-gold, #d4af37);
+  border-radius: 50%;
+  animation: staff-spin 0.8s linear infinite;
+}
+
+@keyframes staff-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Modal Enhancements ──────────────────────────────────────────────────── */
+.staff-modal-content {
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #efe9db);
+}
+
+.modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #544b45);
+  margin-top: 0.2rem;
+}
+
+.staff-invite-info-callout {
+  display: flex;
+  gap: 0.75rem;
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #544b45);
+  line-height: 1.45;
+}
+
+.staff-invite-info-callout p {
+  margin: 0;
 }
