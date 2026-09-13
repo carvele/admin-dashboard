@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import debounce from 'lodash.debounce';
 import { useAuth } from '../../context/AuthContext';
@@ -23,6 +23,8 @@ import {
   PackageCheck,
   ChevronDown,
   ChevronUp,
+  Archive,
+  Copy,
 } from 'lucide-react';
 import StatusBadge from '../../components/ReservationStatusBadge';
 import SkeletonTable from '../../components/SkeletonTable';
@@ -66,6 +68,14 @@ import { logAction } from '../../services/staffService';
 import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
 import './Reservations.css';
+
+
+const getInitials = (name) => {
+  if (!name) return 'CU';
+  const parts = String(name).trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 // Matches the CHECK constraint on reservations.last_receipt_rejection_reason
 // (and cancel_reservation_for_fraud's accepted values) exactly -- keep in sync.
@@ -204,6 +214,23 @@ const Reservations = () => {
   };
 
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'All');
+  const [scopeFilter, setScopeFilter] = useState(() => {
+    const paramScope = searchParams.get('scope');
+    if (paramScope === 'archived' || paramScope === 'completed') return 'archived';
+    const paramStatus = searchParams.get('status');
+    if (paramStatus === 'Cancelled' || paramStatus === 'Completed') return 'archived';
+    return 'active';
+  });
+
+  const handleScopeChange = (newScope) => {
+    setScopeFilter(newScope);
+    setPage(0);
+    if (newScope === 'active' && (statusFilter === 'Completed' || statusFilter === 'Cancelled')) {
+      setStatusFilter('All');
+    } else if (newScope === 'archived' && (statusFilter === 'To Pay' || statusFilter === 'Preparing' || statusFilter.startsWith('To Pickup'))) {
+      setStatusFilter('All');
+    }
+  };
   // Board first: the day-to-day job is working the queue. List view (table) is for
   // scanning history like Cancelled or Completed reservations.
   const [viewMode, setViewMode] = useState(() => {
@@ -377,6 +404,32 @@ const Reservations = () => {
   const toggleExpandRow = (resId) => {
     setExpandedRows((prev) => ({ ...prev, [resId]: !prev[resId] }));
   };
+
+
+  // Live KPI counts across all reservations
+  const { activeCount, toPayCount, toPickupCount, preparingCount, completedCount, cancelledCount, archivedCount } = useMemo(() => {
+    let act = 0, pay = 0, pickup = 0, prep = 0, comp = 0, canc = 0;
+    for (const r of reservations) {
+      const s = toDisplayStatus(r.status);
+      if (s === 'Completed') comp++;
+      else if (s === 'Cancelled') canc++;
+      else {
+        act++;
+        if (s === 'To Pay' || s === 'Pending') pay++;
+        else if (s === 'To Pickup') pickup++;
+        else if (s === 'Preparing') prep++;
+      }
+    }
+    return {
+      activeCount: act,
+      toPayCount: pay,
+      toPickupCount: pickup,
+      preparingCount: prep,
+      completedCount: comp,
+      cancelledCount: canc,
+      archivedCount: comp + canc,
+    };
+  }, [reservations]);
 
   const filteredReservations = reservations.map(r => {
     // Normalize status to Sentence Case, mapping legacy states to new ones for display.
@@ -774,7 +827,7 @@ const Reservations = () => {
               id="reservations-search-input"
               name="reservationsSearch"
               type="text"
-              placeholder="Search by ID or customer name..."
+              placeholder={scopeFilter === 'archived' ? "Search archived by ID or customer name..." : "Search active reservations by ID or customer name..."}
               aria-label="Search by reservation ID or customer name"
               autoComplete="off"
               value={searchInput}
