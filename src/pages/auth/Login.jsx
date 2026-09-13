@@ -144,9 +144,7 @@ const Login = () => {
             </button>
           </form>
 
-          <p className="login-footnote">
-            Access strictly monitored. Unrecognized devices require owner approval.
-          </p>
+
         </div>
       </div>
     </div>
