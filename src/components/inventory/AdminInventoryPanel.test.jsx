@@ -96,4 +96,11 @@ describe('AdminInventoryPanel', () => {
     const select = await screen.findByLabelText('Select Product');
     expect(within(select).getByRole('option', { name: 'Ivory Gown' })).toBeInTheDocument();
   });
+  it('provides a parent category filter for subcategories', async () => {
+    renderPanel();
+
+    await screen.findByDisplayValue('Ball Gowns');
+    const filterSelect = screen.getByLabelText('Filter sub-categories by parent category');
+    expect(filterSelect).toBeInTheDocument();
+  });
 });

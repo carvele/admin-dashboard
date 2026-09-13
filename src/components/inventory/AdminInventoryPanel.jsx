@@ -88,6 +88,22 @@ const ErrorDialog = ({ message, onClose }) => (
 );
 
 // ── Main component ────────────────────────────────────────────────────────────
+// Safe thumbnail with fallback for broken or 404 images
+const ThumbnailWithFallback = ({ src }) => {
+  const [hasError, setHasError] = useState(false);
+  if (!src || hasError) {
+    return <div title="No image set" className="aip-thumb-empty" />;
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className="aip-thumb"
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 export default function AdminInventoryPanel({ products, onClose, onProductUpdated }) {
   const [colors, setColors] = useState([]);
   const [patterns, setPatterns] = useState([]);
@@ -101,6 +117,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   // Sub-category add form state
   const [newSubName, setNewSubName] = useState('');
   const [newSubParentId, setNewSubParentId] = useState('');
+  const [subParentFilter, setSubParentFilter] = useState('all');
 
   // Category image upload — id of the category currently mid-upload, or null
   const [uploadingCatId, setUploadingCatId] = useState(null);
@@ -277,11 +294,7 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   // Shared by the top-level list and the subcategory list below.
   const renderImageControl = (cat) => (
     <div className="aip-thumb-wrap">
-      {cat.imageUrl ? (
-        <img src={cat.imageUrl} alt="" className="aip-thumb" />
-      ) : (
-        <div title="No image set" className="aip-thumb-empty" />
-      )}
+      <ThumbnailWithFallback src={cat.imageUrl} />
       <label title="Upload image" className="aip-upload">
         <Upload size={14} />
         <span className="aip-sr-only">Upload image for {cat.name}</span>
@@ -443,14 +456,19 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                 </ul>
               </div>
 
-              {/* Right: Add subcategory (pick parent first) */}
+              {/* Right: Add subcategory & filtered list */}
               <div className="aip-field">
                 <span className="aip-col-title">Sub-Categories</span>
+
+                {/* Add Subcategory Form */}
                 <form onSubmit={handleAddSubCategory} className="aip-add-form-stacked">
                   <select autoComplete="off" id="field_mmntiqy" name="field_mmntiqy"
                     className="input-field"
                     value={newSubParentId}
-                    onChange={(e) => setNewSubParentId(e.target.value)}
+                    onChange={(e) => {
+                      setNewSubParentId(e.target.value);
+                      if (e.target.value) setSubParentFilter(e.target.value);
+                    }}
                     aria-label="Select parent category"
                   >
                     <option value="">Select parent category...</option>
@@ -470,37 +488,66 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                   </div>
                 </form>
 
-                {/* Subcategories list — grouped under each parent */}
+                {/* Parent Filter Selector for List */}
+                <div className="aip-filter-row">
+                  <label className="label" htmlFor="subcat-parent-filter">Filter List by Parent Category:</label>
+                  <select autoComplete="off"
+                    id="subcat-parent-filter"
+                    className="input-field aip-select-filter"
+                    value={subParentFilter}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSubParentFilter(val);
+                      if (val !== 'all') setNewSubParentId(val);
+                    }}
+                    aria-label="Filter sub-categories by parent category"
+                  >
+                    <option value="all">All Categories ({categoryTree.reduce((acc, c) => acc + c.subcategories.length, 0)} subcategories)</option>
+                    {categoryTree.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name} ({cat.subcategories.length} subcategories)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Subcategories list – filtered by chosen parent or grouped all */}
                 <ul className="aip-list">
-                  {categoryTree.every((c) => c.subcategories.length === 0) ? (
-                    <li className="aip-empty">No sub-categories yet</li>
+                  {(subParentFilter === 'all' ? categoryTree : categoryTree.filter((c) => c.id === subParentFilter))
+                    .every((c) => c.subcategories.length === 0) ? (
+                    <li className="aip-empty">
+                      {subParentFilter === 'all'
+                        ? 'No sub-categories yet'
+                        : `No sub-categories under ${categoryTree.find((c) => c.id === subParentFilter)?.name || 'this category'}`}
+                    </li>
                   ) : (
-                    categoryTree.flatMap((cat) =>
-                      cat.subcategories.length === 0 ? [] : [
-                        <li key={`hdr-${cat.id}`} className="aip-group-label">
-                          {cat.name}
-                        </li>,
-                        ...cat.subcategories.map((sub) => (
-                          <li key={sub.id} className="aip-item aip-item-indent">
-                            {renderImageControl(sub)}
-                            <input autoComplete="off" id="field_gen7n1d" name="field_gen7n1d"
-                              defaultValue={sub.name}
-                              className="input-field aip-item-name"
-                              aria-label="Sub-category name"
-                              onBlur={(e) => handleRenameCategory(sub.id, sub.name, e.target.value)}
-                            />
-                            <button
-                              type="button"
-                              className="btn-outline aip-delete"
-                              onClick={() => handleDeleteCategory(sub.id, sub.name, true)}
-                              aria-label={`Delete sub-category ${sub.name}`}
-                            >
-                              Delete
-                            </button>
-                          </li>
-                        )),
-                      ]
-                    )
+                    (subParentFilter === 'all' ? categoryTree : categoryTree.filter((c) => c.id === subParentFilter))
+                      .flatMap((cat) =>
+                        cat.subcategories.length === 0 ? [] : [
+                          <li key={`hdr-${cat.id}`} className="aip-group-label">
+                            {cat.name}
+                          </li>,
+                          ...cat.subcategories.map((sub) => (
+                            <li key={sub.id} className="aip-item aip-item-indent">
+                              {renderImageControl(sub)}
+                              <input autoComplete="off" id={`field_${sub.id}`} name={`field_${sub.id}`}
+                                defaultValue={sub.name}
+                                className="input-field aip-item-name"
+                                aria-label={`Sub-category ${sub.name}`}
+                                onBlur={(e) => handleRenameCategory(sub.id, sub.name, e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="btn-outline aip-delete"
+                                onClick={() => handleDeleteCategory(sub.id, sub.name, true)}
+                                aria-label={`Delete sub-category ${sub.name}`}
+                              >
+                                Delete
+                              </button>
+                            </li>
+                          )),
+                        ]
+                      )
                   )}
                 </ul>
               </div>
