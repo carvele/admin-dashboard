@@ -479,7 +479,6 @@
   border: 1px solid var(--border-color, #efe9db);
   border-radius: 8px;
   padding: 0.75rem 1rem;
-  margin-top: 0.5rem;
   font-size: 0.82rem;
   color: var(--text-secondary, #544b45);
   line-height: 1.45;
@@ -487,4 +486,112 @@
 
 .staff-invite-info-callout p {
   margin: 0;
+}
+
+/* ── Step 2: Credentials Card ────────────────────────────────────────────── */
+.cred-success-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #def7ec;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.credentials-display-box {
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 10px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cred-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cred-field-label {
+  font-weight: 600;
+  color: var(--text-secondary, #544b45);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cred-field-value {
+  color: var(--charcoal, #1f1c18);
+  font-weight: 600;
+}
+
+.cred-portal-link {
+  color: var(--color-gold, #d4af37);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.cred-portal-link:hover {
+  text-decoration: underline;
+}
+
+.cred-password-row {
+  background: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.cred-password-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cred-password-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--charcoal, #1f1c18);
+  padding: 0.15rem 0.5rem;
+  background: var(--beige, #f5eedc);
+  border-radius: 6px;
+}
+
+.cred-icon-action-btn {
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #efe9db);
+  background: var(--white, #ffffff);
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.cred-icon-action-btn:hover {
+  border-color: var(--color-gold, #d4af37);
+  color: var(--charcoal, #1f1c18);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.credentials-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
 }

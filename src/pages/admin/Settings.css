@@ -466,3 +466,165 @@
 
 
 
+
+/* ── Security & Change Password Styles ─────────────────────────────────── */
+.security-overview-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-left: 4px solid var(--color-gold, #d4af37);
+  border-radius: 8px;
+  padding: 1.15rem;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.security-overview-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #fdf8eb;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #926f1a;
+  flex-shrink: 0;
+}
+
+.security-overview-text h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+  margin: 0 0 0.3rem 0;
+}
+
+.security-overview-text p {
+  font-size: 0.83rem;
+  color: var(--text-secondary, #544b45);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.security-form-box {
+  background: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper .input-field {
+  padding-right: 2.75rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #544b45);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--charcoal, #1f1c18);
+}
+
+.password-strength-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.password-strength-meter {
+  width: 100%;
+  height: 5px;
+  background: var(--beige, #f5eedc);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.password-strength-bar {
+  height: 100%;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.password-strength-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.password-guidelines-box {
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-top: 1.25rem;
+}
+
+.guidelines-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #544b45);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.guidelines-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.guidelines-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #544b45);
+  transition: color 0.15s ease;
+}
+
+.guidelines-list li.req-met {
+  color: var(--status-completed-text, #03543f);
+  font-weight: 500;
+}
+
+.req-bullet {
+  color: var(--border-color, #efe9db);
+  font-size: 1rem;
+  line-height: 1;
+  width: 13px;
+  text-align: center;
+}
+
+.security-switch-card {
+  background: var(--cream, #fdfbf7);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  padding: 0.85rem 1.15rem;
+}
