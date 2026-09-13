@@ -52,14 +52,8 @@ import PageHeader from '../../components/PageHeader';
 import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
+import { compareSizes } from '../../utils/sizeOrder';
 import './Inventory.css';
-
-// Garment sizes standard sorting order
-const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-const sizeRank = (s) => {
-  const i = SIZE_ORDER.indexOf(s);
-  return i === -1 ? SIZE_ORDER.length : i;
-};
 
 const TABLE_COLUMNS = 9;
 
@@ -685,7 +679,7 @@ const Inventory = () => {
       }
 
       if (sortConfig.key === 'size') {
-        const diff = sizeRank(a.size) - sizeRank(b.size);
+        const diff = compareSizes(a.size, b.size);
         return sortConfig.direction === 'ascending' ? diff : -diff;
       }
 
@@ -705,7 +699,7 @@ const Inventory = () => {
       // Tie-breaker: Product name -> size -> color
       return (
         (a.item || '').localeCompare(b.item || '') ||
-        sizeRank(a.size) - sizeRank(b.size) ||
+        compareSizes(a.size, b.size) ||
         (a.color || '').localeCompare(b.color || '')
       );
     });
