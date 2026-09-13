@@ -44,7 +44,7 @@ import './ProductForm.css';
 const ProductForm = ({ readOnly = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdminUnlocked } = useAuth();
   const isEditing = Boolean(id);
 
   const [loading, setLoading] = useState(isEditing);
@@ -799,7 +799,7 @@ const ProductForm = ({ readOnly = false }) => {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 product-form-container">
         <fieldset disabled={readOnly} style={readOnly ? { border: 0, padding: 0, margin: 0 } : undefined}>
 
         {/* ══════════════════════════════════════════════
@@ -979,22 +979,24 @@ const ProductForm = ({ readOnly = false }) => {
                   <img src={url} alt={`${formData.name || 'Product'} ${idx + 1}`} className="w-full h-full object-contain" />
                   {idx === 0 && <div className="primary-badge">PRIMARY COVER</div>}
                   
-                  <div className="gallery-overlay">
-                    <div className="flex items-center justify-center gap-2">
-                      <button type="button" onClick={() => moveExistingImage(idx, -1)} disabled={idx === 0} title="Move Left" className="gallery-btn disabled:opacity-30">
-                        <ChevronLeft size={16} />
-                      </button>
-                      <button type="button" onClick={() => setAsPrimary(idx)} disabled={idx === 0} title="Set as Primary" className={`gallery-btn ${idx === 0 ? 'text-yellow-400' : 'text-white'}`}>
-                        <Star size={16} fill={idx === 0 ? "currentColor" : "none"} />
-                      </button>
-                      <button type="button" onClick={() => moveExistingImage(idx, 1)} disabled={idx === formData.images.length - 1} title="Move Right" className="gallery-btn disabled:opacity-30">
-                        <ChevronRight size={16} />
+                  {!readOnly && (
+                    <div className="gallery-overlay">
+                      <div className="flex items-center justify-center gap-2">
+                        <button type="button" onClick={() => moveExistingImage(idx, -1)} disabled={idx === 0} title="Move Left" className="gallery-btn disabled:opacity-30">
+                          <ChevronLeft size={16} />
+                        </button>
+                        <button type="button" onClick={() => setAsPrimary(idx)} disabled={idx === 0} title="Set as Primary" className={`gallery-btn ${idx === 0 ? 'text-yellow-400' : 'text-white'}`}>
+                          <Star size={16} fill={idx === 0 ? "currentColor" : "none"} />
+                        </button>
+                        <button type="button" onClick={() => moveExistingImage(idx, 1)} disabled={idx === formData.images.length - 1} title="Move Right" className="gallery-btn disabled:opacity-30">
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => removeExistingImage(idx)} className="w-full py-1 bg-red-500/80 hover:bg-red-600 rounded text-white text-[9px] font-bold transition-colors uppercase tracking-wider">
+                        Delete Image
                       </button>
                     </div>
-                    <button type="button" onClick={() => removeExistingImage(idx)} className="w-full py-1 bg-red-500/80 hover:bg-red-600 rounded text-white text-[9px] font-bold transition-colors uppercase tracking-wider">
-                      Delete Image
-                    </button>
-                  </div>
+                  )}
                 </div>
               ))}
 
@@ -1008,11 +1010,16 @@ const ProductForm = ({ readOnly = false }) => {
                 </div>
               ))}
 
-              <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer upload-dropzone transition-all">
-                <Upload size={24} className="text-gray-400 mb-2" />
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
-                <input autoComplete="off" id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
-              </label>
+              {!readOnly && (
+                <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer upload-dropzone transition-all">
+                  <Upload size={24} className="text-gray-400 mb-2" />
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
+                  <input autoComplete="off" id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </label>
+              )}
+              {readOnly && formData.images.length === 0 && (
+                <p className="text-secondary text-sm py-4 italic">No gallery images uploaded for this item.</p>
+              )}
            </div>
 
            <div className="mt-6 pt-4 border-t border-dashed flex items-center justify-between">
@@ -1397,22 +1404,40 @@ const ProductForm = ({ readOnly = false }) => {
         </fieldset>
 
         {/* Actions */}
-        <div
-          className="flex justify-end items-center gap-4 pt-4 sticky bottom-0 p-4 border-t z-20"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--border-color)',
-            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-           <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">
-              {readOnly ? 'Back to Catalog' : 'Cancel'}
-           </button>
-           {!readOnly && (
-             <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Processing...' : (isEditing ? 'Update Product' : 'Create Product')}
-             </button>
-           )}
+        <div className="product-actions-bar sticky bottom-0 z-20">
+          <div className="flex justify-between items-center w-full max-w-7xl mx-auto gap-4">
+            <div className="flex items-center gap-3">
+              {formData.styleCode && (
+                <span className="product-sku-pill">
+                  SKU: {formData.styleCode}
+                </span>
+              )}
+              <span className="text-xs font-medium text-secondary hidden sm:inline-block">
+                {readOnly ? 'Viewing Product Details' : isEditing ? 'Editing Product' : 'Creating New Product'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">
+                {readOnly ? 'Back to Catalog' : 'Cancel'}
+              </button>
+              {readOnly ? (
+                isAdminUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/catalog/edit/' + id)}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <Edit2 size={16} /> Edit Product
+                  </button>
+                )
+              ) : (
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving ? 'Processing...' : (isEditing ? 'Update Product' : 'Create Product')}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </form>
 
