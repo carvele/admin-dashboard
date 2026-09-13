@@ -14,6 +14,7 @@ import {
   Calendar,
   Trash2,
   Plus,
+  Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchSettings, fetchStoreHours, fetchStoreClosures, upsertStoreHour, insertStoreClosure, deleteStoreClosure, upsertSettings, requestPasswordReset } from '../../services/settingsService';
@@ -59,6 +60,18 @@ const Settings = () => {
     // Auto Reply Settings
     enableAutoReply: true,
     autoReplyMessage: DEFAULT_AUTO_REPLY_MESSAGE,
+    // Manual Payment Instructions (customer-facing, gates the mobile app's
+    // manual-transfer receipt-upload flow)
+    manualPaymentEnabled: false,
+    paymentGcashEnabled: false,
+    paymentGcashAccountName: '',
+    paymentGcashNumber: '',
+    bankTransferEnabled: false,
+    bankName: '',
+    bankAccountName: '',
+    bankAccountNumber: '',
+    manualPaymentInstructions: '',
+    manualPaymentReferenceInstructions: '',
     // Account (Local update for display name only)
     displayName: '',
   });
@@ -72,6 +85,7 @@ const Settings = () => {
         const settingsRows = await fetchSettings();
         const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
         const autoReply = settingsMap.autoReply || {};
+        const paymentInstructions = settingsMap.paymentInstructions || {};
         setFormData((prev) => ({
           ...prev,
           ...(settingsMap.storeInfo || {}),
@@ -79,6 +93,16 @@ const Settings = () => {
           ...(settingsMap.ar || {}),
           enableAutoReply: autoReply.enabled ?? true,
           autoReplyMessage: autoReply.message || DEFAULT_AUTO_REPLY_MESSAGE,
+          manualPaymentEnabled: paymentInstructions.manual_payment_enabled ?? false,
+          paymentGcashEnabled: paymentInstructions.gcash_enabled ?? false,
+          paymentGcashAccountName: paymentInstructions.gcash_account_name || '',
+          paymentGcashNumber: paymentInstructions.gcash_number || '',
+          bankTransferEnabled: paymentInstructions.bank_transfer_enabled ?? false,
+          bankName: paymentInstructions.bank_name || '',
+          bankAccountName: paymentInstructions.bank_account_name || '',
+          bankAccountNumber: paymentInstructions.bank_account_number || '',
+          manualPaymentInstructions: paymentInstructions.manual_payment_instructions || '',
+          manualPaymentReferenceInstructions: paymentInstructions.manual_payment_reference_instructions || '',
           displayName: user?.name || '',
         }));
 
@@ -227,6 +251,24 @@ const Settings = () => {
             updated_at: now,
           });
           toast.success('Auto-acknowledgment settings saved!');
+        } else if (activeTab === 'payments') {
+          await upsertSettings({
+            key: 'paymentInstructions',
+            value: {
+              manual_payment_enabled: Boolean(formData.manualPaymentEnabled),
+              gcash_enabled: Boolean(formData.paymentGcashEnabled),
+              gcash_account_name: formData.paymentGcashAccountName || '',
+              gcash_number: formData.paymentGcashNumber || '',
+              bank_transfer_enabled: Boolean(formData.bankTransferEnabled),
+              bank_name: formData.bankName || '',
+              bank_account_name: formData.bankAccountName || '',
+              bank_account_number: formData.bankAccountNumber || '',
+              manual_payment_instructions: formData.manualPaymentInstructions || '',
+              manual_payment_reference_instructions: formData.manualPaymentReferenceInstructions || '',
+            },
+            updated_at: now,
+          });
+          toast.success('Payment instructions saved!');
         }
 
       await logAction(user, 'Updated ' + activeTab + ' settings');
@@ -297,6 +339,12 @@ const Settings = () => {
           onClick={() => setActiveTab('reservation')}
         >
           Reservation Rules
+        </button>
+        <button
+          className={`nav-tab ${activeTab === 'payments' ? 'active' : ''}`}
+          onClick={() => setActiveTab('payments')}
+        >
+          Payment Methods
         </button>
         <button
           className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`}
@@ -751,6 +799,154 @@ const Settings = () => {
             </div>
           )}
 
+          {activeTab === 'payments' && (
+            <div className="animate-fade-in max-w-lg">
+              <div className="section-header-icon">
+                <Wallet size={18} className="text-secondary" />
+                <h3 className="section-title mb-0">Manual Payment Instructions</h3>
+              </div>
+              <p className="text-secondary text-sm mb-4">
+                Shown to customers in the mobile app before they submit a manual
+                transfer receipt. Off by default until real account details are
+                entered here.
+              </p>
+
+              <div className="toggle-group mt-4">
+                <div className="toggle-info">
+                  <h4>Enable Manual Payment</h4>
+                  <p>Turn on the &quot;pay by transfer&quot; option in the mobile app.</p>
+                </div>
+                <label className="toggle-switch" aria-label="Toggle manual payment">
+                  <input
+                    type="checkbox"
+                    name="manualPaymentEnabled"
+                    checked={formData.manualPaymentEnabled}
+                    onChange={handleChange}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="toggle-group mt-4">
+                <div className="toggle-info">
+                  <h4>GCash Transfer</h4>
+                  <p>Accept manual GCash transfers.</p>
+                </div>
+                <label className="toggle-switch" aria-label="Toggle GCash transfer">
+                  <input
+                    type="checkbox"
+                    name="paymentGcashEnabled"
+                    checked={formData.paymentGcashEnabled}
+                    onChange={handleChange}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="paymentGcashAccountName">GCash Account Name</label>
+                <input autoComplete="off"
+                  type="text"
+                  id="paymentGcashAccountName"
+                  name="paymentGcashAccountName"
+                  className="input-field"
+                  value={formData.paymentGcashAccountName}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="paymentGcashNumber">GCash Number</label>
+                <input autoComplete="off"
+                  type="text"
+                  id="paymentGcashNumber"
+                  name="paymentGcashNumber"
+                  className="input-field"
+                  value={formData.paymentGcashNumber}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="toggle-group mt-5">
+                <div className="toggle-info">
+                  <h4>Bank Transfer</h4>
+                  <p>Accept manual bank transfers.</p>
+                </div>
+                <label className="toggle-switch" aria-label="Toggle bank transfer">
+                  <input
+                    type="checkbox"
+                    name="bankTransferEnabled"
+                    checked={formData.bankTransferEnabled}
+                    onChange={handleChange}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="bankName">Bank Name</label>
+                <input autoComplete="off"
+                  type="text"
+                  id="bankName"
+                  name="bankName"
+                  className="input-field"
+                  value={formData.bankName}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="bankAccountName">Bank Account Name</label>
+                <input autoComplete="off"
+                  type="text"
+                  id="bankAccountName"
+                  name="bankAccountName"
+                  className="input-field"
+                  value={formData.bankAccountName}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="bankAccountNumber">Bank Account Number</label>
+                <input autoComplete="off"
+                  type="text"
+                  id="bankAccountNumber"
+                  name="bankAccountNumber"
+                  className="input-field"
+                  value={formData.bankAccountNumber}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group mt-5">
+                <label className="label" htmlFor="manualPaymentInstructions">Payment Instructions</label>
+                <textarea
+                  id="manualPaymentInstructions"
+                  name="manualPaymentInstructions"
+                  className="input-field"
+                  rows={3}
+                  value={formData.manualPaymentInstructions}
+                  onChange={handleChange}
+                  placeholder="e.g. Send the exact deposit amount and keep your reference number."
+                />
+              </div>
+
+              <div className="form-group mt-4">
+                <label className="label" htmlFor="manualPaymentReferenceInstructions">Reference Number Instructions</label>
+                <textarea
+                  id="manualPaymentReferenceInstructions"
+                  name="manualPaymentReferenceInstructions"
+                  className="input-field"
+                  rows={2}
+                  value={formData.manualPaymentReferenceInstructions}
+                  onChange={handleChange}
+                  placeholder="e.g. Copy the reference number shown on your GCash receipt."
+                />
+              </div>
+            </div>
+          )}
+
           {activeTab === 'ar' && (
             <div className="animate-fade-in max-w-lg">
               <div className="section-header-icon">
@@ -950,7 +1146,7 @@ const Settings = () => {
             </div>
           )}
 
-          {['boutique', 'reservation', 'ar', 'messaging'].includes(activeTab) && (
+          {['boutique', 'reservation', 'payments', 'ar', 'messaging'].includes(activeTab) && (
             <div className="settings-footer max-w-lg">
               <button type="submit" className="btn-primary" disabled={isLoading}>
                 {isLoading ? (
