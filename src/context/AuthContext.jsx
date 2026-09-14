@@ -325,67 +325,68 @@ export const AuthProvider = ({ children }) => {
       };
       userRef.current = nextUser;
       setUser(nextUser);
-      setIsLoading(false);
 
       // Device registration: a stable, locally-persisted device ID (see
       // getOrCreateDeviceId above), registered through the register_device
-      // RPC -- a real, version-controlled, authorization-scoped function,
-      // replacing an edge function this repo had no source for and that
-      // failed silently (its errors were only ever console.warn'd).
-      (async () => {
-        try {
-          const deviceId = getOrCreateDeviceId();
-          setDeviceFingerprint(deviceId);
+      // RPC -- a real, version-controlled, authorization-scoped function.
+      let currentDeviceStatus = 'approved';
+      try {
+        const deviceId = getOrCreateDeviceId();
+        setDeviceFingerprint(deviceId);
 
-          const { data: deviceRow, error: registerError } = await supabase.rpc('register_device', {
+        const { data: deviceRow, error: registerError } = await withTimeout(
+          supabase.rpc('register_device', {
             _fingerprint: deviceId,
             _user_agent: navigator.userAgent,
-          });
+          }),
+          4000
+        );
 
-          if (registerError) {
-            console.error('Device registration failed:', registerError);
-            setDeviceStatus('error');
-            return;
-          }
-
-          if (deviceRow) {
-            setDeviceData(toCamel(deviceRow));
-            setDeviceStatus(deviceRow.status);
-          }
-
-          // Live device listener -- reflects an admin's approval instantly
-          // via Realtime, without requiring a sign-out/sign-in cycle.
-          clearDeviceChannel();
-          try {
-            const channel = supabase
-              .channel(`device:${supabaseUser.id}:${deviceId}`)
-              .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${deviceId}` },
-                async () => {
-                  const { data } = await supabase
-                    .from('devices')
-                    .select('*')
-                    .eq('fingerprint', deviceId)
-                    .eq('user_id', supabaseUser.id)
-                    .maybeSingle();
-                  if (data) {
-                    const row = toCamel(data);
-                    setDeviceData(row);
-                    setDeviceStatus(row.status);
-                  }
-                },
-              )
-              .subscribe();
-            deviceChannelRef.current = channel;
-          } catch (channelErr) {
-            console.warn('Failed to subscribe to device realtime channel:', channelErr);
-          }
-        } catch (asyncErr) {
-          console.error('Async device check failed:', asyncErr);
+        if (registerError) {
+          console.error('Device registration failed:', registerError);
           setDeviceStatus('error');
+          currentDeviceStatus = 'error';
+        } else if (deviceRow) {
+          setDeviceData(toCamel(deviceRow));
+          setDeviceStatus(deviceRow.status);
+          currentDeviceStatus = deviceRow.status;
         }
-      })();
+
+        // Live device listener -- reflects an admin's approval instantly
+        // via Realtime, without requiring a sign-out/sign-in cycle.
+        clearDeviceChannel();
+        try {
+          const channel = supabase
+            .channel(`device:${supabaseUser.id}:${deviceId}`)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'devices', filter: `fingerprint=eq.${deviceId}` },
+              async () => {
+                const { data } = await supabase
+                  .from('devices')
+                  .select('*')
+                  .eq('fingerprint', deviceId)
+                  .eq('user_id', supabaseUser.id)
+                  .maybeSingle();
+                if (data) {
+                  const row = toCamel(data);
+                  setDeviceData(row);
+                  setDeviceStatus(row.status);
+                }
+              },
+            )
+            .subscribe();
+          deviceChannelRef.current = channel;
+        } catch (channelErr) {
+          console.warn('Failed to subscribe to device realtime channel:', channelErr);
+        }
+      } catch (asyncErr) {
+        console.error('Device check failed or timed out:', asyncErr);
+        setDeviceStatus('error');
+        currentDeviceStatus = 'error';
+      }
+
+      return { role: resolvedRole, deviceStatus: currentDeviceStatus };
     } catch (err) {
       console.error('Auth check failed:', err);
       setDeviceStatus('error');
@@ -628,8 +629,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      await handleDeviceCheck(data.user);
-      toast.success('Welcome back!');
+      const result = await handleDeviceCheck(data.user);
+      const isOwner = result?.role === 'owner' || result?.role === 'Owner';
+      if (!isOwner && result?.deviceStatus === 'revoked') {
+        toast.error('Device access has been revoked.');
+      } else if (!isOwner && result?.deviceStatus === 'pending') {
+        toast.info('Device registered. Awaiting administrator approval.');
+      } else {
+        toast.success('Welcome back!');
+      }
     } catch (error) {
       let message = 'Login failed. Please check your credentials.';
       if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
