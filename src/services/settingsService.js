@@ -59,7 +59,7 @@ export const insertStoreClosure = async (payload) => {
 };
 
 export const deleteStoreClosure = async (id) => {
-  const { error } = await supabase.from("store_closures").delete().eq("id", id);
+  const { error } = await supabase.from("store_closures").delete().eq("closure_date", id);
   if (error) {
     errorReporting.capture(error, { domain: "settings", operation: "deleteStoreClosure" });
     throw error;

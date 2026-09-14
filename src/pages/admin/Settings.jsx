@@ -209,7 +209,7 @@ const Settings = () => {
     setIsLoading(true);
     try {
       await deleteStoreClosure(id);
-      setClosures(prev => prev.filter(c => c.id !== id));
+      setClosures(prev => prev.filter(c => c.closure_date !== id));
       toast.success('Shop closure removed!');
       await logAction(user, 'Removed shop closure date');
     } catch (err) {
@@ -768,7 +768,7 @@ const Settings = () => {
                           <button
                             type="button"
                             className="btn-outline small text-danger"
-                            onClick={() => handleDeleteClosure(c.id)}
+                            onClick={() => handleDeleteClosure(c.closure_date)}
                             disabled={isLoading}
                           >
                             <Trash2 size={14} /> Remove
