@@ -1554,7 +1554,6 @@ const Inventory = () => {
                   onChange={(e) => setRestockQty(e.target.value)}
                   required
                   disabled={isAdjusting || (adjustMode === 'remove' && restockModal.available <= 0)}
-                  style={{ MozAppearance: 'textfield', appearance: 'textfield' }}
                 />
                 {adjustMode === 'remove' && (
                   <small className="text-secondary" style={{ display: 'block', marginTop: '0.25rem' }}>
