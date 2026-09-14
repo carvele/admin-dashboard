@@ -368,6 +368,13 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* Hide native Edge / IE password reveal and clear buttons
+   to prevent duplicate eye icons when a custom reveal toggle is present */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 .label {
   display: block;
   font-size: 0.875rem;

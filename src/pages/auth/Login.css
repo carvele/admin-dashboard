@@ -161,6 +161,10 @@
   padding-right: 3rem;
   width: 100%;
 }
+.password-wrapper input::-ms-reveal,
+.password-wrapper input::-ms-clear {
+  display: none;
+}
 
 .login-form .input-field:-webkit-autofill,
 .login-form .input-field:-webkit-autofill:hover,

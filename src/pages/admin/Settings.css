@@ -525,6 +525,10 @@
 .password-input-wrapper .input-field {
   padding-right: 2.75rem;
 }
+.password-input-wrapper input::-ms-reveal,
+.password-input-wrapper input::-ms-clear {
+  display: none;
+}
 
 .password-toggle-btn {
   position: absolute;
