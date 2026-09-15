@@ -10,7 +10,6 @@ import {
   Shield,
   ShieldCheck,
   Search,
-  Trash2,
   Crown,
   Eye,
   ShieldAlert,
@@ -469,7 +468,7 @@ const StaffManagement = () => {
                   title="Archive Staff Member"
                   aria-label="Archive Staff Member"
                 >
-                  <Trash2 size={16} />
+                  <UserMinus size={16} />
                 </button>
               )}
             </div>

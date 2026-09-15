@@ -58,6 +58,12 @@ class ErrorBoundary extends React.Component {
     }
   }
 
+  componentDidUpdate(prevProps) {
+    if (this.state.hasError && this.props.resetKey !== prevProps.resetKey) {
+      this.setState({ hasError: false, error: null, isChunkError: false, autoRetryCount: 0 });
+    }
+  }
+
   // Attempt in-place recovery: reset state so Suspense re-tries the lazy import.
   _handleReset() {
     if (this.state.isChunkError || isChunkLoadError(this.state.error)) {
