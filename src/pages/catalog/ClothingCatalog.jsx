@@ -2,7 +2,26 @@
  
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Tag as TagIcon, Edit, Archive, ArchiveRestore, Sparkles, Star, Flame, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Tag as TagIcon,
+  Edit,
+  Archive,
+  ArchiveRestore,
+  Sparkles,
+  Star,
+  Flame,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  RotateCcw,
+  Layers,
+  Shirt,
+  Palette,
+  Package,
+  ArrowUpDown,
+} from 'lucide-react';
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -30,6 +49,7 @@ const ClothingCatalog = () => {
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]);
   // subcatName → parentName map (e.g. 'Sneakers' → 'Footwear', 'Boots' → 'Footwear')
   // Used so the catalog filter works whether products.category stores a parent
   // name ('Footwear') or a subcategory name ('Sneakers' / 'Boots').
@@ -100,6 +120,7 @@ const ClothingCatalog = () => {
     const fetchCategories = async () => {
       try {
         const cats = await getCategories();
+        setCategoryTree(cats || []);
         setDbCategories((cats || []).map((c) => c.name));
         // Build subcategory → parent name lookup
         const map = {};
@@ -113,6 +134,7 @@ const ClothingCatalog = () => {
         setSubcatToParent(map);
       } catch (err) {
         Logger.error('Failed to load categories for filter dropdown', err);
+        setCategoryTree([]);
         setDbCategories([]);
       }
     };
@@ -121,15 +143,100 @@ const ClothingCatalog = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [archiveConfirm, setArchiveConfirm] = useState(null);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
+  const [activeType, setActiveType] = useState('All');
   const [activeColor, setActiveColor] = useState('All Colors');
+  const [activeStock, setActiveStock] = useState('all');
   const [activeTag, setActiveTag] = useState('All Tags');
   const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
 
   const categories = ['All', ...dbCategories];
-    // Dynamically compute all tags used across products + standard presets
+
+  // Dynamically compute all available product types (subcategories)
+  const availableTypes = React.useMemo(() => {
+    if (activeCategory !== 'All') {
+      const selectedParent = categoryTree.find(
+        (c) => c.name.toLowerCase() === activeCategory.toLowerCase()
+      );
+      const types = new Set();
+      if (selectedParent) {
+        (selectedParent.subcategories || []).forEach((sub) => {
+          if (sub.name) types.add(sub.name);
+        });
+      }
+      // Collect any custom subCategory on products belonging to this category
+      (catalog || []).forEach((p) => {
+        const effectiveParent = subcatToParent[p.category] || p.category || '';
+        if (effectiveParent.toLowerCase() === activeCategory.toLowerCase()) {
+          const sub = p.subCategory || p.sub_category;
+          if (sub && typeof sub === 'string' && sub.trim()) {
+            types.add(sub.trim());
+          }
+        }
+      });
+      return Array.from(types).sort((a, b) => a.localeCompare(b));
+    }
+
+    // When All Categories is selected, group subcategories by parent category
+    const grouped = [];
+    const seenTypes = new Set();
+
+    categoryTree.forEach((cat) => {
+      const catTypes = (cat.subcategories || [])
+        .map((s) => s.name)
+        .filter(Boolean);
+      catTypes.forEach((t) => seenTypes.add(t.toLowerCase()));
+      if (catTypes.length > 0) {
+        grouped.push({
+          category: cat.name,
+          types: catTypes.sort((a, b) => a.localeCompare(b)),
+        });
+      }
+    });
+
+    // Also include any orphan product types not present in categoryTree
+    const orphanTypes = [];
+    (catalog || []).forEach((p) => {
+      const sub = p.subCategory || p.sub_category;
+      if (sub && typeof sub === 'string' && sub.trim() && !seenTypes.has(sub.trim().toLowerCase())) {
+        orphanTypes.push(sub.trim());
+        seenTypes.add(sub.trim().toLowerCase());
+      }
+    });
+    if (orphanTypes.length > 0) {
+      grouped.push({
+        category: 'Other Types',
+        types: orphanTypes.sort((a, b) => a.localeCompare(b)),
+      });
+    }
+
+    return grouped;
+  }, [activeCategory, categoryTree, catalog, subcatToParent]);
+
+  const handleCategoryChange = (newCat) => {
+    setActiveCategory(newCat);
+    if (activeType !== 'All' && newCat !== 'All') {
+      const parent = subcatToParent[activeType];
+      if (parent && parent.toLowerCase() !== newCat.toLowerCase()) {
+        setActiveType('All');
+      }
+    }
+  };
+
+  const handleTypeChange = (newType) => {
+    setActiveType(newType);
+    if (newType !== 'All' && activeCategory === 'All') {
+      const parent = subcatToParent[newType];
+      if (parent) {
+        setActiveCategory(parent);
+      }
+    }
+  };
+
+  const [archiveConfirm, setArchiveConfirm] = useState(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [selectedProductForReviews, setSelectedProductForReviews] = useState(null);
+
+  // Dynamically compute all tags used across products + standard presets
   const availableTags = React.useMemo(() => {
     const set = new Set(['AR Try-On', 'New Arrival', 'Limited Edition', 'Sale']);
     (catalog || []).forEach((p) => {
@@ -170,27 +277,56 @@ const ClothingCatalog = () => {
     if (viewMode === 'active' && isArchived) return false;
     if (viewMode === 'archived' && !isArchived) return false;
 
-    const matchesSearch = (item.name || '')
-      .toLowerCase()
-      .includes((searchTerm || '').toLowerCase());
+    const q = (searchTerm || '').trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      (item.name || '').toLowerCase().includes(q) ||
+      (item.styleCode || '').toLowerCase().includes(q) ||
+      (item.subCategory || item.sub_category || '').toLowerCase().includes(q) ||
+      (item.category || '').toLowerCase().includes(q) ||
+      (item.description || '').toLowerCase().includes(q);
 
     // Resolve the product's effective parent category.
     // products.category may hold either a parent name ('Footwear') or a
     // subcategory name ('Sneakers'/'Boots'). Resolve both via the lookup map.
     const effectiveParentCat = subcatToParent[item.category] || item.category || '';
-    const matchesCat = activeCategory === 'All' || effectiveParentCat === activeCategory;
+    const matchesCat =
+      activeCategory === 'All' ||
+      effectiveParentCat.toLowerCase() === activeCategory.toLowerCase();
+
+    // Type / Subcategory match
+    const itemSub = (item.subCategory || item.sub_category || '').trim();
+    const itemCat = (item.category || '').trim();
+    const matchesType =
+      activeType === 'All' ||
+      (itemSub && itemSub.toLowerCase() === activeType.toLowerCase()) ||
+      (itemCat && itemCat.toLowerCase() === activeType.toLowerCase());
 
     // A product can have several colours (comma-joined in `color`); match if the
     // selected colour is any of them. Fall back to baseColor for legacy rows.
     const itemColors = item.color
       ? String(item.color).split(',').map((c) => c.trim()).filter(Boolean)
       : (item.baseColor ? [item.baseColor] : []);
-    const matchesColor = activeColor === 'All Colors' || itemColors.includes(activeColor);
+    const matchesColor =
+      activeColor === 'All Colors' ||
+      itemColors.some((c) => c.toLowerCase() === activeColor.toLowerCase());
+
+    // Stock Status match
+    const invData = inventoryMap[item.docId] || inventoryMap[item.id];
+    const availableStock = invData ? invData.available : (Number(item.stock) || 0);
+    let matchesStock = true;
+    if (activeStock === 'in-stock') {
+      matchesStock = availableStock > 5;
+    } else if (activeStock === 'low-stock') {
+      matchesStock = availableStock > 0 && availableStock <= 5;
+    } else if (activeStock === 'out-of-stock') {
+      matchesStock = availableStock === 0;
+    }
 
     const itemTags = item.tags || [];
     const matchesTag = activeTag === 'All Tags' || itemTags.includes(activeTag);
 
-    return matchesSearch && matchesCat && matchesColor && matchesTag;
+    return matchesSearch && matchesCat && matchesType && matchesColor && matchesStock && matchesTag;
   });
 
   const [sortBy, setSortBy] = useState('newest');
@@ -243,12 +379,14 @@ const ClothingCatalog = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, activeCategory, activeColor, activeTag, sortBy, viewMode, pageSize]);
+  }, [searchTerm, activeCategory, activeType, activeColor, activeStock, activeTag, sortBy, viewMode, pageSize]);
 
   const hasActiveFilters = Boolean(
     searchTerm.trim() ||
     activeCategory !== 'All' ||
+    activeType !== 'All' ||
     activeColor !== 'All Colors' ||
+    activeStock !== 'all' ||
     activeTag !== 'All Tags' ||
     sortBy !== 'newest'
   );
@@ -256,7 +394,9 @@ const ClothingCatalog = () => {
   const resetAllFilters = () => {
     setSearchTerm('');
     setActiveCategory('All');
+    setActiveType('All');
     setActiveColor('All Colors');
+    setActiveStock('all');
     setActiveTag('All Tags');
     setSortBy('newest');
     setPage(0);
@@ -353,82 +493,190 @@ const ClothingCatalog = () => {
       />
 
       <div className="catalog-toolbar card">
-        <div className="catalog-toolbar-actions" style={{ width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
+        {/* Tier 1: Scope toggle (Active/Archived) and Result Count */}
+        <div className="catalog-toolbar-header">
           {isAdminUnlocked && (
-            <div className="archive-toggle-tabs" style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
+            <div className="archive-toggle-tabs" role="tablist" aria-label="Catalog View Mode">
               <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'active'}
                 className={`archive-toggle-btn ${viewMode === 'active' ? 'active' : ''}`}
                 onClick={() => setViewMode('active')}
-                style={{ margin: 0 }}
               >
-                Active ({catalog.filter(c => !c.deleted).length})
+                Active ({catalog.filter((c) => !c.deleted).length})
               </button>
               <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'archived'}
                 className={`archive-toggle-btn ${viewMode === 'archived' ? 'active' : ''}`}
                 onClick={() => setViewMode('archived')}
-                style={{ margin: 0 }}
               >
-                <Archive size={14} /> Archived ({catalog.filter(c => c.deleted).length})
+                <Archive size={14} /> Archived ({catalog.filter((c) => c.deleted).length})
               </button>
             </div>
           )}
-          
-          <div className="search-box">
-            <Search size={18} className="search-icon" />
+
+          <div className="catalog-header-meta">
+            <span className="catalog-results-badge">
+              Showing <strong>{filteredCatalog.length}</strong> {filteredCatalog.length === 1 ? 'product' : 'products'}
+            </span>
+          </div>
+        </div>
+
+        {/* Tier 2: Search Box & Filter Controls */}
+        <div className="catalog-toolbar-filter-grid">
+          {/* Search Box with Search icon & Instant Clear */}
+          <div className="catalog-search-wrapper">
+            <Search size={16} className="search-icon" />
             <input
               id="catalog-search-input"
               name="catalogSearch"
               type="text"
-              placeholder="Search products..."
+              placeholder="Search by name, style, or SKU..."
               aria-label="Search products"
               autoComplete="off"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
+              className="input-field catalog-search-input"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                className="catalog-search-clear"
+                onClick={() => setSearchTerm('')}
+                aria-label="Clear search query"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          
-          <div className="category-filter">
-            <select autoComplete="off" id="field_4tpd2un" name="field_4tpd2un"
-              className="input-field"
+
+          {/* Category Dropdown (All Categories) */}
+          <div className="catalog-filter-field" title="Filter by category">
+            <Layers size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-category-select"
+              name="catalogCategory"
+              className="input-field catalog-select"
               value={activeCategory}
-              onChange={(e) => setActiveCategory(e.target.value)}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              aria-label="Filter by category"
             >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+              <option value="All">All Categories</option>
+              {dbCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
           </div>
 
-          <div className="color-filter">
-            <select autoComplete="off" id="field_bn95249" name="field_bn95249"
-              className="input-field"
+          {/* Product Type Dropdown (All Types - includes all subcategories / types) */}
+          <div className="catalog-filter-field" title="Filter by product type">
+            <Shirt size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-type-select"
+              name="catalogType"
+              className="input-field catalog-select"
+              value={activeType}
+              onChange={(e) => handleTypeChange(e.target.value)}
+              aria-label="Filter by product type"
+            >
+              <option value="All">
+                {activeCategory === 'All' ? 'All Types' : `All ${activeCategory} Types`}
+              </option>
+              {activeCategory === 'All'
+                ? availableTypes.map((group) => (
+                    <optgroup key={group.category} label={group.category}>
+                      {group.types.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                : availableTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+            </select>
+          </div>
+
+          {/* Color Dropdown */}
+          <div className="catalog-filter-field" title="Filter by color">
+            <Palette size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-color-select"
+              name="catalogColor"
+              className="input-field catalog-select"
               value={activeColor}
               onChange={(e) => setActiveColor(e.target.value)}
+              aria-label="Filter by color"
             >
               <option value="All Colors">All Colors</option>
-              {COLOR_CATEGORIES.map(c => (
-                <option key={c} value={c}>{c}</option>
+              {COLOR_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
 
-          <div className="tag-filter">
-            <select autoComplete="off" id="field_yihdvkv" name="field_yihdvkv"
-              className="input-field"
+          {/* Stock Status Dropdown */}
+          <div className="catalog-filter-field" title="Filter by stock status">
+            <Package size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-stock-select"
+              name="catalogStock"
+              className="input-field catalog-select"
+              value={activeStock}
+              onChange={(e) => setActiveStock(e.target.value)}
+              aria-label="Filter by stock status"
+            >
+              <option value="all">All Stock Status</option>
+              <option value="in-stock">In Stock (&gt;5)</option>
+              <option value="low-stock">Low Stock (1–5)</option>
+              <option value="out-of-stock">Out of Stock (0)</option>
+            </select>
+          </div>
+
+          {/* Tags Dropdown */}
+          <div className="catalog-filter-field" title="Filter by tag">
+            <Sparkles size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-tag-select"
+              name="catalogTag"
+              className="input-field catalog-select"
               value={activeTag}
               onChange={(e) => setActiveTag(e.target.value)}
+              aria-label="Filter by tags"
             >
               <option value="All Tags">All Tags</option>
-              {availableTags.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {availableTags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
 
-          <div className="sort-filter">
-            <select autoComplete="off" id="catalog-sort-select" name="catalogSort"
-              className="input-field"
+          {/* Sort By Dropdown */}
+          <div className="catalog-filter-field" title="Sort products">
+            <ArrowUpDown size={14} className="filter-field-icon" />
+            <select
+              autoComplete="off"
+              id="catalog-sort-select"
+              name="catalogSort"
+              className="input-field catalog-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               aria-label="Sort products by"
@@ -442,19 +690,125 @@ const ClothingCatalog = () => {
               <option value="stock-high">Sort: Stock (High → Low)</option>
             </select>
           </div>
-
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={resetAllFilters}
-              className="clear-filters-btn flex-center gap-1"
-              title="Clear all search and filter conditions"
-              aria-label="Clear all filters"
-            >
-              <X size={14} /> Clear
-            </button>
-          )}
         </div>
+
+        {/* Tier 3: Active Filters & Quick Clear Row */}
+        {hasActiveFilters && (
+          <div className="catalog-active-filters-row">
+            <span className="active-filters-label">Active filters:</span>
+            <div className="active-filter-chips">
+              {searchTerm.trim() && (
+                <span className="active-filter-chip">
+                  Search: &ldquo;{searchTerm}&rdquo;
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    aria-label="Remove search filter"
+                    title="Remove search"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {activeCategory !== 'All' && (
+                <span className="active-filter-chip">
+                  Category: {activeCategory}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveCategory('All');
+                      setActiveType('All');
+                    }}
+                    aria-label="Remove category filter"
+                    title="Remove category"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {activeType !== 'All' && (
+                <span className="active-filter-chip">
+                  Type: {activeType}
+                  <button
+                    type="button"
+                    onClick={() => setActiveType('All')}
+                    aria-label="Remove type filter"
+                    title="Remove type"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {activeColor !== 'All Colors' && (
+                <span className="active-filter-chip">
+                  Color: {activeColor}
+                  <button
+                    type="button"
+                    onClick={() => setActiveColor('All Colors')}
+                    aria-label="Remove color filter"
+                    title="Remove color"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {activeStock !== 'all' && (
+                <span className="active-filter-chip">
+                  Stock: {activeStock === 'in-stock' ? 'In Stock' : activeStock === 'low-stock' ? 'Low Stock' : 'Out of Stock'}
+                  <button
+                    type="button"
+                    onClick={() => setActiveStock('all')}
+                    aria-label="Remove stock filter"
+                    title="Remove stock filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {activeTag !== 'All Tags' && (
+                <span className="active-filter-chip">
+                  Tag: {activeTag}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTag('All Tags')}
+                    aria-label="Remove tag filter"
+                    title="Remove tag"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+              {sortBy !== 'newest' && (
+                <span className="active-filter-chip">
+                  Sort: {
+                    sortBy === 'price-asc' ? 'Price: Low → High' :
+                    sortBy === 'price-desc' ? 'Price: High → Low' :
+                    sortBy === 'name-asc' ? 'Name: A → Z' :
+                    sortBy === 'name-desc' ? 'Name: Z → A' :
+                    sortBy === 'stock-low' ? 'Stock: Low → High' : 'Stock: High → Low'
+                  }
+                  <button
+                    type="button"
+                    onClick={() => setSortBy('newest')}
+                    aria-label="Reset sort"
+                    title="Reset sort"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="clear-all-chip-btn"
+                title="Reset all filters to default"
+              >
+                <RotateCcw size={12} /> Reset all
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="catalog-grid-display">
@@ -709,22 +1063,33 @@ const ClothingCatalog = () => {
             <div style={{ opacity: 0.3, marginBottom: '0.5rem' }}>
               <TagIcon size={48} />
             </div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Your Catalog Is Empty</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+              {hasActiveFilters ? 'No Products Match Your Filters' : 'Your Catalog Is Empty'}
+            </h3>
             <p
               className="text-secondary text-center"
               style={{ maxWidth: '360px', fontSize: '0.85rem' }}
             >
-              Add your first product to start building your boutique catalog. Products will be
-              available for reservations and inventory tracking.
+              {hasActiveFilters
+                ? 'Try adjusting or clearing your search terms and filter criteria to see matching products.'
+                : 'Add your first product to start building your boutique catalog. Products will be available for reservations and inventory tracking.'}
             </p>
-            {isAdminUnlocked && (
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                className="btn-outline mt-3 flex-center gap-2"
+                onClick={resetAllFilters}
+              >
+                <RotateCcw size={16} /> Reset All Filters
+              </button>
+            ) : isAdminUnlocked ? (
               <button
                 className="btn-primary mt-3 flex-center gap-2"
                 onClick={() => navigate('/catalog/new')}
               >
                 <Plus size={16} /> Add First Product
               </button>
-            )}
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -6,63 +6,261 @@
 
 .catalog-toolbar {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--spacing-md, 12px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.catalog-toolbar-header {
+  display: flex;
   align-items: center;
-  gap: 1.5rem;
+  justify-content: space-between;
   flex-wrap: wrap;
-  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.archive-toggle-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: var(--cream);
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.catalog-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+}
+
+.catalog-results-badge {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.catalog-results-badge strong {
+  color: var(--charcoal);
+  font-weight: 600;
+}
+
+.catalog-toolbar-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+.catalog-search-wrapper {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.catalog-search-wrapper .search-icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.catalog-search-input {
+  width: 100%;
+  padding-left: 2.35rem !important;
+  padding-right: 2.2rem !important;
+  height: 40px;
+  font-size: 0.875rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--cream);
+  transition: all 0.2s ease;
+}
+
+.catalog-search-input:focus {
+  background-color: var(--white);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.catalog-search-clear {
+  position: absolute;
+  right: 0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.15s;
+}
+
+.catalog-search-clear:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--charcoal);
+}
+
+.catalog-filter-field {
+  position: relative;
+  flex: 1 1 140px;
+  min-width: 135px;
+}
+
+.catalog-filter-field .filter-field-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.catalog-select {
+  height: 40px;
+  padding-left: 2.15rem !important;
+  padding-right: 1.75rem !important;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--cream);
+  color: var(--charcoal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.catalog-select:hover {
+  border-color: var(--accent);
   background-color: var(--white);
 }
 
-.cat-filters {
+.catalog-select:focus {
+  border-color: var(--accent);
+  background-color: var(--white);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.catalog-select optgroup {
+  font-weight: 700;
+  color: var(--charcoal);
+  background-color: var(--cream);
+}
+
+.catalog-select option {
+  font-weight: 400;
+  color: var(--charcoal);
+  background-color: var(--white);
+}
+
+/* Active Filters Row */
+.catalog-active-filters-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.625rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.active-filters-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.active-filter-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  flex: 1 1 auto;
-  min-width: 0;
+  gap: 0.375rem;
 }
-.cat-btn {
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background-color: var(--cream);
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  color: var(--charcoal);
+}
+
+.active-filter-chip button {
+  background: transparent;
+  border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.25rem;
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
+  padding: 1px;
   color: var(--text-secondary);
-  border-radius: 20px;
-  background-color: var(--cream);
-  transition: all 0.2s;
-}
-.cat-btn:hover {
-  background-color: var(--beige);
-  color: var(--charcoal);
-}
-.cat-btn.active {
-  background-color: var(--charcoal);
-  color: var(--white);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.15s;
 }
 
-/* Search + colour filter grouped together, opposite the category pills.
-   Stays on one line and does not stretch apart (fixes the crammed / dead-space
-   layout from the old 3-way justify-content: space-between). */
-.catalog-toolbar-actions {
-  display: flex;
+.active-filter-chip button:hover {
+  color: var(--color-danger, #ef4444);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.clear-all-chip-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--color-danger, #ef4444);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
-.catalog-toolbar-actions .search-box {
-  flex: 1 1 200px;
-  min-width: 180px;
+
+.clear-all-chip-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-danger, #ef4444);
 }
-.color-filter select {
-  width: auto;
-  min-width: 150px;
+
+@media (max-width: 768px) {
+  .catalog-toolbar-filter-grid {
+    gap: 0.5rem;
+  }
+  .catalog-search-wrapper {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .catalog-filter-field {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 130px;
+  }
+  .catalog-header-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .catalog-grid-display {
