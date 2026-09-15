@@ -355,7 +355,8 @@ const Analytics = () => {
               change={cashDelta.text}
               trend={cashDelta.trend}
               icon={TrendingUp}
-              tooltip="Sum of paid transactions in the reporting period."
+              tooltip="Sum of paid transactions in the reporting period. Click to view Reservations."
+              drilldownTo="/reservations"
             />
             <StatCard
               title="Completed Booking Value"
@@ -420,7 +421,8 @@ const Analytics = () => {
               change={`${overview.customer_satisfaction?.review_count || 0} verified reviews`}
               trend="up"
               icon={Activity}
-              tooltip="Average star rating across verified product reviews."
+              tooltip="Average star rating across verified product reviews. Click to review in Reviews."
+              drilldownTo="/reviews"
             />
           </div>
         </>
@@ -533,8 +535,10 @@ const Analytics = () => {
           <div className="flex-center flex-column gap-6 p-6">
             <div className="grid grid-cols-3 gap-4 w-full text-center">
               <div>
-                <div className="stat-value small text-success">{invHealth?.in_stock_variants || 0}</div>
-                <div className="text-xs text-secondary font-bold uppercase tracking-wider">In Stock</div>
+                <Link to="/inventory" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="stat-value small text-success cursor-pointer hover:underline">{invHealth?.in_stock_variants || 0}</div>
+                  <div className="text-xs text-secondary font-bold uppercase tracking-wider">In Stock</div>
+                </Link>
               </div>
               <div>
                 <Link to="/inventory?stock=low" style={{ textDecoration: 'none', color: 'inherit' }}>
