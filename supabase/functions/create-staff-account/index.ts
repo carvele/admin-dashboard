@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
       let profileCleanup = 'not_attempted';
       let authCleanup = 'not_attempted';
       try {
+        await adminClient.from('staff_status_history').delete().eq('staff_id', createdUserId);
         const { error: pErr } = await adminClient.from('profiles').delete().eq('id', createdUserId);
         profileCleanup = pErr ? `failed: ${pErr.message}` : 'success';
       } catch (e: unknown) {
