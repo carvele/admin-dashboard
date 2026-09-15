@@ -18,6 +18,7 @@ export const getAvatarColor = (name) => {
 // Handles all name field variations from Firestore docs
 export const getUserDisplayName = (user) => {
   if (!user) return 'User';
+  if (user.full_name) return user.full_name;
   if (user.name) return user.name;
   if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
   if (user.firstName) return user.firstName;

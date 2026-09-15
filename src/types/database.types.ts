@@ -3080,6 +3080,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_dashboard_operations: {
+        Args: {
+          p_today_date?: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       get_cashflow_analytics: {
         Args: {
           p_end_date_exclusive: string
@@ -3172,11 +3179,23 @@ export type Database = {
         }[]
       }
       get_public_store_setting: { Args: { setting_key: string }; Returns: Json }
+      get_recent_dashboard_activity: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: Json
+      }
       get_reservation_analytics: {
         Args: {
           p_end_date_exclusive: string
           p_start_date: string
           p_timezone?: string
+        }
+        Returns: Json
+      }
+      get_top_inventory_alerts: {
+        Args: {
+          p_limit?: number
         }
         Returns: Json
       }
