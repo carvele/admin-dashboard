@@ -155,24 +155,10 @@ export const updateStaffRole = async (targetUserId, newRole) => {
  * Dispatches via the server-authoritative resend-staff-invite Edge Function.
  */
 export const resendStaffInvite = async (staffUserId) => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token;
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-staff-invite`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ staffUserId }),
-    },
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to resend staff invitation');
+  const { data, error } = await supabase.functions.invoke('resend-staff-invite', {
+    body: { staffUserId },
+  });
+  if (error) throw new Error(error.message || 'Failed to resend staff invitation');
   return data;
 };
 

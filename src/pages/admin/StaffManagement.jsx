@@ -147,26 +147,14 @@ const StaffManagement = () => {
     e.preventDefault();
     setCreating(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-staff-account`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: createForm.email.toLowerCase().trim(),
-            role: 'staff',
-          }),
+      const { data: result, error: invokeError } = await supabase.functions.invoke('create-staff-account', {
+        body: {
+          email: createForm.email.toLowerCase().trim(),
+          role: 'staff',
         },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        toast.error(result.error || 'Failed to create staff account');
+      });
+      if (invokeError) {
+        toast.error(invokeError.message || 'Failed to create staff account');
         return;
       }
 
