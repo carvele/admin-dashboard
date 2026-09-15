@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_product_style_codes_20260915: {
+        Row: {
+          new_style_code: string | null
+          old_style_code: string | null
+          product_id: string
+          remediated_at: string | null
+        }
+        Insert: {
+          new_style_code?: string | null
+          old_style_code?: string | null
+          product_id: string
+          remediated_at?: string | null
+        }
+        Update: {
+          new_style_code?: string | null
+          old_style_code?: string | null
+          product_id?: string
+          remediated_at?: string | null
+        }
+        Relationships: []
+      }
+      _backup_sku_remediation_20260915: {
+        Row: {
+          inventory_id: string
+          new_sku: string | null
+          new_variant_sku: string | null
+          old_sku: string | null
+          old_variant_sku: string | null
+          product_id: string | null
+          remediated_at: string | null
+        }
+        Insert: {
+          inventory_id: string
+          new_sku?: string | null
+          new_variant_sku?: string | null
+          old_sku?: string | null
+          old_variant_sku?: string | null
+          product_id?: string | null
+          remediated_at?: string | null
+        }
+        Update: {
+          inventory_id?: string
+          new_sku?: string | null
+          new_variant_sku?: string | null
+          old_sku?: string | null
+          old_variant_sku?: string | null
+          product_id?: string | null
+          remediated_at?: string | null
+        }
+        Relationships: []
+      }
       account_deletion_requests: {
         Row: {
           created_at: string
@@ -1892,6 +1943,7 @@ export type Database = {
           balance_submission_id: string | null
           cancellation_reason: string | null
           color: string | null
+          completed_at: string | null
           confirmed_at: string | null
           confirmed_by_id: string | null
           confirmed_by_name: string | null
@@ -1956,6 +2008,7 @@ export type Database = {
           balance_submission_id?: string | null
           cancellation_reason?: string | null
           color?: string | null
+          completed_at?: string | null
           confirmed_at?: string | null
           confirmed_by_id?: string | null
           confirmed_by_name?: string | null
@@ -2020,6 +2073,7 @@ export type Database = {
           balance_submission_id?: string | null
           cancellation_reason?: string | null
           color?: string | null
+          completed_at?: string | null
           confirmed_at?: string | null
           confirmed_by_id?: string | null
           confirmed_by_name?: string | null
@@ -2844,6 +2898,7 @@ export type Database = {
         }
         Returns: Json
       }
+      assert_analytics_access: { Args: { p_uid: string }; Returns: undefined }
       assert_bookable_slot: {
         Args: {
           _appointment: string
@@ -3017,6 +3072,30 @@ export type Database = {
           reservation_id: string
         }[]
       }
+      get_analytics_overview: {
+        Args: {
+          p_end_date_exclusive: string
+          p_start_date: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
+      get_cashflow_analytics: {
+        Args: {
+          p_end_date_exclusive: string
+          p_start_date: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
+      get_customer_cohort_analytics: {
+        Args: {
+          p_end_date_exclusive: string
+          p_start_date: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       get_customer_measurements_for_staff: {
         Args: { _customer_id: string }
         Returns: Json
@@ -3033,6 +3112,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_inventory_health_analytics: { Args: never; Returns: Json }
       get_most_wishlisted_products: {
         Args: never
         Returns: {
@@ -3064,6 +3144,14 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_product_performance_analytics: {
+        Args: {
+          p_end_date_exclusive: string
+          p_start_date: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       get_public_outfits_for_product: {
         Args: { p_product_id: string }
         Returns: {
@@ -3084,6 +3172,14 @@ export type Database = {
         }[]
       }
       get_public_store_setting: { Args: { setting_key: string }; Returns: Json }
+      get_reservation_analytics: {
+        Args: {
+          p_end_date_exclusive: string
+          p_start_date: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       get_review_filter_facets: {
         Args: { p_product_id: string }
         Returns: Json
@@ -3219,6 +3315,7 @@ export type Database = {
       is_device_approved: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       is_staff_or_admin: { Args: never; Returns: boolean }
+      low_stock_threshold: { Args: never; Returns: number }
       mark_direct_message_read: {
         Args: { p_message_id: string }
         Returns: undefined
