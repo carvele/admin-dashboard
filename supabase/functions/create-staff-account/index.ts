@@ -197,9 +197,9 @@ Deno.serve(async (req) => {
       metaSynced = false;
     }
 
-    // 4. Strict profile INSERT & saga compensation
+    // 4. Strict profile UPSERT & saga compensation
     const nowIso = new Date().toISOString();
-    const { error: profileInsertError } = await adminClient.from('profiles').insert({
+    const { error: profileInsertError } = await adminClient.from('profiles').upsert({
       id: createdUserId,
       email: email,
       role: 'staff',
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       is_blocked: false,
       created_at: nowIso,
       updated_at: nowIso,
-    });
+    }, { onConflict: 'id' });
 
     if (profileInsertError) {
       console.error('[create-staff-account] Profile insert failed, compensating auth identity:', profileInsertError.message);
