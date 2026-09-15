@@ -11,6 +11,43 @@
   padding: 1.25rem;
 }
 
+.inv-stat-clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.inv-stat-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.08));
+}
+
+.inv-stat-clickable:focus-visible {
+  outline: 2px solid var(--primary, #6366f1);
+  outline-offset: 2px;
+}
+
+.inv-stat-clickable.inv-stat-active--blue {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6, 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+}
+
+.inv-stat-clickable.inv-stat-active--green {
+  border-color: #10b981;
+  box-shadow: 0 0 0 1px #10b981, 0 4px 6px -1px rgba(16, 185, 129, 0.1);
+}
+
+.inv-stat-clickable.inv-stat-active--orange {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px #f59e0b, 0 4px 6px -1px rgba(245, 158, 11, 0.1);
+}
+
+.inv-stat-clickable.inv-stat-active--red {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444, 0 4px 6px -1px rgba(239, 68, 68, 0.1);
+}
+
 .border-danger {
   border: 1px solid var(--color-danger);
   background-color: var(--status-cancelled-bg);

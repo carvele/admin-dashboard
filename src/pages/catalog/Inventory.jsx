@@ -396,6 +396,9 @@ const VariantInvRow = ({
 const Inventory = () => {
   const { user, isAdminUnlocked } = useAuth();
   const canManageLookups = can(user?.role, 'manage_inventory');
+  const tableCardRef = useRef(null);
+
+
   const [inventory, setInventory] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -456,6 +459,15 @@ const Inventory = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'item', direction: 'ascending' });
   const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'active'); // 'active' | 'archived'
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '0', 10) || 0);
+  const [selectedStatCard, setSelectedStatCard] = useState('variants'); // 'variants' | 'units' | 'reserved' | 'alerts'
+
+  const handleCardClick = useCallback((cardType, filter) => {
+    setSelectedStatCard(cardType);
+    setStockQuickFilter(filter);
+    setActiveTab('inventory');
+    setPage(0);
+    setTimeout(() => tableCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -962,7 +974,14 @@ const Inventory = () => {
 
       {/* Metric Summary Cards */}
       <div className="inv-summary-grid">
-        <div className="card inv-stat-card">
+        <div
+          className={`card inv-stat-card inv-stat-clickable${selectedStatCard === 'variants' && stockQuickFilter === 'all' ? ' inv-stat-active inv-stat-active--blue' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Show all variants"
+          onClick={() => handleCardClick('variants', 'all')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick('variants', 'all')}
+        >
           <div className="icon-bg-soft blue">
             <PackageOpen size={24} />
           </div>
@@ -971,25 +990,46 @@ const Inventory = () => {
             <h3>{totalVariants}</h3>
           </div>
         </div>
-        <div className="card inv-stat-card">
+        <div
+          className={`card inv-stat-card inv-stat-clickable${selectedStatCard === 'units' && stockQuickFilter === 'all' ? ' inv-stat-active inv-stat-active--green' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Show all stock units"
+          onClick={() => handleCardClick('units', 'all')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick('units', 'all')}
+        >
           <div className="icon-bg-soft green">
-            <PackageOpen size={24} />
+            <Package size={24} />
           </div>
           <div className="inv-stat-content">
             <p className="stat-label">Total Stock Units</p>
             <h3>{totalStock.toLocaleString()}</h3>
           </div>
         </div>
-        <div className="card inv-stat-card">
+        <div
+          className={`card inv-stat-card inv-stat-clickable${stockQuickFilter === 'reserved' ? ' inv-stat-active inv-stat-active--orange' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Filter by reserved units"
+          onClick={() => handleCardClick('reserved', 'reserved')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick('reserved', 'reserved')}
+        >
           <div className="icon-bg-soft orange">
-            <PackageOpen size={24} />
+            <PackageMinus size={24} />
           </div>
           <div className="inv-stat-content">
             <p className="stat-label">Reserved Units</p>
             <h3>{totalReserved.toLocaleString()}</h3>
           </div>
         </div>
-        <div className="card inv-stat-card">
+        <div
+          className={`card inv-stat-card inv-stat-clickable${stockQuickFilter === 'alerts' ? ' inv-stat-active inv-stat-active--red' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Filter by stock alerts"
+          onClick={() => handleCardClick('alerts', 'alerts')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick('alerts', 'alerts')}
+        >
           <div className="icon-bg-soft red">
             <AlertTriangle size={24} />
           </div>
@@ -1006,6 +1046,7 @@ const Inventory = () => {
           </div>
         </div>
       </div>
+
 
       {/* Catalog products missing inventory warning */}
       {!loading && !loadingProducts && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
@@ -1047,7 +1088,7 @@ const Inventory = () => {
       )}
 
       {/* Main Table Card */}
-      <div className="card mt-2">
+      <div className="card mt-2" ref={tableCardRef}>
         <div className="inv-toolbar">
           {/* Tier 1: Navigation Tabs & View Controls */}
           <div className="inv-toolbar-header">
@@ -1170,21 +1211,21 @@ const Inventory = () => {
                 <button
                   type="button"
                   className={`quick-filter-chip ${stockQuickFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setStockQuickFilter('all')}
+                  onClick={() => { setStockQuickFilter('all'); setSelectedStatCard('variants'); setPage(0); }}
                 >
                   All Variants ({sortedAndFilteredInv.length})
                 </button>
                 <button
                   type="button"
                   className={`quick-filter-chip alert-chip ${stockQuickFilter === 'alerts' ? 'active' : ''}`}
-                  onClick={() => setStockQuickFilter('alerts')}
+                  onClick={() => { setStockQuickFilter('alerts'); setSelectedStatCard('alerts'); setPage(0); }}
                 >
                   <AlertTriangle size={13} /> Stock Alerts ({lowStockCount})
                 </button>
                 <button
                   type="button"
                   className={`quick-filter-chip reserved-chip ${stockQuickFilter === 'reserved' ? 'active' : ''}`}
-                  onClick={() => setStockQuickFilter('reserved')}
+                  onClick={() => { setStockQuickFilter('reserved'); setSelectedStatCard('reserved'); setPage(0); }}
                 >
                   Reserved ({reservedCount})
                 </button>

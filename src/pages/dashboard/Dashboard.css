@@ -34,6 +34,15 @@
   transform: translateY(-2px);
 }
 
+.stat-card-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.stat-card-clickable:focus-visible {
+  outline: 2px solid var(--primary, #6366f1);
+  outline-offset: 2px;
+}
+
 .stat-icon {
   width: var(--spacing-3xl);
   height: var(--spacing-3xl);

@@ -222,7 +222,7 @@ describe('Inventory Modernized Grid', () => {
     expect(screen.getByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
 
     // Click Stock Alerts chip button
-    const alertsChip = screen.getByRole('button', { name: /Stock Alerts/i });
+    const alertsChip = document.querySelector('.quick-filter-chip.alert-chip');
     fireEvent.click(alertsChip);
 
     // Only Cotton Pajama Set has available=0 (stock alert)
@@ -231,8 +231,28 @@ describe('Inventory Modernized Grid', () => {
     expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
 
     // Click All Variants to reset
-    const allChip = screen.getByRole('button', { name: /All Variants/i });
+    const allChip = document.querySelector('.quick-filter-chip:not(.alert-chip):not(.reserved-chip)');
     fireEvent.click(allChip);
+    expect(screen.getByText('JZ-LB-S-BLK')).toBeInTheDocument();
+  });
+
+  it('filters variants when summary stat cards are clicked', async () => {
+    renderInventory();
+
+    expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
+
+    // Click Stock Alerts stat card
+    const stockAlertsCard = screen.getByLabelText('Filter by stock alerts');
+    fireEvent.click(stockAlertsCard);
+
+    // Only Cotton Pajama Set has available=0 (stock alert)
+    expect(screen.getByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
+    expect(screen.queryByText('JZ-LB-S-BLK')).not.toBeInTheDocument();
+    expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+
+    // Click Total Active Variants stat card to reset
+    const variantsCard = screen.getByLabelText('Show all variants');
+    fireEvent.click(variantsCard);
     expect(screen.getByText('JZ-LB-S-BLK')).toBeInTheDocument();
   });
 
