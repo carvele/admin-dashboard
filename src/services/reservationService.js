@@ -563,3 +563,59 @@ export const resolveRescheduleRequest = async (reservationId, approve) => {
   if (error) throw error;
   return data;
 };
+
+export const rescheduleReservation = async (
+  reservationId,
+  expectedStatus,
+  newDate,
+  newAppointmentTime,
+  reason = null,
+) => {
+  const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
+    _reservation_id:       reservationId,
+    _expected_status:      expectedStatus,
+    _new_date:             newDate,           // 'YYYY-MM-DD'
+    _new_appointment_time: newAppointmentTime, // 'HH:MM:SS'
+    _reason:               reason,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const markRefundDisbursed = async (
+  reservationId,
+  disbursementMethod,
+  referenceNumber,
+  notes = null,
+) => {
+  const { data, error } = await supabase.rpc('mark_reservation_refund_disbursed', {
+    _reservation_id:      reservationId,
+    _disbursement_method: disbursementMethod,
+    _reference_number:    referenceNumber,
+    _notes:               notes,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Fetches cancelled reservations that have pending refund liability.
+ * Canonical predicate: payments.status='paid' AND payments.requires_refund=true.
+ * Used as the single source of truth for refund count and exact peso amount.
+ */
+export const getRefundQueue = async () => {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(`
+      id, display_id, customer_name, payment_status, updated_at,
+      payments!inner(id, amount_centavos, requires_refund, refund_required_at,
+                     refund_disbursed_at, refund_disbursement_method, refund_reference_number,
+                     status)
+    `)
+    .eq('status', 'Cancelled')
+    .eq('payments.requires_refund', true)
+    .eq('payments.status', 'paid')
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(toCamel);
+};

@@ -69,6 +69,9 @@ import {
   completeReservationHandover,
   resolveRescheduleRequest,
   getPaymentsForReservation,
+  rescheduleReservation,
+  markRefundDisbursed,
+  getRefundQueue,
 } from '../../services/reservationService';
 import {
   subscribeToCustomers,
@@ -182,7 +185,7 @@ const CountdownTimer = ({ targetDate }) => {
 const BOARD_COLUMNS = [
   {
     status: 'To Pay',
-    label: 'Awaiting payment',
+    label: 'To Pay',
     icon: CheckCircle,
     empty: 'No one owes anything right now.',
   },
@@ -194,7 +197,7 @@ const BOARD_COLUMNS = [
   },
   {
     status: 'To Pickup',
-    label: 'Ready for pickup',
+    label: 'To Pickup',
     icon: Shirt,
     empty: 'Nothing waiting to be collected.',
   },
@@ -211,6 +214,27 @@ const Reservations = () => {
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  // Canonical refund queue: cancelled reservations with qualifying payment rows.
+  // Single source of truth for refundCount and refundLiabilityTotal (exact centavo sum).
+  const [refundQueue, setRefundQueue] = useState([]);
+  const [refundQueueLoading, setRefundQueueLoading] = useState(true);
+
+  const loadRefundQueue = useCallback(async () => {
+    setRefundQueueLoading(true);
+    try {
+      const rows = await getRefundQueue();
+      setRefundQueue(rows);
+    } catch (err) {
+      console.error('Failed to load refund queue:', err);
+    } finally {
+      setRefundQueueLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRefundQueue();
+  }, [loadRefundQueue]);
+
 
   useEffect(() => {
     setLoading(true);
@@ -273,6 +297,7 @@ const Reservations = () => {
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'All');
   const [scopeFilter, setScopeFilter] = useState(() => {
     const paramScope = searchParams.get('scope');
+    if (paramScope === 'refunds') return 'refunds';
     if (paramScope === 'archived' || paramScope === 'completed') return 'archived';
     const paramStatus = searchParams.get('status');
     if (paramStatus === 'Cancelled' || paramStatus === 'Completed') return 'archived';
@@ -282,7 +307,11 @@ const Reservations = () => {
   const handleScopeChange = (newScope) => {
     setScopeFilter(newScope);
     setPage(0);
-    if (newScope === 'active' && (statusFilter === 'Completed' || statusFilter === 'Cancelled')) {
+    if (newScope === 'refunds') {
+      // Refund scope always uses table view; no lifecycle status sub-filter applies.
+      setViewMode('table');
+      setStatusFilter('All');
+    } else if (newScope === 'active' && (statusFilter === 'Completed' || statusFilter === 'Cancelled')) {
       setStatusFilter('All');
     } else if (newScope === 'archived' && (statusFilter === 'To Pay' || statusFilter === 'Preparing' || statusFilter.startsWith('To Pickup'))) {
       setStatusFilter('All');
@@ -436,6 +465,38 @@ const Reservations = () => {
   const [paymentRecordsLoading, setPaymentRecordsLoading] = useState(false);
   const [balanceMethod, setBalanceMethod] = useState('cash');
   const [recordingBalance, setRecordingBalance] = useState(false);
+  // Refund disbursement form state (shown in detail modal for Refund Required reservations).
+  const [refundDisbursementMethod, setRefundDisbursementMethod] = useState('cash');
+  const [refundReferenceNumber, setRefundReferenceNumber] = useState('');
+  const [refundNotes, setRefundNotes] = useState('');
+  const [submittingRefund, setSubmittingRefund] = useState(false);
+
+  const handleMarkRefundDisbursed = async (res) => {
+    if (!refundReferenceNumber.trim()) {
+      toast.error('Reference number is required.');
+      return;
+    }
+    setSubmittingRefund(true);
+    try {
+      await markRefundDisbursed(res.docId, refundDisbursementMethod, refundReferenceNumber.trim(), refundNotes.trim() || null);
+      // Optimistic UI update.
+      setViewModal((prev) => prev ? { ...prev, paymentStatus: 'Refunded' } : prev);
+      toast.success(`Refund disbursement recorded for ${res.id}`);
+      // Refetch authoritative sources: payment records + canonical queue.
+      if (res.docId) {
+        getPaymentsForReservation(res.docId).then(setPaymentRecords).catch(() => {});
+      }
+      await loadRefundQueue();
+      setRefundReferenceNumber('');
+      setRefundNotes('');
+    } catch (err) {
+      console.error('Failed to mark refund disbursed:', err);
+      toast.error(err.message || 'Failed to record refund disbursement');
+    } finally {
+      setSubmittingRefund(false);
+    }
+  };
+
 
   useEffect(() => {
     setBalanceMethod('cash');
@@ -713,6 +774,18 @@ const Reservations = () => {
     };
   }, [reservations]);
 
+  // Exact refund count and liability from canonical payment-ledger predicate.
+  const { refundCount, refundLiabilityTotal } = useMemo(() => {
+    const count = refundQueue.length;
+    const totalCentavos = refundQueue.reduce((total, reservation) =>
+      total + (reservation.payments ?? []).reduce(
+        (sum, payment) => sum + (payment.amountCentavos ?? 0),
+        0,
+      ),
+    0);
+    return { refundCount: count, refundLiabilityTotal: totalCentavos / 100 };
+  }, [refundQueue]);
+
   const filteredReservations = reservations.map(r => {
     // Normalize status to Sentence Case, mapping legacy states to new ones for display.
     // A null status shouldn't happen for a live row (every writer sets one),
@@ -753,11 +826,18 @@ const Reservations = () => {
     else if (statusFilter.startsWith('Completed')) matchesStatus = r.displayStatus === 'Completed';
     else matchesStatus = r.displayStatus === statusFilter;
 
-    // Scope filter: in table view, separate Active Queue from Archive
+    // Scope filter: in table view, separate Active Queue, Refunds, and Archive.
     let matchesScope = true;
     if (viewMode === 'table') {
-      const isArchived = r.displayStatus === 'Completed' || r.displayStatus === 'Cancelled';
-      matchesScope = scopeFilter === 'archived' ? isArchived : !isArchived;
+      if (scopeFilter === 'refunds') {
+        // Refund scope: Cancelled reservations with pending refund liability.
+        matchesScope =
+          r.displayStatus === 'Cancelled' &&
+          (r.paymentStatus || '').toLowerCase() === 'refund required';
+      } else {
+        const isArchived = r.displayStatus === 'Completed' || r.displayStatus === 'Cancelled';
+        matchesScope = scopeFilter === 'archived' ? isArchived : !isArchived;
+      }
     }
 
     return matchesSearch && matchesStatus && matchesScope;
@@ -861,55 +941,26 @@ const Reservations = () => {
       return;
     }
 
-    const conflict = reservations.some(
-      (r) =>
-        r.id !== rescheduleModal.id &&
-        r.status !== 'Cancelled' &&
-        r.status !== 'Completed' &&
-        (r.productName || r.outfit) === (rescheduleModal.productName || rescheduleModal.outfit) &&
-        r.size === rescheduleModal.size &&
-        Math.abs(parseDate(r.reservationDate || r.date) - new Date(newDate)) < 2 * 60 * 60 * 1000,
-    );
+    // Extract HH:MM from the time input (falls back to midnight if absent).
+    const newTime = rescheduleModal.newTime || '10:00';
+    const appointmentTimePadded = newTime.length === 5 ? `${newTime}:00` : newTime;
 
-    const executeReschedule = async () => {
-      try {
-        // Moving the appointment invalidates the old payment window: the trigger
-        // only stamps on entry to an awaiting-payment status and COALESCEs, so
-        // without this the deadline can outlast the new appointment, or have
-        // already expired for one moved further out.
-        const stillAwaitingPayment =
-          rescheduleModal.displayStatus === 'To Pay' &&
-          !['paid', 'submitted'].includes(String(rescheduleModal.paymentStatus || '').toLowerCase());
-
-        await updateReservation(rescheduleModal.docId, {
-          reservationDate: new Date(newDate),
-          date: new Date(newDate), // Fallback for Android which parses 'date'
-          countdown: true,
-          ...(stillAwaitingPayment ? { payment_due_at: computePaymentDueAt(newDate) } : {}),
-        });
-        await logAction(user, 'Rescheduled reservation', {
-          reservationId: rescheduleModal.id,
-          newDate,
-        });
-        toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
-        setRescheduleModal(null);
-        setNewDate('');
-      } catch (err) { console.error('Failed to reschedule:', err); toast.error(err.message || 'Failed to reschedule'); }
-    };
-
-    if (conflict) {
-      setConfirmDialogState({
-        title: 'Reservation Conflict Warning',
-        message: 'This outfit/size is already reserved within 2 hours of the new time. Proceed anyway?',
-        confirmText: 'Reschedule Anyway',
-        cancelText: 'Cancel',
-        isDestructive: false,
-        onConfirm: executeReschedule,
-      });
-      return;
+    try {
+      // Server owns: capacity advisory lock, slot validation, deadline recompute.
+      await rescheduleReservation(
+        rescheduleModal.docId,
+        rescheduleModal.status,
+        newDate,
+        appointmentTimePadded,
+        null,
+      );
+      toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
+      setRescheduleModal(null);
+      setNewDate('');
+    } catch (err) {
+      console.error('Failed to reschedule:', err);
+      toast.error(err.message || 'Failed to reschedule');
     }
-
-    await executeReschedule();
   };
 
   // Shared by the modal footer, the board card, and the table row -- used to
@@ -1256,6 +1307,32 @@ const Reservations = () => {
                 <span className="stat-sub">Ready for pickup</span>
               </div>
             </div>
+            {/* Refunds Required — danger card; exact amount from payment ledger */}
+            <div
+              className="card res-stat-card danger-stat"
+              onClick={() => handleScopeChange('refunds')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleScopeChange('refunds');
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title="View reservations with pending refund liability"
+              aria-label={`Refunds Required: ${refundCount} reservations, ${formatCurrency(refundLiabilityTotal)} pending`}
+            >
+              <div className="icon-bg-soft red">
+                <AlertTriangle size={24} />
+              </div>
+              <div className="res-stat-content">
+                <p className="stat-label">Refunds Required</p>
+                <h3>{refundQueueLoading ? '—' : refundCount}</h3>
+                <span className="stat-sub">
+                  {refundQueueLoading ? 'Loading…' : `${formatCurrency(refundLiabilityTotal)} pending`}
+                </span>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="res-summary-grid archive-grid">
@@ -1330,7 +1407,7 @@ const Reservations = () => {
       )}
 
       <div className="card">
-        {/* Scope Bar: Active Queue vs Archive */}
+        {/* Scope Bar: Active Queue | Refunds Required | Archive */}
         {viewMode === 'table' && (
           <div className="res-scope-bar">
             <div className="res-scope-tabs" role="tablist" aria-label="Reservation Scope">
@@ -1343,6 +1420,19 @@ const Reservations = () => {
               >
                 <span>Active Queue</span>
                 <span className="res-scope-count">{activeCount}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scopeFilter === 'refunds'}
+                className={`res-scope-tab ${scopeFilter === 'refunds' ? 'active danger' : ''}`}
+                onClick={() => handleScopeChange('refunds')}
+                aria-label={`Refunds Required: ${refundCount} reservations`}
+              >
+                <span>Refunds Required</span>
+                <span className={`res-scope-count ${refundCount > 0 ? 'danger' : ''}`}>
+                  {refundQueueLoading ? '…' : refundCount}
+                </span>
               </button>
               <button
                 type="button"
@@ -1637,6 +1727,28 @@ const Reservations = () => {
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
                           <StatusBadge status={res.displayStatus} />
+                          {String(res.paymentStatus || '').toLowerCase() === 'refund required' && (() => {
+                            const qItem = refundQueue.find((q) => q.id === res.id || q.docId === res.docId);
+                            const totalRefund = qItem
+                              ? (qItem.payments ?? []).reduce((sum, p) => sum + (p.amountCentavos ?? 0), 0) / 100
+                              : 0;
+                            return (
+                              <span
+                                className="receipt-badge"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#ef4444',
+                                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ⚠️ Refund Required{totalRefund > 0 ? ` — ${formatCurrency(totalRefund)}` : ''}
+                              </span>
+                            );
+                          })()}
                           {isAwaitingReceipt(res) && (
                             <span className="receipt-badge">📎 Receipt uploaded</span>
                           )}
@@ -1668,15 +1780,26 @@ const Reservations = () => {
                       </td>
                       <td>
                         <div className="res-list-actions">
-                          <button className="res-action-btn view" title="View Details" onClick={() => setViewModal(res)}>
+                          <button
+                            className="res-action-btn view"
+                            title="View Details"
+                            aria-label={`View details for reservation ${res.displayId || res.id}`}
+                            onClick={() => setViewModal(res)}
+                          >
                             <Eye size={14} />
                           </button>
-                          <button className="res-action-btn msg" title="Message" onClick={() => handleMessageBuyer(res)}>
+                          <button
+                            className="res-action-btn msg"
+                            title="Message"
+                            aria-label={`Message customer for reservation ${res.displayId || res.id}`}
+                            onClick={() => handleMessageBuyer(res)}
+                          >
                             <MessageSquare size={14} />
                           </button>
                           {canManage && primaryAction && (
                             <button
                               className={`res-action-primary ${isAwaitingReceipt(res) ? 'verify' : 'approve'}`}
+                              aria-label={`${isAwaitingReceipt(res) ? 'Verify Receipt' : primaryAction.action === 'complete' ? 'Complete Pickup' : primaryAction.label} for reservation ${res.displayId || res.id}`}
                               // Same fix as the board card: this used to fire
                               // a payment mutation immediately, relabeled
                               // "Verify Receipt" -- staff could mark it verified
@@ -1689,12 +1812,22 @@ const Reservations = () => {
                             </button>
                           )}
                           {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
-                            <button className="res-action-btn reschedule" title="Reschedule" onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}>
+                            <button
+                              className="res-action-btn reschedule"
+                              title="Reschedule"
+                              aria-label={`Reschedule reservation ${res.displayId || res.id}`}
+                              onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}
+                            >
                               <Calendar size={14} />
                             </button>
                           )}
                           {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && canCancelReservation(res) && (
-                            <button className="res-action-btn reject" title="Cancel" onClick={() => handleAction(res.id, 'cancel')}>
+                            <button
+                              className="res-action-btn reject"
+                              title="Cancel"
+                              aria-label={`Cancel reservation ${res.displayId || res.id}`}
+                              onClick={() => handleAction(res.id, 'cancel')}
+                            >
                               <XCircle size={14} />
                             </button>
                           )}
@@ -2270,19 +2403,39 @@ const Reservations = () => {
                       <span className={`payment-status-pill ${
                         (viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'paid'
                         : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'submitted'
+                        : (viewModal.paymentStatus || '').toLowerCase() === 'refunded' ? 'paid'
                         : 'unpaid'
                       }`}>
                         {(viewModal.paymentStatus || '').toLowerCase() === 'paid'
                           ? (outstandingBalance(viewModal) > 0 ? 'Reservation payment paid ✓' : 'Paid in full ✓')
-                         : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? 'Refund required'
+                         : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? 'Refund required ⚠️'
+                         : (viewModal.paymentStatus || '').toLowerCase() === 'refunded' ? 'Refunded ✓'
                          : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'Receipt Submitted ⌛'
                          : 'Unpaid ✗'}
                       </span>
-                      <span className="text-secondary text-sm font-medium">
-                        Deposit Due: ₱{Number(viewModal.deposit || 0).toFixed(2)}
-                      </span>
-                      {viewModal.paymentType && (
-                        <span className="text-secondary text-sm">({viewModal.paymentType})</span>
+                      {/* Cleaned up payment meta */}
+                      {(viewModal.paymentStatus || '').toLowerCase() === 'paid' ? (
+                        outstandingBalance(viewModal) > 0 ? (
+                          <span className="text-secondary text-sm font-medium">
+                            Deposit paid · Balance due at pickup: <strong>{formatCurrency(outstandingBalance(viewModal))}</strong>
+                          </span>
+                        ) : (
+                          <span className="text-secondary text-sm font-medium">
+                            {viewModal.paymentType ? `Payment type: ${viewModal.paymentType}` : 'Paid in full'}
+                          </span>
+                        )
+                      ) : (viewModal.paymentStatus || '').toLowerCase() === 'refunded' ? (
+                        <span className="text-secondary text-sm font-medium text-emerald-600 font-semibold">
+                          Refund disbursed ✓
+                        </span>
+                      ) : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? (
+                        <span className="text-secondary text-sm font-medium text-red-500 font-semibold">
+                          Cancellation liability pending disbursement
+                        </span>
+                      ) : (
+                        <span className="text-secondary text-sm font-medium">
+                          Amount Due: ₱{Number(viewModal.deposit || viewModal.rentalPrice || 0).toFixed(2)} {viewModal.paymentType ? `(${viewModal.paymentType})` : ''}
+                        </span>
                       )}
                       {viewModal.paymentMethod && (
                         <span className="text-secondary text-sm"> · Method: <strong>{viewModal.paymentMethod}</strong></span>
@@ -2359,6 +2512,143 @@ const Reservations = () => {
                   );
                 })()}
               </div>
+
+              {/* Operational Refund Action Panel (R-02 / Stage 3) */}
+              {(viewModal.paymentStatus || '').toLowerCase() === 'refund required' && (() => {
+                const qItem = refundQueue.find((q) => q.id === viewModal.id || q.docId === viewModal.docId);
+                const refundablePayments = (paymentRecords.length > 0 ? paymentRecords : (qItem?.payments ?? []))
+                  .filter((p) => p.requiresRefund || p.requires_refund);
+                const totalRefundPesos = refundablePayments.reduce((sum, p) => {
+                  const centavos = p.amountCentavos ?? p.amount_centavos ?? (p.amount ? p.amount * 100 : 0);
+                  return sum + centavos;
+                }, 0) / 100 || (qItem?.payments ?? []).reduce((sum, p) => sum + (p.amountCentavos ?? 0), 0) / 100;
+                const isAdminOrOwner = ['admin', 'owner'].includes(String(user?.role || '').toLowerCase());
+
+                return (
+                  <div
+                    className="card"
+                    style={{
+                      marginTop: '1rem',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      background: 'rgba(239, 68, 68, 0.04)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <AlertTriangle size={20} color="#ef4444" />
+                      <h4 style={{ margin: 0, color: '#ef4444', fontWeight: 700, fontSize: '0.95rem' }}>
+                        Refund Disbursement Required
+                      </h4>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
+                      This reservation was cancelled, but a payment of{' '}
+                      <strong style={{ color: '#ef4444' }}>
+                        {formatCurrency(totalRefundPesos || viewModal.rentalPrice || 0)}
+                      </strong>{' '}
+                      was collected and requires refund settlement to the customer.
+                    </p>
+
+                    {isAdminOrOwner ? (
+                      <div
+                        style={{
+                          background: 'var(--card-bg, #fff)',
+                          padding: '0.75rem',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color, #e5e7eb)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                          Record Refund Disbursement (Admin/Owner)
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <div style={{ flex: '1 1 140px' }}>
+                            <label
+                              htmlFor="refund-disbursement-method"
+                              style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
+                            >
+                              Disbursement Method
+                            </label>
+                            <select
+                              id="refund-disbursement-method"
+                              value={refundDisbursementMethod}
+                              onChange={(e) => setRefundDisbursementMethod(e.target.value)}
+                              disabled={submittingRefund}
+                              className="input-field"
+                              style={{ width: '100%' }}
+                            >
+                              <option value="cash">Cash in Person</option>
+                              <option value="gcash">GCash Transfer</option>
+                              <option value="bank_transfer">Bank Transfer</option>
+                              <option value="paymongo">PayMongo Manual</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div style={{ flex: '2 1 180px' }}>
+                            <label
+                              htmlFor="refund-reference-number"
+                              style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
+                            >
+                              Reference Number / Tx ID *
+                            </label>
+                            <input
+                              id="refund-reference-number"
+                              type="text"
+                              value={refundReferenceNumber}
+                              onChange={(e) => setRefundReferenceNumber(e.target.value)}
+                              placeholder="e.g. GCash Ref / Receipt #"
+                              disabled={submittingRefund}
+                              className="input-field"
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="refund-settlement-notes"
+                            style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
+                          >
+                            Settlement Notes (Optional)
+                          </label>
+                          <input
+                            id="refund-settlement-notes"
+                            type="text"
+                            value={refundNotes}
+                            onChange={(e) => setRefundNotes(e.target.value)}
+                            placeholder="Reason or notes regarding settlement"
+                            disabled={submittingRefund}
+                            className="input-field"
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-danger"
+                          disabled={submittingRefund || !refundReferenceNumber.trim()}
+                          onClick={() => handleMarkRefundDisbursed(viewModal)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            borderRadius: '6px',
+                            cursor: submittingRefund || !refundReferenceNumber.trim() ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {submittingRefund ? 'Recording Disbursement…' : `Mark Refund Disbursed (${formatCurrency(totalRefundPesos || 0)})`}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                        Only an Administrator or Owner can disburse and record refunds.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* Actual PayMongo transaction records for this reservation --
                   distinct from the payment_status pill above, which only
                   reflects the current aggregate state. A reservation can have

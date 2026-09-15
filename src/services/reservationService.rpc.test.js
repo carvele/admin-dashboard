@@ -43,6 +43,9 @@ import {
   resolveRescheduleRequest,
   updateReservation,
   getPaymentReviewHistory,
+  rescheduleReservation,
+  markRefundDisbursed,
+  getRefundQueue,
 } from './reservationService';
 
 
@@ -313,4 +316,103 @@ describe('getPaymentReviewHistory', () => {
     ]);
   });
 });
+
+describe('rescheduleReservation', () => {
+  afterEach(() => mockRpc.mockReset());
+
+  it('invokes reschedule_reservation_as_manager with canonical params', async () => {
+    mockRpc.mockResolvedValue({
+      data: { reservation_id: 'res-1', date: '2026-09-20', appointment_time: '14:00:00' },
+      error: null,
+    });
+
+    const result = await rescheduleReservation('res-1', 'To Pay', '2026-09-20', '14:00:00', 'Customer requested');
+
+    expect(mockRpc).toHaveBeenCalledWith('reschedule_reservation_as_manager', {
+      _reservation_id: 'res-1',
+      _expected_status: 'To Pay',
+      _new_date: '2026-09-20',
+      _new_appointment_time: '14:00:00',
+      _reason: 'Customer requested',
+    });
+    expect(result).toEqual({ reservation_id: 'res-1', date: '2026-09-20', appointment_time: '14:00:00' });
+  });
+
+  it('throws error when RPC returns an error', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: new Error('Selected slot is full'),
+    });
+
+    await expect(rescheduleReservation('res-1', 'To Pay', '2026-09-20', '14:00:00')).rejects.toThrow(
+      'Selected slot is full',
+    );
+  });
+});
+
+describe('markRefundDisbursed', () => {
+  afterEach(() => mockRpc.mockReset());
+
+  it('invokes mark_reservation_refund_disbursed with canonical params', async () => {
+    mockRpc.mockResolvedValue({
+      data: { reservation_id: 'res-1', status: 'refunded', total_refunded_centavos: 318000 },
+      error: null,
+    });
+
+    const result = await markRefundDisbursed('res-1', 'gcash', 'GCASH-12345', 'Refund sent via app');
+
+    expect(mockRpc).toHaveBeenCalledWith('mark_reservation_refund_disbursed', {
+      _reservation_id: 'res-1',
+      _disbursement_method: 'gcash',
+      _reference_number: 'GCASH-12345',
+      _notes: 'Refund sent via app',
+    });
+    expect(result).toEqual({ reservation_id: 'res-1', status: 'refunded', total_refunded_centavos: 318000 });
+  });
+
+  it('throws error when RPC returns an error', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: new Error('Refund disbursement requires admin or owner authorization.'),
+    });
+
+    await expect(markRefundDisbursed('res-1', 'cash', 'REF-1')).rejects.toThrow(
+      'Refund disbursement requires admin or owner authorization.',
+    );
+  });
+});
+
+describe('getRefundQueue', () => {
+  it('queries reservations with status Cancelled and inner payments requires_refund true', async () => {
+    const mockOrder = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'res-1',
+          display_id: 'RES-001',
+          payment_status: 'Refund Required',
+          payments: [
+            { id: 'pay-1', amount_centavos: 279000, requires_refund: true, status: 'paid' },
+          ],
+        },
+      ],
+      error: null,
+    });
+    const mockEqStatusPaid = jest.fn().mockReturnValue({ order: mockOrder });
+    const mockEqRefund = jest.fn().mockReturnValue({ eq: mockEqStatusPaid });
+    const mockEqCancelled = jest.fn().mockReturnValue({ eq: mockEqRefund });
+    const mockSelect = jest.fn().mockReturnValue({ eq: mockEqCancelled });
+
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    const result = await getRefundQueue();
+
+    expect(mockFrom).toHaveBeenCalledWith('reservations');
+    expect(mockEqCancelled).toHaveBeenCalledWith('status', 'Cancelled');
+    expect(mockEqRefund).toHaveBeenCalledWith('payments.requires_refund', true);
+    expect(mockEqStatusPaid).toHaveBeenCalledWith('payments.status', 'paid');
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('res-1');
+  });
+});
+
 
