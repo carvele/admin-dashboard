@@ -53,6 +53,7 @@ import SkeletonTable from '../../components/SkeletonTable';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { toast } from 'sonner';
 import { compareSizes } from '../../utils/sizeOrder';
+import { resolveVariantSku } from '../../utils/skuHelper';
 import './Inventory.css';
 
 const TABLE_COLUMNS = 9;
@@ -146,7 +147,8 @@ const VariantInvRow = ({
   setActiveMenuId,
 }) => {
   const [copied, setCopied] = useState(false);
-  const skuDisplay = item.variantSku || item.variant_sku || item.sku || item.id || '--';
+  const parentProduct = productMetaById?.[item.productDocId || item.product_doc_id];
+  const skuDisplay = resolveVariantSku(item, parentProduct);
 
   const copySku = (e) => {
     e.stopPropagation();
@@ -639,15 +641,19 @@ const Inventory = () => {
     // Search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      list = list.filter((item) =>
-        (item.item || '').toLowerCase().includes(term) ||
-        (item.sku || '').toLowerCase().includes(term) ||
-        (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
-        (item.id || item.docId || '').toLowerCase().includes(term) ||
-        (item.color || '').toLowerCase().includes(term) ||
-        (item.size || '').toLowerCase().includes(term) ||
-        (item.category || '').toLowerCase().includes(term)
-      );
+      list = list.filter((item) => {
+        const resolvedSku = resolveVariantSku(item, productMetaById?.[item.productDocId || item.product_doc_id]);
+        return (
+          (item.item || '').toLowerCase().includes(term) ||
+          (item.sku || '').toLowerCase().includes(term) ||
+          (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
+          (resolvedSku || '').toLowerCase().includes(term) ||
+          (item.id || item.docId || '').toLowerCase().includes(term) ||
+          (item.color || '').toLowerCase().includes(term) ||
+          (item.size || '').toLowerCase().includes(term) ||
+          (item.category || '').toLowerCase().includes(term)
+        );
+      });
     }
 
     // Category filter
@@ -705,7 +711,7 @@ const Inventory = () => {
     });
 
     return list;
-  }, [inventory, viewMode, searchTerm, categoryFilter, colorFilter, stockQuickFilter, sortConfig]);
+  }, [inventory, viewMode, searchTerm, categoryFilter, colorFilter, stockQuickFilter, sortConfig, productMetaById]);
 
   const PAGE_SIZE = 50;
   const isServerSearch = !!searchTerm.trim();
@@ -881,7 +887,7 @@ const Inventory = () => {
     const header = ['SKU/Variant', 'Product', 'Category', 'Size', 'Color', 'Pattern', 'Total', 'Reserved', 'Available'].join(',');
     const rows = sortedAndFilteredInv.map((i) =>
       [
-        csvField(i.variantSku || i.variant_sku || i.sku || i.id),
+        csvField(resolveVariantSku(i, productMetaById?.[i.productDocId || i.product_doc_id])),
         csvField(i.item),
         csvField(i.category),
         csvField(i.size),
@@ -1529,7 +1535,9 @@ const Inventory = () => {
                 <strong>{restockModal.item}</strong>
                 <span className="size-badge">{restockModal.size}</span>
                 {restockModal.color && <span className="color-badge">{restockModal.color}</span>}
-                <span className="sku-code">{restockModal.variantSku || restockModal.sku}</span>
+                <span className="sku-code">
+                  {resolveVariantSku(restockModal, productMetaById?.[restockModal.productDocId || restockModal.product_doc_id])}
+                </span>
               </div>
 
               <div className="stock-metrics-box" style={{ background: 'var(--cream, #f9fafb)', padding: '0.75rem', borderRadius: '6px', margin: '0.75rem 0', display: 'flex', justifyContent: 'space-between' }}>
@@ -1655,7 +1663,9 @@ const Inventory = () => {
                 <strong>{sellModal.item}</strong>
                 <span className="size-badge">{sellModal.size}</span>
                 {sellModal.color && <span className="color-badge">{sellModal.color}</span>}
-                <span className="sku-code">{sellModal.variantSku || sellModal.sku}</span>
+                <span className="sku-code">
+                  {resolveVariantSku(sellModal, productMetaById?.[sellModal.productDocId || sellModal.product_doc_id])}
+                </span>
               </div>
               <div className="p-3 bg-light rounded-lg mt-2 mb-4" style={{ background: 'var(--cream, #f9fafb)', borderRadius: '8px', padding: '0.75rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>

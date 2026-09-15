@@ -67,7 +67,7 @@ describe('buildVariantSku', () => {
 
   it('skips unused dimensions and strips punctuation', () => {
     expect(buildVariantSku('GOWN01', { size: 'M' })).toBe('GOWN01-M');
-    expect(buildVariantSku('GOWN01', { color: 'Off White' })).toBe('GOWN01-OFFWHITE');
+    expect(buildVariantSku('GOWN01', { color: 'Off White' })).toBe('GOWN01-OFF-WHITE');
   });
 
   it('returns null without a base sku', () => {

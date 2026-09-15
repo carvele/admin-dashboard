@@ -59,18 +59,8 @@ export const variantLabel = ({ size = '', color = '', pattern = '' } = {}) => {
   return parts.length ? parts.join(' / ') : 'Default';
 };
 
-/**
- * Build a readable variant SKU: `GOWN01-RED-SOLID-M`.
- * Returns null when there's no base SKU to extend.
- */
-export const buildVariantSku = (baseSku, { size = '', color = '', pattern = '' } = {}) => {
-  const base = String(baseSku ?? '').trim();
-  if (!base) return null;
-  const clean = (s) => String(s ?? '').replace(/[^A-Za-z0-9]+/g, '').toUpperCase();
-  return [base.toUpperCase(), clean(color), clean(pattern), clean(size)]
-    .filter(Boolean)
-    .join('-');
-};
+import { buildVariantSku } from '../utils/skuHelper';
+export { buildVariantSku };
 
 // ── Capability probe ─────────────────────────────────────────────────────────
 

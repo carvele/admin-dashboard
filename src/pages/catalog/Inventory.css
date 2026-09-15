@@ -140,8 +140,8 @@
 
 /* Column Sizing & Content */
 .th-sku, .sku-cell {
-  width: 145px;
-  min-width: 130px;
+  width: 190px;
+  min-width: 175px;
   white-space: nowrap;
 }
 
@@ -149,11 +149,12 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
 }
 
 .sku-code {
   display: inline-block;
-  max-width: 125px;
+  max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
