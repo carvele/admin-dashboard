@@ -1186,6 +1186,10 @@ export type Database = {
           receipt_url: string | null
           reference_number: string | null
           refund_required_at: string | null
+          refund_disbursed_at: string | null
+          refund_disbursement_method: string | null
+          refund_disbursed_by: string | null
+          refund_reference_number: string | null
           requires_refund: boolean
           reservation_id: string
           status: string
@@ -1210,6 +1214,10 @@ export type Database = {
           receipt_url?: string | null
           reference_number?: string | null
           refund_required_at?: string | null
+          refund_disbursed_at?: string | null
+          refund_disbursement_method?: string | null
+          refund_disbursed_by?: string | null
+          refund_reference_number?: string | null
           requires_refund?: boolean
           reservation_id: string
           status?: string
@@ -1234,6 +1242,10 @@ export type Database = {
           receipt_url?: string | null
           reference_number?: string | null
           refund_required_at?: string | null
+          refund_disbursed_at?: string | null
+          refund_disbursement_method?: string | null
+          refund_disbursed_by?: string | null
+          refund_reference_number?: string | null
           requires_refund?: boolean
           reservation_id?: string
           status?: string
@@ -3347,6 +3359,15 @@ export type Database = {
         Args: { p_conversation_id?: string; p_message_ids?: string[] }
         Returns: undefined
       }
+      mark_reservation_refund_disbursed: {
+        Args: {
+          _disbursement_method: string
+          _notes?: string
+          _reference_number: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       merge_message_reaction: {
         Args: { p_emoji: string; p_message_id: string }
         Returns: Json
@@ -3441,6 +3462,16 @@ export type Database = {
       }
       resolve_reschedule_as_manager: {
         Args: { _approve: boolean; _reservation_id: string }
+        Returns: Json
+      }
+      reschedule_reservation_as_manager: {
+        Args: {
+          _expected_status: string
+          _new_appointment_time: string
+          _new_date: string
+          _reason?: string
+          _reservation_id: string
+        }
         Returns: Json
       }
       resolve_username: { Args: { p_username: string }; Returns: string }
