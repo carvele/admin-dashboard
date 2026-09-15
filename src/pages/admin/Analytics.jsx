@@ -27,20 +27,26 @@ import {
 } from '../../services/analyticsService';
 import './Analytics.css';
 
-const StatCard = ({ title, value, change, icon: Icon, trend, tooltip, drilldownTo }) => {
+const StatCard = ({ title, value, change, icon: Icon, trend, tooltip, drilldownTo, alertStyle }) => {
+  const alertClasses = alertStyle === 'danger'
+    ? 'border-red-200 bg-red-50/40 dark:bg-red-950/20'
+    : alertStyle === 'warning'
+    ? 'border-amber-200 bg-amber-50/40 dark:bg-amber-950/20'
+    : '';
+
   const content = (
-    <div className={`card stat-card ${drilldownTo ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} title={tooltip || ''}>
+    <div className={`card stat-card ${alertClasses} ${drilldownTo ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} title={tooltip || ''}>
       <div className="stat-header">
-        <div className="stat-title">{title}</div>
+        <div className="stat-title font-semibold">{title}</div>
         <div
-          className={`stat-icon ${trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
+          className={`stat-icon ${alertStyle === 'danger' ? 'text-danger' : alertStyle === 'warning' ? 'text-warning' : trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
         >
           <Icon size={20} />
         </div>
       </div>
-      <div className="stat-value">{value}</div>
+      <div className={`stat-value ${alertStyle === 'danger' ? 'text-danger' : ''}`}>{value}</div>
       <div
-        className={`stat-change ${trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
+        className={`stat-change font-medium ${alertStyle === 'danger' ? 'text-danger' : alertStyle === 'warning' ? 'text-warning' : trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
       >
         {trend === 'up' ? '↑' : trend === 'down' ? '↓' : ''} {change}
       </div>
@@ -393,11 +399,16 @@ const Analytics = () => {
             <StatCard
               title="Pending Refund Liability"
               value={`₱${(overview.pending_refund_liability?.amount || 0).toLocaleString()}`}
-              change={`${overview.pending_refund_liability?.count || 0} cancelled booking(s)`}
-              trend="neutral"
+              change={
+                (overview.pending_refund_liability?.amount || 0) > 0
+                  ? `⚠ ${overview.pending_refund_liability?.count || 0} booking(s) require refund`
+                  : 'No pending refunds'
+              }
+              trend={(overview.pending_refund_liability?.amount || 0) > 0 ? 'down' : 'neutral'}
               icon={AlertCircle}
-              tooltip="Paid payments on Cancelled reservations requiring refund."
+              tooltip="Paid payments on Cancelled reservations requiring refund. Click to review in Reservations."
               drilldownTo="/reservations?status=Cancelled"
+              alertStyle={(overview.pending_refund_liability?.amount || 0) > 0 ? 'danger' : null}
             />
             <StatCard
               title="Average Product Rating"
