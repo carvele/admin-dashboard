@@ -311,7 +311,16 @@ const Dashboard = () => {
         animate="show"
       >
         {widgetPrefs.statTotalReservations && (
-        <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
+        <motion.div
+          variants={itemVariants}
+          whileHover={{ y: -4 }}
+          className="stat-card stat-card-clickable"
+          role="button"
+          tabIndex={0}
+          aria-label="View all reservations"
+          onClick={() => navigate('/reservations')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations')}
+        >
           <div className="stat-icon calendar">
             <Calendar size={24} />
           </div>
@@ -326,7 +335,16 @@ const Dashboard = () => {
         )}
 
         {widgetPrefs.statActiveCustomers && (
-        <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
+        <motion.div
+          variants={itemVariants}
+          whileHover={{ y: -4 }}
+          className="stat-card stat-card-clickable"
+          role="button"
+          tabIndex={0}
+          aria-label="View active customers"
+          onClick={() => navigate('/customers?filter=active')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/customers?filter=active')}
+        >
           <div className="stat-icon users">
             <Users size={24} />
           </div>
@@ -341,7 +359,16 @@ const Dashboard = () => {
         )}
 
         {widgetPrefs.statPendingRequests && (
-        <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
+        <motion.div
+          variants={itemVariants}
+          whileHover={{ y: -4 }}
+          className="stat-card stat-card-clickable"
+          role="button"
+          tabIndex={0}
+          aria-label="View pending reservation requests"
+          onClick={() => navigate('/reservations?view=table&scope=active&status=To%20Pay')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations?view=table&scope=active&status=To%20Pay')}
+        >
           <div className="stat-icon clock">
             <Clock size={24} />
           </div>
@@ -356,7 +383,16 @@ const Dashboard = () => {
         )}
 
         {widgetPrefs.statARUsage && (
-        <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="stat-card">
+        <motion.div
+          variants={itemVariants}
+          whileHover={{ y: -4 }}
+          className="stat-card stat-card-clickable"
+          role="button"
+          tabIndex={0}
+          aria-label="View AR Try-On analytics"
+          onClick={() => navigate('/analytics')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/analytics')}
+        >
           <div className="stat-icon ar">
             <Shirt size={24} />
           </div>

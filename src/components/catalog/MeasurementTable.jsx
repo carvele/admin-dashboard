@@ -184,7 +184,8 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
               type="button"
               className="btn-outline small flex items-center gap-2"
               onClick={handleLoadRecommended}
-              title="Load standard metrics for this category"
+              title="Load recommended default metrics for this category"
+              aria-label="Load recommended default metrics for this category"
             >
               <RefreshCw size={14} />
               <span className="hidden sm:inline">Load Suggested</span>

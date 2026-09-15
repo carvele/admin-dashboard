@@ -1,6 +1,6 @@
  
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import debounce from 'lodash.debounce';
 import {
   Search,
@@ -232,11 +232,39 @@ const Customers = () => {
   const [custHistory, setCustHistory] = useState([]);
   const [custHistoryLoading, setCustHistoryLoading] = useState(false);
 
+  const [customerFilter, setCustomerFilter] = useState(() => {
+    const sp = new URLSearchParams(location.search);
+    const f = sp.get('filter');
+    if (f === 'active' || f === 'new') return f;
+    return 'all';
+  });
+  const tableCardRef = useRef(null);
+
+  const handleFilterChange = (filter) => {
+    setCustomerFilter(filter);
+    const newParams = new URLSearchParams(location.search);
+    if (filter === 'all') {
+      newParams.delete('filter');
+    } else {
+      newParams.set('filter', filter);
+    }
+    const newSearch = newParams.toString();
+    navigate(`/customers${newSearch ? '?' + newSearch : ''}`, { replace: true });
+    setTimeout(() => tableCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+
   React.useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const id = sp.get('id');
     const str = sp.get('search');
+    const f = sp.get('filter');
     
+    if (f && (f === 'active' || f === 'new')) {
+      setCustomerFilter(f);
+    } else if (!f && customerFilter !== 'all') {
+      setCustomerFilter('all');
+    }
+
     if (str && !searchInput) {
       setSearchInput(str);
       setSearchTerm(str);
@@ -321,14 +349,6 @@ const Customers = () => {
   // `profiles` has no status column — customer state is derived from is_blocked.
   const statusLabel = (c) => (c?.isBlocked ? 'Inactive' : 'Active');
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      getUserDisplayName(c)
-        .toLowerCase()
-        .includes((searchTerm || '').toLowerCase()) ||
-      (c.email || '').toLowerCase().includes((searchTerm || '').toLowerCase()),
-  );
-
   // Stats
   const totalCustomers = customers.length;
   // There is no presence/last_online column anywhere in the schema, so a live
@@ -343,6 +363,27 @@ const Customers = () => {
     const now = new Date();
     return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
   }).length;
+
+  const filteredCustomers = customers.filter((c) => {
+    // 1. Text search
+    const matchesSearch =
+      getUserDisplayName(c)
+        .toLowerCase()
+        .includes((searchTerm || '').toLowerCase()) ||
+      (c.email || '').toLowerCase().includes((searchTerm || '').toLowerCase());
+    if (!matchesSearch) return false;
+
+    // 2. Stat card filter
+    if (customerFilter === 'active') {
+      return Boolean(c.lastActivity && Date.now() - new Date(c.lastActivity).getTime() < THIRTY_DAYS);
+    }
+    if (customerFilter === 'new') {
+      const joined = new Date(c.createdAt ?? 0);
+      const now = new Date();
+      return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
+    }
+    return true;
+  });
   const avgEngagement =
     customers.length > 0
       ? Math.round(
@@ -490,7 +531,14 @@ const Customers = () => {
 
       {/* ===== STATS ROW ===== */}
       <div className="customer-stats-row">
-        <div className="cstat-card">
+        <div
+          className={`cstat-card cstat-clickable${customerFilter === 'all' ? ' cstat-active cstat-active--all' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="View all customers"
+          onClick={() => handleFilterChange('all')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFilterChange('all')}
+        >
           <div
             className="cstat-icon"
             style={{ background: 'linear-gradient(135deg, #6366F1, #818CF8)' }}
@@ -502,7 +550,14 @@ const Customers = () => {
             <p className="cstat-label">Total Customers</p>
           </div>
         </div>
-        <div className="cstat-card">
+        <div
+          className={`cstat-card cstat-clickable${customerFilter === 'active' ? ' cstat-active cstat-active--active' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Filter by active customers (last 30 days)"
+          onClick={() => handleFilterChange(customerFilter === 'active' ? 'all' : 'active')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFilterChange(customerFilter === 'active' ? 'all' : 'active')}
+        >
           <div
             className="cstat-icon"
             style={{ background: 'linear-gradient(135deg, #10B981, #34D399)' }}
@@ -514,7 +569,14 @@ const Customers = () => {
             <p className="cstat-label">Active (30 days)</p>
           </div>
         </div>
-        <div className="cstat-card">
+        <div
+          className={`cstat-card cstat-clickable${customerFilter === 'new' ? ' cstat-active cstat-active--new' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Filter by new customers this month"
+          onClick={() => handleFilterChange(customerFilter === 'new' ? 'all' : 'new')}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFilterChange(customerFilter === 'new' ? 'all' : 'new')}
+        >
           <div
             className="cstat-icon"
             style={{ background: 'linear-gradient(135deg, #D4AF37, #F5D76E)' }}
@@ -541,7 +603,7 @@ const Customers = () => {
       </div>
 
       {/* ===== TABLE ===== */}
-      <div className="card">
+      <div className="card" ref={tableCardRef}>
         <div className="card-toolbar">
           <div className="search-box">
             <Search size={18} className="search-icon" />
