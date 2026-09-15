@@ -60,7 +60,7 @@ export const getTopInventoryAlerts = async (limit = 5) => {
 export const getRecentSignups = async (limit = 5) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, email, created_at, avatar_url')
+    .select('id, full_name, first_name, last_name, email, created_at, role')
     .or('role.eq.customer,role.is.null')
     .order('created_at', { ascending: false })
     .limit(limit);
