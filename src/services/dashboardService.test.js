@@ -110,7 +110,7 @@ describe('dashboardService', () => {
 
       const res = await getRecentSignups(5);
       expect(supabase.from).toHaveBeenCalledWith('profiles');
-      expect(queryBuilder.select).toHaveBeenCalledWith('id, full_name, email, created_at, avatar_url');
+      expect(queryBuilder.select).toHaveBeenCalledWith('id, full_name, first_name, last_name, email, created_at, role');
       expect(queryBuilder.or).toHaveBeenCalledWith('role.eq.customer,role.is.null');
       expect(queryBuilder.order).toHaveBeenCalledWith('created_at', { ascending: false });
       expect(queryBuilder.limit).toHaveBeenCalledWith(5);
