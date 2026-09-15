@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -9,48 +8,71 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  Legend,
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Users, ShoppingBag, Settings2, X, ChevronDown, Activity, AlertCircle, AlertTriangle, Package } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { exportGarmentPerformanceReport, exportInventoryDepreciationReport } from '../../utils/reportExporter';
-import { countsAsRevenue } from '../../utils/reservationStatus';
 import PageHeader from '../../components/PageHeader';
+import {
+  getAnalyticsOverview,
+  getReservationAnalytics,
+  getCashflowAnalytics,
+  getInventoryHealthAnalytics,
+  getProductPerformanceAnalytics,
+  getCustomerCohortAnalytics,
+} from '../../services/analyticsService';
 import './Analytics.css';
 
-const StatCard = ({ title, value, change, icon: Icon, trend, tooltip }) => (
-  <div className="card stat-card" title={tooltip || ''}>
-    <div className="stat-header">
-      <div className="stat-title">{title}</div>
+const StatCard = ({ title, value, change, icon: Icon, trend, tooltip, drilldownTo, alertStyle }) => {
+  const alertClasses = alertStyle === 'danger'
+    ? 'border-red-200 bg-red-50/40 dark:bg-red-950/20'
+    : alertStyle === 'warning'
+    ? 'border-amber-200 bg-amber-50/40 dark:bg-amber-950/20'
+    : '';
+
+  const content = (
+    <div className={`card stat-card ${alertClasses} ${drilldownTo ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} title={tooltip || ''}>
+      <div className="stat-header">
+        <div className="stat-title font-semibold">{title}</div>
+        <div
+          className={`stat-icon ${alertStyle === 'danger' ? 'text-danger' : alertStyle === 'warning' ? 'text-warning' : trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
+        >
+          <Icon size={20} />
+        </div>
+      </div>
+      <div className={`stat-value ${alertStyle === 'danger' ? 'text-danger' : ''}`}>{value}</div>
       <div
-        className={`stat-icon ${trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : ''}`}
+        className={`stat-change font-medium ${alertStyle === 'danger' ? 'text-danger' : alertStyle === 'warning' ? 'text-warning' : trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
       >
-        <Icon size={20} />
+        {trend === 'up' ? '↑' : trend === 'down' ? '↓' : ''} {change}
       </div>
     </div>
-    <div className="stat-value">{value}</div>
-    <div
-      className={`stat-change ${trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : 'text-secondary'}`}
-    >
-      {trend === 'up' ? '↑' : trend === 'down' ? '↓' : ''} {change}
-    </div>
-  </div>
-);
+  );
+
+  if (drilldownTo) {
+    return (
+      <Link to={drilldownTo} style={{ textDecoration: 'none', color: 'inherit' }}>
+        {content}
+      </Link>
+    );
+  }
+  return content;
+};
 
 const Analytics = () => {
-  const [reservations, setReservations] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [catalog, setCatalog] = useState([]);
-  const [inventory, setInventory] = useState([]);
-  const [arLogs, setArLogs] = useState([]);
-  const [feedback, setFeedback] = useState([]);
-  const [poseGuides, setPoseGuides] = useState([]);
-  const [topWishlist, setTopWishlist] = useState([]);
-  
+  const [overview, setOverview] = useState(null);
+  const [resAnalytics, setResAnalytics] = useState(null);
+  const [, setCashflowAnalytics] = useState(null);
+  const [invHealth, setInvHealth] = useState(null);
+  const [prodPerf, setProdPerf] = useState(null);
+  const [cohortAnalytics, setCohortAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Filter state
   const [dateRange, setDateRange] = useState('30d');
   const getLocalDateString = (date) => {
@@ -66,7 +88,7 @@ const Analytics = () => {
     return getLocalDateString(d);
   });
   const [endDate, setEndDate] = useState(getLocalDateString(new Date()));
-  
+
   const [showPreferences, setShowPreferences] = useState(false);
   const [exportRef, setExportRef] = useState(false);
   const [widgetPrefs, setWidgetPrefs] = useState(() => {
@@ -81,83 +103,53 @@ const Analytics = () => {
     return {
       showTopStats: true,
       showRevenueTrends: true,
-      showARConversions: true,
       showCategoryShare: true,
       showTopItems: true,
       showMetrics: true,
     };
   });
 
-  // Save prefs to local storage automatically
   useEffect(() => {
     localStorage.setItem('analytics_widget_prefs', JSON.stringify(widgetPrefs));
   }, [widgetPrefs]);
-  
+
   const handleTogglePref = (key) => {
     setWidgetPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-  // Static/Dimension Data
+
+  // Fetch all analytics from canonical PostgreSQL RPCs
   useEffect(() => {
     let isMounted = true;
-    const loadStaticData = async () => {
+    const fetchAllAnalytics = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const { getCustomers } = await import('../../services/customerService');
-        const { getProducts, getInventory, getMostWishlistedProducts } = await import('../../services/productService');
-        const { getCollection } = await import('../../lib/supabaseService');
-
-        const [c, p, i, pg, tw] = await Promise.all([
-          getCustomers(),
-          getProducts(true),
-          getInventory(),
-          getCollection('pose_guides'),
-          getMostWishlistedProducts()
-        ]);
-        
-        if (!isMounted) return;
-        setCustomers(c || []);
-        setCatalog(p || []);
-        setInventory(i || []);
-        setPoseGuides(pg || []);
-        setTopWishlist(tw || []);
-      } catch (err) {
-        console.error('Failed to load static analytics data:', err);
-      }
-    };
-    loadStaticData();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Time-Series Data (Date Bounded)
-  useEffect(() => {
-    let isMounted = true;
-    const loadTimeSeriesData = async () => {
-      try {
-        // Parse the dates into local midnight and 23:59:59 exactly as we do for filtering
-        const [sYear, sMonth, sDay] = startDate.split('-').map(Number);
-        const [eYear, eMonth, eDay] = endDate.split('-').map(Number);
-        const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0).toISOString();
-        const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999).toISOString();
-
-        const { getReservationsRange, getArSessionsRange, getFeedbackRange } = await import('../../services/analyticsService');
-        const { toCamel } = await import('../../lib/supabaseService');
-
-        // Fetch explicitly bounded historical data via analyticsService
-        const [resData, arData, feedbackData] = await Promise.all([
-          getReservationsRange(s, e),
-          getArSessionsRange(s, e),
-          getFeedbackRange(s, e),
+        const [ov, res, cf, inv, prod, cohort] = await Promise.all([
+          getAnalyticsOverview(startDate, endDate),
+          getReservationAnalytics(startDate, endDate),
+          getCashflowAnalytics(startDate, endDate),
+          getInventoryHealthAnalytics(),
+          getProductPerformanceAnalytics(startDate, endDate),
+          getCustomerCohortAnalytics(startDate, endDate),
         ]);
 
         if (!isMounted) return;
-
-        setReservations((resData || []).map(r => ({ ...toCamel(r), docId: r.id })));
-        setArLogs((arData || []).map(r => ({ ...toCamel(r), docId: r.id })));
-        setFeedback((feedbackData || []).map(r => ({ ...toCamel(r), docId: r.id })));
+        setOverview(ov);
+        setResAnalytics(res);
+        setCashflowAnalytics(cf);
+        setInvHealth(inv);
+        setProdPerf(prod);
+        setCohortAnalytics(cohort);
       } catch (err) {
-        console.error('Failed to load time-series analytics data:', err);
+        if (!isMounted) return;
+        console.error('Failed to load canonical analytics:', err);
+        setError(err.message || 'Failed to load analytics data.');
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
-    loadTimeSeriesData();
+
+    fetchAllAnalytics();
     return () => { isMounted = false; };
   }, [startDate, endDate]);
 
@@ -165,274 +157,102 @@ const Analytics = () => {
     setDateRange(preset);
     const now = new Date();
     let start = new Date();
-    
+
     if (preset === '7d') start.setDate(now.getDate() - 7);
     else if (preset === '30d') start.setDate(now.getDate() - 30);
     else if (preset === 'quarter') start.setMonth(now.getMonth() - 3);
     else if (preset === 'ytd') start = new Date(now.getFullYear(), 0, 1);
-    
+
     setStartDate(getLocalDateString(start));
     setEndDate(getLocalDateString(now));
   };
 
-  const parseResDate = useCallback((item, overrideField = null) => {
-    const raw = overrideField ? item[overrideField] : (item.reservationDate || item.date || item.timestamp || item.createdAt || item.joinedAt);
-    if (!raw) return null;
-    // Supabase returns ISO strings; legacy Firestore may have .toDate() or .seconds
-    if (raw?.toDate) return raw.toDate();
-    if (raw?.seconds) return new Date(raw.seconds * 1000);
-    return new Date(raw);
+  // Helper for computing delta display
+  const computeDelta = useCallback((current, previous) => {
+    if (previous === 0 || previous === null || previous === undefined) {
+      if (current > 0) return { text: 'New this period', trend: 'up' };
+      return { text: 'No change', trend: 'neutral' };
+    }
+    const diff = current - previous;
+    const pct = Math.round((diff / previous) * 100);
+    return {
+      text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`,
+      trend: pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral',
+    };
   }, []);
 
-  const isInRange = useCallback((date) => {
-    if (!date) return false;
-    const d = new Date(date);
-    
-    // Parse YYYY-MM-DD into local midnight and 23:59:59
-    const [sYear, sMonth, sDay] = startDate.split('-').map(Number);
-    const s = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-    
-    const [eYear, eMonth, eDay] = endDate.split('-').map(Number);
-    const e = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
-    
-    return d >= s && d <= e;
-  }, [startDate, endDate]);
+  const cashDelta = useMemo(() => {
+    if (!overview?.gross_cash_collected) return { text: '--', trend: 'neutral' };
+    return computeDelta(overview.gross_cash_collected.current, overview.gross_cash_collected.previous);
+  }, [overview, computeDelta]);
 
-  // Filter Data
-  const filteredReservations = useMemo(
-    () => reservations.filter(r => isInRange(parseResDate(r))),
-    [reservations, isInRange, parseResDate]
-  );
-  const filteredCustomers = useMemo(
-    () => customers.filter(c => isInRange(parseResDate(c))),
-    [customers, isInRange, parseResDate]
-  );
-  const currentTotalCustomers = customers.length; // Absolute total
+  const bookingDelta = useMemo(() => {
+    if (!overview?.completed_booking_value) return { text: '--', trend: 'neutral' };
+    return computeDelta(overview.completed_booking_value.current, overview.completed_booking_value.previous);
+  }, [overview, computeDelta]);
 
-  // Compute Revenue and Growth
-  //
-  // Revenue is recognised at handover, matching reservationStatus.js's
-  // countsAsRevenue (Completed only) -- this used to hand-roll its own list
-  // that counted every in-progress status as revenue, including reservations
-  // still awaiting payment. That inflated "Total Revenue" with money that had
-  // neither been earned nor received, and drifted further out of date with
-  // every status-vocabulary change since it never imported the shared
-  // definition other pages already use.
-  const { totalRev, earnedReservations } = useMemo(() => {
-    let rev = 0;
-    const list = filteredReservations.filter((r) => countsAsRevenue(r));
-    list.forEach((r) => {
-      const outfitName = r.productName || r.outfit;
-      const item = catalog.find((c) => c.id === r.productId || c.name === outfitName);
-      
-      const paid = r.rentalPrice ?? r.price ?? r.totalAmount ?? r.rentalFee;
-      if (paid !== undefined && paid !== null) {
-        rev += Number(paid) || 0;
-      } else if (item) {
-        rev += Number(item.price) || 0;
-      }
-    });
-    return { totalRev: rev, earnedReservations: list };
-  }, [filteredReservations, catalog]);
+  const completedResDelta = useMemo(() => {
+    if (!overview?.completed_reservations) return { text: '--', trend: 'neutral' };
+    return computeDelta(overview.completed_reservations.current, overview.completed_reservations.previous);
+  }, [overview, computeDelta]);
 
-  const getGrowth = useCallback((list, dateField = null) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const duration = end - start;
-    const prevStart = new Date(start.getTime() - duration);
-    const prevEnd = new Date(start.getTime() - 1);
+  const customerDelta = useMemo(() => {
+    if (!overview?.unique_customers_served) return { text: '--', trend: 'neutral' };
+    return computeDelta(overview.unique_customers_served.current, overview.unique_customers_served.previous);
+  }, [overview, computeDelta]);
 
-    const isPrevRange = (date) => {
-      const d = new Date(date);
-      return d >= prevStart && d <= prevEnd;
-    };
-
-    const currentCount = list.filter(item => isInRange(parseResDate(item, dateField))).length;
-    const prevCount = list.filter(item => isPrevRange(parseResDate(item, dateField))).length;
-
-    if (prevCount === 0) return { text: `+${currentCount} this period`, trend: 'up' };
-    const pct = Math.round(((currentCount - prevCount) / prevCount) * 100);
-    return { text: `${pct >= 0 ? '+' : ''}${pct}% vs prev period`, trend: pct >= 0 ? 'up' : 'down' };
-  }, [startDate, endDate, isInRange, parseResDate]);
-
-  const revDelta = useMemo(() => getGrowth(earnedReservations), [earnedReservations, getGrowth]);
-  const custDelta = useMemo(() => getGrowth(customers), [customers, getGrowth]);
-  const resDelta = useMemo(() => getGrowth(reservations), [reservations, getGrowth]);
-
-  // New Visualization: Revenue by Category
-  const categoryShareData = useMemo(() => {
-    const categoryRev = {};
-    earnedReservations.forEach(r => {
-      const outfitName = r.productName || r.outfit;
-      const item = catalog.find(c => c.name === outfitName || c.id === r.productId);
-      const cat = item?.category || 'Uncategorized';
-      const paid = r.rentalPrice ?? r.price ?? r.totalAmount ?? r.rentalFee;
-      const val = (paid !== undefined && paid !== null) ? Number(paid) : (Number(item?.price) || 0);
-      categoryRev[cat] = (categoryRev[cat] || 0) + Number(val) || 0;
-    });
-
-    return Object.entries(categoryRev)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a,b) => b.value - a.value);
-  }, [earnedReservations, catalog]);
-
-  const COLORS = ['var(--accent)', 'var(--highlight)', 'var(--color-warning)', 'var(--text-secondary)', 'var(--border-color)'];
-
-  // Status Funnel
-  const funnelData = useMemo(() => {
-    const statusCounts = {};
-    filteredReservations.forEach(r => {
-      statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-    });
-    return Object.entries(statusCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a,b) => b.count - a.count);
-  }, [filteredReservations]);
-
-  // Avg Rating
-  const avgRating = useMemo(() => {
-    return feedback.length > 0 
-      ? (feedback.reduce((acc, f) => acc + (f.rating || 0), 0) / feedback.length).toFixed(1)
-      : 0;
-  }, [feedback]);
-
-  // Inventory Health - Active items only
-  const activeCatalog = useMemo(() => catalog.filter((p) => !p.deleted), [catalog]);
-  const activeInventory = useMemo(() => inventory.filter((i) => !i.deleted), [inventory]);
-  const { inStock, outOfStock } = useMemo(() => {
-    let inCount = 0;
-    let outCount = 0;
-    activeInventory.forEach((i) => {
-      if ((i.available || 0) > 0) inCount++;
-      else outCount++;
-    });
-    return { inStock: inCount, outOfStock: outCount };
-  }, [activeInventory]);
-
-  // Build dynamic trends from actual reservation data
-  const buildTrends = () => {
-    const s = new Date(startDate);
-    const e = new Date(endDate);
-    const diffDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays <= 14) {
-      // Day by day
-      const days = {};
-      for(let i=0; i <= diffDays; i++) {
-        const d = new Date(s);
-        d.setDate(s.getDate() + i);
-        days[d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })] = 0;
-      }
-      filteredReservations.forEach(r => {
-        const d = parseResDate(r);
-        const k = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if(days[k] !== undefined) days[k]++;
-      });
-      return Object.entries(days).map(([name, reservations]) => ({ name, reservations }));
-    } else {
-      // Group by weeks or months
-      const weeks = {};
-      filteredReservations.forEach(r => {
-        const d = parseResDate(r);
-        const weekNum = `Week ${Math.ceil((d - s) / (1000 * 60 * 60 * 24 * 7)) || 1}`;
-        weeks[weekNum] = (weeks[weekNum] || 0) + 1;
-      });
-      return Object.entries(weeks).map(([name, reservations]) => ({ name, reservations }));
-    }
-  };
-  const reservationTrends = buildTrends();
-
-  // Compute popular items for the selected range
-  const outfitCounts = {};
-  filteredReservations.forEach((r) => {
-    const key = r.productName || r.outfit;
-    if (key) outfitCounts[key] = (outfitCounts[key] || 0) + 1;
-  });
-  const popularOutfits = Object.entries(outfitCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => {
-      const item = catalog.find((c) => c.name === name);
-      return { 
-        name, 
-        value: count, 
-        revenue: (item?.price || 0) * count, 
-        category: item?.category || '' 
-      };
-    });
-
-  const enrichedTopWishlist = (topWishlist || []).slice(0, 5).map(item => {
-    const resCount = outfitCounts[item.productName] || 0;
-    const conversion = item.wishlistCount > 0 ? ((resCount / item.wishlistCount) * 100).toFixed(1) : 0;
+  const cancellationRateDisplay = useMemo(() => {
+    if (!overview?.cancellation_rate) return { value: '0%', text: '0 cancelled' };
+    const currRate = overview.cancellation_rate.current;
+    const currCancelled = overview.cancellation_rate.current_cancelled || 0;
     return {
-      ...item,
-      resCount,
-      conversion
+      value: currRate !== null ? `${currRate}%` : '0%',
+      text: `${currCancelled} cancelled booking(s)`,
     };
-  });
+  }, [overview]);
+
+  const COLORS = ['#2B2B28', '#D97706', '#059669', '#6366F1', '#EC4899', '#8B5CF6'];
 
   const handleExport = (type) => {
-    if (reservations.length === 0) return;
-    
-    const data = filteredReservations.map(r => ({
-      ID: r.id || '',
-      Customer: r.customerName || r.customer || '',
-      Product: r.productName || r.outfit || '',
-      Size: r.size || '',
-      Date: parseResDate(r)?.toLocaleDateString() || '',
-      Status: r.status || '',
-      Price: r.rentalPrice || r.price || r.totalAmount || 0
-    }));
+    if (!overview) return;
 
     if (type === 'pdf') {
       const doc = new jsPDF();
-      doc.text("JezSy Collection Analytics Report", 14, 15);
-      doc.text(`Period: ${startDate} to ${endDate}`, 14, 25);
-      
-      const tableColumn = ["Customer", "Product", "Date", "Status", "Price"];
-      const tableRows = data.map(r => [r.Customer, r.Product, r.Date, r.Status, `P${r.Price}`]);
-      
+      doc.text('JezSy Collection Analytics Summary Report', 14, 15);
+      doc.text(`Period: ${startDate} to ${endDate} (Timezone: Asia/Manila)`, 14, 25);
+
+      const tableColumn = ['Metric', 'Current Period', 'Previous Period'];
+      const tableRows = [
+        ['Gross Cash Collected', `P${(overview.gross_cash_collected?.current || 0).toLocaleString()}`, `P${(overview.gross_cash_collected?.previous || 0).toLocaleString()}`],
+        ['Completed Booking Value', `P${(overview.completed_booking_value?.current || 0).toLocaleString()}`, `P${(overview.completed_booking_value?.previous || 0).toLocaleString()}`],
+        ['Completed Reservations', `${overview.completed_reservations?.current || 0}`, `${overview.completed_reservations?.previous || 0}`],
+        ['Unique Customers Served', `${overview.unique_customers_served?.current || 0}`, `${overview.unique_customers_served?.previous || 0}`],
+        ['Cancellation Rate', `${overview.cancellation_rate?.current ?? 0}%`, `${overview.cancellation_rate?.previous ?? 0}%`],
+        ['Pending Refund Liability', `P${(overview.pending_refund_liability?.amount || 0).toLocaleString()} (${overview.pending_refund_liability?.count || 0} bookings)`, 'Snapshot'],
+      ];
+
       doc.autoTable(tableColumn, tableRows, { startY: 30 });
-      doc.save(`JezSy_Report_${startDate}_to_${endDate}.pdf`);
+      doc.save(`JezSy_Analytics_${startDate}_to_${endDate}.pdf`);
     } else {
-      // Default CSV
-      const headers = Object.keys(data[0]);
-      const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${row[h]}"`).join(','))].join('\n');
+      const rows = [
+        ['Metric', 'Current Period', 'Previous Period'],
+        ['Gross Cash Collected', overview.gross_cash_collected?.current || 0, overview.gross_cash_collected?.previous || 0],
+        ['Completed Booking Value', overview.completed_booking_value?.current || 0, overview.completed_booking_value?.previous || 0],
+        ['Completed Reservations', overview.completed_reservations?.current || 0, overview.completed_reservations?.previous || 0],
+        ['Unique Customers Served', overview.unique_customers_served?.current || 0, overview.unique_customers_served?.previous || 0],
+        ['Cancellation Rate', overview.cancellation_rate?.current ?? 0, overview.cancellation_rate?.previous ?? 0],
+        ['Pending Refund Liability', overview.pending_refund_liability?.amount || 0, 'Snapshot'],
+      ];
+      const csv = rows.map((r) => r.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `JezSy_Report_${startDate}.csv`;
+      link.download = `JezSy_Analytics_${startDate}_to_${endDate}.csv`;
       link.click();
     }
     setExportRef(false);
   };
-
-  // Dynamic AR Conversions
-  const dynamicConvRates = (() => {
-    const months = {};
-    // Group tryOns
-    arLogs.forEach(log => {
-      const d = parseResDate(log);
-      if(!d) return;
-      const m = d.toLocaleDateString('en-US', { month: 'short' });
-      if(!months[m]) months[m] = { month: m, tryOn: 0, reserved: 0, _date: d };
-      months[m].tryOn++;
-    });
-    // Group reservations
-    reservations.forEach(r => {
-      const d = parseResDate(r);
-      if(!d) return;
-      const m = d.toLocaleDateString('en-US', { month: 'short' });
-      if(!months[m]) months[m] = { month: m, tryOn: 0, reserved: 0, _date: d };
-      months[m].reserved++;
-    });
-    
-    // Sort chronologically and return
-    return Object.values(months)
-      .sort((a, b) => a._date - b._date)
-      .slice(-6); // last 6 months
-  })();
 
   return (
     <div className="page-container">
@@ -440,13 +260,14 @@ const Analytics = () => {
         breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Analytics' }]}
         category="ANALYTICS"
         title="Analytics Dashboard"
-        subtitle="Comprehensive performance metrics for JezSy Collection"
+        subtitle="Canonical business performance metrics for JezSy Collection (Asia/Manila)"
         actions={
           <div className="analytics-controls flex-center gap-3">
             <div className="date-picker-group">
               <div className="search-box">
                 <Calendar size={18} className="search-icon" />
-                <select autoComplete="off"
+                <select
+                  autoComplete="off"
                   id="analytics-date-preset"
                   name="analyticsDatePreset"
                   aria-label="Date range preset"
@@ -461,51 +282,50 @@ const Analytics = () => {
                   <option value="custom">Custom Range</option>
                 </select>
               </div>
-              
+
               <div className="flex-center gap-2 ml-4 date-inputs-row">
-                <input 
+                <input
                   id="analytics-start-date"
                   name="analyticsStartDate"
-                  type="date" 
+                  type="date"
                   aria-label="Start date"
                   autoComplete="off"
-                  className="input-field small-date" 
-                  value={startDate} 
-                  onChange={(e) => { setStartDate(e.target.value); setDateRange('custom'); }}
+                  className="input-field small-date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setDateRange('custom');
+                  }}
                 />
                 <span className="text-secondary">to</span>
-                <input 
+                <input
                   id="analytics-end-date"
                   name="analyticsEndDate"
-                  type="date" 
+                  type="date"
                   aria-label="End date"
                   autoComplete="off"
-                  className="input-field small-date" 
-                  value={endDate} 
-                  onChange={(e) => { setEndDate(e.target.value); setDateRange('custom'); }}
+                  className="input-field small-date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setDateRange('custom');
+                  }}
                 />
               </div>
             </div>
-            
+
             <button className="btn-outline small flex-center gap-1" onClick={() => setShowPreferences(true)}>
               <Settings2 size={18} /> Customize View
             </button>
-            
+
             <div className="dropdown-container">
               <button className="btn-primary flex-center gap-2" onClick={() => setExportRef(!exportRef)}>
                 <Download size={18} /> Export <ChevronDown size={14} />
               </button>
               {exportRef && (
                 <div className="dropdown-menu">
-                  <button onClick={() => handleExport('csv')}>Revenue Summary (CSV)</button>
+                  <button onClick={() => handleExport('csv')}>Summary Metrics (CSV)</button>
                   <button onClick={() => handleExport('pdf')}>PDF Summary Report</button>
-                  <hr style={{ margin: '4px 0', borderColor: 'var(--border-color)' }} />
-                  <button onClick={() => { exportGarmentPerformanceReport(catalog, reservations); setExportRef(false); }}>
-                    👗 Garment Performance (CSV)
-                  </button>
-                  <button onClick={() => { exportInventoryDepreciationReport(catalog, reservations); setExportRef(false); }}>
-                    📊 Depreciation & ROI (CSV)
-                  </button>
                 </div>
               )}
             </div>
@@ -513,40 +333,99 @@ const Analytics = () => {
         }
       />
 
-      {widgetPrefs.showTopStats && (
-        <div className="analytics-grid-4">
-          <StatCard
-            title="Total Revenue"
-            value={`₱${totalRev.toLocaleString()}`}
-            change={revDelta.text}
-            trend={revDelta.trend}
-            icon={TrendingUp}
-            tooltip={`Earned revenue from ${earnedReservations.length} completed reservation(s) in this period.`}
-          />
-          <StatCard
-            title="Total Customers"
-            value={currentTotalCustomers}
-            change={custDelta.text}
-            trend={custDelta.trend}
-            icon={Users}
-            tooltip={`${custDelta.text} within the selected range.`}
-          />
-          <StatCard
-            title="Reservations"
-            value={filteredReservations.length}
-            change={resDelta.text}
-            trend={resDelta.trend}
-            icon={ShoppingBag}
-            tooltip={`Total bookings in this period.`}
-          />
-          <StatCard
-            title="Customer Satisfaction"
-            value={`${avgRating} / 5`}
-            change={`${feedback.length} reviews`}
-            trend="up"
-            icon={Activity}
-          />
+      {error && (
+        <div className="alert alert-danger mb-4 flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg">
+          <AlertCircle size={18} />
+          <span>{error}</span>
         </div>
+      )}
+
+      {loading && !overview && (
+        <div className="p-8 text-center text-secondary">
+          <p>Loading analytics from database...</p>
+        </div>
+      )}
+
+      {overview && widgetPrefs.showTopStats && (
+        <>
+          <div className="analytics-grid-4">
+            <StatCard
+              title="Gross Cash Collected"
+              value={`₱${(overview.gross_cash_collected?.current || 0).toLocaleString()}`}
+              change={cashDelta.text}
+              trend={cashDelta.trend}
+              icon={TrendingUp}
+              tooltip="Sum of paid transactions in the reporting period. Click to view Reservations."
+              drilldownTo="/reservations"
+            />
+            <StatCard
+              title="Completed Booking Value"
+              value={`₱${(overview.completed_booking_value?.current || 0).toLocaleString()}`}
+              change={bookingDelta.text}
+              trend={bookingDelta.trend}
+              icon={ShoppingBag}
+              tooltip="Sum of rental prices for reservations completed in the reporting period."
+              drilldownTo="/reservations?status=Completed"
+            />
+            <StatCard
+              title="Completed Bookings"
+              value={overview.completed_reservations?.current || 0}
+              change={completedResDelta.text}
+              trend={completedResDelta.trend}
+              icon={ShoppingBag}
+              tooltip="Number of reservations completed in the reporting period."
+              drilldownTo="/reservations?status=Completed"
+            />
+            <StatCard
+              title="Unique Customers Served"
+              value={overview.unique_customers_served?.current || 0}
+              change={customerDelta.text}
+              trend={customerDelta.trend}
+              icon={Users}
+              tooltip="Distinct customers with completed reservations in the period."
+              drilldownTo="/customers"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <StatCard
+              title="Cancellation Rate"
+              value={cancellationRateDisplay.value}
+              change={cancellationRateDisplay.text}
+              trend={overview.cancellation_rate?.current > 0 ? 'down' : 'neutral'}
+              icon={AlertTriangle}
+              tooltip="Cancelled / (Completed + Cancelled) in this period."
+              drilldownTo="/reservations?status=Cancelled"
+            />
+            <StatCard
+              title="Pending Refund Liability"
+              value={`₱${(overview.pending_refund_liability?.amount || 0).toLocaleString()}`}
+              change={
+                (overview.pending_refund_liability?.amount || 0) > 0
+                  ? `⚠ ${overview.pending_refund_liability?.count || 0} booking(s) require refund`
+                  : 'No pending refunds'
+              }
+              trend={(overview.pending_refund_liability?.amount || 0) > 0 ? 'down' : 'neutral'}
+              icon={AlertCircle}
+              tooltip="Paid payments on Cancelled reservations requiring refund. Click to review in Reservations."
+              drilldownTo="/reservations?status=Cancelled"
+              alertStyle={(overview.pending_refund_liability?.amount || 0) > 0 ? 'danger' : null}
+            />
+            <StatCard
+              title="Average Product Rating"
+              value={
+                overview.customer_satisfaction?.average_rating !== null
+                  ? `${overview.customer_satisfaction.average_rating} / 5`
+                  : 'No ratings'
+              }
+              change={`${overview.customer_satisfaction?.review_count || 0} verified reviews`}
+              trend="up"
+              icon={Activity}
+              tooltip="Average star rating across verified product reviews. Click to review in Reviews."
+              drilldownTo="/reviews"
+            />
+          </div>
+        </>
       )}
 
       <div className="analytics-layout mt-6">
@@ -554,13 +433,13 @@ const Analytics = () => {
         {widgetPrefs.showRevenueTrends && (
           <div className="card">
             <div className="card-header border-none flex-between">
-              <h3>Reservation & Growth Trends</h3>
-              <div className="badge accent">Daily Volume</div>
+              <h3>Reservation & Volume Trends</h3>
+              <div className="badge accent">Daily (Asia/Manila)</div>
             </div>
             <div className="chart-container" style={{ height: 350 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={reservationTrends}
+                  data={resAnalytics?.daily_trends || []}
                   margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                 >
                   <defs>
@@ -568,12 +447,17 @@ const Analytics = () => {
                       <stop offset="5%" stopColor="var(--charcoal)" stopOpacity={0.2} />
                       <stop offset="95%" stopColor="var(--charcoal)" stopOpacity={0} />
                     </linearGradient>
+                    <linearGradient id="colorComp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                   <RechartsTooltip />
-                  <Area type="monotone" dataKey="reservations" stroke="var(--charcoal)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRes)" />
+                  <Area type="monotone" dataKey="reservations" name="Total Booked" stroke="var(--charcoal)" strokeWidth={2} fillOpacity={1} fill="url(#colorRes)" />
+                  <Area type="monotone" dataKey="completed" name="Completed" stroke="#059669" strokeWidth={2} fillOpacity={1} fill="url(#colorComp)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -584,26 +468,27 @@ const Analytics = () => {
         {widgetPrefs.showCategoryShare && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>Revenue by Category</h3>
+              <h3>Completed Booking Value by Category</h3>
             </div>
             <div className="chart-container flex-center" style={{ height: 350 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categoryShareData}
+                    data={prodPerf?.category_distribution || []}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
                     outerRadius={100}
                     paddingAngle={5}
                     dataKey="value"
+                    nameKey="category"
                   >
-                    {categoryShareData.map((entry, index) => (
+                    {(prodPerf?.category_distribution || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={(val) => `₱${val.toLocaleString()}`} />
-                  <Legend verticalAlign="bottom" height={36}/>
+                  <RechartsTooltip formatter={(val) => `₱${Number(val).toLocaleString()}`} />
+                  <Legend verticalAlign="bottom" height={36} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -612,124 +497,129 @@ const Analytics = () => {
       </div>
 
       <div className="analytics-grid-3 mt-6">
-        {/* Order Funnel */}
+        {/* Order Funnel / Status Breakdown */}
         <div className="card">
           <div className="card-header border-none">
-             <h3>Reservation Status Breakdown</h3>
+            <h3>Reservation Status Breakdown</h3>
           </div>
           <div className="p-4 pt-0">
-             {funnelData.map((item, i) => (
-               <div key={i} className="demo-bar-group mt-3">
-                 <div className="flex-between text-xs mb-1">
-                   <span className="font-semibold">{item.name}</span>
-                   <span>{item.count} orders</span>
-                 </div>
-                 <div className="demo-bar">
-                   <div 
-                    className="demo-fill" 
-                    style={{ 
-                      width: `${(item.count / filteredReservations.length) * 100}%`,
-                      backgroundColor: COLORS[i % COLORS.length]
+            {(resAnalytics?.status_breakdown || []).map((item, i) => (
+              <div key={i} className="demo-bar-group mt-3">
+                <div className="flex-between text-xs mb-1">
+                  <span className="font-semibold">{item.status}</span>
+                  <span>{item.count} bookings</span>
+                </div>
+                <div className="demo-bar">
+                  <div
+                    className="demo-fill"
+                    style={{
+                      width: `${Math.min(100, (item.count / Math.max(1, overview?.completed_reservations?.current + overview?.cancellation_rate?.current_cancelled || item.count)) * 100)}%`,
+                      backgroundColor: COLORS[i % COLORS.length],
                     }}
-                    ></div>
-                 </div>
-               </div>
-             ))}
+                  ></div>
+                </div>
+              </div>
+            ))}
+            {(!resAnalytics?.status_breakdown || resAnalytics.status_breakdown.length === 0) && (
+              <p className="text-xs text-secondary text-center py-4">No reservations in this period.</p>
+            )}
           </div>
         </div>
 
-        {/* Inventory Health */}
+        {/* Inventory Health - Variant Level */}
         <div className="card">
-           <div className="card-header border-none">
-             <h3>Inventory Health</h3>
-           </div>
-           <div className="flex-center flex-column gap-6 p-6">
-              <div className="flex-center gap-10">
-                <div className="text-center">
-                   <div className="stat-value small text-success">{inStock}</div>
-                   <div className="text-xs text-secondary font-bold uppercase tracking-wider">In Stock</div>
-                </div>
-                <div className="text-center">
-                   <div className="stat-value small text-danger">{outOfStock}</div>
-                   <div className="text-xs text-secondary font-bold uppercase tracking-wider">Out of Stock</div>
-                </div>
+          <div className="card-header border-none flex-between">
+            <h3>Inventory Health</h3>
+            <span className="badge text-xs">Variant Cutoff ≤ {invHealth?.threshold || 2}</span>
+          </div>
+          <div className="flex-center flex-column gap-6 p-6">
+            <div className="grid grid-cols-3 gap-4 w-full text-center">
+              <div>
+                <Link to="/inventory" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="stat-value small text-success cursor-pointer hover:underline">{invHealth?.in_stock_variants || 0}</div>
+                  <div className="text-xs text-secondary font-bold uppercase tracking-wider">In Stock</div>
+                </Link>
               </div>
+              <div>
+                <Link to="/inventory?stock=low" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="stat-value small text-warning cursor-pointer hover:underline">
+                    {invHealth?.low_stock_variants || 0}
+                  </div>
+                  <div className="text-xs text-secondary font-bold uppercase tracking-wider">Low Stock</div>
+                </Link>
+              </div>
+              <div>
+                <Link to="/inventory?stock=out" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="stat-value small text-danger cursor-pointer hover:underline">
+                    {invHealth?.out_of_stock_variants || 0}
+                  </div>
+                  <div className="text-xs text-secondary font-bold uppercase tracking-wider">Out of Stock</div>
+                </Link>
+              </div>
+            </div>
+            <div className="w-full">
               <div className="demo-bar-group">
-                 <div className="demo-bar">
-                   <div className="demo-fill" style={{ width: `${(inStock / (activeCatalog.length || 1)) * 100}%`, backgroundColor: 'var(--color-success)' }}></div>
-                 </div>
+                <div className="demo-bar">
+                  <div
+                    className="demo-fill"
+                    style={{
+                      width: `${Math.round(((invHealth?.in_stock_variants || 0) / Math.max(1, invHealth?.total_variants || 1)) * 100)}%`,
+                      backgroundColor: 'var(--color-success)',
+                    }}
+                  ></div>
+                </div>
               </div>
-              <p className="text-xs text-secondary text-center">
-                Total Catalog size: <span className="text-charcoal font-bold">{activeCatalog.length} items</span>
+            </div>
+            <div className="text-xs text-secondary text-center flex flex-column gap-1">
+              <p>
+                Total Variants: <span className="text-charcoal font-bold">{invHealth?.total_variants || 0}</span> ({invHealth?.available_units || 0} units available, {invHealth?.reserved_units || 0} reserved)
               </p>
-           </div>
+              <p>
+                Active Catalog: <span className="text-charcoal font-bold">{invHealth?.total_catalog_items || 0} products</span>
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Top performing items */}
         {widgetPrefs.showTopItems && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>Top Performing Items</h3>
+              <h3>Top Performing Items (Period)</h3>
             </div>
             <div className="table-container pt-0">
               <table className="table compact">
                 <thead>
                   <tr>
                     <th>Product</th>
-                    <th className="text-right">Revenue</th>
+                    <th className="text-center">Bookings</th>
+                    <th className="text-right">Value</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(popularOutfits.length > 0 ? popularOutfits : []).slice(0, 5).map((item, idx) => (
+                  {(prodPerf?.top_performing_items || []).slice(0, 5).map((item, idx) => (
                     <tr key={idx}>
-                      <td className="font-medium text-sm">{item.name}</td>
+                      <td className="font-medium text-sm flex items-center gap-2">
+                        {item.image_url ? (
+                          <img src={item.image_url} alt={item.product_name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                        ) : (
+                          <Package size={20} className="text-secondary" />
+                        )}
+                        <span>{item.product_name}</span>
+                      </td>
+                      <td className="text-center text-sm">{item.completed_reservations}</td>
                       <td className="text-right font-bold text-sm">
-                        ₱{(item.revenue || 0).toLocaleString()}
+                        ₱{Number(item.completed_booking_value || 0).toLocaleString()}
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Top Wishlisted */}
-        {widgetPrefs.showTopItems && enrichedTopWishlist.length > 0 && (
-          <div className="card mt-6">
-            <div className="card-header border-none">
-              <h3>Top Wishlisted</h3>
-            </div>
-            <div className="table-container pt-0">
-              <table className="table compact">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th className="text-right">Wishlists</th>
-                    <th className="text-right">Reservations</th>
-                    <th className="text-right">Conversion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enrichedTopWishlist.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="font-medium text-sm flex-center gap-2 justify-start">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.productName} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
-                        ) : null}
-                        {item.productName}
-                      </td>
-                      <td className="text-right font-bold text-sm text-secondary">
-                        {item.wishlistCount}
-                      </td>
-                      <td className="text-right font-bold text-sm text-secondary">
-                        {item.resCount}
-                      </td>
-                      <td className="text-right font-bold text-sm text-accent">
-                        {item.conversion}%
+                  {(!prodPerf?.top_performing_items || prodPerf.top_performing_items.length === 0) && (
+                    <tr>
+                      <td colSpan={3} className="text-center text-secondary py-4 text-xs">
+                        No completed items in this period.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -738,94 +628,99 @@ const Analytics = () => {
       </div>
 
       <div className="analytics-layout mt-6">
-        {/* AR Conversions */}
-        {widgetPrefs.showARConversions && (
+        {/* Most Wishlisted */}
+        {widgetPrefs.showTopItems && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>AR Try-On Performance</h3>
+              <h3>Most Wishlisted Items (Demand)</h3>
             </div>
-            <div className="chart-container" style={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dynamicConvRates} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-                  <RechartsTooltip cursor={{ fill: 'transparent' }} />
-                  <Bar dataKey="tryOn" name="AR Try-Ons" fill="var(--charcoal)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="reserved" name="Reservations" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="p-4 border-t mt-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 mb-3">Top Style Poses (Engagement)</h4>
-              <div className="space-y-2">
-                {poseGuides.slice(0, 4).map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
-                    <div className="flex items-center gap-3">
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="w-7 h-9 object-cover rounded" />
-                      ) : (
-                        <div className="w-7 h-9 bg-slate-800 rounded flex items-center justify-center text-[10px] text-white">📸</div>
-                      )}
-                      <div>
-                        <p className="font-bold text-gray-900">{p.name}</p>
-                        <p className="text-[10px] text-gray-500">{p.occasion || 'General'} · {p.difficulty || 'Easy'}</p>
-                      </div>
-                    </div>
-                    <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-[11px]">
-                      {p.category || 'Style Hint'}
-                    </span>
-                  </div>
-                ))}
-                {poseGuides.length === 0 && (
-                  <p className="text-xs text-gray-400">No style pose activity recorded yet.</p>
-                )}
-              </div>
+            <div className="table-container pt-0">
+              <table className="table compact">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th className="text-right">Wishlist Demand</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(prodPerf?.most_wishlisted_items || []).slice(0, 5).map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="font-medium text-sm flex items-center gap-2">
+                        {item.image_url ? (
+                          <img src={item.image_url} alt={item.product_name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                        ) : (
+                          <Package size={20} className="text-secondary" />
+                        )}
+                        <span>{item.product_name}</span>
+                      </td>
+                      <td className="text-sm text-secondary">{item.category || 'Uncategorized'}</td>
+                      <td className="text-right font-bold text-sm text-secondary">
+                        {item.wishlist_count}
+                      </td>
+                    </tr>
+                  ))}
+                  {(!prodPerf?.most_wishlisted_items || prodPerf.most_wishlisted_items.length === 0) && (
+                    <tr>
+                      <td colSpan={3} className="text-center text-secondary py-4 text-xs">
+                        No wishlisted items recorded.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* Customer Engagement Metrics */}
+        {/* Customer Cohort Metrics */}
         {widgetPrefs.showMetrics && (
           <div className="card">
             <div className="card-header border-none">
-              <h3>Platform Metrics</h3>
+              <h3>Customer Cohort Metrics</h3>
             </div>
             <div className="p-4 pt-0">
               <div className="metric-row">
-                 <div className="flex-between mb-1">
-                   <span className="text-sm">New Registered Users</span>
-                   <span className="font-bold">{filteredCustomers.length}</span>
-                 </div>
-                 <p className="text-xs text-secondary mb-4">{custDelta.text}</p>
-              </div>
-              
-              <div className="metric-row">
-                 <div className="flex-between mb-1">
-                   <span className="text-sm">Returning Customer Rate</span>
-                   <span className="font-bold">
-                    {filteredCustomers.length > 0 
-                      ? Math.round((filteredReservations.length / filteredCustomers.length) * 10) 
-                      : 0}%
-                   </span>
-                 </div>
-                 <div className="demo-bar"><div className="demo-fill" style={{ width: '45%', backgroundColor: 'var(--color-warning)' }}></div></div>
+                <div className="flex-between mb-1">
+                  <span className="text-sm">New Registered Users</span>
+                  <span className="font-bold">{cohortAnalytics?.new_registered_users || 0}</span>
+                </div>
+                <p className="text-xs text-secondary mb-4">Registered within the selected date range</p>
               </div>
 
-              <div className="metric-row mt-6">
-                 <div className="flex-between mb-1">
-                   <span className="text-sm">Avg Reservation Value</span>
-                   <span className="font-bold">₱{ (totalRev / (earnedReservations.length || 1)).toLocaleString() }</span>
-                 </div>
-                 <div className="demo-bar"><div className="demo-fill" style={{ width: '70%', backgroundColor: 'var(--charcoal)' }}></div></div>
+              <div className="metric-row">
+                <div className="flex-between mb-1">
+                  <span className="text-sm">Unique Customers Served</span>
+                  <span className="font-bold">{cohortAnalytics?.unique_customers_served || 0}</span>
+                </div>
+                <p className="text-xs text-secondary mb-4">Customers with completed bookings in period</p>
+              </div>
+
+              <div className="metric-row">
+                <div className="flex-between mb-1">
+                  <span className="text-sm">Returning Customers</span>
+                  <span className="font-bold">{cohortAnalytics?.returning_customers || 0}</span>
+                </div>
+                <p className="text-xs text-secondary mb-4">Completed in period with a prior completed booking</p>
+              </div>
+
+              <div className="metric-row">
+                <div className="flex-between mb-1">
+                  <span className="text-sm">Returning Customer Rate</span>
+                  <span className="font-bold">
+                    {cohortAnalytics?.returning_customer_rate !== null && cohortAnalytics?.returning_customer_rate !== undefined
+                      ? `${cohortAnalytics.returning_customer_rate}%`
+                      : 'N/A'}
+                  </span>
+                </div>
+                <p className="text-xs text-secondary">Returning customers / unique customers served</p>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Analytics Preferences Modal */}
+      {/* Preferences Modal */}
       {showPreferences && (
         <div className="modal-overlay" role="presentation" onClick={() => setShowPreferences(false)}>
           <div className="modal-content" role="presentation" onClick={(e) => e.stopPropagation()}>
@@ -835,16 +730,16 @@ const Analytics = () => {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="modal-body p-6">
               <p className="text-secondary mb-6 leading-relaxed">
                 Choose which analytical sections you want to display on your view. Your choices are automatically saved locally.
               </p>
-              
+
               <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
                 <div>
                   <h4 className="font-medium mb-1">Top Statistics</h4>
-                  <p className="text-sm text-secondary">Summary cards for Revenue, Customers, etc.</p>
+                  <p className="text-sm text-secondary">Summary cards for Gross Cash, Completed Booking Value, etc.</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle Top Statistics">
                   <input
@@ -859,7 +754,7 @@ const Analytics = () => {
               <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
                 <div>
                   <h4 className="font-medium mb-1">Trends Chart</h4>
-                  <p className="text-sm text-secondary">Reservation & Revenue area trends.</p>
+                  <p className="text-sm text-secondary">Reservation volume and completion trends.</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle Trends Chart">
                   <input
@@ -870,26 +765,11 @@ const Analytics = () => {
                   <span className="toggle-slider"></span>
                 </label>
               </div>
-              
-              <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
-                <div>
-                  <h4 className="font-medium mb-1">Conversion Chart</h4>
-                  <p className="text-sm text-secondary">AR Try-On vs Reservation comparisons.</p>
-                </div>
-                <label className="toggle-switch" aria-label="Toggle Conversion Chart">
-                  <input
-                    type="checkbox"
-                    checked={widgetPrefs.showARConversions}
-                    onChange={() => handleTogglePref('showARConversions')}
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
 
               <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
                 <div>
                   <h4 className="font-medium mb-1">Category Breakdown</h4>
-                  <p className="text-sm text-secondary">Pie chart showing category profit distribution.</p>
+                  <p className="text-sm text-secondary">Pie chart showing category booking value distribution.</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle Category Breakdown">
                   <input
@@ -904,7 +784,7 @@ const Analytics = () => {
               <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
                 <div>
                   <h4 className="font-medium mb-1">Top Performing Items</h4>
-                  <p className="text-sm text-secondary">Table showing the most generated revenue list.</p>
+                  <p className="text-sm text-secondary">Top completed booking items and wishlists.</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle Top Performing Items">
                   <input
@@ -918,8 +798,8 @@ const Analytics = () => {
 
               <div className="form-group flex-between align-center p-4 border border-color rounded-xl mb-4" style={{ borderColor: 'var(--border-color)', borderRadius: '12px' }}>
                 <div>
-                  <h4 className="font-medium mb-1">Customer Metrics</h4>
-                  <p className="text-sm text-secondary">Breakdowns for Returning rates, Active growth, etc.</p>
+                  <h4 className="font-medium mb-1">Customer Cohort Metrics</h4>
+                  <p className="text-sm text-secondary">Breakdowns for Returning rates, unique customers, etc.</p>
                 </div>
                 <label className="toggle-switch" aria-label="Toggle Customer Metrics">
                   <input
@@ -930,14 +810,13 @@ const Analytics = () => {
                   <span className="toggle-slider"></span>
                 </label>
               </div>
-
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };
 
 export default Analytics;
+
