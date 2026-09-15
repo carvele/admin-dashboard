@@ -38,6 +38,7 @@ import {
 import { Logger } from '../../utils/Logger';
 import { supabase } from '../../lib/supabaseClient';
 import { formatPHDate } from '../../utils/dateFormatter';
+import { ensureStyleCode, buildVariantSku } from '../../utils/skuHelper';
 import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
 import './ProductForm.css';
@@ -269,18 +270,13 @@ const ProductForm = ({ readOnly = false }) => {
 
   // Auto-generate SKU from product name
   useEffect(() => {
-    if (!isEditing && formData.name.trim()) {
-      const words = formData.name
-        .trim()
-        .split(' ')
-        .filter((w) => w.length > 0);
-      let acronym = 'ITM';
-      if (words.length >= 2) acronym = (words[0][0] + words[1][0]).toUpperCase();
-      else if (words.length === 1) acronym = formData.name.substring(0, 3).toUpperCase();
-      const generated = `JZ-${acronym}-${String(Date.now()).slice(-4)}`;
+    if (!isEditing && formData.name.trim() && !formData.styleCode) {
+      const generated = ensureStyleCode({
+        productName: formData.name,
+      });
       setFormData((prev) => ({ ...prev, styleCode: generated }));
     }
-  }, [formData.name, isEditing]);
+  }, [formData.name, formData.styleCode, isEditing]);
 
   // Rebuild variant matrix: Size × Color only (no pattern dimension)
   const rebuildMatrix = useCallback( 
@@ -543,7 +539,11 @@ const ProductForm = ({ readOnly = false }) => {
         color: (formData.colors || []).join(', '),
         careInstructions: sanitizeText(formData.careInstructions),
         fitAndSizing: formData.fitAndSizing,
-        styleCode: formData.styleCode,
+        styleCode: ensureStyleCode({
+          existingStyleCode: formData.styleCode,
+          productName: formData.name,
+          productId: id || '',
+        }),
         season: formData.season,
         occasion: formData.occasion,
         visibility: formData.visibility,
@@ -647,7 +647,8 @@ const ProductForm = ({ readOnly = false }) => {
                 newSizes.map((size) =>
                   createInventoryItem({
                     productDocId: id,
-                    sku: payload.styleCode || payload.id,
+                    sku: payload.styleCode,
+                    variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
                     item: payload.name,
                     category: payload.category,
                     size,
@@ -715,7 +716,8 @@ const ProductForm = ({ readOnly = false }) => {
             const inventoryPromises = payload.sizes.map((size) =>
               createInventoryItem({
                 productDocId: newDocId,
-                sku: payload.styleCode || payload.id,
+                sku: payload.styleCode,
+                variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
                 item: payload.name,
                 category: payload.category,
                 size: size,
