@@ -1,25 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/permissions';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-import {
   Calendar,
   Users,
-  Shirt,
   Clock,
   AlertTriangle,
+  AlertCircle,
   TrendingUp,
   RefreshCw,
   CheckCircle2,
@@ -30,91 +18,61 @@ import {
   Zap,
   PlusCircle,
   MessageSquare,
+  ArrowRight,
+  Package,
 } from 'lucide-react';
-import { getPaginatedReservations } from '../../services/reservationService';
-// @ts-expect-error -- helpers.d.ts missing declarations for getUserDisplayName, formatDate, formatSmartDateTime; tracked for STRAT-005
-import { getUserDisplayName, formatRelativeTime, formatDate, formatSmartDateTime } from '../../utils/helpers';
-
-const defaultPreferences = {
-  statTotalReservations: true,
-  statActiveCustomers: true,
-  statPendingRequests: true,
-  statARUsage: true,
-  chartReservationTrends: true,
-  chartPopularOutfits: true,
-  widgetLowStock: true,
-  widgetRecentCustomers: true,
-  widgetLogistics: true,
-  widgetActivityFeed: true,
-};
-
-import { getPaginatedCustomers } from '../../services/customerService';
-import { getInventory, subscribeToInventory } from '../../services/productService';
-import { isStockAlert, getStockHealth, getStockBreakdown } from '../../utils/stockStatus';
 import PageHeader from '../../components/PageHeader';
-import { isPending } from '../../utils/reservationStatus';
-import { getSuggestedOutfits, getARSessions } from '../../services/wardrobeService';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
+import {
+  getDashboardOperations,
+  getTopInventoryAlerts,
+  getRecentSignups,
+  getRecentDashboardActivity,
+  deriveMtdDateRange,
+} from '../../services/dashboardService';
+import {
+  getInventoryHealthAnalytics,
+  getAnalyticsOverview,
+} from '../../services/analyticsService';
+import { getUserDisplayName } from '../../utils/helpers';
+import { formatLogSentence, relativeTime } from '../../utils/activityLogFormat';
 import { motion } from 'framer-motion';
 import './Dashboard.css';
 
-const COLORS = ['#8B6F5C', '#C9BEB4', '#E8DDD3', '#2C2C2C'];
-
-const parseDate = (d: any) => {
-  if (!d) return new Date(0);
-  if (d.toDate) return d.toDate();
-  if (d.seconds) return new Date(d.seconds * 1000);
-  const parsed = new Date(d);
-  return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+const defaultPreferences = {
+  statActionRequired: true,
+  statPreparing: true,
+  statReadyForPickup: true,
+  statPendingRefunds: true,
+  widgetTodaySchedule: true,
+  widgetBusinessSnapshot: true,
+  widgetInventoryAttention: true,
+  widgetRecentSignups: true,
+  widgetRecentActivity: true,
 };
+
+interface DomainState<T> {
+  data: T | null;
+  loading: boolean;
+  error: Error | null;
+  lastUpdated: Date | null;
+}
+
+const initialDomainState = <T,>(): DomainState<T> => ({
+  data: null,
+  loading: true,
+  error: null,
+  lastUpdated: null,
+});
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, isAdminUnlocked } = useAuth() as { user: any, isAdminUnlocked: boolean };
+  const { user, isAdminUnlocked } = useAuth() as { user: any; isAdminUnlocked: boolean };
   const canCustomize = can(user?.role, 'customize_dashboard');
-  
-  const [reservations, setReservations] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [totalReservationsCount, setTotalReservationsCount] = useState(0);
-  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
-  
-  const loadDashboard = React.useCallback(async () => {
-    try {
-      const [resRaw, cusRaw, invData, arCount, outfitsData] = await Promise.all([
-        getPaginatedReservations(100, 0, {}),
-        getPaginatedCustomers(100, 0, {}),
-        getInventory(100),
-        getARSessions(),
-        getSuggestedOutfits(),
-      ]);
-      const resResult = resRaw as any;
-      const cusResult = cusRaw as any;
-      setReservations(resResult.data || []);
-      setTotalReservationsCount(resResult.total || 0);
-      
-      const activeCusts = (cusResult.data || []).filter((u: any) => !u.role || u.role === 'customer');
-      setCustomers(activeCusts);
-      setTotalCustomersCount(cusResult.total || 0);
-      
-      setInventory(invData || []);
-      setArSessionCount(arCount?.length || 0);
-      setSuggestedOutfits(outfitsData || []);
-      setLastSynced(new Date());
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    }
-  }, []);
 
-  // Initialize realtime sync for global alerts and auto-refresh
-  useRealtimeSync(loadDashboard);
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [suggestedOutfits, setSuggestedOutfits] = useState<any[]>([]);
-  const [arSessionCount, setArSessionCount] = useState(0);
-  const [trendFilter, setTrendFilter] = useState('This Week');
-  const [lastSynced, setLastSynced] = useState(new Date());
-
+  // Preferences
   const [widgetPrefs, setWidgetPrefs] = useState(() => {
-    const saved = localStorage.getItem('dashboard_widget_prefs');
+    const saved = localStorage.getItem('dashboard_widget_prefs_v2');
     return saved ? JSON.parse(saved) : defaultPreferences;
   });
   const [showPreferences, setShowPreferences] = useState(false);
@@ -122,134 +80,167 @@ const Dashboard = () => {
   const togglePref = (key: keyof typeof defaultPreferences) => {
     const nextPrefs = { ...widgetPrefs, [key]: !widgetPrefs[key] };
     setWidgetPrefs(nextPrefs);
-    localStorage.setItem('dashboard_widget_prefs', JSON.stringify(nextPrefs));
+    localStorage.setItem('dashboard_widget_prefs_v2', JSON.stringify(nextPrefs));
   };
 
+  // ── Four Bounded Data Domains ───────────────────────────────────────────
+  // Domain 1: Operations (Action queues, refunds, today's schedule)
+  const [operations, setOperations] = useState<DomainState<any>>(initialDomainState);
+  // Domain 2: Inventory Attention (Aggregate counts & top 5 alerts)
+  const [inventory, setInventory] = useState<DomainState<{ health: any; alerts: any[] }>>(initialDomainState);
+  // Domain 3: Business Snapshot (Month-to-date canonical overview)
+  const [snapshot, setSnapshot] = useState<DomainState<any>>(initialDomainState);
+  // Domain 4: Customer Pulse & Activity (Recent signups & allowlisted logs)
+  const [activityDomain, setActivityDomain] = useState<DomainState<{ signups: any[]; logs: any[] }>>(initialDomainState);
 
-
-  React.useEffect(() => {
-    // Non-inventory data: load once, poll every 5 minutes
-    loadDashboard();
-    const intervalId = setInterval(loadDashboard, 5 * 60 * 1000);
-    // Inventory: real-time subscription so stock alerts update instantly
-    const unsubInventory = subscribeToInventory((invData: any[]) => {
-      setInventory(invData || []);
-      setLastSynced(new Date());
-    });
-    return () => {
-      clearInterval(intervalId);
-      unsubInventory();
-    };
-  }, [loadDashboard]);
-
-  // 5-tier stock alert analysis (demand-aware, real-time) - Active items only
-  const activeInventory = inventory.filter((i: any) => i.deleted !== true);
-
-  const stockBreakdown = getStockBreakdown(
-    activeInventory.map((i: any) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
-  );
-
-  const totalReservations = totalReservationsCount;
-  // profiles has no `status` column — "active" = not blocked
-  const activeCustomers = totalCustomersCount;
-  const pendingRequests = reservations.filter((r) => isPending(r.status)).length;
-  // 5-tier: alert = very-low + critical + no-stock items (Active items only)
-  const lowStockItems = activeInventory
-    .filter((i: any) => isStockAlert(i.available, i.total, i.reserved || 0))
-    .sort((a: any, b: any) => {
-      const hA = getStockHealth(a.available, a.total, a.reserved || 0);
-      const hB = getStockHealth(b.available, b.total, b.reserved || 0);
-      return hA.priority - hB.priority; // worst (priority=1) first
-    })
-    .slice(0, 5);
-  const recentCustomers = [...customers]
-    .sort((a, b) => (b.id || '').localeCompare(a.id || ''))
-    .slice(0, 3);
-
-  // --- NEW COMMAND CENTER LOGIC ---
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // 1. Daily Logistics (Pickups for Today) -- JezSy is reserve-and-collect
-  // only, there is no rental return leg, so this tracks pickups alone.
-  const todayLogistics = reservations
-    .filter(r => {
-      const pickupDate = parseDate(r.reservationDate || r.date);
-      pickupDate.setHours(0,0,0,0);
-      return pickupDate.getTime() === today.getTime();
-    })
-    .map(r => {
-      const pickupDate = parseDate(r.reservationDate || r.date);
-      return {
-        ...r,
-        actionType: 'Pickup',
-        timeStr: r.appointmentTime || pickupDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
-      };
-    });
-
-  // 2. Unified Activity Feed (Last 10 events)
-  const activityFeed = [
-    ...reservations.map(r => ({ type: 'reservation', date: parseDate(r.createdAt || r.date), desc: `${r.customerName || 'A customer'} booked ${r.productName || 'an outfit'}`, user: r.customerName })),
-    ...customers.map(c => ({ type: 'customer', date: parseDate(c.createdAt || c.id), desc: `New customer ${getUserDisplayName(c)} joined`, user: getUserDisplayName(c) })),
-  ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 10);
-
-  // Popular Outfit Combinations — sourced from admin-created suggestedOutfits
-  const outfitCounts: Record<string, number> = {};
-  suggestedOutfits.forEach((o) => {
-    const outfitName = o.name || o.title || 'Untitled Outfit';
-    // Count how many items/pieces each suggestion has as a popularity proxy
-    const pieceCount = (o.items || o.products || []).length || 1;
-    outfitCounts[outfitName] = (outfitCounts[outfitName] || 0) + pieceCount;
-  });
-  const computedPopular = Object.entries(outfitCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([name, count]) => ({ name, value: count }));
-  const finalPopular =
-    computedPopular.length > 0 ? computedPopular : [{ name: 'No suggestions yet', value: 1 }];
-
-  // Build dynamic reservation trends from actual DB data
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const dayCounts: Record<string, number> = {};
-  daysOfWeek.forEach((d) => (dayCounts[d] = 0));
-
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  reservations.forEach((r) => {
-    // Android writes 'reservationDate'; admin uses 'date'
-    const rawDate = r.reservationDate || r.date;
-    if (rawDate) {
-      const resDate = parseDate(rawDate);
-      // Filter based on dropdown
-      if (trendFilter === 'This Week' && resDate < weekAgo) return;
-      if (trendFilter === 'This Month' && resDate < monthAgo) return;
-
-      const dayName = daysOfWeek[resDate.getDay()];
-      dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+  // ── Load Operations Domain ──────────────────────────────────────────────
+  const loadOperations = useCallback(async () => {
+    setOperations((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getDashboardOperations();
+      setOperations({
+        data,
+        loading: false,
+        error: null,
+        lastUpdated: new Date(),
+      });
+      return data;
+    } catch (err: any) {
+      console.error('[Dashboard] loadOperations failed:', err);
+      setOperations((prev) => ({
+        ...prev,
+        loading: false,
+        error: err,
+        lastUpdated: new Date(),
+      }));
+      return null;
     }
-  });
-  const reservationTrends = daysOfWeek.map((d) => ({ name: d, reservations: dayCounts[d] }));
-  // Framer Motion Variants
+  }, []);
+
+  // ── Load Inventory Domain ───────────────────────────────────────────────
+  const loadInventory = useCallback(async () => {
+    setInventory((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const [health, alerts] = await Promise.all([
+        getInventoryHealthAnalytics(),
+        getTopInventoryAlerts(5),
+      ]);
+      setInventory({
+        data: { health, alerts },
+        loading: false,
+        error: null,
+        lastUpdated: new Date(),
+      });
+    } catch (err: any) {
+      console.error('[Dashboard] loadInventory failed:', err);
+      setInventory((prev) => ({
+        ...prev,
+        loading: false,
+        error: err,
+        lastUpdated: new Date(),
+      }));
+    }
+  }, []);
+
+  // ── Load Business Snapshot Domain (MTD) ──────────────────────────────────
+  const loadSnapshot = useCallback(async (businessDateStr: string) => {
+    setSnapshot((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const mtd = deriveMtdDateRange(businessDateStr || new Date().toISOString().slice(0, 10));
+      const overview = await getAnalyticsOverview(mtd.startDateStr, mtd.endDateStr, mtd.timezone);
+      setSnapshot({
+        data: overview,
+        loading: false,
+        error: null,
+        lastUpdated: new Date(),
+      });
+    } catch (err: any) {
+      console.error('[Dashboard] loadSnapshot failed:', err);
+      setSnapshot((prev) => ({
+        ...prev,
+        loading: false,
+        error: err,
+        lastUpdated: new Date(),
+      }));
+    }
+  }, []);
+
+  // ── Load Customer & Activity Domain ─────────────────────────────────────
+  const loadActivityDomain = useCallback(async () => {
+    setActivityDomain((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const [signups, logs] = await Promise.all([
+        getRecentSignups(5),
+        getRecentDashboardActivity(8),
+      ]);
+      setActivityDomain({
+        data: { signups, logs },
+        loading: false,
+        error: null,
+        lastUpdated: new Date(),
+      });
+    } catch (err: any) {
+      console.error('[Dashboard] loadActivityDomain failed:', err);
+      setActivityDomain((prev) => ({
+        ...prev,
+        loading: false,
+        error: err,
+        lastUpdated: new Date(),
+      }));
+    }
+  }, []);
+
+  // ── Master Loader ────────────────────────────────────────────────────────
+  const loadAll = useCallback(async () => {
+    const opsData = await loadOperations();
+    loadInventory();
+    loadActivityDomain();
+    if (opsData?.business_date) {
+      loadSnapshot(opsData.business_date);
+    } else {
+      const todayInManila = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+      loadSnapshot(todayInManila);
+    }
+  }, [loadOperations, loadInventory, loadActivityDomain, loadSnapshot]);
+
+  useEffect(() => {
+    loadAll();
+    const intervalId = setInterval(loadAll, 5 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [loadAll]);
+
+  // Real-time synchronization
+  useRealtimeSync(loadAll);
+
+  // Motion variants
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1 },
+      transition: { staggerChildren: 0.08 },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } as any },
   };
+
+  const opsData = operations.data;
+  const actionQueues = opsData?.action_queues;
+  const refundLiability = opsData?.pending_refund_liability;
+  const todaySchedule = opsData?.today_schedule || [];
+  const invHealth = inventory.data?.health;
+  const invAlerts = inventory.data?.alerts || [];
+  const mtdOverview = snapshot.data;
+  const recentSignups = activityDomain.data?.signups || [];
+  const recentLogs = activityDomain.data?.logs || [];
 
   return (
     <div className="dashboard-page">
       <PageHeader
-        title="Dashboard Overview"
-        subtitle="Welcome back! Here is what is happening at JezSy Collection today."
+        title="Operational Mission Control"
+        subtitle="Live boutique operations, queue attention, and daily logistics in Asia/Manila."
         category="OVERVIEW"
         actions={
           <div className="system-health flex-center gap-3">
@@ -257,13 +248,13 @@ const Dashboard = () => {
               className="health-indicator flex-center gap-1 text-success text-sm font-medium px-3 py-1 rounded-full"
               style={{ backgroundColor: 'var(--status-completed-bg)' }}
             >
-              <CheckCircle2 size={16} /> Pipeline Healthy
+              <CheckCircle2 size={16} /> Operations Active
             </div>
             <div className="sync-status flex-center gap-1 text-secondary text-xs">
-              Last synced: {lastSynced.toLocaleTimeString()}
+              Manila Date: {opsData?.business_date || 'Today'}
             </div>
-            <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadDashboard}>
-              <RefreshCw size={14} /> Refresh
+            <button className="btn-outline small flex-center gap-1 ml-2" onClick={loadAll}>
+              <RefreshCw size={14} className={operations.loading ? 'animate-spin' : ''} /> Refresh
             </button>
             {canCustomize && (
               <button className="btn-outline small flex-center gap-1 ml-2" onClick={() => setShowPreferences(true)}>
@@ -275,7 +266,7 @@ const Dashboard = () => {
       />
 
       {/* QUICK ACTIONS BAR */}
-      <motion.div 
+      <motion.div
         className="quick-actions-bar card flex-between align-center px-6 py-4"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -304,409 +295,475 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
+      {/* TOP OPERATIONAL KPI ROW */}
       <motion.div
         className="stats-grid"
         variants={containerVariants}
         initial="hidden"
         animate="show"
       >
-        {widgetPrefs.statTotalReservations && (
-        <motion.div
-          variants={itemVariants}
-          whileHover={{ y: -4 }}
-          className="stat-card stat-card-clickable"
-          role="button"
-          tabIndex={0}
-          aria-label="View all reservations"
-          onClick={() => navigate('/reservations')}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations')}
-        >
-          <div className="stat-icon calendar">
-            <Calendar size={24} />
-          </div>
-          <div className="stat-info">
-            <p className="stat-label">Total Reservations</p>
-            <h3 className="stat-value">{totalReservations}</h3>
-            <span className="stat-trend positive">
-              <TrendingUp size={14} /> Live from DB
-            </span>
-          </div>
-        </motion.div>
+        {/* KPI 1: Action Required */}
+        {widgetPrefs.statActionRequired && (
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -4 }}
+            className="stat-card stat-card-clickable"
+            role="button"
+            tabIndex={0}
+            aria-label="View actionable reservations"
+            onClick={() => navigate('/reservations')}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations')}
+          >
+            <div className="stat-icon clock">
+              <Clock size={24} />
+            </div>
+            <div className="stat-info">
+              <p className="stat-label font-semibold">Action Required</p>
+              {operations.loading ? (
+                <div className="stat-value text-secondary text-base">Loading...</div>
+              ) : operations.error ? (
+                <div className="text-xs text-danger flex align-center gap-1">
+                  <span>Unavailable</span>
+                  <button className="underline ml-1" onClick={(e) => { e.stopPropagation(); loadOperations(); }}>Retry</button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="stat-value">{actionQueues?.unique_action_count ?? 0}</h3>
+                  <div className="text-xs text-secondary mt-1">
+                    {(actionQueues?.unique_action_count || 0) > 0 ? (
+                      <span>
+                        {actionQueues?.preparing > 0 && `${actionQueues.preparing} Prep `}
+                        {actionQueues?.refund_required > 0 && `· ${actionQueues.refund_required} Refund `}
+                        {actionQueues?.awaiting_payment > 0 && `· ${actionQueues.awaiting_payment} To Pay `}
+                        {actionQueues?.receipt_review > 0 && `· ${actionQueues.receipt_review} Receipt `}
+                        {actionQueues?.ready_for_pickup > 0 && `· ${actionQueues.ready_for_pickup} Pickup `}
+                      </span>
+                    ) : (
+                      <span className="text-success font-medium">All caught up</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
         )}
 
-        {widgetPrefs.statActiveCustomers && (
-        <motion.div
-          variants={itemVariants}
-          whileHover={{ y: -4 }}
-          className="stat-card stat-card-clickable"
-          role="button"
-          tabIndex={0}
-          aria-label="View active customers"
-          onClick={() => navigate('/customers?filter=active')}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/customers?filter=active')}
-        >
-          <div className="stat-icon users">
-            <Users size={24} />
-          </div>
-          <div className="stat-info">
-            <p className="stat-label">Active Customers</p>
-            <h3 className="stat-value">{activeCustomers}</h3>
-            <span className="stat-trend positive">
-              <TrendingUp size={14} /> Live from DB
-            </span>
-          </div>
-        </motion.div>
+        {/* KPI 2: Preparing */}
+        {widgetPrefs.statPreparing && (
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -4 }}
+            className="stat-card stat-card-clickable"
+            role="button"
+            tabIndex={0}
+            aria-label="View preparing reservations"
+            onClick={() => navigate('/reservations?status=Preparing')}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations?status=Preparing')}
+          >
+            <div className="stat-icon calendar">
+              <Package size={24} />
+            </div>
+            <div className="stat-info">
+              <p className="stat-label font-semibold">In Preparation</p>
+              {operations.loading ? (
+                <div className="stat-value text-secondary text-base">Loading...</div>
+              ) : operations.error ? (
+                <div className="text-xs text-danger">Unavailable</div>
+              ) : (
+                <>
+                  <h3 className="stat-value">{actionQueues?.preparing ?? 0}</h3>
+                  <span className="stat-trend neutral">Garments being prepped / fitted</span>
+                </>
+              )}
+            </div>
+          </motion.div>
         )}
 
-        {widgetPrefs.statPendingRequests && (
-        <motion.div
-          variants={itemVariants}
-          whileHover={{ y: -4 }}
-          className="stat-card stat-card-clickable"
-          role="button"
-          tabIndex={0}
-          aria-label="View pending reservation requests"
-          onClick={() => navigate('/reservations?view=table&scope=active&status=To%20Pay')}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations?view=table&scope=active&status=To%20Pay')}
-        >
-          <div className="stat-icon clock">
-            <Clock size={24} />
-          </div>
-          <div className="stat-info">
-            <p className="stat-label">Pending Requests</p>
-            <h3 className="stat-value">{pendingRequests}</h3>
-            <span className={pendingRequests > 0 ? 'stat-trend negative' : 'stat-trend positive'}>
-              {pendingRequests > 0 ? 'Requires attention' : 'All caught up'}
-            </span>
-          </div>
-        </motion.div>
+        {/* KPI 3: Ready for Pickup */}
+        {widgetPrefs.statReadyForPickup && (
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -4 }}
+            className="stat-card stat-card-clickable"
+            role="button"
+            tabIndex={0}
+            aria-label="View ready for pickup reservations"
+            onClick={() => navigate('/reservations?status=To%20Pickup')}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations?status=To%20Pickup')}
+          >
+            <div className="stat-icon users">
+              <MapPin size={24} />
+            </div>
+            <div className="stat-info">
+              <p className="stat-label font-semibold">Ready for Pickup</p>
+              {operations.loading ? (
+                <div className="stat-value text-secondary text-base">Loading...</div>
+              ) : operations.error ? (
+                <div className="text-xs text-danger">Unavailable</div>
+              ) : (
+                <>
+                  <h3 className="stat-value">{actionQueues?.ready_for_pickup ?? 0}</h3>
+                  <span className="stat-trend neutral">Packaged & awaiting collection</span>
+                </>
+              )}
+            </div>
+          </motion.div>
         )}
 
-        {widgetPrefs.statARUsage && (
-        <motion.div
-          variants={itemVariants}
-          whileHover={{ y: -4 }}
-          className="stat-card stat-card-clickable"
-          role="button"
-          tabIndex={0}
-          aria-label="View AR Try-On analytics"
-          onClick={() => navigate('/analytics')}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/analytics')}
-        >
-          <div className="stat-icon ar">
-            <Shirt size={24} />
-          </div>
-          <div className="stat-info">
-            <p className="stat-label">AR Try-On Usage</p>
-            <h3 className="stat-value">{arSessionCount}</h3>
-            <span className="stat-trend positive">
-              <TrendingUp size={14} /> Live from DB
-            </span>
-          </div>
-        </motion.div>
+        {/* KPI 4: Pending Refund Liability */}
+        {widgetPrefs.statPendingRefunds && (
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -4 }}
+            className={`stat-card stat-card-clickable ${(refundLiability?.amount || 0) > 0 ? 'border-red-200 bg-red-50/40 dark:bg-red-950/20' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-label="View cancelled reservations requiring refund"
+            onClick={() => navigate('/reservations?status=Cancelled')}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/reservations?status=Cancelled')}
+          >
+            <div className={`stat-icon ${(refundLiability?.amount || 0) > 0 ? 'text-danger' : 'text-secondary'}`} style={{ backgroundColor: (refundLiability?.amount || 0) > 0 ? 'var(--status-cancelled-bg)' : 'var(--bg-card)' }}>
+              <AlertCircle size={24} />
+            </div>
+            <div className="stat-info">
+              <p className="stat-label font-semibold">Pending Refund Liability</p>
+              {operations.loading ? (
+                <div className="stat-value text-secondary text-base">Loading...</div>
+              ) : operations.error ? (
+                <div className="text-xs text-danger">Unavailable</div>
+              ) : (
+                <>
+                  <h3 className={`stat-value ${(refundLiability?.amount || 0) > 0 ? 'text-danger' : ''}`}>
+                    ₱{(refundLiability?.amount || 0).toLocaleString()}
+                  </h3>
+                  <span className={`stat-trend ${(refundLiability?.amount || 0) > 0 ? 'text-danger font-semibold' : 'positive'}`}>
+                    {(refundLiability?.amount || 0) > 0 ? (
+                      `⚠ ${refundLiability?.count || 0} booking(s) require refund`
+                    ) : (
+                      'No pending refunds'
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
+          </motion.div>
         )}
       </motion.div>
 
-      <div className={`charts-grid${(!widgetPrefs.chartReservationTrends || !widgetPrefs.chartPopularOutfits) ? ' charts-grid--single' : ''}`}>
-        {widgetPrefs.chartReservationTrends && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+      {/* TODAY'S OPERATIONS & BUSINESS SNAPSHOT GRID */}
+      <div className="analytics-layout mt-6">
+        {/* Left: Today's Scheduled Pickups */}
+        {widgetPrefs.widgetTodaySchedule && (
+          <div className="card">
+            <div className="card-header border-none flex-between">
+              <div className="flex align-center gap-2">
+                <Calendar size={20} className="text-accent" />
+                <h3>Today&apos;s Pickups</h3>
+              </div>
+              <span className="badge accent">Asia/Manila</span>
+            </div>
 
-          transition={{ delay: 0.3 }}
-          className="chart-card card"
-        >
-          <div className="card-header">
-            <h3>Reservation Trends</h3>
-            <select autoComplete="off" id="field_p8j7mw2" name="field_p8j7mw2"
-              className="input-field small-select"
-              value={trendFilter}
-              onChange={(e) => setTrendFilter(e.target.value)}
-            >
-              <option value="This Week">This Week</option>
-              <option value="This Month">This Month</option>
-            </select>
+            <div className="p-4 pt-0">
+              {operations.loading ? (
+                <div className="p-8 text-center text-secondary">
+                  <RefreshCw className="animate-spin inline mr-2" size={16} /> Loading today&apos;s schedule...
+                </div>
+              ) : operations.error ? (
+                <div className="p-6 text-center text-danger">
+                  <p>Unable to load today&apos;s schedule.</p>
+                  <button className="btn-outline small mt-2" onClick={loadOperations}>Retry</button>
+                </div>
+              ) : todaySchedule.length === 0 ? (
+                <div className="p-8 text-center text-secondary bg-cream rounded-xl">
+                  No pickups scheduled for today.
+                </div>
+              ) : (
+                <div className="table-container pt-0">
+                  <table className="table compact">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Customer</th>
+                        <th>Outfit / Product</th>
+                        <th>Status</th>
+                        <th className="text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {todaySchedule.map((item: any) => (
+                        <tr key={item.id}>
+                          <td className="font-semibold text-sm whitespace-nowrap">
+                            {item.appointment_time_formatted || 'Scheduled'}
+                          </td>
+                          <td className="text-sm font-medium">{item.customer_name}</td>
+                          <td className="text-sm text-secondary">
+                            {item.product_name} · {item.size} {item.color ? `(${item.color})` : ''}
+                          </td>
+                          <td>
+                            <span className={`badge ${item.status === 'Completed' ? 'accent' : item.status === 'Preparing' ? 'warning' : 'secondary'}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            <button
+                              className="btn-outline small"
+                              onClick={() => navigate(`/reservations?search=${encodeURIComponent(item.display_id || item.customer_name)}`)}
+                            >
+                              Review
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart
-                data={reservationTrends}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8B6F5C" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#8B6F5C" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#6B6B6B' }}
-                />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B' }} allowDecimals={false} />
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="reservations"
-                  stroke="#8B6F5C"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRes)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
         )}
 
-        {widgetPrefs.chartPopularOutfits && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          className="chart-card card"
-        >
-          <div className="card-header">
-            <h3>Popular Outfit Combinations</h3>
-            <button className="text-btn" onClick={() => navigate('/wardrobe')}>
-              View All
-            </button>
-          </div>
-          <div className="chart-container pie-container">
-            {computedPopular.length === 0 ? (
-              <div className="empty-state-placeholder">
-                <p>No outfit data yet</p>
+        {/* Right: Business Snapshot (Month-to-Date Reusing Analytics Contract) */}
+        {widgetPrefs.widgetBusinessSnapshot && (
+          <div className="card">
+            <div className="card-header border-none flex-between">
+              <div className="flex align-center gap-2">
+                <TrendingUp size={20} className="text-accent" />
+                <h3>Business Pulse (MTD)</h3>
               </div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie
-                      data={finalPopular}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {finalPopular.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="pie-legend">
-                  {finalPopular.map((_entry, index) => (
-                    <div key={index} className="legend-item">
-                      <span
-                        className="legend-dot"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      ></span>
-                      <span className="legend-text">{finalPopular[index].name}</span>
-                    </div>
-                  ))}
+              <Link to="/analytics" className="text-xs text-accent hover:underline flex align-center gap-1 font-medium">
+                Full Analytics <ArrowRight size={14} />
+              </Link>
+            </div>
+
+            <div className="p-4 pt-0">
+              {snapshot.loading ? (
+                <div className="p-8 text-center text-secondary">
+                  <RefreshCw className="animate-spin inline mr-2" size={16} /> Loading pulse...
                 </div>
-              </>
-            )}
+              ) : snapshot.error ? (
+                <div className="p-6 text-center text-danger">
+                  <p>Unable to load snapshot.</p>
+                  <button className="btn-outline small mt-2" onClick={() => loadSnapshot(opsData?.business_date)}>Retry</button>
+                </div>
+              ) : (
+                <div className="flex flex-column gap-4">
+                  <div className="p-3 rounded-lg border border-color" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="text-xs text-secondary font-medium">Gross Cash Collected</div>
+                    <div className="text-xl font-bold text-charcoal mt-1">
+                      ₱{(mtdOverview?.gross_cash_collected?.current || 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-secondary mt-0.5">Paid inflows received this month</div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-color" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="text-xs text-secondary font-medium">Completed Booking Value</div>
+                    <div className="text-xl font-bold text-charcoal mt-1">
+                      ₱{(mtdOverview?.completed_booking_value?.current || 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-secondary mt-0.5">Value of completed rentals this month</div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-color" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="text-xs text-secondary font-medium">Completed Bookings</div>
+                    <div className="text-xl font-bold text-charcoal mt-1">
+                      {mtdOverview?.completed_reservations?.current || 0}
+                    </div>
+                    <div className="text-xs text-secondary mt-0.5">Fulfilled customer reservations</div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </motion.div>
         )}
       </div>
 
-      <div className="widgets-grid" style={{
-        gridTemplateColumns: (!widgetPrefs.widgetLowStock || !widgetPrefs.widgetRecentCustomers) ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))'
-      }}>
-        {widgetPrefs.widgetLowStock && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="widget card"
-        >
-          <div className="card-header">
-            <h3>Stock Health Alerts</h3>
-            <span className="badge-danger">{stockBreakdown.alerts} Items</span>
+      {/* INVENTORY ATTENTION & OPERATIONAL ACTIVITY GRID */}
+      <div className="analytics-layout mt-6">
+        {/* Left: Inventory Attention Widget */}
+        {widgetPrefs.widgetInventoryAttention && (
+          <div className="card">
+            <div className="card-header border-none flex-between">
+              <div className="flex align-center gap-2">
+                <AlertTriangle size={20} className="text-accent" />
+                <h3>Inventory Attention</h3>
+              </div>
+              <Link to="/inventory" className="text-xs text-accent hover:underline flex align-center gap-1 font-medium">
+                Inventory Catalog <ArrowRight size={14} />
+              </Link>
+            </div>
+
+            <div className="p-4 pt-0">
+              {inventory.loading ? (
+                <div className="p-8 text-center text-secondary">
+                  <RefreshCw className="animate-spin inline mr-2" size={16} /> Loading inventory attention...
+                </div>
+              ) : inventory.error ? (
+                <div className="p-6 text-center text-danger">
+                  <p>Unable to load inventory data.</p>
+                  <button className="btn-outline small mt-2" onClick={loadInventory}>Retry</button>
+                </div>
+              ) : (
+                <>
+                  {/* Canonical Partition Chips */}
+                  <div className="flex gap-2 flex-wrap mb-4">
+                    <Link to="/inventory?stock=out" style={{ textDecoration: 'none' }}>
+                      <span className="badge-danger cursor-pointer hover:opacity-80">
+                        {invHealth?.out_of_stock_variants || 0} Out of Stock
+                      </span>
+                    </Link>
+                    <Link to="/inventory?stock=low" style={{ textDecoration: 'none' }}>
+                      <span className="badge warning cursor-pointer hover:opacity-80" style={{ backgroundColor: 'var(--stock-low-bg)', color: 'var(--stock-low)' }}>
+                        {invHealth?.low_stock_variants || 0} Low Stock (≤ 2)
+                      </span>
+                    </Link>
+                    <Link to="/inventory" style={{ textDecoration: 'none' }}>
+                      <span className="badge secondary cursor-pointer hover:opacity-80">
+                        {invHealth?.in_stock_variants || 0} In Stock
+                      </span>
+                    </Link>
+                  </div>
+
+                  {/* Top 5 Urgent Restock Variants */}
+                  <div className="widget-list">
+                    {invAlerts.length === 0 ? (
+                      <div className="p-4 text-center text-secondary">All stock levels healthy ✅</div>
+                    ) : (
+                      invAlerts.map((item: any, idx: number) => (
+                        <div key={item.inventory_id || item.sku || idx} className="widget-item alert-item flex-between align-center">
+                          <div className="flex align-center gap-3">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.product_name} style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />
+                            ) : (
+                              <div className="item-icon-bg alert" style={{ backgroundColor: item.stock_tier === 'out_of_stock' ? 'var(--status-cancelled-bg)' : 'var(--stock-low-bg)' }}>
+                                <AlertTriangle size={18} className={item.stock_tier === 'out_of_stock' ? 'text-danger' : 'text-warning'} />
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="text-sm font-semibold">{item.product_name}</h4>
+                              <p className="text-xs text-secondary">
+                                Size {item.size} · {item.color} ·{' '}
+                                <span className={item.stock_tier === 'out_of_stock' ? 'text-danger font-bold' : 'text-warning font-semibold'}>
+                                  {item.available} / {item.total} available
+                                </span>
+                                {(item.reserved || 0) > 0 && (
+                                  <span className="text-secondary ml-1">({item.reserved} reserved)</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <button className="btn-outline small" onClick={() => navigate('/inventory')}>
+                            Restock
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          {/* Tier breakdown chips */}
-          {stockBreakdown.alerts > 0 && (
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              {stockBreakdown.noStock > 0 && (
-                <span style={{ background: 'var(--stock-none-bg)', color: 'var(--stock-none)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
-                  {stockBreakdown.noStock} No Stock
-                </span>
-              )}
-              {stockBreakdown.critical > 0 && (
-                <span style={{ background: 'var(--stock-critical-bg)', color: 'var(--stock-critical)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
-                  {stockBreakdown.critical} Critical
-                </span>
-              )}
-              {stockBreakdown.veryLow > 0 && (
-                <span style={{ background: 'var(--stock-very-low-bg)', color: 'var(--stock-very-low)', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 12 }}>
-                  {stockBreakdown.veryLow} Very Low
-                </span>
-              )}
+        )}
+
+        {/* Right: Customer Pulse & Operational Activity */}
+        <div className="flex flex-column gap-6">
+          {/* Recent Signups */}
+          {widgetPrefs.widgetRecentSignups && (
+            <div className="card">
+              <div className="card-header border-none flex-between">
+                <div className="flex align-center gap-2">
+                  <Users size={20} className="text-accent" />
+                  <h3>Recent Signups</h3>
+                </div>
+                <Link to="/customers" className="text-xs text-accent hover:underline flex align-center gap-1 font-medium">
+                  All Customers <ArrowRight size={14} />
+                </Link>
+              </div>
+
+              <div className="widget-list p-4 pt-0">
+                {activityDomain.loading ? (
+                  <div className="p-4 text-center text-secondary text-sm">Loading signups...</div>
+                ) : activityDomain.error ? (
+                  <div className="text-xs text-danger p-2 text-center">Unable to load signups.</div>
+                ) : recentSignups.length === 0 ? (
+                  <div className="p-4 text-center text-secondary text-xs">No registered customers yet.</div>
+                ) : (
+                  recentSignups.map((c: any, idx: number) => (
+                    <div key={c.id || idx} className="widget-item flex-between align-center">
+                      <div className="flex align-center gap-3">
+                        <div
+                          className="avatar-small"
+                          style={{ backgroundColor: `hsl(${200 + idx * 40}, 50%, 50%)` }}
+                        >
+                          {getUserDisplayName(c)[0]?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold">{getUserDisplayName(c)}</h4>
+                          <p className="text-xs text-secondary">
+                            {c.created_at ? relativeTime(c.created_at) : 'Registered customer'}
+                          </p>
+                        </div>
+                      </div>
+                      <button className="icon-btn small" onClick={() => navigate(`/customers`)}>
+                        <Users size={16} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
-          <div className="widget-list">
-            {lowStockItems.length === 0 && (
-              <div className="p-4 text-center text-secondary">All stock levels healthy ✅</div>
-            )}
-            {lowStockItems.map((item: any) => {
-              const health = getStockHealth(item.available, item.total, item.reserved || 0);
-              return (
-                <div key={`${item.id}-${item.size}`} className="widget-item alert-item">
-                  <div className="item-icon-bg alert" style={{ background: health.bgColor }}>
-                    <AlertTriangle size={18} style={{ color: health.color }} />
-                  </div>
-                  <div className="item-details">
-                    <h4>{item.item}</h4>
-                    <p>
-                      Size {item.size} ·{' '}
-                      <span style={{ color: health.color, fontWeight: 600 }}>{health.label}</span>
-                      {' · '}{item.available} / {item.total} available
-                      {(item.reserved || 0) > 0 && (
-                        <span style={{ color: 'var(--stock-very-low)', marginLeft: '0.3rem', fontSize: '0.72rem' }}>
-                          ({item.reserved} reserved)
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <button className="btn-outline small" onClick={() => navigate('/inventory')}>
-                    Restock
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-        )}
 
-        {widgetPrefs.widgetRecentCustomers && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="widget card"
-        >
-          <div className="card-header">
-            <h3>Recent Customers</h3>
-            <button className="text-btn" onClick={() => navigate('/customers')}>
-              View All
-            </button>
-          </div>
-          <div className="widget-list">
-            {recentCustomers.length === 0 && (
-              <div className="p-4 text-center text-secondary">No customers yet.</div>
-            )}
-            {recentCustomers.map((c, i) => (
-              <div key={c.id} className="widget-item">
-                <div
-                  className="avatar-small"
-                  style={{ backgroundColor: `hsl(${200 + i * 40}, 50%, 50%)` }}
-                >
-                  {getUserDisplayName(c)[0]?.toUpperCase() || 'U'}
+          {/* Recent Operational Activity */}
+          {widgetPrefs.widgetRecentActivity && (
+            <div className="card">
+              <div className="card-header border-none flex-between">
+                <div className="flex align-center gap-2">
+                  <Activity size={20} className="text-accent" />
+                  <h3>Recent Activity</h3>
                 </div>
-                <div className="item-details">
-                  <h4>{getUserDisplayName(c)}</h4>
-                  <p className="text-xs text-secondary">
-                    Joined {c.createdAt ? formatDate(c.createdAt) : 'N/A'} • {c.lastOnline ? `Last seen ${formatRelativeTime(c.lastOnline)}` : (c.email || 'No activity')}
-                  </p>
-                </div>
-                <button className="icon-btn small" onClick={() => navigate(`/customers?id=${c.id}`)}>
-                  <Users size={16} />
-                </button>
+                <Link to="/activity-log" className="text-xs text-accent hover:underline flex align-center gap-1 font-medium">
+                  Full Log <ArrowRight size={14} />
+                </Link>
               </div>
-            ))}
-          </div>
-        </motion.div>
-        )}
 
-        
+              <div className="activity-pulse-list p-4 pt-0">
+                {activityDomain.loading ? (
+                  <div className="p-4 text-center text-secondary text-sm">Loading activity...</div>
+                ) : activityDomain.error ? (
+                  <div className="text-xs text-danger p-2 text-center">Unable to load activity.</div>
+                ) : recentLogs.length === 0 ? (
+                  <div className="p-4 text-center text-secondary text-xs">No recent operational activity.</div>
+                ) : (
+                  recentLogs.map((log: any) => {
+                    const sentence = formatLogSentence(log);
+                    return (
+                      <div key={log.id} className="activity-pulse-item flex align-center gap-3 py-2 border-b border-color" style={{ borderColor: 'var(--border-light)' }}>
+                        <div className="activity-icon-sm">
+                          <Activity size={14} className="text-accent" />
+                        </div>
+                        <div className="activity-pulse-content flex-1">
+                          <p className="text-xs text-charcoal font-medium">
+                            <span className="font-semibold">{log.user_name || 'Staff'}: </span>
+                            {sentence.action || log.action}{' '}
+                            {sentence.subject && <span className="font-semibold">{sentence.subject} </span>}
+                            {sentence.amount && <span className="text-accent font-semibold">{sentence.amount}</span>}
+                          </p>
+                          <span className="text-xs text-secondary">{relativeTime(log.timestamp)}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="command-center-grid mt-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-        {widgetPrefs.widgetLogistics && (
-        <motion.div
-          className="card logistics-widget"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.8 }}
-        >
-          <div className="card-header">
-            <div className="flex align-center gap-2">
-              <MapPin size={20} className="text-accent" />
-              <h3>Today&apos;s Pickups</h3>
-            </div>
-            <span className="badge secondary">{todayLogistics.length} Events</span>
-          </div>
-          
-          <div className="logistics-timeline mt-4">
-            {todayLogistics.length === 0 ? (
-              <div className="p-8 text-center text-secondary bg-cream rounded-xl">
-                No pickups scheduled for today.
-              </div>
-            ) : (
-              todayLogistics.map((item, idx) => (
-                <div key={idx} className={`logistics-row ${item.actionType.toLowerCase()}`}>
-                  <div className="logistics-time">{item.date ? formatSmartDateTime(item.date) : item.timeStr}</div>
-                  <div className="logistics-point"></div>
-                  <div className="logistics-info">
-                    <div className="flex-between align-center">
-                      <span className={`logistics-badge ${item.actionType.toLowerCase()}`}>{item.actionType}</span>
-                      <span className="text-xs font-semibold">{item.status}</span>
-                    </div>
-                    <h4>{item.customerName}</h4>
-                    <p>{item.productName || item.outfit} · {item.size}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </motion.div>
-        )}
-
-        {widgetPrefs.widgetActivityFeed && (
-        <motion.div
-           className="card activity-feed-widget"
-           initial={{ opacity: 0, x: 20 }}
-           animate={{ opacity: 1, x: 0 }}
-           transition={{ delay: 0.9 }}
-        >
-          <div className="card-header">
-            <div className="flex align-center gap-2">
-              <Activity size={20} className="text-accent" />
-              <h3>Real-time Activity Pulse</h3>
-            </div>
-          </div>
-
-          <div className="activity-pulse-list mt-4">
-            {activityFeed.map((item, idx) => (
-              <div key={idx} className="activity-pulse-item">
-                <div className={`activity-icon-sm ${item.type}`}>
-                  {item.type === 'reservation' && <Calendar size={14} />}
-                  {item.type === 'customer' && <Users size={14} />}
-                  {item.type === 'staff' && <RefreshCw size={14} />}
-                </div>
-                <div className="activity-pulse-content">
-                  <p className="text-sm">{item.desc}</p>
-                  <span className="text-xs text-secondary">{formatSmartDateTime(item.date)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-        )}
-      </div>
-
+      {/* CUSTOMIZE MODAL */}
       {showPreferences && canCustomize && (
-        <div 
-          className="modal-overlay" 
+        <div
+          className="modal-overlay"
           onClick={() => setShowPreferences(false)}
           onKeyDown={(e) => e.key === 'Escape' && setShowPreferences(false)}
           role="button"
@@ -722,53 +779,33 @@ const Dashboard = () => {
             </div>
             <div className="preferences-body">
               <div className="pref-section">
-                <h4>Top Statistics</h4>
+                <h4>Operational KPIs</h4>
                 <div className="pref-list">
                   <div className="pref-item">
-                    <label className="pref-label" htmlFor="pref-total-reservations">Total Reservations</label>
-                    <label className="toggle-switch" aria-label="Toggle Total Reservations">
-                      <input type="checkbox" id="pref-total-reservations" className="toggle-input" checked={widgetPrefs.statTotalReservations} onChange={() => togglePref('statTotalReservations')} />
+                    <label className="pref-label" htmlFor="pref-action-req">Action Required</label>
+                    <label className="toggle-switch" aria-label="Toggle Action Required">
+                      <input type="checkbox" id="pref-action-req" className="toggle-input" checked={widgetPrefs.statActionRequired} onChange={() => togglePref('statActionRequired')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <label className="pref-label" htmlFor="pref-active-customers">Active Customers</label>
-                    <label className="toggle-switch" aria-label="Toggle Active Customers">
-                      <input type="checkbox" id="pref-active-customers" className="toggle-input" checked={widgetPrefs.statActiveCustomers} onChange={() => togglePref('statActiveCustomers')} />
+                    <label className="pref-label" htmlFor="pref-prep">In Preparation</label>
+                    <label className="toggle-switch" aria-label="Toggle In Preparation">
+                      <input type="checkbox" id="pref-prep" className="toggle-input" checked={widgetPrefs.statPreparing} onChange={() => togglePref('statPreparing')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <label className="pref-label" htmlFor="pref-pending-requests">Pending Requests</label>
-                    <label className="toggle-switch" aria-label="Toggle Pending Requests">
-                      <input type="checkbox" id="pref-pending-requests" className="toggle-input" checked={widgetPrefs.statPendingRequests} onChange={() => togglePref('statPendingRequests')} />
+                    <label className="pref-label" htmlFor="pref-pickup">Ready for Pickup</label>
+                    <label className="toggle-switch" aria-label="Toggle Ready for Pickup">
+                      <input type="checkbox" id="pref-pickup" className="toggle-input" checked={widgetPrefs.statReadyForPickup} onChange={() => togglePref('statReadyForPickup')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <label className="pref-label" htmlFor="pref-ar-usage">AR Try-On Usage</label>
-                    <label className="toggle-switch" aria-label="Toggle AR Try-On Usage">
-                      <input type="checkbox" id="pref-ar-usage" className="toggle-input" checked={widgetPrefs.statARUsage} onChange={() => togglePref('statARUsage')} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="pref-section">
-                <h4>Charts</h4>
-                <div className="pref-list">
-                  <div className="pref-item">
-                    <span className="pref-label">Reservation Trends</span>
-                    <label className="toggle-switch" aria-label="Toggle Reservation Trends">
-                      <input type="checkbox" id="pref-chart-trends" name="pref-chart-trends" className="toggle-input" checked={widgetPrefs.chartReservationTrends} onChange={() => togglePref('chartReservationTrends')} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-                  <div className="pref-item">
-                    <span className="pref-label">Popular Outfits</span>
-                    <label className="toggle-switch" aria-label="Toggle Popular Outfits">
-                      <input type="checkbox" id="pref-chart-popular" name="pref-chart-popular" className="toggle-input" checked={widgetPrefs.chartPopularOutfits} onChange={() => togglePref('chartPopularOutfits')} />
+                    <label className="pref-label" htmlFor="pref-refunds">Pending Refunds</label>
+                    <label className="toggle-switch" aria-label="Toggle Pending Refunds">
+                      <input type="checkbox" id="pref-refunds" className="toggle-input" checked={widgetPrefs.statPendingRefunds} onChange={() => togglePref('statPendingRefunds')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
@@ -776,37 +813,43 @@ const Dashboard = () => {
               </div>
 
               <div className="pref-section">
-                <h4>Tactical Widgets</h4>
+                <h4>Operational Widgets</h4>
                 <div className="pref-list">
                   <div className="pref-item">
-                    <span className="pref-label">Low Stock Alerts</span>
-                    <label className="toggle-switch" aria-label="Toggle Low Stock Alerts">
-                      <input type="checkbox" id="pref-widget-lowstock" name="pref-widget-lowstock" className="toggle-input" checked={widgetPrefs.widgetLowStock} onChange={() => togglePref('widgetLowStock')} />
+                    <span className="pref-label">Today&apos;s Pickups</span>
+                    <label className="toggle-switch" aria-label="Toggle Today's Pickups">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetTodaySchedule} onChange={() => togglePref('widgetTodaySchedule')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">Recent Customers</span>
-                    <label className="toggle-switch" aria-label="Toggle Recent Customers">
-                      <input type="checkbox" id="pref-widget-customers" name="pref-widget-customers" className="toggle-input" checked={widgetPrefs.widgetRecentCustomers} onChange={() => togglePref('widgetRecentCustomers')} />
+                    <span className="pref-label">Business Snapshot (MTD)</span>
+                    <label className="toggle-switch" aria-label="Toggle Business Snapshot">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetBusinessSnapshot} onChange={() => togglePref('widgetBusinessSnapshot')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">Logistics Monitor</span>
-                    <label className="toggle-switch" aria-label="Toggle Logistics Monitor">
-                      <input type="checkbox" id="pref-widget-logistics" name="pref-widget-logistics" className="toggle-input" checked={widgetPrefs.widgetLogistics} onChange={() => togglePref('widgetLogistics')} />
+                    <span className="pref-label">Inventory Attention</span>
+                    <label className="toggle-switch" aria-label="Toggle Inventory Attention">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetInventoryAttention} onChange={() => togglePref('widgetInventoryAttention')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
                   <div className="pref-item">
-                    <span className="pref-label">Activity Pulse</span>
-                    <label className="toggle-switch" aria-label="Toggle Activity Pulse">
-                      <input type="checkbox" id="pref-widget-activity" name="pref-widget-activity" className="toggle-input" checked={widgetPrefs.widgetActivityFeed} onChange={() => togglePref('widgetActivityFeed')} />
+                    <span className="pref-label">Recent Signups</span>
+                    <label className="toggle-switch" aria-label="Toggle Recent Signups">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentSignups} onChange={() => togglePref('widgetRecentSignups')} />
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
-                  
+                  <div className="pref-item">
+                    <span className="pref-label">Recent Activity</span>
+                    <label className="toggle-switch" aria-label="Toggle Recent Activity">
+                      <input type="checkbox" className="toggle-input" checked={widgetPrefs.widgetRecentActivity} onChange={() => togglePref('widgetRecentActivity')} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -816,4 +859,5 @@ const Dashboard = () => {
     </div>
   );
 };
+
 export default Dashboard;
