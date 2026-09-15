@@ -137,6 +137,45 @@ export const getStaffStatusHistory = async (staffId) => {
   return data ?? [];
 };
 
+/**
+ * Update staff role via the hardened v2 RPC.
+ * Prohibits owner promotion in Phase 1; enforces privileged quorum on demotion.
+ */
+export const updateStaffRole = async (targetUserId, newRole) => {
+  const { data, error } = await supabase.rpc('update_staff_role_v2', {
+    target_user_id: targetUserId,
+    new_role: newRole,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Resend a tokenized invitation email to a pending staff member.
+ * Dispatches via the server-authoritative resend-staff-invite Edge Function.
+ */
+export const resendStaffInvite = async (staffUserId) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-staff-invite`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ staffUserId }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to resend staff invitation');
+  return data;
+};
+
 // ── Audit log ───────────────────────────────────────────────
 
 /** Re-export the shared logAction from supabaseService for convenient import. */

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -13,32 +13,29 @@ import {
   Trash2,
   Crown,
   Eye,
-  EyeOff,
   ShieldAlert,
   Archive,
   ArchiveRestore,
   X,
-  Copy,
-  Check,
   CheckCircle2,
-  ExternalLink,
-  KeyRound,
   Mail,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   subscribeToStaff,
   updateStaffStatus,
-  logAction,
+  updateStaffRole,
+  resendStaffInvite,
 } from '../../services/staffService';
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
-import SkeletonTable from '../../components/SkeletonTable';
 import './StaffManagement.css';
 
 const EMPLOYMENT_STATUS_META = {
   active:     { label: 'Active',      cls: 'emp-active' },
+  invited:    { label: 'Invited',     cls: 'emp-invited' },
   on_leave:   { label: 'On Leave',    cls: 'emp-leave' },
   resigned:   { label: 'Resigned',    cls: 'emp-resigned' },
   terminated: { label: 'Terminated',  cls: 'emp-terminated' },
@@ -68,23 +65,13 @@ const StaffManagement = () => {
   const [reactivateNote, setReactivateNote] = useState('');
   const [reactivating, setReactivating] = useState(false);
 
-  // ── Create / Credentials Modal ────────────────────────────────────────────
+  // ── Create / Invitation Modal ────────────────────────────────────────────
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', role: 'staff' });
   const [creating, setCreating] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState(null);
-  const [showTempPassword, setShowTempPassword] = useState(true);
-  const [copiedType, setCopiedType] = useState(null); // 'password' | 'credentials' | 'message'
-
-  const copyToClipboard = (text, type) => {
-    navigator.clipboard.writeText(text);
-    setCopiedType(type);
-    toast.success('Copied to clipboard!');
-    setTimeout(() => setCopiedType(null), 2000);
-  };
 
   // ── Resend Invite State ───────────────────────────────────────────────────
-  const [authStatuses, setAuthStatuses] = useState({});
   const [resendingEmail, setResendingEmail] = useState(null);
   const [resendConfirm, setResendConfirm] = useState(null);
 
@@ -130,8 +117,11 @@ const StaffManagement = () => {
 
   const getDisplayName = (m) =>
     m ? ([m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown') : 'Unknown';
-  const getDisplayRole = (role) =>
-    role === 'owner' ? 'Owner' : 'Sales Staff';
+  const getDisplayRole = (role) => {
+    if (role === 'owner') return 'Owner';
+    if (role === 'admin') return 'Admin';
+    return 'Sales Staff';
+  };
 
   const filteredActive = activeStaff
     .filter(
@@ -170,8 +160,7 @@ const StaffManagement = () => {
           },
           body: JSON.stringify({
             email: createForm.email.toLowerCase().trim(),
-            role: createForm.role,
-            siteUrl: window.location.origin,
+            role: 'staff',
           }),
         },
       );
@@ -181,23 +170,20 @@ const StaffManagement = () => {
         return;
       }
 
-      await logAction(user, 'Created new staff account with temporary credentials', {
-        targetType: 'profile',
-        targetId: result.userId,
-        email: createForm.email,
-        role: createForm.role,
-      });
-
-      // Advance to Step 2: Show Credentials Card
+      // Advance to Step 2: Show Invitation Confirmation Card
       setCreatedCredentials({
         email: result.email || createForm.email,
-        role: result.role || createForm.role,
-        tempPassword: result.tempPassword,
-        loginUrl: result.loginUrl || `${window.location.origin}/login`,
+        role: 'Sales Staff',
         emailSent: Boolean(result.emailSent),
+        deliveryStatus: result.deliveryStatus || (result.emailSent ? 'sent' : 'failed'),
+        emailError: result.emailError || null,
       });
 
-      toast.success(`Staff account for ${createForm.email} created successfully!`);
+      if (result.emailSent) {
+        toast.success(`Staff invitation sent to ${createForm.email}!`);
+      } else {
+        toast.warning(`Account provisioned, but invite email delivery failed: ${result.emailError || 'Unknown error'}`);
+      }
     } catch (err) {
       console.error('Staff creation error:', err);
       toast.error('Failed to create staff account: ' + err.message);
@@ -210,7 +196,25 @@ const StaffManagement = () => {
     setIsCreateModalOpen(false);
     setCreateForm({ email: '', role: 'staff' });
     setCreatedCredentials(null);
-    setShowTempPassword(true);
+  };
+
+  const handleResendInvite = async () => {
+    if (!resendConfirm) return;
+    const member = resendConfirm;
+    setResendingEmail(member.id);
+    try {
+      const result = await resendStaffInvite(member.id);
+      if (result.emailSent) {
+        toast.success(`Invitation resent to ${member.email}`);
+      } else {
+        toast.warning(`Invitation regenerated, but email dispatch failed: ${result.emailError || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to resend invitation');
+    } finally {
+      setResendingEmail(null);
+      setResendConfirm(null);
+    }
   };
 
   const confirmRoleToggle = async () => {
@@ -219,12 +223,8 @@ const StaffManagement = () => {
     const newRole = member.role === 'admin' ? 'staff' : 'admin';
     const name = getDisplayName(member);
     try {
-      const { error } = await supabase.rpc('update_staff_role_v2', {
-        target_user_id: member.id,
-        new_role: newRole,
-      });
-      if (error) throw error;
-      toast.success(`${name} is now ${newRole}`);
+      await updateStaffRole(member.id, newRole);
+      toast.success(`${name} is now ${newRole === 'admin' ? 'Admin' : 'Sales Staff'}`);
     } catch (err) {
       toast.error(err?.message || 'Failed to update role');
     } finally {
@@ -258,6 +258,10 @@ const StaffManagement = () => {
     }
     if (member.role === 'owner') {
       toast.error('The owner role cannot be modified.');
+      return;
+    }
+    if (member.employmentStatus === 'invited') {
+      toast.error('Role cannot be changed while account is pending activation.');
       return;
     }
     setRoleToggleConfirm(member);
@@ -355,15 +359,15 @@ const StaffManagement = () => {
     }
 
     return filteredActive.map((member) => {
-      const authInfo = authStatuses[member.id] || (member.email ? authStatuses[member.email.toLowerCase()] : null);
-      const isInvitePending = member.role !== 'owner' && authInfo && !authInfo.hasLoggedIn;
+      const isInvited = member.employmentStatus === 'invited';
+      const isDeliveryFailed = member.inviteDeliveryStatus === 'failed';
 
       return (
         <tr key={member.id} className="staff-table-row">
           <td>
             <div className="member-info">
               <div
-                className={`staff-avatar ${member.role === 'owner' ? 'avatar-owner' : 'avatar-staff'}`}
+                className={`staff-avatar ${member.role === 'owner' ? 'avatar-owner' : (member.role === 'admin' ? 'avatar-admin' : 'avatar-staff')}`}
               >
                 {(getDisplayName(member) || 'U')[0].toUpperCase()}
               </div>
@@ -371,9 +375,14 @@ const StaffManagement = () => {
                 <div className="member-name">{getDisplayName(member)}</div>
                 <div className="member-email-row">
                   <span className="member-email">{member.email}</span>
-                  {isInvitePending && (
-                    <span className="emp-badge emp-pending-invite" title="Staff member has never logged in yet">
-                      <Mail size={10} /> Invite Pending
+                  {isInvited && isDeliveryFailed && (
+                    <span className="emp-badge emp-failed" title="Invitation email delivery failed. Click Resend to retry.">
+                      <AlertTriangle size={10} /> Delivery Failed
+                    </span>
+                  )}
+                  {isInvited && !isDeliveryFailed && (
+                    <span className="emp-badge emp-pending-invite" title="Staff member has not activated their account yet">
+                      <Mail size={10} /> Invite Sent
                     </span>
                   )}
                 </div>
@@ -382,7 +391,7 @@ const StaffManagement = () => {
           </td>
           <td>
             <div
-              className={`role-chip ${member.role === 'owner' ? 'owner-chip' : 'staff-chip'}`}
+              className={`role-chip ${member.role === 'owner' ? 'owner-chip' : (member.role === 'admin' ? 'admin-chip' : 'staff-chip')}`}
               onClick={() => toggleRole(member)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -392,11 +401,18 @@ const StaffManagement = () => {
               }}
               role="button"
               tabIndex={0}
-              style={{ cursor: member.role === 'owner' ? 'default' : 'pointer' }}
-              title={member.role === 'owner' ? 'Master owner role locked' : 'Click to change role'}
+              style={{ cursor: member.role === 'owner' || isInvited ? 'default' : 'pointer' }}
+              title={
+                member.role === 'owner'
+                  ? 'Master owner role locked'
+                  : isInvited
+                  ? 'Role cannot be modified until account is activated'
+                  : 'Click to change role'
+              }
             >
               {member.role === 'owner' && <Crown size={13} className="owner-crown-icon" />}
-              {member.role !== 'owner' && <Shield size={13} className="staff-shield-icon" />}
+              {member.role === 'admin' && <ShieldCheck size={13} className="admin-shield-icon" />}
+              {member.role === 'staff' && <Shield size={13} className="staff-shield-icon" />}
               <span className="role-chip-text">
                 {getDisplayRole(member.role)}
               </span>
@@ -436,13 +452,13 @@ const StaffManagement = () => {
           </td>
           <td className="text-right">
             <div className="staff-actions-cell">
-              {member.role !== 'owner' && isInvitePending && (
+              {member.role !== 'owner' && isInvited && (
                 <button
                   type="button"
                   className="icon-btn-small staff-action-btn staff-resend-btn"
                   onClick={() => setResendConfirm(member)}
                   disabled={resendingEmail === member.id}
-                  title="Resend invitation email with new temporary password"
+                  title="Resend invitation email"
                   aria-label="Resend invitation email"
                 >
                   <Mail size={16} />
@@ -702,6 +718,7 @@ const StaffManagement = () => {
             >
               <option value="all">All Roles</option>
               <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
               <option value="staff">Sales Staff</option>
             </select>
             {(searchTerm || roleFilter !== 'all') && (
@@ -763,7 +780,7 @@ const StaffManagement = () => {
                 <div className="modal-header">
                   <div>
                     <h2>Invite Staff Member</h2>
-                    <p className="modal-subtitle">Generate credentials and portal access for your team</p>
+                    <p className="modal-subtitle">Send a secure workforce invitation link</p>
                   </div>
                   <button
                     type="button"
@@ -784,7 +801,7 @@ const StaffManagement = () => {
                       name="email"
                       type="email"
                       autoComplete="email"
-                      placeholder="e.g. goodstoriesonly11@gmail.com"
+                      placeholder="e.g. staff.member@example.com"
                       className="input-field"
                       value={createForm.email}
                       onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
@@ -794,24 +811,25 @@ const StaffManagement = () => {
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="create-staff-role">
-                      Access Role <span style={{ color: 'var(--color-danger)' }}>*</span>
+                      Access Role
                     </label>
                     <select
                       autoComplete="off"
                       id="create-staff-role"
                       className="input-field"
-                      value={createForm.role}
-                      onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-                      disabled={creating}
+                      value="staff"
+                      disabled
                     >
                       <option value="staff">Sales Staff</option>
-                      <option value="owner">Owner (Full Access)</option>
                     </select>
+                    <p className="text-secondary text-xs" style={{ marginTop: '0.35rem' }}>
+                      Workforce invitations are scoped to Sales Staff. Admin privileges may be granted after account activation.
+                    </p>
                   </div>
                   <div className="staff-invite-info-callout">
-                    <KeyRound size={18} className="text-secondary" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <Mail size={18} className="text-secondary" style={{ flexShrink: 0, marginTop: 2 }} />
                     <p>
-                      The system will generate a secure temporary password and display a ready-to-share login card with one-click email options.
+                      A secure invitation link will be emailed to the recipient. The link allows them to set their password and activate their staff account within 24 hours.
                     </p>
                   </div>
                   <div className="modal-footer">
@@ -824,13 +842,13 @@ const StaffManagement = () => {
                       Cancel
                     </button>
                     <button type="submit" className="btn-primary" disabled={creating}>
-                      {creating ? 'Creating Account...' : 'Generate Credentials'}
+                      {creating ? 'Sending Invitation...' : 'Send Invitation'}
                     </button>
                   </div>
                 </form>
               </>
             ) : (
-              /* Step 2: Credentials Card */
+              /* Step 2: Invitation Sent Card */
               <div className="credentials-card-step">
                 <div className="modal-header">
                   <div className="flex-center gap-2">
@@ -838,8 +856,8 @@ const StaffManagement = () => {
                       <CheckCircle2 size={22} className="text-success" />
                     </div>
                     <div>
-                      <h2>Staff Account Ready</h2>
-                      <p className="modal-subtitle">Account created & pre-confirmed for immediate login</p>
+                      <h2>Invitation Dispatched</h2>
+                      <p className="modal-subtitle">Workforce account created and invitation link generated</p>
                     </div>
                   </div>
                   <button
@@ -854,133 +872,42 @@ const StaffManagement = () => {
                 <div className="modal-body credentials-card-body">
                   <div className="credentials-display-box">
                     <div className="cred-field-row">
-                      <span className="cred-field-label">Portal URL:</span>
-                      <a
-                        href={createdCredentials.loginUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="cred-portal-link"
-                      >
-                        {createdCredentials.loginUrl} <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div className="cred-field-row">
-                      <span className="cred-field-label">Staff Email:</span>
+                      <span className="cred-field-label">Invited Email:</span>
                       <span className="cred-field-value font-mono">{createdCredentials.email}</span>
                     </div>
-                    <div className="cred-field-row cred-password-row">
-                      <span className="cred-field-label">Temporary Password:</span>
-                      <div className="cred-password-ctrl">
-                        <span className="cred-password-text font-mono">
-                          {showTempPassword ? createdCredentials.tempPassword : '••••••••••'}
-                        </span>
-                        <button
-                          type="button"
-                          className="cred-icon-action-btn"
-                          onClick={() => setShowTempPassword(!showTempPassword)}
-                          title={showTempPassword ? 'Hide password' : 'Show password'}
-                          aria-label={showTempPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showTempPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
-                        <button
-                          type="button"
-                          className="cred-icon-action-btn"
-                          onClick={() => copyToClipboard(createdCredentials.tempPassword, 'password')}
-                          title="Copy Password"
-                          aria-label="Copy Password"
-                        >
-                          {copiedType === 'password' ? <Check size={15} className="text-success" /> : <Copy size={15} />}
-                        </button>
-                      </div>
+                    <div className="cred-field-row">
+                      <span className="cred-field-label">Assigned Role:</span>
+                      <span className="cred-field-value">{createdCredentials.role}</span>
+                    </div>
+                    <div className="cred-field-row">
+                      <span className="cred-field-label">Delivery Status:</span>
+                      <span className="cred-field-value">
+                        {createdCredentials.emailSent ? (
+                          <span className="text-success flex-center gap-1" style={{ display: 'inline-flex' }}>
+                            <CheckCircle2 size={14} /> Dispatched via Email
+                          </span>
+                        ) : (
+                          <span className="text-danger flex-center gap-1" style={{ display: 'inline-flex' }}>
+                            <AlertTriangle size={14} /> Delivery Failed ({createdCredentials.emailError || 'Failed to dispatch'})
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </div>
 
                   <div className="staff-invite-info-callout" style={{ marginTop: '1rem' }}>
                     <Shield size={16} style={{ color: 'var(--color-gold)', flexShrink: 0, marginTop: 2 }} />
                     <p>
-                      The staff member can log in directly at <strong>/login</strong> using this temporary password. To change it, they can go to their <strong>Profile page</strong> after logging in.
+                      {createdCredentials.emailSent
+                        ? 'The staff member has received a secure invitation email with a link to activate their account and set their password. The link expires in 24 hours.'
+                        : 'The account was provisioned in invited status, but the invitation email could not be sent. You can retry delivery anytime using the Resend button in the staff list.'}
                     </p>
                   </div>
 
-                  <div className="cred-send-email-section" style={{ marginBottom: '0.75rem' }}>
+                  <div className="modal-footer" style={{ borderTop: 'none', padding: '1rem 0 0 0' }}>
                     <button
                       type="button"
-                      className="btn-primary flex-center gap-2 w-full staff-gmail-send-btn"
-                      style={{ padding: '0.75rem 1rem', fontSize: '0.9rem' }}
-                      onClick={() => {
-                        const subject = encodeURIComponent('Your JezSy Collection Staff Login Credentials');
-                        const body = encodeURIComponent(
-                          `Welcome to the JezSy Collection Admin Team!\n\n` +
-                          `Your staff account has been set up with the following login details:\n` +
-                          `• Portal URL: ${createdCredentials.loginUrl}\n` +
-                          `• Email: ${createdCredentials.email}\n` +
-                          `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
-                          `Please log in and change your password via your Profile page.`
-                        );
-                        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(createdCredentials.email)}&su=${subject}&body=${body}`;
-                        window.open(gmailUrl, '_blank');
-                      }}
-                    >
-                      <Mail size={16} />
-                      <span>Send via Gmail to {createdCredentials.email}</span>
-                    </button>
-                  </div>
-
-                  <div className="credentials-action-buttons">
-                    <button
-                      type="button"
-                      className="btn-outline flex-center gap-2 w-full"
-                      onClick={() => {
-                        const subject = encodeURIComponent('Your JezSy Collection Staff Login Credentials');
-                        const body = encodeURIComponent(
-                          `Welcome to the JezSy Collection Admin Team!\n\n` +
-                          `Your staff account has been set up with the following login details:\n` +
-                          `• Portal URL: ${createdCredentials.loginUrl}\n` +
-                          `• Email: ${createdCredentials.email}\n` +
-                          `• Temporary Password: ${createdCredentials.tempPassword}\n\n` +
-                          `Please log in and change your password via your Profile page.`
-                        );
-                        window.location.href = `mailto:${encodeURIComponent(createdCredentials.email)}?subject=${subject}&body=${body}`;
-                      }}
-                      title="Open in default desktop or mobile mail app"
-                    >
-                      <ExternalLink size={15} />
-                      <span>Send via Default Mail App</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline flex-center gap-2 w-full"
-                      onClick={() =>
-                        copyToClipboard(
-                          `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.tempPassword}\nPortal: ${createdCredentials.loginUrl}`,
-                          'credentials',
-                        )
-                      }
-                    >
-                      {copiedType === 'credentials' ? <Check size={16} /> : <Copy size={16} />}
-                      <span>Copy Login Credentials</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn-primary flex-center gap-2 w-full"
-                      onClick={() =>
-                        copyToClipboard(
-                          `Welcome to the JezSy Collection Admin Team!\n\nYour staff account has been set up with the following login details:\n• Portal URL: ${createdCredentials.loginUrl}\n• Email: ${createdCredentials.email}\n• Temporary Password: ${createdCredentials.tempPassword}\n\nPlease log in and change your password via your Profile page.`,
-                          'message',
-                        )
-                      }
-                    >
-                      {copiedType === 'message' ? <Check size={16} /> : <Copy size={16} />}
-                      <span>Copy Full Invite Message</span>
-                    </button>
-                  </div>
-
-                  <div className="modal-footer" style={{ borderTop: 'none', padding: '0.5rem 0 0 0' }}>
-                    <button
-                      type="button"
-                      className="btn-outline w-full text-center"
+                      className="btn-primary w-full text-center"
                       onClick={handleCloseCreateModal}
                     >
                       Done
@@ -1051,6 +978,15 @@ const StaffManagement = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!resendConfirm}
+        title="Resend Invitation?"
+        message={`Resend a fresh invitation email to ${getDisplayName(resendConfirm)} (${resendConfirm?.email})? Any previous invitation link will be invalidated.`}
+        confirmText={resendingEmail ? 'Sending...' : 'Resend Invite'}
+        onConfirm={handleResendInvite}
+        onCancel={() => setResendConfirm(null)}
+      />
 
       <ConfirmDialog
         isOpen={!!roleToggleConfirm}
