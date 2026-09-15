@@ -137,6 +137,31 @@ export const getStaffStatusHistory = async (staffId) => {
   return data ?? [];
 };
 
+/**
+ * Update staff role via the hardened v2 RPC.
+ * Prohibits owner promotion in Phase 1; enforces privileged quorum on demotion.
+ */
+export const updateStaffRole = async (targetUserId, newRole) => {
+  const { data, error } = await supabase.rpc('update_staff_role_v2', {
+    target_user_id: targetUserId,
+    new_role: newRole,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Resend a tokenized invitation email to a pending staff member.
+ * Dispatches via the server-authoritative resend-staff-invite Edge Function.
+ */
+export const resendStaffInvite = async (staffUserId) => {
+  const { data, error } = await supabase.functions.invoke('resend-staff-invite', {
+    body: { staffUserId },
+  });
+  if (error) throw new Error(error.message || 'Failed to resend staff invitation');
+  return data;
+};
+
 // ── Audit log ───────────────────────────────────────────────
 
 /** Re-export the shared logAction from supabaseService for convenient import. */

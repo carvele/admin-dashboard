@@ -351,6 +351,8 @@
 .emp-terminated { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
 .emp-blocked    { background: var(--status-rejected-bg, #fde8e8); color: var(--status-rejected-text, #c81e1e); }
 .emp-clear      { background: var(--status-completed-bg, #def7ec); color: var(--status-completed-text, #03543f); }
+.emp-invited    { background: #e0f2fe; color: #0369a1; }
+.emp-failed     { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 
 .archive-note-text {
   display: -webkit-box;
