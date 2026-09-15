@@ -129,8 +129,8 @@ const AnimatedRoutes = () => {
     checkLockout();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <ErrorBoundary key={location.pathname}>
-    <Routes location={location}>
+    <ErrorBoundary resetKey={location.pathname}>
+      <Routes location={location}>
       <Route
         path="/login"
           element={

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -41,6 +41,21 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
   const [stockAlert, setStockAlert] = useState<string | null>(null);
+
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('sidebar_scroll_pos');
+    if (saved && navRef.current) {
+      navRef.current.scrollTop = Number(saved);
+    }
+  }, []);
+
+  const handleNavScroll = () => {
+    if (navRef.current) {
+      sessionStorage.setItem('sidebar_scroll_pos', String(navRef.current.scrollTop));
+    }
+  };
 
   useEffect(() => {
     const unsub = subscribeToCollection('inventory', (data: any[]) => {
@@ -229,7 +244,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
           </div>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav ref={navRef} className="sidebar-nav" onScroll={handleNavScroll}>
           <ul className="nav-list">
             {allLinks.map((link, idx) => {
               const Icon = link.icon;
