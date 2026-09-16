@@ -113,11 +113,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Server-controlled redirect URL — never trust client-supplied siteUrl
-    const configuredSiteUrl = Deno.env.get('ADMIN_DASHBOARD_URL') ?? Deno.env.get('SITE_URL');
+    // Server-controlled redirect URL — prefer allowed caller origin, fallback to configured URL
     const requestOrigin = req.headers.get('Origin');
     const isOriginAllowed = requestOrigin && ALLOWED_ORIGINS.some((p) => originMatches(requestOrigin, p));
-    const baseSiteUrl = configuredSiteUrl ?? (isOriginAllowed ? requestOrigin : 'https://admin.jezsy.com');
+    const configuredSiteUrl = Deno.env.get('ADMIN_DASHBOARD_URL') ?? Deno.env.get('SITE_URL');
+    const baseSiteUrl = (isOriginAllowed ? requestOrigin : configuredSiteUrl) ?? 'https://admin.jezsy.com';
     const redirectUrl = `${baseSiteUrl.replace(/\/$/, '')}/set-password`;
 
     // 1. Pre-flight integrity checks
