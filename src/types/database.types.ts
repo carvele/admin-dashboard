@@ -3283,6 +3283,20 @@ export type Database = {
         Returns: Json
       }
       get_app_version_policy: { Args: { p_platform: string }; Returns: Json }
+      get_app_version_policy_audit: {
+        Args: { p_before?: string; p_limit?: number; p_platform?: string }
+        Returns: {
+          action: string
+          confirmation_text: string
+          created_at: string
+          id: string
+          new_policy: Json
+          old_policy: Json
+          operator_email: string
+          operator_id: string
+          platform: string
+        }[]
+      }
       get_cashflow_analytics: {
         Args: {
           p_end_date_exclusive: string

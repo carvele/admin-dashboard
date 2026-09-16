@@ -2,6 +2,7 @@ import {
   fetchAppVersionPolicy,
   updateAppVersionPolicy,
   setGlobalVersionEnforcementBypass,
+  fetchAppVersionAuditLog,
 } from "./appVersionService";
 import { supabase } from "../lib/supabaseClient";
 
@@ -71,6 +72,26 @@ describe("appVersionService", () => {
         p_confirmation: "Testing emergency bypass",
       });
       expect(res.emergency_bypass_enabled).toBe(true);
+    });
+  });
+
+  describe("fetchAppVersionAuditLog", () => {
+    it("calls get_app_version_policy_audit rpc with limit, platform, and before", async () => {
+      const mockLogs = [
+        { id: "log-1", platform: "android", action: "UPDATE_POLICY", created_at: "2026-09-16T12:00:00Z" },
+      ];
+      supabase.rpc.mockResolvedValueOnce({
+        data: mockLogs,
+        error: null,
+      });
+
+      const res = await fetchAppVersionAuditLog(15, "android", "2026-09-16T12:00:00Z");
+      expect(supabase.rpc).toHaveBeenCalledWith("get_app_version_policy_audit", {
+        p_platform: "android",
+        p_limit: 15,
+        p_before: "2026-09-16T12:00:00Z",
+      });
+      expect(res).toEqual(mockLogs);
     });
   });
 });

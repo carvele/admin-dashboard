@@ -50,12 +50,12 @@ export const setGlobalVersionEnforcementBypass = async (enabled, confirmationTex
   return data;
 };
 
-export const fetchAppVersionAuditLog = async (limit = 20) => {
-  const { data, error } = await supabase
-    .from("app_version_policy_audit")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+export const fetchAppVersionAuditLog = async (limit = 20, platform = null, before = null) => {
+  const { data, error } = await supabase.rpc("get_app_version_policy_audit", {
+    p_platform: platform,
+    p_limit: limit,
+    p_before: before,
+  });
   if (error) {
     errorReporting.capture(error, { domain: "version_policy", operation: "fetchAppVersionAuditLog" });
     throw error;
