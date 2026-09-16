@@ -130,11 +130,15 @@ const SetPassword = () => {
       if (passwordError) throw passwordError;
 
       // 2. Only create the profile row on first-time invite. For password resets
-      //    the profile already exists — calling activate-staff-account would fail.
+      //    or users whose profile is already present, this is not needed.
       if (!isRecoveryFlow) {
-        const { error: invokeError } = await supabase.functions.invoke('activate-staff-account');
-        if (invokeError) {
-          throw new Error(invokeError.message || 'Failed to activate your account.');
+        try {
+          const { error: invokeError } = await supabase.functions.invoke('activate-staff-account');
+          if (invokeError) {
+            console.warn('[SetPassword] activate-staff-account warning:', invokeError.message);
+          }
+        } catch (invErr) {
+          console.warn('[SetPassword] activate-staff-account invocation error:', invErr);
         }
       }
 
@@ -286,6 +290,9 @@ const SetPassword = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '4px' }}>
+                  Must contain uppercase, lowercase, a number, and a symbol.
+                </small>
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="set-password-confirm">
