@@ -630,10 +630,10 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       const result = await handleDeviceCheck(data.user);
-      const isOwner = result?.role === 'owner' || result?.role === 'Owner';
-      if (!isOwner && result?.deviceStatus === 'revoked') {
+      const isPrivileged = ['owner', 'admin'].includes(String(result?.role || '').toLowerCase());
+      if (!isPrivileged && result?.deviceStatus === 'revoked') {
         toast.error('Device access has been revoked.');
-      } else if (!isOwner && result?.deviceStatus === 'pending') {
+      } else if (!isPrivileged && result?.deviceStatus === 'pending') {
         toast.info('Device registered. Awaiting administrator approval.');
       } else {
         toast.success('Welcome back!');
@@ -715,7 +715,7 @@ export const AuthProvider = ({ children }) => {
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()
     : null;
 
-  const isAdminUnlocked = normalizedRole === 'Owner';
+  const isAdminUnlocked = normalizedRole === 'Owner' || normalizedRole === 'Admin';
 
   if (isLoading) {
     return (
