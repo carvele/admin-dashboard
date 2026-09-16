@@ -22,7 +22,7 @@ export const downloadCSV = (filename, csvContent) => {
 
 /**
  * Export Garment Performance Report
- * Analyzes rental frequency, total revenue generated, average rental earnings,
+ * Analyzes order frequency, total revenue generated, average order earnings,
  * and utilization rate per catalog product.
  */
 export const exportGarmentPerformanceReport = (products = [], reservations = []) => {
@@ -78,16 +78,16 @@ export const exportGarmentPerformanceReport = (products = [], reservations = [])
     'Garment ID',
     'Garment Name',
     'Category',
-    'Rental Rate (PHP)',
-    'Total Rental Count',
+    'Price (PHP)',
+    'Total Order Count',
     'Total Revenue Earned (PHP)',
-    'Avg Revenue per Rental (PHP)',
-    'Last Rented Date',
+    'Avg Revenue per Order (PHP)',
+    'Last Ordered Date',
   ];
 
   const rows = Array.from(productStats.values()).map((stat) => {
     const avgRev = stat.rentalCount > 0 ? stat.totalRevenue / stat.rentalCount : 0;
-    const lastDateStr = stat.lastRentedDate ? stat.lastRentedDate.toISOString().split('T')[0] : 'Never Rented';
+    const lastDateStr = stat.lastRentedDate ? stat.lastRentedDate.toISOString().split('T')[0] : 'Never Ordered';
     return [
       `"${stat.id}"`,
       `"${stat.name.replace(/"/g, '""')}"`,
@@ -107,14 +107,14 @@ export const exportGarmentPerformanceReport = (products = [], reservations = [])
 
 /**
  * Export Inventory Depreciation & ROI Report
- * Compares estimated purchase/acquisition cost against total accumulated rental revenue
- * to measure ROI % and asset wear.
+ * Compares estimated purchase/acquisition cost against total accumulated sales revenue
+ * to measure ROI % and margins.
  */
 export const exportInventoryDepreciationReport = (products = [], reservations = []) => {
   const productStats = new Map();
 
   products.forEach((p) => {
-    // Estimated purchase cost fallback: 3.5x single rental price if cost_price not specified
+    // Estimated purchase cost fallback: 3.5x single price if cost_price not specified
     const purchaseCost = Number(p.cost_price || p.purchaseCost || (Number(p.price || 0) * 3.5));
     productStats.set(p.id || p.docId, {
       id: p.id || p.docId,
@@ -155,9 +155,9 @@ export const exportInventoryDepreciationReport = (products = [], reservations = 
     'Garment Name',
     'SKU',
     'Est. Acquisition Cost (PHP)',
-    'Rental Rate (PHP)',
-    'Total Completed Wears',
-    'Accumulated Rental Revenue (PHP)',
+    'Price (PHP)',
+    'Total Completed Orders',
+    'Accumulated Revenue (PHP)',
     'Net Profit / Loss (PHP)',
     'ROI (%)',
   ];

@@ -19,7 +19,6 @@ export const RESERVATION_STATUSES = [
   'Confirmed',
   'Preparing',
   'To Pickup',
-  'Fitting',
   'Active',
   'Ready',
   'Completed',
@@ -37,11 +36,11 @@ export const CANCELLED_STATUSES = ['Cancelled'];
  *
  * Revenue is recognised when the performance obligation is satisfied -- when
  * control of the item passes to the customer -- which for reserve-and-collect
- * is the handover, not the deposit. A deposit is a liability until then, not
+ * is the pickup completion, not the deposit. A deposit is a liability until then, not
  * income. That is the IFRS 15 / ASC 606 position and the ordinary retail one.
  *
  * Only 'Completed' qualifies, which conveniently makes cash and accrual agree:
- * by the time staff hand the item over the balance has been collected in
+ * by the time staff complete the pickup the balance has been collected in
  * person, so the full price is both earned and received. Nothing here depends
  * on recording that collection separately.
  */
@@ -57,7 +56,6 @@ export const COMMITTED_STATUSES = [
   'Confirmed',
   'Preparing',
   'To Pickup',
-  'Fitting',
   'Active',
   'Ready',
 ];
@@ -78,7 +76,7 @@ export const COMMITTED_STATUSES = [
  * shelf without a single approval.
  *
  * 'To Pay' is the display label for stored 'Confirmed', but older rows may
- * carry it literally; 'Fitting' and 'Active' are legacy mid-flow states. All
+ * carry it literally; 'Active' is a legacy mid-flow state. All
  * are included so historical rows reconcile correctly.
  */
 export const STOCK_HOLDING_STATUSES = [
@@ -87,7 +85,6 @@ export const STOCK_HOLDING_STATUSES = [
   'To Pay',
   'Preparing',
   'To Pickup',
-  'Fitting',
   'Active',
   'Ready',
 ];

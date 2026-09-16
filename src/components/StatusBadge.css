@@ -49,7 +49,7 @@
   color: var(--status-approved-text);
 }
 
-.status-fitting, .status-to-pickup {
+.status-to-pickup {
   background-color: var(--status-fitting-bg);
   color: var(--status-fitting-text);
 }
