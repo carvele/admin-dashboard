@@ -12,6 +12,8 @@ import {
   Search,
   Crown,
   Eye,
+  EyeOff,
+  Loader,
   ShieldAlert,
   Archive,
   ArchiveRestore,
@@ -54,6 +56,9 @@ const StaffManagement = () => {
   const [roleFilter, setRoleFilter] = useState('all');
 
   const [roleToggleConfirm, setRoleToggleConfirm] = useState(null);
+  const [rolePassword, setRolePassword] = useState('');
+  const [showRolePassword, setShowRolePassword] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null);
 
   // ── Archived-tab extras ───────────────────────────────────────────────────
@@ -209,13 +214,36 @@ const StaffManagement = () => {
     const member = roleToggleConfirm;
     const newRole = member.role === 'admin' ? 'staff' : 'admin';
     const name = getDisplayName(member);
+
+    if (newRole === 'admin') {
+      if (!rolePassword.trim()) {
+        toast.error('Please enter your owner password to authorize promotion.');
+        return;
+      }
+      setRoleUpdating(true);
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: user?.email,
+        password: rolePassword.trim(),
+      });
+      if (authErr) {
+        setRoleUpdating(false);
+        toast.error('Incorrect password. Promotion not authorized.');
+        return;
+      }
+    } else {
+      setRoleUpdating(true);
+    }
+
     try {
       await updateStaffRole(member.id, newRole);
       toast.success(`${name} is now ${newRole === 'admin' ? 'Admin' : 'Sales Staff'}`);
+      setRolePassword('');
+      setShowRolePassword(false);
+      setRoleToggleConfirm(null);
     } catch (err) {
       toast.error(err?.message || 'Failed to update role');
     } finally {
-      setRoleToggleConfirm(null);
+      setRoleUpdating(false);
     }
   };
 
@@ -975,14 +1003,142 @@ const StaffManagement = () => {
         onCancel={() => setResendConfirm(null)}
       />
 
-      <ConfirmDialog
-        isOpen={!!roleToggleConfirm}
-        title="Change Role?"
-        message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to ${roleToggleConfirm?.role === 'admin' ? 'Staff' : 'Admin'}?`}
-        confirmText="Change Role"
-        onConfirm={confirmRoleToggle}
-        onCancel={() => setRoleToggleConfirm(null)}
-      />
+      {/* Promotion with Password Confirmation Modal */}
+      {roleToggleConfirm && roleToggleConfirm.role === 'staff' && (
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setRoleToggleConfirm(null);
+              setRolePassword('');
+              setShowRolePassword(false);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setRoleToggleConfirm(null);
+              setRolePassword('');
+              setShowRolePassword(false);
+            }
+          }}
+        >
+          <div className="modal-content staff-modal-content" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <div className="flex-center gap-2">
+                <Shield size={20} style={{ color: 'var(--accent, #d97706)' }} />
+                <h2>Promote to Administrator</h2>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => {
+                  setRoleToggleConfirm(null);
+                  setRolePassword('');
+                  setShowRolePassword(false);
+                }}
+                disabled={roleUpdating}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                You are promoting <strong style={{ color: 'var(--charcoal)' }}>{getDisplayName(roleToggleConfirm)}</strong> to <strong>Administrator</strong>.
+                Administrators have access to management tools, inventory, and staff operations.
+              </p>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem' }}>
+                <label
+                  className="label"
+                  htmlFor="mgmt-promote-pw"
+                  style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}
+                >
+                  Owner Password Confirmation <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
+                </label>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                  Please enter your password to authorize this administrative promotion:
+                </p>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="mgmt-promote-pw"
+                    type={showRolePassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter owner password"
+                    className="input-field"
+                    style={{ paddingRight: '2.5rem', width: '100%' }}
+                    value={rolePassword}
+                    onChange={(e) => setRolePassword(e.target.value)}
+                    disabled={roleUpdating}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && rolePassword.trim() && !roleUpdating) {
+                        e.preventDefault();
+                        confirmRoleToggle();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRolePassword(!showRolePassword)}
+                    tabIndex={-1}
+                    style={{
+                      position: 'absolute',
+                      right: '0.75rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-secondary)',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    aria-label={showRolePassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showRolePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => {
+                  setRoleToggleConfirm(null);
+                  setRolePassword('');
+                  setShowRolePassword(false);
+                }}
+                disabled={roleUpdating}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!rolePassword.trim() || roleUpdating}
+                onClick={confirmRoleToggle}
+              >
+                {roleUpdating ? 'Authorizing...' : 'Authorize & Promote'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Demote confirmation (Admin -> Staff) */}
+      {roleToggleConfirm && roleToggleConfirm.role === 'admin' && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Demote to Sales Staff?"
+          message={`Are you sure you want to change the role of ${getDisplayName(roleToggleConfirm)} to Sales Staff?`}
+          confirmText={roleUpdating ? 'Demoting...' : 'Change to Staff'}
+          onConfirm={confirmRoleToggle}
+          onCancel={() => setRoleToggleConfirm(null)}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={!!removeConfirm}
