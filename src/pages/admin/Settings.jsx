@@ -29,6 +29,7 @@ import { uploadToCloudinary } from '../../lib/storage';
 import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
 import AppVersionSettings from '../settings/AppVersionSettings';
 import MfaSettings from '../settings/MfaSettings';
+import LegalManagement from '../settings/LegalManagement';
 import './Settings.css';
 
 const Settings = () => {
@@ -38,7 +39,7 @@ const Settings = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account', 'app-version'].includes(tabParam)) {
+    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account', 'app-version', 'legal'].includes(tabParam)) {
       if (!isAdminUnlocked && !['security', 'account'].includes(tabParam)) {
         setActiveTab('security');
       } else {
@@ -460,6 +461,12 @@ const Settings = () => {
               onClick={() => setActiveTab('app-version')}
             >
               App Version Policy
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'legal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('legal')}
+            >
+              Legal Management
             </button>
           </>
         )}
@@ -1401,6 +1408,12 @@ const Settings = () => {
           {activeTab === 'app-version' && (
             <div className="animate-fade-in">
               <AppVersionSettings />
+            </div>
+          )}
+
+          {activeTab === 'legal' && (
+            <div className="animate-fade-in">
+              <LegalManagement />
             </div>
           )}
 
