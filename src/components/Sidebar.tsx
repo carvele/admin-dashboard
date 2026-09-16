@@ -192,7 +192,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
     { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
     { to: '/account-deletion', icon: UserX, label: 'Account Deletion Requests', admin: true },
     { to: '/devices', icon: MonitorSmartphone, label: 'Device Management', admin: true },
-    { to: '/settings', icon: Settings, label: 'System Settings', admin: true },
+    { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (

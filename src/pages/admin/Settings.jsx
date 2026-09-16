@@ -32,16 +32,22 @@ import MfaSettings from '../settings/MfaSettings';
 import './Settings.css';
 
 const Settings = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('boutique');
+  const { user, isAdminUnlocked } = useAuth();
+  const [activeTab, setActiveTab] = useState(isAdminUnlocked ? 'boutique' : 'security');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account', 'app-version'].includes(tabParam)) {
-      setActiveTab(tabParam);
+      if (!isAdminUnlocked && !['security', 'account'].includes(tabParam)) {
+        setActiveTab('security');
+      } else {
+        setActiveTab(tabParam);
+      }
+    } else if (!isAdminUnlocked) {
+      setActiveTab('security');
     }
-  }, []);
+  }, [isAdminUnlocked]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Security / Change Password state
@@ -405,59 +411,69 @@ const Settings = () => {
       </div>
 
       <div className="settings-horizontal-nav">
+        {isAdminUnlocked && (
+          <>
+            <button
+              className={`nav-tab ${activeTab === 'boutique' ? 'active' : ''}`}
+              onClick={() => setActiveTab('boutique')}
+            >
+              Boutique Info
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'hours' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hours')}
+            >
+              Store Hours & Closures
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'reservation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('reservation')}
+            >
+              Reservation Rules
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'payments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('payments')}
+            >
+              Payment Methods
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ar')}
+            >
+              AR Try-On
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'messaging' ? 'active' : ''}`}
+              onClick={() => setActiveTab('messaging')}
+            >
+              Messaging & Auto-Reply
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
+            >
+              Notifications
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'app-version' ? 'active' : ''}`}
+              onClick={() => setActiveTab('app-version')}
+            >
+              App Version Policy
+            </button>
+          </>
+        )}
         <button
-          className={`nav-tab ${activeTab === 'boutique' ? 'active' : ''}`}
-          onClick={() => setActiveTab('boutique')}
+          className={`nav-tab ${activeTab === 'security' ? 'active' : ''}`}
+          onClick={() => setActiveTab('security')}
         >
-          Boutique Info
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'hours' ? 'active' : ''}`}
-          onClick={() => setActiveTab('hours')}
-        >
-          Store Hours & Closures
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'reservation' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reservation')}
-        >
-          Reservation Rules
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'payments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('payments')}
-        >
-          Payment Methods
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ar')}
-        >
-          AR Try-On
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'messaging' ? 'active' : ''}`}
-          onClick={() => setActiveTab('messaging')}
-        >
-          Messaging & Auto-Reply
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notifications')}
-        >
-          Notifications
+          Security & 2FA
         </button>
         <button
           className={`nav-tab ${activeTab === 'account' ? 'active' : ''}`}
           onClick={() => setActiveTab('account')}
         >
           Account
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'app-version' ? 'active' : ''}`}
-          onClick={() => setActiveTab('app-version')}
-        >
-          App Version Policy
         </button>
       </div>
 
