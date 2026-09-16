@@ -243,6 +243,12 @@ const ColorwayMediaManager = ({
                 key={cw.id || `cw-${idx}`}
                 className={`colorway-tab ${isActive ? 'active' : ''}`}
                 onClick={() => setActiveTabIdx(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveTabIdx(idx);
+                  }
+                }}
                 role="tab"
                 tabIndex={0}
                 aria-selected={isActive}
@@ -258,10 +264,13 @@ const ColorwayMediaManager = ({
                 <span className="colorway-img-count">{totalImgs} img</span>
 
                 {!readOnly && (
-                  <div className="flex items-center gap-1 ml-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 ml-1">
                     <button
                       type="button"
-                      onClick={() => handleMoveColorway(idx, -1)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveColorway(idx, -1);
+                      }}
                       disabled={idx === 0}
                       className="text-gray-400 hover:text-gray-700 disabled:opacity-20 p-0.5"
                       title="Move Left"
@@ -270,7 +279,10 @@ const ColorwayMediaManager = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleMoveColorway(idx, 1)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveColorway(idx, 1);
+                      }}
                       disabled={idx === colorways.length - 1}
                       className="text-gray-400 hover:text-gray-700 disabled:opacity-20 p-0.5"
                       title="Move Right"

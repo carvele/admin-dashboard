@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   fetchAllAppVersionPolicies,
   updateAppVersionPolicy,
@@ -217,8 +217,9 @@ export default function AppVersionSettings() {
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="label">Minimum Supported Version (Hard Block Threshold)</label>
+            <label className="label" htmlFor="policy-min-version">Minimum Supported Version (Hard Block Threshold)</label>
             <input
+              id="policy-min-version"
               type="text"
               className="input w-full"
               value={formData.min_version}
@@ -232,10 +233,11 @@ export default function AppVersionSettings() {
           </div>
 
           <div>
-            <label className="label">
+            <label className="label" htmlFor="policy-min-build">
               Minimum Build Number ({selectedPlatform === 'android' ? 'versionCode' : 'buildNumber'})
             </label>
             <input
+              id="policy-min-build"
               type="number"
               className="input w-full"
               value={formData.min_build_number}
@@ -251,8 +253,9 @@ export default function AppVersionSettings() {
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="label">Latest Available Version (Advisory / Soft Update)</label>
+            <label className="label" htmlFor="policy-latest-version">Latest Available Version (Advisory / Soft Update)</label>
             <input
+              id="policy-latest-version"
               type="text"
               className="input w-full"
               value={formData.latest_version}
@@ -266,8 +269,9 @@ export default function AppVersionSettings() {
           </div>
 
           <div>
-            <label className="label">Latest Build Number</label>
+            <label className="label" htmlFor="policy-latest-build">Latest Build Number</label>
             <input
+              id="policy-latest-build"
               type="number"
               className="input w-full"
               value={formData.latest_build_number}
@@ -279,8 +283,9 @@ export default function AppVersionSettings() {
         </div>
 
         <div className="mb-4">
-          <label className="label">Barrier Modal Title</label>
+          <label className="label" htmlFor="policy-title">Barrier Modal Title</label>
           <input
+            id="policy-title"
             type="text"
             className="input w-full"
             value={formData.title}
@@ -290,8 +295,9 @@ export default function AppVersionSettings() {
         </div>
 
         <div className="mb-4">
-          <label className="label">Barrier Modal Message</label>
+          <label className="label" htmlFor="policy-message">Barrier Modal Message</label>
           <textarea
+            id="policy-message"
             className="input w-full h-20"
             value={formData.message}
             onChange={(e) => setFormData({ ...formData, message: e.target.value })}
@@ -301,8 +307,9 @@ export default function AppVersionSettings() {
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="label">Store Deep-Link URL</label>
+            <label className="label" htmlFor="policy-store-url">Store Deep-Link URL</label>
             <input
+              id="policy-store-url"
               type="text"
               className="input w-full"
               value={formData.store_url}
@@ -313,8 +320,9 @@ export default function AppVersionSettings() {
           </div>
 
           <div>
-            <label className="label">Fallback HTTPS Store URL</label>
+            <label className="label" htmlFor="policy-fallback-url">Fallback HTTPS Store URL</label>
             <input
+              id="policy-fallback-url"
               type="url"
               className="input w-full"
               value={formData.store_fallback_url}
@@ -385,16 +393,16 @@ export default function AppVersionSettings() {
             </div>
 
             <div className="mb-4">
-              <label className="label text-xs">
+              <label className="label text-xs" htmlFor="confirm-token-input">
                 To confirm, type <strong>{confirmationRequiredString}</strong> below:
               </label>
               <input
+                id="confirm-token-input"
                 type="text"
                 className="input w-full"
                 value={confirmationInput}
                 onChange={(e) => setConfirmationInput(e.target.value)}
                 placeholder={confirmationRequiredString}
-                autoFocus
               />
             </div>
 

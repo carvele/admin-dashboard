@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck, ShieldAlert, Smartphone, Copy, Check, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -82,7 +82,7 @@ const MfaSettings = () => {
 
     setIsSubmitting(true);
     try {
-      const { data, error } = await supabase.auth.mfa.challengeAndVerify({
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
         factorId: enrollData.id,
         code: cleanCode,
       });
@@ -275,7 +275,6 @@ const MfaSettings = () => {
                 className="input-field mfa-code-input"
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
-                autoFocus
                 disabled={isSubmitting}
               />
               <button

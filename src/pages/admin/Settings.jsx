@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   KeyRound,
@@ -728,13 +728,11 @@ const Settings = () => {
                 Close the boutique for a specific holiday or date (e.g. Christmas Day or staff event). This immediately blocks mobile appointments on that date.
               </p>
 
-              <div
+              <form
                 className="closures-form-card"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddClosure(e);
-                  }
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddClosure();
                 }}
               >
                 <div className="closures-form-grid">
@@ -762,16 +760,15 @@ const Settings = () => {
                   </div>
                   <div className="closures-btn-col">
                     <button
-                      type="button"
+                      type="submit"
                       className="btn-primary w-full"
-                      onClick={handleAddClosure}
                       disabled={isLoading}
                     >
                       <Plus size={16} /> Add Closure
                     </button>
                   </div>
                 </div>
-              </div>
+              </form>
 
               <div className="table-container mt-4 mb-4">
                 <table className="closures-table">
