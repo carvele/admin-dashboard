@@ -697,8 +697,8 @@ const StaffManagement = () => {
             <Search size={17} className="staff-search-icon" />
             <input
               id="staff-search-input"
-              name="staffSearch"
-              type="text"
+              name="staff-directory-search-query"
+              type="search"
               placeholder={
                 viewMode === 'archived'
                   ? 'Search archived staff by name or email...'
@@ -706,6 +706,12 @@ const StaffManagement = () => {
               }
               aria-label="Search staff by name or email"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="staff-search-input"
@@ -1045,15 +1051,40 @@ const StaffManagement = () => {
             </div>
             <div className="modal-body">
               <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                You are promoting <strong style={{ color: 'var(--charcoal)' }}>{getDisplayName(roleToggleConfirm)}</strong> to <strong>Administrator</strong>.
+                You are promoting <strong style={{ color: 'var(--text-primary)' }}>{getDisplayName(roleToggleConfirm)}</strong> to <strong style={{ color: 'var(--text-primary)' }}>Administrator</strong>.
                 Administrators have access to management tools, inventory, and staff operations.
               </p>
 
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem' }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (rolePassword.trim() && !roleUpdating) {
+                    confirmRoleToggle();
+                  }
+                }}
+                autoComplete="on"
+                style={{
+                  background: 'var(--surface-hover, var(--beige))',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                }}
+              >
+                {/* Hidden username field prevents browser password managers from associating the page search input with this password */}
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  value={user?.email || ''}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+                />
                 <label
                   className="label"
                   htmlFor="mgmt-promote-pw"
-                  style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}
+                  style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-primary)' }}
                 >
                   Owner Password Confirmation <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                 </label>
@@ -1063,6 +1094,7 @@ const StaffManagement = () => {
                 <div style={{ position: 'relative' }}>
                   <input
                     id="mgmt-promote-pw"
+                    name="current-password"
                     type={showRolePassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     placeholder="Enter owner password"
@@ -1100,7 +1132,7 @@ const StaffManagement = () => {
                     {showRolePassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
             <div className="modal-footer">
               <button
