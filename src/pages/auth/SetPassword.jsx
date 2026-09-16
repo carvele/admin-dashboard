@@ -16,6 +16,7 @@ const SetPassword = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [session, setSession] = useState(null);
+  const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState('idle'); // idle, saving, success, error
@@ -63,7 +64,12 @@ const SetPassword = () => {
     // 1. Listen for auth state changes (catches PKCE code exchange or hash token processing)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
-      if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
+      if (event === 'PASSWORD_RECOVERY' && newSession) {
+        // Existing staff resetting their password — profile already exists, skip activation.
+        setIsRecoveryFlow(true);
+        setSession(newSession);
+        setChecking(false);
+      } else if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
         evaluateSession(newSession);
       }
     });
@@ -122,12 +128,13 @@ const SetPassword = () => {
       const { error: passwordError } = await supabase.auth.updateUser({ password });
       if (passwordError) throw passwordError;
 
-      // 2. Create the profile row server-side. The role comes from app_metadata
-      //    inside the edge function, never from the client - so this can't be
-      //    used to self-assign a higher role.
-      const { data: result, error: invokeError } = await supabase.functions.invoke('activate-staff-account');
-      if (invokeError) {
-        throw new Error(invokeError.message || 'Failed to activate your account.');
+      // 2. Only create the profile row on first-time invite. For password resets
+      //    the profile already exists — calling activate-staff-account would fail.
+      if (!isRecoveryFlow) {
+        const { error: invokeError } = await supabase.functions.invoke('activate-staff-account');
+        if (invokeError) {
+          throw new Error(invokeError.message || 'Failed to activate your account.');
+        }
       }
 
       // Offer to save the new credential to the browser's password manager, so
