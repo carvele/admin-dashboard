@@ -229,11 +229,11 @@ export const AuthProvider = ({ children }) => {
 
       if (profile) {
         // Lockout guard: only block on explicit confirmed bad states
-        const isActive = !profile.employment_status || profile.employment_status === 'active';
+        const isAllowedStatus = !profile.employment_status || profile.employment_status === 'active' || profile.employment_status === 'invited';
         if (
           profile.deleted === true ||
           profile.is_blocked === true ||
-          !isActive
+          !isAllowedStatus
         ) {
           isIntentionalSignOutRef.current = true;
           await supabase.auth.signOut();
@@ -684,13 +684,13 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        const isActive = !profile?.employment_status || profile.employment_status === 'active';
+        const isAllowedStatus = !profile?.employment_status || profile.employment_status === 'active' || profile.employment_status === 'invited';
         if (
           profile &&
           (
             profile.deleted === true ||
             profile.is_blocked === true ||
-            !isActive
+            !isAllowedStatus
           )
         ) {
           clearDeviceChannel();
