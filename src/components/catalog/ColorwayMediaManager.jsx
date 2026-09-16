@@ -10,6 +10,7 @@ import {
   Palette,
   CheckCircle2,
 } from 'lucide-react';
+import { getChipColorDot } from '../../utils/constants';
 import './ColorwayMediaManager.css';
 
 /**
@@ -61,13 +62,30 @@ const ColorwayMediaManager = ({
   const safeActiveIdx = Math.min(Math.max(0, activeTabIdx), Math.max(0, colorways.length - 1));
   const activeColorway = colorways[safeActiveIdx] || null;
 
-  // Derive predefined color names and hex map
+  // Derive predefined color names and hex map from canonical taxonomy
   const colorOptions = React.useMemo(() => {
     return colorList.map((c) => {
-      if (typeof c === 'string') return { name: c, hex: '#000000' };
-      return { name: c.name || '', hex: c.hex || '#000000' };
+      const name = typeof c === 'string' ? c : (c.name || '');
+      const hex = (typeof c === 'object' && c.hex) ? c.hex : getChipColorDot(name);
+      return { name, hex };
     }).filter((c) => Boolean(c.name));
   }, [colorList]);
+
+  // Compute available options for active colorway, preserving legacy colors absent from taxonomy
+  const availableColorOptions = React.useMemo(() => {
+    const list = [...colorOptions];
+    if (activeColorway?.colorName) {
+      const exists = list.some((c) => c.name.toLowerCase() === activeColorway.colorName.trim().toLowerCase());
+      if (!exists) {
+        list.push({
+          name: activeColorway.colorName,
+          hex: activeColorway.hexColor || getChipColorDot(activeColorway.colorName),
+          isLegacy: true,
+        });
+      }
+    }
+    return list;
+  }, [colorOptions, activeColorway?.colorName, activeColorway?.hexColor]);
 
   const updateColorway = (index, updates) => {
     if (readOnly) return;
@@ -77,12 +95,12 @@ const ColorwayMediaManager = ({
 
   const handleAddColorway = () => {
     if (readOnly) return;
-    // Suggest an unused color from colorList
+    // Suggest an unused color from available taxonomy colors
     const usedNames = new Set(colorways.map((c) => (c.colorName || '').trim().toLowerCase()));
     const suggested = colorOptions.find((c) => !usedNames.has(c.name.toLowerCase()));
 
-    const newColorName = suggested ? suggested.name : `Colorway ${colorways.length + 1}`;
-    const newHex = suggested ? suggested.hex : '#2563eb';
+    const newColorName = suggested ? suggested.name : (colorOptions[0]?.name || '');
+    const newHex = suggested ? suggested.hex : (colorOptions[0]?.hex || getChipColorDot(newColorName));
 
     const newColorway = {
       id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -255,7 +273,7 @@ const ColorwayMediaManager = ({
               >
                 <div
                   className="colorway-swatch-dot"
-                  style={{ backgroundColor: cw.hexColor || '#000000' }}
+                  style={{ backgroundColor: cw.hexColor || getChipColorDot(cw.colorName) }}
                 />
                 <span className="font-semibold text-xs">
                   {cw.displayName || cw.colorName || `Colorway ${idx + 1}`}
@@ -312,43 +330,62 @@ const ColorwayMediaManager = ({
         <div className="colorway-panel-card space-y-5">
           {/* Card Header & Metadata */}
           <div className="colorway-fields-grid">
-            {/* Color Name */}
+            {/* Canonical Color Selector */}
             <div>
-              <label className="label text-xs" htmlFor="colorway-color-name">
-                Color Name * <span className="text-[11px] text-gray-500">(matches inventory)</span>
+              <label className="label text-xs" htmlFor="colorway-canonical-color">
+                Color * <span className="text-[11px] text-gray-500">(JezSy Taxonomy)</span>
               </label>
-              <div className="relative">
-                <input
-                  id="colorway-color-name"
-                  type="text"
-                  list="predefined-colors-list"
-                  className="input-field text-sm"
-                  value={activeColorway.colorName || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const matched = colorOptions.find((c) => c.name.toLowerCase() === val.trim().toLowerCase());
-                    updateColorway(safeActiveIdx, {
-                      colorName: val,
-                      displayName: activeColorway.displayName === activeColorway.colorName ? val : activeColorway.displayName,
-                      hexColor: matched ? matched.hex : activeColorway.hexColor,
-                    });
-                  }}
-                  placeholder="e.g. Navy Blue, Crimson"
-                  disabled={readOnly}
-                  required
-                />
-                <datalist id="predefined-colors-list">
-                  {colorOptions.map((c) => (
-                    <option key={c.name} value={c.name} />
-                  ))}
-                </datalist>
-              </div>
+              <select
+                id="colorway-canonical-color"
+                className="input-field text-sm"
+                value={activeColorway.colorName || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = availableColorOptions.find((c) => c.name.toLowerCase() === val.toLowerCase());
+                  const derivedHex = matched?.hex || getChipColorDot(val);
+                  updateColorway(safeActiveIdx, {
+                    colorName: val,
+                    displayName: (!activeColorway.displayName || activeColorway.displayName === activeColorway.colorName) ? val : activeColorway.displayName,
+                    hexColor: derivedHex,
+                  });
+                }}
+                disabled={readOnly}
+                required
+              >
+                <option value="" disabled>Select from JezSy Colors...</option>
+                {availableColorOptions.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name} {c.isLegacy ? '(Legacy)' : ''}
+                  </option>
+                ))}
+              </select>
+
+              {activeColorway.colorName ? (
+                <div className="colorway-selected-preview flex items-center gap-2 mt-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs">
+                  <span
+                    className="colorway-swatch-dot inline-block shrink-0"
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: activeColorway.hexColor || getChipColorDot(activeColorway.colorName),
+                      border: '1px solid #cbd5e1',
+                    }}
+                  />
+                  <span className="font-semibold text-gray-800">
+                    {activeColorway.colorName}
+                  </span>
+                  <span className="text-gray-400 font-mono text-[11px]">
+                    {activeColorway.hexColor || getChipColorDot(activeColorway.colorName)}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {/* Display / Marketing Name */}
             <div>
               <label className="label text-xs" htmlFor="colorway-display-name">
-                Display Name <span className="text-[11px] text-gray-500">(customer facing)</span>
+                Display Name <span className="text-[11px] text-gray-500">(customer facing marketing title)</span>
               </label>
               <input
                 id="colorway-display-name"
@@ -356,35 +393,9 @@ const ColorwayMediaManager = ({
                 className="input-field text-sm"
                 value={activeColorway.displayName || ''}
                 onChange={(e) => updateColorway(safeActiveIdx, { displayName: e.target.value })}
-                placeholder="e.g. Midnight Navy"
+                placeholder="e.g. Midnight Navy (optional)"
                 disabled={readOnly}
               />
-            </div>
-
-            {/* Hex Color Swatch */}
-            <div>
-              <label className="label text-xs" htmlFor="colorway-hex">
-                Hex Swatch Color
-              </label>
-              <div className="colorway-swatch-input-wrap">
-                <input
-                  type="color"
-                  className="colorway-color-picker"
-                  value={activeColorway.hexColor?.startsWith('#') ? activeColorway.hexColor : '#000000'}
-                  onChange={(e) => updateColorway(safeActiveIdx, { hexColor: e.target.value })}
-                  disabled={readOnly}
-                />
-                <input
-                  id="colorway-hex"
-                  type="text"
-                  className="input-field text-sm font-mono uppercase"
-                  value={activeColorway.hexColor || '#000000'}
-                  onChange={(e) => updateColorway(safeActiveIdx, { hexColor: e.target.value })}
-                  placeholder="#000000"
-                  disabled={readOnly}
-                  maxLength={7}
-                />
-              </div>
             </div>
 
             {/* Default Status & Actions */}
