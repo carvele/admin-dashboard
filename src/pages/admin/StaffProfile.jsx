@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -28,6 +28,7 @@ import {
   Eye,
   EyeOff,
   X,
+  Crown,
 } from 'lucide-react';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import { getLogsForTarget } from '../../lib/supabaseService';
@@ -118,6 +119,90 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
   );
 };
 
+// ── Promote Owner Step-Up Modal ──────────────────────────────
+const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loading }) => {
+  const [totpCode, setTotpCode] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  return (
+    <div
+      className="sp-modal-overlay"
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    >
+      <div className="sp-modal">
+        <div className="sp-modal-header">
+          <Crown size={22} className="sp-modal-icon" style={{ color: 'var(--accent, #d97706)' }} />
+          <h3>Promote to Store Owner</h3>
+          <button className="sp-modal-close" onClick={onCancel}><X size={18} /></button>
+        </div>
+        <div className="sp-modal-body">
+          <p style={{ marginBottom: '0.75rem', lineHeight: 1.5 }}>
+            You are about to promote <strong>{targetName || targetEmail}</strong> to <strong>Store Owner</strong>.
+            This grants full, irrevocable administrative ownership across the entire JezSy organization.
+          </p>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginTop: '1rem' }}>
+            <label className="sp-label" htmlFor="sp-owner-totp" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+              Owner MFA Step-Up Verification <span className="sp-required">*</span>
+            </label>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+              Enter the 6-digit code from your authenticator app to authorize this Owner promotion:
+            </p>
+            <input
+              ref={inputRef}
+              id="sp-owner-totp"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              autoComplete="one-time-code"
+              placeholder="000000"
+              className="input-field"
+              style={{ maxWidth: '180px', fontSize: '1.25rem', textAlign: 'center', letterSpacing: '0.25em', fontWeight: 'bold' }}
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+              disabled={loading}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && totpCode.trim().length === 6 && !loading) {
+                  e.preventDefault();
+                  onConfirm(totpCode.trim());
+                }
+              }}
+            />
+          </div>
+        </div>
+        <div className="sp-modal-footer">
+          <button className="btn-outline" onClick={onCancel} disabled={loading}>
+            Cancel
+          </button>
+          <button
+            className="btn-primary"
+            style={{ background: 'var(--accent, #d97706)' }}
+            disabled={totpCode.trim().length !== 6 || loading}
+            onClick={() => onConfirm(totpCode.trim())}
+          >
+            {loading ? <Loader size={16} className="spin" /> : 'Authorize & Promote'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── History Timeline adapters ───────────────────────────────────
 // The staff account has two audit trails: staff_status_history (employment/
 // block changes via the update_staff_status RPC) and the generic logs table
@@ -178,6 +263,10 @@ const StaffProfile = () => {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
+
+  const isCallerOwner = (user?.role || '').toLowerCase() === 'owner';
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+  const [promoteLoading, setPromoteLoading] = useState(false);
 
   // ── Load data ────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
@@ -295,6 +384,56 @@ const StaffProfile = () => {
     } finally {
       setStatusSaving(false);
       setPendingChange(null);
+    }
+  };
+
+  const handlePromoteToOwner = async (totpCode) => {
+    try {
+      setPromoteLoading(true);
+      // 1. Get owner's verified TOTP factor
+      const { data: factorData, error: factorErr } = await supabase.auth.mfa.listFactors();
+      if (factorErr) throw factorErr;
+      const verifiedTotp = (factorData?.all || []).find((f) => f.factor_type === 'totp' && f.status === 'verified');
+      if (!verifiedTotp) {
+        throw new Error('You must have an active verified TOTP factor to authorize promotions.');
+      }
+
+      // 2. Perform step-up challenge and verify to upgrade caller session to AAL2
+      const { error: stepUpErr } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: verifiedTotp.id,
+        code: totpCode,
+      });
+      if (stepUpErr) {
+        throw new Error('Invalid TOTP code: ' + stepUpErr.message);
+      }
+
+      // 3. Invoke canonical owner-lifecycle Edge Function
+      const { data, error: invokeErr } = await supabase.functions.invoke('owner-lifecycle', {
+        body: {
+          action: 'promote',
+          targetId: id,
+          factorId: verifiedTotp.id,
+          code: totpCode,
+        },
+      });
+
+      if (invokeErr) {
+        throw new Error(invokeErr.message || 'Failed to promote staff member to Owner.');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast.success(`${profile.firstName || profile.email} has been successfully promoted to Store Owner!`);
+      setPromoteModalOpen(false);
+      await loadProfile();
+      await loadHistory();
+    } catch (err) {
+      console.error('[StaffProfile] Owner promotion error:', err);
+      toast.error(err.message || 'Failed to promote staff member to Owner.');
+    } finally {
+      setPromoteLoading(false);
     }
   };
 
@@ -579,6 +718,20 @@ const StaffProfile = () => {
                     Sends an email with a secure link to choose a new password.
                   </span>
                 </div>
+                {isCallerOwner && !isOwnProfile && profile?.role !== 'owner' && profile?.employmentStatus === 'active' && !profile?.isBlocked && (
+                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <button
+                      className="btn-primary flex-center gap-2"
+                      style={{ background: 'var(--accent, #d97706)', border: 'none', padding: '0.45rem 1rem', fontSize: '0.85rem' }}
+                      onClick={() => setPromoteModalOpen(true)}
+                    >
+                      <Crown size={16} /> Promote to Store Owner
+                    </button>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Requires fresh MFA step-up verification from the current Owner.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -688,6 +841,17 @@ const StaffProfile = () => {
           onConfirm={confirmStatusChange}
           onCancel={() => setPendingChange(null)}
           loading={statusSaving}
+        />
+      )}
+
+      {/* ── Promote Owner Step-Up Modal ── */}
+      {promoteModalOpen && (
+        <PromoteOwnerModal
+          targetName={[profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.email}
+          targetEmail={profile.email}
+          onConfirm={handlePromoteToOwner}
+          onCancel={() => setPromoteModalOpen(false)}
+          loading={promoteLoading}
         />
       )}
     </div>

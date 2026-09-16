@@ -68,7 +68,7 @@ const MfaSettings = () => {
   };
 
   const handleVerify = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     const cleanCode = verifyCode.replace(/\s+/g, '').trim();
     if (cleanCode.length !== 6) {
       toast.error('Please enter a valid 6-digit code.');
@@ -258,7 +258,7 @@ const MfaSettings = () => {
             </div>
           </div>
 
-          <form onSubmit={handleVerify} className="mfa-verify-form">
+          <div className="mfa-verify-form">
             <div className="mfa-step-block mt-3">
               <span className="mfa-step-badge">Step 2</span>
               <span className="mfa-step-label">Enter the 6-digit verification code from the app</span>
@@ -275,11 +275,20 @@ const MfaSettings = () => {
                 className="input-field mfa-code-input"
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (verifyCode.trim().length === 6 && !isSubmitting) {
+                      handleVerify();
+                    }
+                  }
+                }}
                 disabled={isSubmitting}
               />
               <button
-                type="submit"
+                type="button"
                 className="btn-primary"
+                onClick={handleVerify}
                 disabled={isSubmitting || verifyCode.trim().length !== 6}
               >
                 {isSubmitting ? (
@@ -299,7 +308,7 @@ const MfaSettings = () => {
                 Cancel
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
     </div>

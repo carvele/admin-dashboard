@@ -133,4 +133,53 @@ describe('ColorwayMediaManager Component', () => {
       ])
     );
   });
+
+  test('preserves legacy color not in colorList and marks as Legacy in selector', () => {
+    const legacyColorway = [
+      {
+        id: 'cw-leg',
+        colorName: 'Vintage Teal',
+        displayName: 'Vintage Teal',
+        hexColor: '#14b8a6',
+        isDefault: true,
+        sortOrder: 0,
+        primaryImageUrl: '',
+        images: [],
+        pendingFiles: [],
+      },
+    ];
+
+    render(
+      <ColorwayMediaManager
+        colorways={legacyColorway}
+        onChange={jest.fn()}
+        colorList={[{ name: 'Blue' }, { name: 'Red' }]}
+      />
+    );
+
+    expect(screen.getByText('Vintage Teal (Legacy)')).toBeInTheDocument();
+  });
+
+  test('updates colorway with canonical taxonomy color and derived swatch metadata on change', () => {
+    const handleChange = jest.fn();
+    render(
+      <ColorwayMediaManager
+        colorways={mockColorways}
+        onChange={handleChange}
+        colorList={[{ name: 'Navy', hex: '#000080' }, { name: 'Emerald', hex: '#10b981' }]}
+      />
+    );
+
+    const select = screen.getByLabelText(/Color \*/i);
+    fireEvent.change(select, { target: { value: 'Emerald' } });
+
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          colorName: 'Emerald',
+          hexColor: '#10b981',
+        }),
+      ])
+    );
+  });
 });

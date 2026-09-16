@@ -227,7 +227,7 @@ const Settings = () => {
   };
 
   const handleSave = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     setIsLoading(true);
     try {
       const now = new Date().toISOString();
@@ -478,7 +478,7 @@ const Settings = () => {
       </div>
 
       <div className="settings-content-area">
-        <form onSubmit={handleSave} className="settings-form">
+        <div className="settings-form">
 
           {activeTab === 'boutique' && (
             <div className="animate-fade-in">
@@ -1406,7 +1406,7 @@ const Settings = () => {
 
           {['boutique', 'reservation', 'payments', 'ar', 'messaging'].includes(activeTab) && (
             <div className="settings-footer max-w-lg">
-              <button type="submit" className="btn-primary" disabled={isLoading}>
+              <button type="button" onClick={handleSave} className="btn-primary" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 size={16} className="mr-2 inline animate-spin" /> Saving...
@@ -1419,7 +1419,7 @@ const Settings = () => {
               </button>
             </div>
           )}
-        </form>
+        </div>
       </div>
     </div>
   );
