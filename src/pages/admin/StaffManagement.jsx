@@ -1086,7 +1086,7 @@ const StaffManagement = () => {
                   htmlFor="mgmt-promote-pw"
                   style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-primary)' }}
                 >
-                  Owner Password Confirmation <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
+                  Password Confirmation <span style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                 </label>
                 <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
                   Please enter your password to authorize this administrative promotion:
@@ -1097,7 +1097,7 @@ const StaffManagement = () => {
                     name="current-password"
                     type={showRolePassword ? 'text' : 'password'}
                     autoComplete="current-password"
-                    placeholder="Enter owner password"
+                    placeholder="Enter account password"
                     className="input-field"
                     style={{ paddingRight: '2.5rem', width: '100%' }}
                     value={rolePassword}

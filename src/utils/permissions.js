@@ -17,10 +17,11 @@
  */
 
 const OWNER = 'owner';
+const ADMIN = 'admin';
 const STAFF = 'staff';
 
-const FULL = [OWNER];          // full-access tier
-const ALL = [OWNER, STAFF];    // everyone who can reach the dashboard
+const FULL = [OWNER, ADMIN];          // full-access tier: Owner and Admin share identical privileges
+const ALL = [OWNER, ADMIN, STAFF];    // everyone who can reach the dashboard
 
 const PERMISSIONS = {
   // ── Dashboard ──────────────────────────────────────────────
@@ -65,15 +66,15 @@ const PERMISSIONS = {
   // ── Account deletion (irreversible: erases data + revokes login) ──
   process_account_deletion: FULL,
 
-  // ── Areas the user did not re-scope: existing behavior kept ─
+  // ── Administrative controls (Owner & Admin equal access) ──
   view_analytics: FULL,
-  export_analytics: [OWNER],
-  manage_devices: [OWNER],
+  export_analytics: FULL,
+  manage_devices: FULL,
   view_customers: ALL,
   edit_customer: ALL,
   delete_customer: FULL,
-  manage_settings: [OWNER],
-  seed_demo_data: [OWNER],
+  manage_settings: FULL,
+  seed_demo_data: FULL,
 };
 
 const normalizeRole = (role) => (typeof role === 'string' ? role.trim().toLowerCase() : '');

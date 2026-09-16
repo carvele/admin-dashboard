@@ -183,7 +183,7 @@ const StaffProfile = () => {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
-  const isCallerOwner = (user?.role || '').toLowerCase() === 'owner';
+  const isCallerAdminOrOwner = ['admin', 'owner'].includes((user?.role || '').toLowerCase());
   const [roleUpdating, setRoleUpdating] = useState(false);
   const [roleConfirm, setRoleConfirm] = useState(null); // 'admin' | 'staff' | null
   const [rolePassword, setRolePassword] = useState('');
@@ -606,7 +606,7 @@ const StaffProfile = () => {
                   <Shield size={14} style={{ marginRight: '4px' }} />
                   {profile.role === 'admin' ? 'Administrator' : profile.role === 'owner' ? 'Store Owner' : 'Sales Staff'}
                 </div>
-                {isCallerOwner && !isOwnProfile && profile?.role !== 'owner' && profile?.employmentStatus === 'active' && !profile?.isBlocked && (
+                {isCallerAdminOrOwner && !isOwnProfile && profile?.role !== 'owner' && profile?.employmentStatus === 'active' && !profile?.isBlocked && (
                   <div className="sp-status-actions">
                     {profile.role === 'staff' ? (
                       <button
@@ -851,10 +851,10 @@ const StaffProfile = () => {
                     htmlFor="sp-promote-pw"
                     style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-primary)' }}
                   >
-                    Owner Password Confirmation <span className="sp-required" style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
+                    Password Confirmation <span className="sp-required" style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                   </label>
                   <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                    Enter your current password to authorize promoting this staff member to Administrator:
+                    Enter your password to authorize promoting this staff member to Administrator:
                   </p>
                   <div style={{ position: 'relative', maxWidth: '320px' }}>
                     <input
