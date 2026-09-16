@@ -86,8 +86,28 @@ const SetPassword = () => {
       const hasCode = searchParams.has('code');
       const hasHashTokens = hash.includes('access_token=') || hash.includes('refresh_token=');
 
-      if (hasCode || hasHashTokens) {
-        // Wait up to 3.5s for Supabase client to finish the exchange
+      if (hasHashTokens) {
+        // In PKCE mode, Supabase client might ignore hash tokens. Manually hydrate the session.
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+        
+        if (type === 'recovery') setIsRecoveryFlow(true);
+
+        if (accessToken && refreshToken) {
+          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+            .then(({ data, error }) => {
+              if (!mounted) return;
+              if (data?.session && evaluateSession(data.session)) return;
+              if (error) console.error('Manual token hydration error:', error);
+              setChecking(false);
+            });
+          return;
+        }
+      }
+
+      if (hasCode) {
+        // Wait up to 3.5s for Supabase client to finish the PKCE exchange
         setTimeout(async () => {
           if (!mounted) return;
           const { data: { session: retrySession } } = await supabase.auth.getSession();
