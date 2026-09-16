@@ -3,6 +3,7 @@ import { formatPHDate } from '../utils/dateFormatter';
 import { Star, CheckCircle, Trash2, Pin, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import ReviewImageLightbox from './ReviewImageLightbox';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * ReviewCard
@@ -21,6 +22,8 @@ import ReviewImageLightbox from './ReviewImageLightbox';
  *                     moderation page, false inside the per-product modal)
  */
 const ReviewCard = ({ review, onDelete, onUpdate, showProductName = false }) => {
+  const auth = useAuth();
+  const isAdminUnlocked = auth?.isAdminUnlocked ?? false;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   
@@ -177,14 +180,16 @@ const ReviewCard = ({ review, onDelete, onUpdate, showProductName = false }) => 
               </>
             )}
           </div>
-          <button
-            className="delete-btn"
-            onClick={() => setConfirmOpen(true)}
-            title="Delete Review"
-            aria-label={`Delete review by ${review.displayName}`}
-          >
-            <Trash2 size={15} aria-hidden="true" /> Delete
-          </button>
+          {isAdminUnlocked && (
+            <button
+              className="delete-btn"
+              onClick={() => setConfirmOpen(true)}
+              title="Delete Review"
+              aria-label={`Delete review by ${review.displayName}`}
+            >
+              <Trash2 size={15} aria-hidden="true" /> Delete
+            </button>
+          )}
         </div>
       </div>
 
