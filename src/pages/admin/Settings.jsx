@@ -28,6 +28,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
+import AppVersionSettings from '../settings/AppVersionSettings';
 import './Settings.css';
 
 const Settings = () => {
@@ -37,7 +38,7 @@ const Settings = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account'].includes(tabParam)) {
+    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account', 'app-version'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, []);
@@ -451,6 +452,12 @@ const Settings = () => {
           onClick={() => setActiveTab('account')}
         >
           Account
+        </button>
+        <button
+          className={`nav-tab ${activeTab === 'app-version' ? 'active' : ''}`}
+          onClick={() => setActiveTab('app-version')}
+        >
+          App Version Policy
         </button>
       </div>
 
@@ -1373,6 +1380,12 @@ const Settings = () => {
               >
                 Send Password Reset Email
               </button>
+            </div>
+          )}
+
+          {activeTab === 'app-version' && (
+            <div className="animate-fade-in">
+              <AppVersionSettings />
             </div>
           )}
 
