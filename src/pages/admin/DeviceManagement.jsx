@@ -37,6 +37,9 @@ const DeviceManagement = () => {
   // Inline rename state
   const [editingFp, setEditingFp] = useState(null);
   const [editingName, setEditingName] = useState('');
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Confirm dialogs
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -81,9 +84,22 @@ const DeviceManagement = () => {
     return result;
   }, { all: 0, pending: 0, approved: 0, revoked: 0 }), [devices]);
 
-  const filteredDevices = useMemo(() => statusFilter === 'all'
-    ? devices
-    : devices.filter((device) => device.status === statusFilter), [devices, statusFilter]);
+  const filteredDevices = useMemo(() => {
+    let result = devices;
+    if (statusFilter !== 'all') {
+      result = result.filter((device) => device.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((device) =>
+        (device.fingerprint || '').toLowerCase().includes(q) ||
+        (device.name || '').toLowerCase().includes(q) ||
+        (device.staff_name || '').toLowerCase().includes(q) ||
+        (device.staff_email || '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [devices, statusFilter, searchQuery]);
 
   const updateStatus = async (device, status) => {
     setBusyId(device.fingerprint);
@@ -192,9 +208,19 @@ const DeviceManagement = () => {
       </div>
 
       <section className="card">
-        <div className="card-header flex-between">
+        <div className="card-header flex-between" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           <div><h2 className="section-title">Registered devices</h2><p className="text-secondary">Changes take effect on the next device status check.</p></div>
-          <ShieldAlert size={20} className="text-secondary" aria-label="Device access controls" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <input 
+              type="search" 
+              className="input-field" 
+              placeholder="Search ID, name, email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '250px' }}
+            />
+            <ShieldAlert size={20} className="text-secondary" aria-label="Device access controls" />
+          </div>
         </div>
         {loading ? <div className="empty-state"><RefreshCw className="spin" /> Loading devices…</div> : filteredDevices.length === 0 ? (
           <div className="empty-state"><Laptop size={36} /><span>No devices in this view.</span></div>
