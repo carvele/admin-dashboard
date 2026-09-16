@@ -560,7 +560,7 @@ const Dashboard = () => {
                     <div className="text-xl font-bold text-charcoal mt-1">
                       ₱{(mtdOverview?.completed_booking_value?.current || 0).toLocaleString()}
                     </div>
-                    <div className="text-xs text-secondary mt-0.5">Value of completed rentals this month</div>
+                    <div className="text-xs text-secondary mt-0.5">Value of completed orders this month</div>
                   </div>
 
                   <div className="p-3 rounded-lg border border-color" style={{ borderColor: 'var(--border-light)' }}>

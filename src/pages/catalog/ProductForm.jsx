@@ -986,7 +986,7 @@ const ProductForm = ({ readOnly = false }) => {
 
            <div className={`grid grid-cols-1 ${formData.onSale ? 'md:grid-cols-3' : ''} gap-6`}>
               <div>
-                 <label className="label" htmlFor="product-price">Regular Rental Price (₱) *</label>
+                  <label className="label" htmlFor="product-price">Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
                     <input autoComplete="off" id="product-price" type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />

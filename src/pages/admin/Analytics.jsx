@@ -364,7 +364,7 @@ const Analytics = () => {
               change={bookingDelta.text}
               trend={bookingDelta.trend}
               icon={ShoppingBag}
-              tooltip="Sum of rental prices for reservations completed in the reporting period."
+              tooltip="Sum of order values for reservations completed in the reporting period."
               drilldownTo="/reservations?status=Completed"
             />
             <StatCard

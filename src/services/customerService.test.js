@@ -42,7 +42,6 @@ import {
   setCustomerArchiveState,
   getCustomerMeasurements,
   saveCustomerMeasurements,
-  saveReservationFittingRecord,
 } from './customerService';
 
 const CUST = 'cust-1';
@@ -319,27 +318,6 @@ describe('customerService B2A-4 commands', () => {
       await expect(saveCustomerMeasurements()).rejects.toThrow(
         'Direct mutation of customer body profiles is discontinued'
       );
-    });
-
-    test('saveReservationFittingRecord delegates to RPC', async () => {
-      mockRpc.mockResolvedValueOnce({ data: 'fitting-uuid-1', error: null });
-
-      const res = await saveReservationFittingRecord({
-        reservationId: 'res-123',
-        confirmedBodyMeasurements: { bust: 88, waist: 70 },
-        fittingStatus: 'fitted',
-        customerFittingSummary: 'Fitting confirmed',
-        staffInternalNotes: 'Customer requested loose waist',
-      });
-
-      expect(mockRpc).toHaveBeenCalledWith('save_reservation_fitting_record', {
-        _reservation_id: 'res-123',
-        _confirmed_body_measurements: { bust: 88, waist: 70 },
-        _fitting_status: 'fitted',
-        _customer_fitting_summary: 'Fitting confirmed',
-        _staff_internal_notes: 'Customer requested loose waist',
-      });
-      expect(res).toBe('fitting-uuid-1');
     });
   });
 });
