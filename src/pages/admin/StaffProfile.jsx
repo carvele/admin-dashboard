@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -122,6 +122,12 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
 // ── Promote Owner Step-Up Modal ──────────────────────────────
 const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loading }) => {
   const [totpCode, setTotpCode] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <div
       className="sp-modal-overlay"
@@ -144,9 +150,9 @@ const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loadi
           <button className="sp-modal-close" onClick={onCancel}><X size={18} /></button>
         </div>
         <div className="sp-modal-body">
-          <p className="sp-modal-desc">
-            You are promoting <strong>{targetName}</strong> (<code>{targetEmail}</code>) to <strong>Store Owner</strong>.
-            Owners have full authority over store configuration, workforce IAM, and quorum governance.
+          <p style={{ marginBottom: '0.75rem', lineHeight: 1.5 }}>
+            You are about to promote <strong>{targetName || targetEmail}</strong> to <strong>Store Owner</strong>.
+            This grants full, irrevocable administrative ownership across the entire JezSy organization.
           </p>
 
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginTop: '1rem' }}>
@@ -157,6 +163,7 @@ const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loadi
               Enter the 6-digit code from your authenticator app to authorize this Owner promotion:
             </p>
             <input
+              ref={inputRef}
               id="sp-owner-totp"
               type="text"
               inputMode="numeric"
@@ -168,7 +175,6 @@ const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loadi
               style={{ maxWidth: '180px', fontSize: '1.25rem', textAlign: 'center', letterSpacing: '0.25em', fontWeight: 'bold' }}
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-              autoFocus
               disabled={loading}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && totpCode.trim().length === 6 && !loading) {
