@@ -1,11 +1,10 @@
-/* eslint-disable jsx-a11y/no-static-element-interactions */
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   KeyRound,
   Check,
   EyeOff,
-  Eye, useState, useEffect } from 'react';
-import {
+  Eye,
   Save,
   Shield,
   Loader2,
@@ -28,19 +27,27 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
+import AppVersionSettings from '../settings/AppVersionSettings';
+import MfaSettings from '../settings/MfaSettings';
 import './Settings.css';
 
 const Settings = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('boutique');
+  const { user, isAdminUnlocked } = useAuth();
+  const [activeTab, setActiveTab] = useState(isAdminUnlocked ? 'boutique' : 'security');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account'].includes(tabParam)) {
-      setActiveTab(tabParam);
+    if (tabParam && ['boutique', 'hours', 'reservation', 'payments', 'ar', 'messaging', 'notifications', 'security', 'account', 'app-version'].includes(tabParam)) {
+      if (!isAdminUnlocked && !['security', 'account'].includes(tabParam)) {
+        setActiveTab('security');
+      } else {
+        setActiveTab(tabParam);
+      }
+    } else if (!isAdminUnlocked) {
+      setActiveTab('security');
     }
-  }, []);
+  }, [isAdminUnlocked]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Security / Change Password state
@@ -404,47 +411,63 @@ const Settings = () => {
       </div>
 
       <div className="settings-horizontal-nav">
+        {isAdminUnlocked && (
+          <>
+            <button
+              className={`nav-tab ${activeTab === 'boutique' ? 'active' : ''}`}
+              onClick={() => setActiveTab('boutique')}
+            >
+              Boutique Info
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'hours' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hours')}
+            >
+              Store Hours & Closures
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'reservation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('reservation')}
+            >
+              Reservation Rules
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'payments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('payments')}
+            >
+              Payment Methods
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ar')}
+            >
+              AR Try-On
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'messaging' ? 'active' : ''}`}
+              onClick={() => setActiveTab('messaging')}
+            >
+              Messaging & Auto-Reply
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
+            >
+              Notifications
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'app-version' ? 'active' : ''}`}
+              onClick={() => setActiveTab('app-version')}
+            >
+              App Version Policy
+            </button>
+          </>
+        )}
         <button
-          className={`nav-tab ${activeTab === 'boutique' ? 'active' : ''}`}
-          onClick={() => setActiveTab('boutique')}
+          className={`nav-tab ${activeTab === 'security' ? 'active' : ''}`}
+          onClick={() => setActiveTab('security')}
         >
-          Boutique Info
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'hours' ? 'active' : ''}`}
-          onClick={() => setActiveTab('hours')}
-        >
-          Store Hours & Closures
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'reservation' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reservation')}
-        >
-          Reservation Rules
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'payments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('payments')}
-        >
-          Payment Methods
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'ar' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ar')}
-        >
-          AR Try-On
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'messaging' ? 'active' : ''}`}
-          onClick={() => setActiveTab('messaging')}
-        >
-          Messaging & Auto-Reply
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notifications')}
-        >
-          Notifications
+          Security & 2FA
         </button>
         <button
           className={`nav-tab ${activeTab === 'account' ? 'active' : ''}`}
@@ -705,13 +728,11 @@ const Settings = () => {
                 Close the boutique for a specific holiday or date (e.g. Christmas Day or staff event). This immediately blocks mobile appointments on that date.
               </p>
 
-              <div
+              <form
                 className="closures-form-card"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddClosure(e);
-                  }
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddClosure();
                 }}
               >
                 <div className="closures-form-grid">
@@ -739,16 +760,15 @@ const Settings = () => {
                   </div>
                   <div className="closures-btn-col">
                     <button
-                      type="button"
+                      type="submit"
                       className="btn-primary w-full"
-                      onClick={handleAddClosure}
                       disabled={isLoading}
                     >
                       <Plus size={16} /> Add Closure
                     </button>
                   </div>
                 </div>
-              </div>
+              </form>
 
               <div className="table-container mt-4 mb-4">
                 <table className="closures-table">
@@ -1316,6 +1336,8 @@ const Settings = () => {
                   </button>
                 </div>
               </div>
+
+              <MfaSettings />
             </div>
           )}
 
@@ -1373,6 +1395,12 @@ const Settings = () => {
               >
                 Send Password Reset Email
               </button>
+            </div>
+          )}
+
+          {activeTab === 'app-version' && (
+            <div className="animate-fade-in">
+              <AppVersionSettings />
             </div>
           )}
 

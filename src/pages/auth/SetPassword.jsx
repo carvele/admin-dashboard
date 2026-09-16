@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { KeyRound, CheckCircle2 } from 'lucide-react';
+import { KeyRound, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import './SetPassword.css';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -16,8 +16,10 @@ const SetPassword = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [session, setSession] = useState(null);
+  const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('idle'); // idle, saving, success, error
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -63,7 +65,12 @@ const SetPassword = () => {
     // 1. Listen for auth state changes (catches PKCE code exchange or hash token processing)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
-      if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
+      if (event === 'PASSWORD_RECOVERY' && newSession) {
+        // Existing staff resetting their password — profile already exists, skip activation.
+        setIsRecoveryFlow(true);
+        setSession(newSession);
+        setChecking(false);
+      } else if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
         evaluateSession(newSession);
       }
     });
@@ -122,12 +129,17 @@ const SetPassword = () => {
       const { error: passwordError } = await supabase.auth.updateUser({ password });
       if (passwordError) throw passwordError;
 
-      // 2. Create the profile row server-side. The role comes from app_metadata
-      //    inside the edge function, never from the client - so this can't be
-      //    used to self-assign a higher role.
-      const { data: result, error: invokeError } = await supabase.functions.invoke('activate-staff-account');
-      if (invokeError) {
-        throw new Error(invokeError.message || 'Failed to activate your account.');
+      // 2. Only create the profile row on first-time invite. For password resets
+      //    or users whose profile is already present, this is not needed.
+      if (!isRecoveryFlow) {
+        try {
+          const { error: invokeError } = await supabase.functions.invoke('activate-staff-account');
+          if (invokeError) {
+            console.warn('[SetPassword] activate-staff-account warning:', invokeError.message);
+          }
+        } catch (invErr) {
+          console.warn('[SetPassword] activate-staff-account invocation error:', invErr);
+        }
       }
 
       // Offer to save the new credential to the browser's password manager, so
@@ -252,36 +264,61 @@ const SetPassword = () => {
                 <label className="label" htmlFor="set-password-new">
                   New Password
                 </label>
-                <input
-                  id="set-password-new"
-                  type="password"
-                  className="input-field"
-                  name="new-password"
-                  autoComplete="new-password"
-                  placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={status === 'saving'}
-                  // Autofocus is appropriate here: this is the primary input of a
-                  // just-opened account-activation form (email above is read-only).
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
-                  autoFocus
-                />
+                <div className="password-input-wrapper">
+                  <input
+                    id="set-password-new"
+                    type={showPassword ? 'text' : 'password'}
+                    className="input-field"
+                    name="new-password"
+                    autoComplete="new-password"
+                    placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={status === 'saving'}
+                    // Autofocus is appropriate here: this is the primary input of a
+                    // just-opened account-activation form (email above is read-only).
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '4px' }}>
+                  Must contain uppercase, lowercase, a number, and a symbol.
+                </small>
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="set-password-confirm">
                   Confirm Password
                 </label>
-                <input
-                  id="set-password-confirm"
-                  type="password"
-                  className="input-field"
-                  name="confirm-password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={status === 'saving'}
-                />
+                <div className="password-input-wrapper">
+                  <input
+                    id="set-password-confirm"
+                    type={showPassword ? 'text' : 'password'}
+                    className="input-field"
+                    name="confirm-password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={status === 'saving'}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <button type="submit" className="btn-primary reset-btn" disabled={status === 'saving'}>

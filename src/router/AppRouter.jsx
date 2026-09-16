@@ -368,11 +368,9 @@ const AnimatedRoutes = () => {
             path="settings"
             element={
               <ProtectedRoute>
-                <RequireAdmin>
-                  <Suspense fallback={<PageLoader />}>
-                    <Settings />
-                  </Suspense>
-                </RequireAdmin>
+                <Suspense fallback={<PageLoader />}>
+                  <Settings />
+                </Suspense>
               </ProtectedRoute>
             }
           />

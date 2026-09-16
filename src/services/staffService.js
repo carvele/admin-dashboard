@@ -93,7 +93,7 @@ export const updateStaffProfile = async (id, profileData) => {
  */
 export const sendPasswordResetEmail = async (email) => {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/login`,
+    redirectTo: `${window.location.origin}/set-password`,
   });
   if (error) throw error;
 };

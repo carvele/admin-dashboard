@@ -211,6 +211,87 @@ export type Database = {
           },
         ]
       }
+      app_version_policies: {
+        Row: {
+          emergency_bypass_enabled: boolean
+          latest_build_number: number
+          latest_version: string
+          message: string
+          min_build_number: number
+          min_version: string
+          platform: string
+          store_fallback_url: string
+          store_url: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          emergency_bypass_enabled?: boolean
+          latest_build_number?: number
+          latest_version: string
+          message?: string
+          min_build_number?: number
+          min_version: string
+          platform: string
+          store_fallback_url: string
+          store_url: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          emergency_bypass_enabled?: boolean
+          latest_build_number?: number
+          latest_version?: string
+          message?: string
+          min_build_number?: number
+          min_version?: string
+          platform?: string
+          store_fallback_url?: string
+          store_url?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      app_version_policy_audit: {
+        Row: {
+          action: string
+          confirmation_text: string | null
+          created_at: string
+          id: string
+          new_policy: Json | null
+          old_policy: Json | null
+          operator_email: string | null
+          operator_id: string | null
+          platform: string
+        }
+        Insert: {
+          action: string
+          confirmation_text?: string | null
+          created_at?: string
+          id?: string
+          new_policy?: Json | null
+          old_policy?: Json | null
+          operator_email?: string | null
+          operator_id?: string | null
+          platform: string
+        }
+        Update: {
+          action?: string
+          confirmation_text?: string | null
+          created_at?: string
+          id?: string
+          new_policy?: Json | null
+          old_policy?: Json | null
+          operator_email?: string | null
+          operator_id?: string | null
+          platform?: string
+        }
+        Relationships: []
+      }
       ar_assets: {
         Row: {
           created_at: string | null
@@ -1185,11 +1266,11 @@ export type Database = {
           purpose: string
           receipt_url: string | null
           reference_number: string | null
-          refund_required_at: string | null
           refund_disbursed_at: string | null
-          refund_disbursement_method: string | null
           refund_disbursed_by: string | null
+          refund_disbursement_method: string | null
           refund_reference_number: string | null
+          refund_required_at: string | null
           requires_refund: boolean
           reservation_id: string
           status: string
@@ -1213,11 +1294,11 @@ export type Database = {
           purpose?: string
           receipt_url?: string | null
           reference_number?: string | null
-          refund_required_at?: string | null
           refund_disbursed_at?: string | null
-          refund_disbursement_method?: string | null
           refund_disbursed_by?: string | null
+          refund_disbursement_method?: string | null
           refund_reference_number?: string | null
+          refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id: string
           status?: string
@@ -1241,11 +1322,11 @@ export type Database = {
           purpose?: string
           receipt_url?: string | null
           reference_number?: string | null
-          refund_required_at?: string | null
           refund_disbursed_at?: string | null
-          refund_disbursement_method?: string | null
           refund_disbursed_by?: string | null
+          refund_disbursement_method?: string | null
           refund_reference_number?: string | null
+          refund_required_at?: string | null
           requires_refund?: boolean
           reservation_id?: string
           status?: string
@@ -1391,6 +1472,104 @@ export type Database = {
           },
         ]
       }
+      product_colorway_images: {
+        Row: {
+          alt_text: string | null
+          colorway_id: string
+          created_at: string
+          id: string
+          image_type: string | null
+          image_url: string
+          sort_order: number
+        }
+        Insert: {
+          alt_text?: string | null
+          colorway_id: string
+          created_at?: string
+          id?: string
+          image_type?: string | null
+          image_url: string
+          sort_order?: number
+        }
+        Update: {
+          alt_text?: string | null
+          colorway_id?: string
+          created_at?: string
+          id?: string
+          image_type?: string | null
+          image_url?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_colorway_images_colorway_id_fkey"
+            columns: ["colorway_id"]
+            isOneToOne: false
+            referencedRelation: "product_colorways"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_colorways: {
+        Row: {
+          color_name: string
+          created_at: string
+          display_name: string | null
+          hex_color: string | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          legacy_product_id: string | null
+          primary_image_url: string | null
+          product_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color_name: string
+          created_at?: string
+          display_name?: string | null
+          hex_color?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          legacy_product_id?: string | null
+          primary_image_url?: string | null
+          product_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color_name?: string
+          created_at?: string
+          display_name?: string | null
+          hex_color?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          legacy_product_id?: string | null
+          primary_image_url?: string | null
+          product_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_colorways_legacy_product_id_fkey"
+            columns: ["legacy_product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_colorways_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_complements: {
         Row: {
           complementary_product_id: string
@@ -1456,6 +1635,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           dateadded: string | null
+          default_colorway_id: string | null
           deleted: boolean | null
           deleted_at: string | null
           description: string | null
@@ -1502,6 +1682,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dateadded?: string | null
+          default_colorway_id?: string | null
           deleted?: boolean | null
           deleted_at?: string | null
           description?: string | null
@@ -1548,6 +1729,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dateadded?: string | null
+          default_colorway_id?: string | null
           deleted?: boolean | null
           deleted_at?: string | null
           description?: string | null
@@ -1590,6 +1772,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_default_colorway_id_fkey"
+            columns: ["default_colorway_id"]
+            isOneToOne: false
+            referencedRelation: "product_colorways"
             referencedColumns: ["id"]
           },
         ]
@@ -2928,6 +3117,7 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: undefined
       }
+      backfill_canonical_sibling_colorways: { Args: never; Returns: Json }
       begin_workforce_mfa_reset: {
         Args: {
           p_actor_id: string
@@ -3092,12 +3282,20 @@ export type Database = {
         }
         Returns: Json
       }
-      get_dashboard_operations: {
-        Args: {
-          p_today_date?: string
-          p_timezone?: string
-        }
-        Returns: Json
+      get_app_version_policy: { Args: { p_platform: string }; Returns: Json }
+      get_app_version_policy_audit: {
+        Args: { p_before?: string; p_limit?: number; p_platform?: string }
+        Returns: {
+          action: string
+          confirmation_text: string
+          created_at: string
+          id: string
+          new_policy: Json
+          old_policy: Json
+          operator_email: string
+          operator_id: string
+          platform: string
+        }[]
       }
       get_cashflow_analytics: {
         Args: {
@@ -3121,6 +3319,10 @@ export type Database = {
       }
       get_customer_reservation_fitting: {
         Args: { _reservation_id: string }
+        Returns: Json
+      }
+      get_dashboard_operations: {
+        Args: { p_timezone?: string; p_today_date?: string }
         Returns: Json
       }
       get_direct_chat_summaries: {
@@ -3192,9 +3394,7 @@ export type Database = {
       }
       get_public_store_setting: { Args: { setting_key: string }; Returns: Json }
       get_recent_dashboard_activity: {
-        Args: {
-          p_limit?: number
-        }
+        Args: { p_limit?: number }
         Returns: Json
       }
       get_reservation_analytics: {
@@ -3202,12 +3402,6 @@ export type Database = {
           p_end_date_exclusive: string
           p_start_date: string
           p_timezone?: string
-        }
-        Returns: Json
-      }
-      get_top_inventory_alerts: {
-        Args: {
-          p_limit?: number
         }
         Returns: Json
       }
@@ -3250,6 +3444,7 @@ export type Database = {
           username: string
         }[]
       }
+      get_top_inventory_alerts: { Args: { p_limit?: number }; Returns: Json }
       get_trending_products: {
         Args: { limit_count?: number }
         Returns: {
@@ -3262,6 +3457,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           dateadded: string | null
+          default_colorway_id: string | null
           deleted: boolean | null
           deleted_at: string | null
           description: string | null
@@ -3351,14 +3547,6 @@ export type Database = {
         Args: { p_message_id: string }
         Returns: undefined
       }
-      mark_support_conversation_read: {
-        Args: { p_conversation_id: string }
-        Returns: undefined
-      }
-      mark_support_messages_delivered: {
-        Args: { p_conversation_id?: string; p_message_ids?: string[] }
-        Returns: undefined
-      }
       mark_reservation_refund_disbursed: {
         Args: {
           _disbursement_method: string
@@ -3367,6 +3555,14 @@ export type Database = {
           _reservation_id: string
         }
         Returns: Json
+      }
+      mark_support_conversation_read: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
+      mark_support_messages_delivered: {
+        Args: { p_conversation_id?: string; p_message_ids?: string[] }
+        Returns: undefined
       }
       merge_message_reaction: {
         Args: { p_emoji: string; p_message_id: string }
@@ -3452,6 +3648,16 @@ export type Database = {
       }
       require_aal2: { Args: never; Returns: undefined }
       require_recent_mfa: { Args: never; Returns: undefined }
+      reschedule_reservation_as_manager: {
+        Args: {
+          _expected_status: string
+          _new_appointment_time: string
+          _new_date: string
+          _reason?: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       reservation_holds_stock: {
         Args: { _deleted: boolean; _status: string }
         Returns: boolean
@@ -3462,16 +3668,6 @@ export type Database = {
       }
       resolve_reschedule_as_manager: {
         Args: { _approve: boolean; _reservation_id: string }
-        Returns: Json
-      }
-      reschedule_reservation_as_manager: {
-        Args: {
-          _expected_status: string
-          _new_appointment_time: string
-          _new_date: string
-          _reason?: string
-          _reservation_id: string
-        }
         Returns: Json
       }
       resolve_username: { Args: { p_username: string }; Returns: string }
@@ -3563,6 +3759,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           dateadded: string | null
+          default_colorway_id: string | null
           deleted: boolean | null
           deleted_at: string | null
           description: string | null
@@ -3634,6 +3831,10 @@ export type Database = {
           new_is_blocked: boolean
           target_customer_id: string
         }
+        Returns: Json
+      }
+      set_global_version_enforcement_bypass: {
+        Args: { p_confirmation: string; p_enabled: boolean }
         Returns: Json
       }
       set_inventory_archive_state: {
@@ -3738,6 +3939,10 @@ export type Database = {
         }
         Returns: Json
       }
+      update_app_version_policy: {
+        Args: { p_confirmation: string; p_platform: string; p_policy: Json }
+        Returns: Json
+      }
       update_profile_and_measurements: {
         Args: {
           _fit_preference: string
@@ -3773,6 +3978,10 @@ export type Database = {
         Returns: Json
       }
       update_user_streak: { Args: never; Returns: undefined }
+      upsert_product_with_colorways: {
+        Args: { _colorways_payload: Json; _product_payload: Json }
+        Returns: Json
+      }
       vote_on_review: {
         Args: { p_review_id: string; p_vote_type?: string }
         Returns: Json

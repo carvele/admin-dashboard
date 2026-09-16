@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import { getLogsForTarget } from '../../lib/supabaseService';
+import MfaSettings from '../settings/MfaSettings';
 import './StaffProfile.css';
 
 // ── helpers ──────────────────────────────────────────────────
@@ -668,6 +669,9 @@ const StaffProfile = () => {
             </form>
           </section>
         )}
+
+        {/* Two-Factor Authentication (TOTP) — visible on own profile */}
+        {isOwnProfile && <MfaSettings />}
       </div>
 
       {/* ── Confirmation Modal ── */}

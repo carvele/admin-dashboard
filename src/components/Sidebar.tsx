@@ -26,7 +26,7 @@ import { subscribeToCollection } from '../lib/supabaseService';
 import { getStockHealth } from '../utils/stockStatus';
 import './Sidebar.css';
 
-const ADMIN_ROUTES = ['/ar-assets', '/style-inspiration', '/analytics', '/staff', '/settings', '/activity-log', '/account-deletion', '/announcements', '/devices'];
+const ADMIN_ROUTES = ['/ar-assets', '/style-inspiration', '/analytics', '/staff', '/activity-log', '/account-deletion', '/announcements', '/devices'];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -192,7 +192,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed = false, onToggleCollapse }: Sid
     { to: '/activity-log', icon: ScrollText, label: 'Activity Log', admin: true },
     { to: '/account-deletion', icon: UserX, label: 'Account Deletion Requests', admin: true },
     { to: '/devices', icon: MonitorSmartphone, label: 'Device Management', admin: true },
-    { to: '/settings', icon: Settings, label: 'System Settings', admin: true },
+    { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (

@@ -71,6 +71,63 @@ export const updateProduct = async (docId, updates) => {
   }
 };
 
+/**
+ * Fetch first-class colorways for a product, including nested gallery images.
+ */
+export const getProductColorways = async (productId) => {
+  const { data, error } = await supabase
+    .from('product_colorways')
+    .select('*, product_colorway_images(*)')
+    .eq('product_id', productId)
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    console.error('[productService] getProductColorways error:', error);
+    throw error;
+  }
+
+  return (data || []).map((cw) => ({
+    id: cw.id,
+    productId: cw.product_id,
+    colorName: cw.color_name,
+    displayName: cw.display_name || '',
+    hexColor: cw.hex_color || '#000000',
+    sortOrder: cw.sort_order ?? 0,
+    isDefault: Boolean(cw.is_default),
+    isActive: Boolean(cw.is_active),
+    primaryImageUrl: cw.primary_image_url || '',
+    images: (cw.product_colorway_images || [])
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((img) => ({
+        id: img.id,
+        imageUrl: img.image_url,
+        sortOrder: img.sort_order ?? 0,
+        altText: img.alt_text || '',
+        imageType: img.image_type || 'gallery',
+      })),
+  }));
+};
+
+/**
+ * Transactional upsert of a product and all its colorways + image galleries.
+ */
+export const upsertProductWithColorways = async (productPayload, colorwaysPayload) => {
+  queryCache.invalidateByPrefix('products');
+  queryCache.invalidateByPrefix('inventory');
+
+  const { data, error } = await supabase.rpc('upsert_product_with_colorways', {
+    _product_payload: productPayload,
+    _colorways_payload: colorwaysPayload,
+  });
+
+  if (error) {
+    console.error('[productService] upsertProductWithColorways error:', error);
+    throw error;
+  }
+
+  return data;
+};
+
 /** Soft-archive a product and cascade to its inventory rows. */
 export const archiveProduct = async (docId) => {
   queryCache.invalidateByPrefix('products');
