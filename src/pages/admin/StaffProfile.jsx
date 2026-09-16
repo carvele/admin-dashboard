@@ -840,7 +840,7 @@ const StaffProfile = () => {
                     type="text"
                     name="username"
                     autoComplete="username"
-                    value={currentUser?.email || ''}
+                    value={user?.email || ''}
                     readOnly
                     tabIndex={-1}
                     aria-hidden="true"
