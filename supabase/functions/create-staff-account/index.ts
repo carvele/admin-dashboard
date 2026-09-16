@@ -203,7 +203,6 @@ Deno.serve(async (req) => {
     const { error: profileInsertError } = await adminClient.from('profiles').upsert({
       id: createdUserId,
       email: email,
-      account_kind: 'workforce',
       invite_delivery_status: 'pending',
       invited_at: nowIso,
       last_invited_at: nowIso,
