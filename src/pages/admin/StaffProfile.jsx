@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   getStaffProfile,
   updateStaffProfile,
   updateStaffStatus,
+  updateStaffRole,
   getStaffStatusHistory,
   sendPasswordResetEmail,
 } from '../../services/staffService';
@@ -19,6 +20,7 @@ import {
   Calendar,
   Save,
   Loader,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Clock,
@@ -28,7 +30,6 @@ import {
   Eye,
   EyeOff,
   X,
-  Crown,
 } from 'lucide-react';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import { getLogsForTarget } from '../../lib/supabaseService';
@@ -119,89 +120,7 @@ const StatusChangeModal = ({ title, description, onConfirm, onCancel, loading })
   );
 };
 
-// ── Promote Owner Step-Up Modal ──────────────────────────────
-const PromoteOwnerModal = ({ targetName, targetEmail, onConfirm, onCancel, loading }) => {
-  const [totpCode, setTotpCode] = useState('');
-  const inputRef = useRef(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  return (
-    <div
-      className="sp-modal-overlay"
-      role="button"
-      tabIndex={0}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onCancel();
-        }
-      }}
-    >
-      <div className="sp-modal">
-        <div className="sp-modal-header">
-          <Crown size={22} className="sp-modal-icon" style={{ color: 'var(--accent, #d97706)' }} />
-          <h3>Promote to Store Owner</h3>
-          <button className="sp-modal-close" onClick={onCancel}><X size={18} /></button>
-        </div>
-        <div className="sp-modal-body">
-          <p style={{ marginBottom: '0.75rem', lineHeight: 1.5 }}>
-            You are about to promote <strong>{targetName || targetEmail}</strong> to <strong>Store Owner</strong>.
-            This grants full, irrevocable administrative ownership across the entire JezSy organization.
-          </p>
-
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginTop: '1rem' }}>
-            <label className="sp-label" htmlFor="sp-owner-totp" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
-              Owner MFA Step-Up Verification <span className="sp-required">*</span>
-            </label>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-              Enter the 6-digit code from your authenticator app to authorize this Owner promotion:
-            </p>
-            <input
-              ref={inputRef}
-              id="sp-owner-totp"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              autoComplete="one-time-code"
-              placeholder="000000"
-              className="input-field"
-              style={{ maxWidth: '180px', fontSize: '1.25rem', textAlign: 'center', letterSpacing: '0.25em', fontWeight: 'bold' }}
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-              disabled={loading}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && totpCode.trim().length === 6 && !loading) {
-                  e.preventDefault();
-                  onConfirm(totpCode.trim());
-                }
-              }}
-            />
-          </div>
-        </div>
-        <div className="sp-modal-footer">
-          <button className="btn-outline" onClick={onCancel} disabled={loading}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            style={{ background: 'var(--accent, #d97706)' }}
-            disabled={totpCode.trim().length !== 6 || loading}
-            onClick={() => onConfirm(totpCode.trim())}
-          >
-            {loading ? <Loader size={16} className="spin" /> : 'Authorize & Promote'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ── History Timeline adapters ───────────────────────────────────
 // The staff account has two audit trails: staff_status_history (employment/
@@ -265,8 +184,10 @@ const StaffProfile = () => {
   const [pwSaving, setPwSaving] = useState(false);
 
   const isCallerOwner = (user?.role || '').toLowerCase() === 'owner';
-  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
-  const [promoteLoading, setPromoteLoading] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState(false);
+  const [roleConfirm, setRoleConfirm] = useState(null); // 'admin' | 'staff' | null
+  const [rolePassword, setRolePassword] = useState('');
+  const [showRolePassword, setShowRolePassword] = useState(false);
 
   // ── Load data ────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
@@ -387,53 +308,42 @@ const StaffProfile = () => {
     }
   };
 
-  const handlePromoteToOwner = async (totpCode) => {
+  const handleConfirmRoleChange = async () => {
+    if (!roleConfirm) return;
+    const targetRole = roleConfirm;
+
+    if (targetRole === 'admin') {
+      if (!rolePassword.trim()) {
+        toast.error('Please enter your owner password to authorize this promotion.');
+        return;
+      }
+      setRoleUpdating(true);
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: user?.email,
+        password: rolePassword.trim(),
+      });
+      if (authErr) {
+        setRoleUpdating(false);
+        toast.error('Incorrect password. Promotion not authorized.');
+        return;
+      }
+    } else {
+      setRoleUpdating(true);
+    }
+
     try {
-      setPromoteLoading(true);
-      // 1. Get owner's verified TOTP factor
-      const { data: factorData, error: factorErr } = await supabase.auth.mfa.listFactors();
-      if (factorErr) throw factorErr;
-      const verifiedTotp = (factorData?.all || []).find((f) => f.factor_type === 'totp' && f.status === 'verified');
-      if (!verifiedTotp) {
-        throw new Error('You must have an active verified TOTP factor to authorize promotions.');
-      }
-
-      // 2. Perform step-up challenge and verify to upgrade caller session to AAL2
-      const { error: stepUpErr } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: verifiedTotp.id,
-        code: totpCode,
-      });
-      if (stepUpErr) {
-        throw new Error('Invalid TOTP code: ' + stepUpErr.message);
-      }
-
-      // 3. Invoke canonical owner-lifecycle Edge Function
-      const { data, error: invokeErr } = await supabase.functions.invoke('owner-lifecycle', {
-        body: {
-          action: 'promote',
-          targetId: id,
-          factorId: verifiedTotp.id,
-          code: totpCode,
-        },
-      });
-
-      if (invokeErr) {
-        throw new Error(invokeErr.message || 'Failed to promote staff member to Owner.');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      toast.success(`${profile.firstName || profile.email} has been successfully promoted to Store Owner!`);
-      setPromoteModalOpen(false);
-      await loadProfile();
+      await updateStaffRole(id, targetRole);
+      toast.success(`Role updated to ${targetRole === 'admin' ? 'Administrator' : 'Sales Staff'}.`);
+      setProfile((prev) => ({ ...prev, role: targetRole }));
       await loadHistory();
+      setRolePassword('');
+      setShowRolePassword(false);
+      setRoleConfirm(null);
     } catch (err) {
-      console.error('[StaffProfile] Owner promotion error:', err);
-      toast.error(err.message || 'Failed to promote staff member to Owner.');
+      console.error('[StaffProfile] Role change error:', err);
+      toast.error(err.message || 'Failed to update role.');
     } finally {
-      setPromoteLoading(false);
+      setRoleUpdating(false);
     }
   };
 
@@ -688,6 +598,37 @@ const StaffProfile = () => {
                   </button>
                 )}
               </div>
+
+              {/* ── Role & Permissions ── */}
+              <div className="sp-status-block">
+                <div className="sp-status-label">Assigned Role</div>
+                <div className="sp-status-badge status-active" style={{ textTransform: 'capitalize' }}>
+                  <Shield size={14} style={{ marginRight: '4px' }} />
+                  {profile.role === 'admin' ? 'Administrator' : profile.role === 'owner' ? 'Store Owner' : 'Sales Staff'}
+                </div>
+                {isCallerOwner && !isOwnProfile && profile?.role !== 'owner' && profile?.employmentStatus === 'active' && !profile?.isBlocked && (
+                  <div className="sp-status-actions">
+                    {profile.role === 'staff' ? (
+                      <button
+                        className="sp-status-btn status-active"
+                        disabled={roleUpdating}
+                        onClick={() => setRoleConfirm('admin')}
+                      >
+                        {roleUpdating ? <Loader size={14} className="spin" /> : '→ Promote to Admin'}
+                      </button>
+                    ) : (
+                      <button
+                        className="sp-status-btn status-warning"
+                        disabled={roleUpdating}
+                        onClick={() => setRoleConfirm('staff')}
+                      >
+                        {roleUpdating ? <Loader size={14} className="spin" /> : '→ Demote to Sales Staff'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* 🔒 Security Actions */}
               <div className="sp-status-block" style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
                 <div className="sp-status-label">Security Actions</div>
@@ -718,20 +659,6 @@ const StaffProfile = () => {
                     Sends an email with a secure link to choose a new password.
                   </span>
                 </div>
-                {isCallerOwner && !isOwnProfile && profile?.role !== 'owner' && profile?.employmentStatus === 'active' && !profile?.isBlocked && (
-                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button
-                      className="btn-primary flex-center gap-2"
-                      style={{ background: 'var(--accent, #d97706)', border: 'none', padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-                      onClick={() => setPromoteModalOpen(true)}
-                    >
-                      <Crown size={16} /> Promote to Store Owner
-                    </button>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      Requires fresh MFA step-up verification from the current Owner.
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -844,15 +771,130 @@ const StaffProfile = () => {
         />
       )}
 
-      {/* ── Promote Owner Step-Up Modal ── */}
-      {promoteModalOpen && (
-        <PromoteOwnerModal
-          targetName={[profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.email}
-          targetEmail={profile.email}
-          onConfirm={handlePromoteToOwner}
-          onCancel={() => setPromoteModalOpen(false)}
-          loading={promoteLoading}
-        />
+      {/* ── Role Change Confirmation Modal ── */}
+      {roleConfirm && (
+        <div
+          className="sp-modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setRoleConfirm(null);
+              setRolePassword('');
+              setShowRolePassword(false);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setRoleConfirm(null);
+              setRolePassword('');
+              setShowRolePassword(false);
+            }
+          }}
+        >
+          <div className="sp-modal">
+            <div className="sp-modal-header">
+              <Shield size={22} className="sp-modal-icon" style={{ color: 'var(--accent, #d97706)' }} />
+              <h3>{roleConfirm === 'admin' ? 'Confirm Promotion to Administrator' : 'Confirm Demotion to Sales Staff'}</h3>
+              <button
+                className="sp-modal-close"
+                onClick={() => {
+                  setRoleConfirm(null);
+                  setRolePassword('');
+                  setShowRolePassword(false);
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="sp-modal-body">
+              <p style={{ marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                Are you sure you want to change <strong>{displayName}</strong>&apos;s role to{' '}
+                <strong>{roleConfirm === 'admin' ? 'Administrator' : 'Sales Staff'}</strong>?
+              </p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                {roleConfirm === 'admin'
+                  ? 'Administrators have access to management tools, inventory, and staff management.'
+                  : 'Sales staff have access to POS, order fulfillment, and storefront operations.'}
+              </p>
+
+              {roleConfirm === 'admin' && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginTop: '1rem' }}>
+                  <label
+                    className="sp-label"
+                    htmlFor="sp-promote-pw"
+                    style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}
+                  >
+                    Owner Password Confirmation <span className="sp-required" style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
+                  </label>
+                  <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                    Enter your current password to authorize promoting this staff member to Administrator:
+                  </p>
+                  <div style={{ position: 'relative', maxWidth: '320px' }}>
+                    <input
+                      id="sp-promote-pw"
+                      type={showRolePassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Enter owner password"
+                      className="input-field"
+                      style={{ paddingRight: '2.5rem', width: '100%' }}
+                      value={rolePassword}
+                      onChange={(e) => setRolePassword(e.target.value)}
+                      disabled={roleUpdating}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && rolePassword.trim() && !roleUpdating) {
+                          e.preventDefault();
+                          handleConfirmRoleChange();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRolePassword(!showRolePassword)}
+                      tabIndex={-1}
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text-secondary)',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      aria-label={showRolePassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showRolePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="sp-modal-footer">
+              <button
+                className="btn-outline"
+                onClick={() => {
+                  setRoleConfirm(null);
+                  setRolePassword('');
+                  setShowRolePassword(false);
+                }}
+                disabled={roleUpdating}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={(roleConfirm === 'admin' && !rolePassword.trim()) || roleUpdating}
+                onClick={handleConfirmRoleChange}
+              >
+                {roleUpdating ? <Loader size={16} className="spin" /> : roleConfirm === 'admin' ? 'Authorize & Promote' : 'Confirm Change'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
