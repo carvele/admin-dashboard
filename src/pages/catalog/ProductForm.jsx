@@ -25,7 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
 import { normalizeSizes } from '../../utils/sizeOrder';
-import { getColorList } from '../../services/inventoryService';
+import { getColorList, getPatternList } from '../../services/inventoryService';
 import ReservationStatusBadge from '../../components/ReservationStatusBadge';
 import { toDisplayStatus } from '../../utils/reservationStatus';
 import {
@@ -70,7 +70,7 @@ const ProductForm = ({ readOnly = false }) => {
     color: '', // Derived on save from `colors` (comma-joined; mobile app splits on ',')
     colors: [], // Multi-select available colours the customer can choose from
     baseColor: '', // Primary colour (colors[0]) — used for admin catalog filtering
-    pattern: 'Solid', // Populated from pattern_list on mount
+    pattern: '', // Populated dynamically from Taxonomy pattern_list
     careInstructions: '',
     fitAndSizing: '',
     styleCode: '',
@@ -91,6 +91,8 @@ const ProductForm = ({ readOnly = false }) => {
 
   const [categories, setCategories] = useState([]);
   const [colorList, setColorList] = useState([]);
+  const [patternList, setPatternList] = useState([]);
+  const [loadingPatterns, setLoadingPatterns] = useState(true);
   // Variant matrix
   const [variantColumnsReady, setVariantColumnsReady] = useState(false);
   const [variantMatrix, setVariantMatrix] = useState([]);
@@ -151,6 +153,16 @@ const ProductForm = ({ readOnly = false }) => {
       })
       .catch((err) => console.error('Failed to load color list:', err));
 
+    getPatternList()
+      .then((list) => {
+        setPatternList(list || []);
+        setLoadingPatterns(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load pattern list:', err);
+        setLoadingPatterns(false);
+      });
+
     variantColumnsAvailable()
       .then((ok) => setVariantColumnsReady(ok))
       .catch(() => setVariantColumnsReady(false));
@@ -189,7 +201,7 @@ const ProductForm = ({ readOnly = false }) => {
                 fabric_stretch: docParams.garment_metadata?.fabric_stretch || 'Moderate',
                 color: docParams.color || '',
                 baseColor: docParams.baseColor || '',
-                pattern: docParams.pattern || 'Solid',
+                pattern: docParams.pattern ?? '',
                 careInstructions: docParams.careInstructions || '',
                 fitAndSizing: docParams.fitAndSizing || '',
                 styleCode: docParams.styleCode || '',
@@ -690,7 +702,7 @@ const ProductForm = ({ readOnly = false }) => {
         payload.created_by = user?.id || null;
         payload.stock = 0;
         payload.status = 'Out of Stock';
-        payload.visibility = 'draft';
+        payload.visibility = formData.visibility === 'public' ? 'public' : 'draft';
         payload.tags = ['New Arrival'];
 
         const newDocId = await createProduct(payload);
@@ -764,6 +776,15 @@ const ProductForm = ({ readOnly = false }) => {
     const merged = [...new Set([...listNames, ...(formData.colors || [])])].filter(Boolean);
     return merged;
   }, [colorList, formData.colors]);
+
+  // Merge patterns from settings pattern_list with any legacy pattern currently saved on this product
+  const allAvailablePatterns = React.useMemo(() => {
+    const listNames = patternList.map((p) => (typeof p === 'string' ? p : p.name)).filter(Boolean);
+    if (formData.pattern && !listNames.includes(formData.pattern)) {
+      return [...listNames, formData.pattern];
+    }
+    return listNames;
+  }, [patternList, formData.pattern]);
 
   if (loading) return <div className="p-8">Loading product data...</div>;
 
@@ -1086,6 +1107,50 @@ const ProductForm = ({ readOnly = false }) => {
                         Selected color(s): <strong>{(formData.colors || []).join(', ')}</strong>
                      </p>
                   )}
+
+                  {/* Dynamic Taxonomy Pattern Selection */}
+                  <div className="mt-5 pt-4 border-t border-dashed">
+                     <span className="label">Product Pattern</span>
+                     {loadingPatterns ? (
+                        <p className="text-sm text-secondary mt-2">Loading patterns from Taxonomy...</p>
+                     ) : allAvailablePatterns.length === 0 ? (
+                        <p className="text-sm text-secondary mt-2">
+                           No patterns configured in Taxonomy. Configure patterns in Inventory &rarr; Taxonomy &rarr; Patterns.
+                        </p>
+                     ) : (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                           {allAvailablePatterns.map((patName) => {
+                              const isSelected = formData.pattern === patName;
+                              const isLegacy = !patternList.some((p) => (typeof p === 'string' ? p : p.name) === patName);
+                              return (
+                                 <button
+                                    key={patName}
+                                    type="button"
+                                    onClick={() => !readOnly && setFormData((prev) => ({
+                                       ...prev,
+                                       pattern: prev.pattern === patName ? '' : patName,
+                                    }))}
+                                    className={`color-chip ${isSelected ? 'active' : ''}`}
+                                    disabled={readOnly}
+                                    title={isLegacy ? `${patName} (Legacy / Retired pattern preserved)` : patName}
+                                 >
+                                    {patName}
+                                    {isLegacy && <span style={{ fontSize: '9px', opacity: 0.75, marginLeft: 4 }}>(Legacy)</span>}
+                                 </button>
+                              );
+                           })}
+                        </div>
+                     )}
+                     {formData.pattern ? (
+                        <p className="text-xs text-secondary mt-2">
+                           Selected pattern: <strong>{formData.pattern}</strong>
+                        </p>
+                     ) : (
+                        <p className="text-xs text-secondary mt-2 italic">
+                           Optional: No pattern selected
+                        </p>
+                     )}
+                  </div>
               </div>
 
                               <div className="flex flex-col gap-4">
