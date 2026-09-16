@@ -38,14 +38,8 @@ function json(req: Request, body: unknown, status: number) {
   });
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -83,7 +77,7 @@ Deno.serve(async (req) => {
       !callerProfile ||
       callerProfile.deleted ||
       callerProfile.is_blocked ||
-      callerProfile.role !== 'owner' ||
+      !['owner', 'admin'].includes(callerProfile.role) ||
       callerProfile.employment_status !== 'active'
     ) {
       return json(req, { error: 'You do not have permission to manage staff invitations.' }, 403);
@@ -131,147 +125,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Fail-closed invitation link regeneration
-    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'invite',
-      email: targetProfile.email,
-      options: { redirectTo: redirectUrl },
-    });
+    // 2. Regenerate and dispatch the invite in one call via Supabase Auth's
+    // own admin API, instead of a separate generateLink + hand-rolled Resend
+    // HTTP send. inviteUserByEmail both issues a fresh token for an existing,
+    // still-unconfirmed user and emails it through whatever mail delivery is
+    // configured on this Supabase project (Auth > Email settings) -- so it
+    // is not limited to a single verified test recipient the way the
+    // project's standalone Resend account was.
+    let emailSent = false;
+    let emailError: string | null = null;
 
-    if (linkError || !linkData?.properties?.action_link) {
-      console.error('[resend-staff-invite] Invite generation failed:', linkError?.message);
+    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+      targetProfile.email,
+      { redirectTo: redirectUrl },
+    );
+
+    if (inviteError) {
+      emailError = inviteError.message || 'Failed to send invitation email.';
+      console.error('[resend-staff-invite] inviteUserByEmail failed:', emailError);
       await adminClient.from('logs').insert({
         user_id: caller.id,
         user_name: caller.email,
         action: 'staff_invite_resend_failed',
         target_type: 'staff',
         target_id: staffUserId,
-        details: { error: linkError?.message || 'Link generation failed' },
+        details: { error: emailError },
       });
-      return json(req, { error: 'Failed to generate fresh invitation link. Please try again.' }, 500);
+      return json(req, { error: 'Failed to generate and send a fresh invitation. Please try again.' }, 500);
     }
 
-    const actionLink = linkData.properties.action_link;
-
-    // 3. Send fresh invitation email via Resend
-    let emailSent = false;
-    let emailError: string | null = null;
-
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') ?? 'JezSy Collection <onboarding@resend.dev>';
-
-    if (!resendApiKey) {
-      emailError = 'RESEND_API_KEY is not configured in Supabase secrets.';
-      console.warn('[resend-staff-invite]', emailError);
-    } else {
-      try {
-        const safeEmail = escapeHtml(targetProfile.email);
-        const safeActionLink = escapeHtml(actionLink);
-
-        const emailHtml = '<!DOCTYPE html>' +
-'<html>' +
-'<head>' +
-'  <meta charset="utf-8">' +
-'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-'  <title>Your New Staff Account Invitation - JezSy Collection</title>' +
-'</head>' +
-'<body style="margin: 0; padding: 0; background-color: #f7f4ed; font-family: sans-serif;">' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f7f4ed; padding: 32px 16px;">' +
-'    <tr>' +
-'      <td align="center">' +
-'        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; background-color: #ffffff; border: 1px solid #efe9db; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">' +
-'          <tr>' +
-'            <td style="background: #1f1c18; padding: 28px 32px; text-align: center; border-bottom: 3px solid #d4af37;">' +
-'              <h1 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 0.12em; font-weight: 700; text-transform: uppercase;">JEZSY COLLECTION</h1>' +
-'              <p style="color: #d4af37; margin: 6px 0 0 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;">Staff Management Portal</p>' +
-'            </td>' +
-'          </tr>' +
-'          <tr>' +
-'            <td style="padding: 32px 32px 24px 32px;">' +
-'              <h2 style="color: #1f1c18; font-size: 18px; margin: 0 0 12px 0; font-weight: 600;">New Invitation Link</h2>' +
-'              <p style="color: #544b45; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">' +
-'                Your administrator has generated a fresh invitation link for your account. Any previously issued invitation links are no longer valid. Click below to set up your password and access the management portal:' +
-'              </p>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fdfbf7; border: 1px solid #efe9db; border-left: 4px solid #d4af37; border-radius: 8px; margin: 0 0 24px 0;">' +
-'                <tr>' +
-'                  <td style="padding: 16px 20px;">' +
-'                    <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'                      <tr>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; width: 120px; font-weight: 600;">Staff Email:</td>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #1f1c18; font-family: monospace; font-weight: 600;">' + safeEmail + '</td>' +
-'                      </tr>' +
-'                      <tr>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; font-weight: 600;">Assigned Role:</td>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #926f1a; font-weight: 600;">Sales Staff</td>' +
-'                      </tr>' +
-'                    </table>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 24px 0;">' +
-'                <tr>' +
-'                  <td align="center">' +
-'                    <a href="' + safeActionLink + '" target="_blank" style="background-color: #1f1c18; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; letter-spacing: 0.02em;">' +
-'                      Set Up Password & Activate Account &rarr;' +
-'                    </a>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border: 1px solid #efe9db; border-radius: 6px; margin: 0 0 16px 0;">' +
-'                <tr>' +
-'                  <td style="padding: 14px 16px;">' +
-'                    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #1f1c18; text-transform: uppercase; letter-spacing: 0.04em;">Security Instructions</p>' +
-'                    <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #544b45; line-height: 1.5;">' +
-'                      <li>This invitation link expires automatically.</li>' +
-'                      <li>Do not forward or share this email with anyone.</li>' +
-'                    </ul>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'            </td>' +
-'          </tr>' +
-'          <tr>' +
-'            <td style="background-color: #fdfbf7; padding: 20px 32px; text-align: center; border-top: 1px solid #efe9db;">' +
-'              <p style="margin: 0; font-size: 11px; color: #888888; line-height: 1.4;">' +
-'                This is an automated administrative notification from JezSy Collection.<br>' +
-'                Please do not reply directly to this email.' +
-'              </p>' +
-'            </td>' +
-'          </tr>' +
-'        </table>' +
-'      </td>' +
-'    </tr>' +
-'  </table>' +
-'</body>' +
-'</html>';
-
-        const resendResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + resendApiKey,
-          },
-          body: JSON.stringify({
-            from: resendFromEmail,
-            to: [targetProfile.email],
-            subject: 'New Staff Account Invitation Link - JezSy Collection',
-            html: emailHtml,
-          }),
-        });
-
-        if (resendResponse.ok) {
-          emailSent = true;
-          console.log('[resend-staff-invite] Fresh invitation link sent to ' + targetProfile.email);
-        } else {
-          const errBody = await resendResponse.json().catch(() => ({}));
-          emailError = errBody?.message || ('Resend delivery failed with status ' + resendResponse.status);
-          console.warn('[resend-staff-invite] Resend error:', emailError);
-        }
-      } catch (err: unknown) {
-        emailError = err instanceof Error ? err.message : 'Network error communicating with Resend';
-        console.warn('[resend-staff-invite] Resend exception:', emailError);
-      }
-    }
+    emailSent = true;
+    console.log('[resend-staff-invite] Fresh invitation sent to ' + targetProfile.email + ' via Supabase Auth');
 
     // 4. Update delivery status, timestamp, and audit log
     await adminClient
