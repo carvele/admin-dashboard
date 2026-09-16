@@ -1,11 +1,10 @@
-/* eslint-disable jsx-a11y/no-static-element-interactions */
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   KeyRound,
   Check,
   EyeOff,
-  Eye, useState, useEffect } from 'react';
-import {
+  Eye,
   Save,
   Shield,
   Loader2,
@@ -29,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary } from '../../lib/storage';
 import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService';
 import AppVersionSettings from '../settings/AppVersionSettings';
+import MfaSettings from '../settings/MfaSettings';
 import './Settings.css';
 
 const Settings = () => {
@@ -1323,6 +1323,8 @@ const Settings = () => {
                   </button>
                 </div>
               </div>
+
+              <MfaSettings />
             </div>
           )}
 
