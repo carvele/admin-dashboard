@@ -260,6 +260,8 @@ const SetPassword = () => {
                   autoComplete="username"
                   value={session.user.email}
                   readOnly
+                  disabled
+                  style={{ backgroundColor: '#f9f9f9', color: '#888', cursor: 'not-allowed', border: '1px solid #eaeaea' }}
                 />
               </div>
               <div className="form-group">
@@ -292,7 +294,7 @@ const SetPassword = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '4px' }}>
+                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '6px', marginBottom: '8px' }}>
                   Must contain uppercase, lowercase, a number, and a symbol.
                 </small>
               </div>
@@ -323,7 +325,12 @@ const SetPassword = () => {
                 </div>
               </div>
 
-              <button type="submit" className="btn-primary reset-btn" disabled={status === 'saving'}>
+              <button 
+                type="submit" 
+                className="btn-primary reset-btn" 
+                disabled={status === 'saving'}
+                style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px' }}
+              >
                 {status === 'saving' ? (
                   <span className="loading-dots">
                     Activating<span>...</span>
