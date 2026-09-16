@@ -86,8 +86,28 @@ const SetPassword = () => {
       const hasCode = searchParams.has('code');
       const hasHashTokens = hash.includes('access_token=') || hash.includes('refresh_token=');
 
-      if (hasCode || hasHashTokens) {
-        // Wait up to 3.5s for Supabase client to finish the exchange
+      if (hasHashTokens) {
+        // In PKCE mode, Supabase client might ignore hash tokens. Manually hydrate the session.
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+        
+        if (type === 'recovery') setIsRecoveryFlow(true);
+
+        if (accessToken && refreshToken) {
+          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+            .then(({ data, error }) => {
+              if (!mounted) return;
+              if (data?.session && evaluateSession(data.session)) return;
+              if (error) console.error('Manual token hydration error:', error);
+              setChecking(false);
+            });
+          return;
+        }
+      }
+
+      if (hasCode) {
+        // Wait up to 3.5s for Supabase client to finish the PKCE exchange
         setTimeout(async () => {
           if (!mounted) return;
           const { data: { session: retrySession } } = await supabase.auth.getSession();
@@ -260,6 +280,8 @@ const SetPassword = () => {
                   autoComplete="username"
                   value={session.user.email}
                   readOnly
+                  disabled
+                  style={{ backgroundColor: '#f9f9f9', color: '#888', cursor: 'not-allowed', border: '1px solid #eaeaea' }}
                 />
               </div>
               <div className="form-group">
@@ -292,7 +314,7 @@ const SetPassword = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '4px' }}>
+                <small style={{ color: 'var(--text-muted, #777)', fontSize: '0.78rem', display: 'block', marginTop: '6px', marginBottom: '8px' }}>
                   Must contain uppercase, lowercase, a number, and a symbol.
                 </small>
               </div>
@@ -323,7 +345,12 @@ const SetPassword = () => {
                 </div>
               </div>
 
-              <button type="submit" className="btn-primary reset-btn" disabled={status === 'saving'}>
+              <button 
+                type="submit" 
+                className="btn-primary reset-btn" 
+                disabled={status === 'saving'}
+                style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px' }}
+              >
                 {status === 'saving' ? (
                   <span className="loading-dots">
                     Activating<span>...</span>
