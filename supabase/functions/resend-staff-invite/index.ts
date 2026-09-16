@@ -125,24 +125,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Regenerate and dispatch the invite in one call via Supabase Auth's
-    // own admin API, instead of a separate generateLink + hand-rolled Resend
-    // HTTP send. inviteUserByEmail both issues a fresh token for an existing,
-    // still-unconfirmed user and emails it through whatever mail delivery is
-    // configured on this Supabase project (Auth > Email settings) -- so it
-    // is not limited to a single verified test recipient the way the
-    // project's standalone Resend account was.
+    // 2. Check canonical Auth confirmation state
+    const { data: authUser } = await adminClient.auth.admin.getUserById(staffUserId);
+
+    // 3. Dispatch the correct email type
+    // If the user already clicked a prior invite link, they are 'confirmed' in Auth 
+    // even though they haven't set a password or completed profile activation yet.
+    // inviteUserByEmail produces invalid (otp_expired) tokens for confirmed users, 
+    // so we must send a password recovery email instead.
     let emailSent = false;
     let emailError: string | null = null;
+    let inviteError = null;
 
-    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      targetProfile.email,
-      { redirectTo: redirectUrl },
-    );
+    if (authUser?.user?.email_confirmed_at) {
+      const { error } = await adminClient.auth.admin.resetPasswordForEmail(
+        targetProfile.email,
+        { redirectTo: redirectUrl }
+      );
+      inviteError = error;
+      console.log(`[resend-staff-invite] User already confirmed. Sent password reset to ${targetProfile.email}`);
+    } else {
+      const { error } = await adminClient.auth.admin.inviteUserByEmail(
+        targetProfile.email,
+        { redirectTo: redirectUrl }
+      );
+      inviteError = error;
+      console.log(`[resend-staff-invite] Sent fresh invite to ${targetProfile.email}`);
+    }
 
     if (inviteError) {
       emailError = inviteError.message || 'Failed to send invitation email.';
-      console.error('[resend-staff-invite] inviteUserByEmail failed:', emailError);
+      console.error('[resend-staff-invite] Email dispatch failed:', emailError);
       await adminClient.from('logs').insert({
         user_id: caller.id,
         user_name: caller.email,
@@ -155,7 +168,6 @@ Deno.serve(async (req) => {
     }
 
     emailSent = true;
-    console.log('[resend-staff-invite] Fresh invitation sent to ' + targetProfile.email + ' via Supabase Auth');
 
     // 4. Update delivery status, timestamp, and audit log
     await adminClient
