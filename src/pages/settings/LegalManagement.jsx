@@ -248,7 +248,7 @@ export default function LegalManagement() {
           ) : (
             history.map((doc) => (
               <div
-                key={doc.document_id}
+                key={doc.id}
                 className={`border rounded-lg p-5 ${
                   doc.is_active ? 'border-emerald-300 bg-emerald-50/30' : 'border-gray-200 bg-white'
                 }`}
@@ -272,7 +272,7 @@ export default function LegalManagement() {
                     </div>
                   </div>
                   <div className="text-xs text-gray-400 font-mono text-right">
-                    ID: {doc.document_id.split('-')[0]}...<br/>
+                    ID: {doc.id.split('-')[0]}...<br/>
                     SHA: {doc.content_sha256.substring(0, 8)}...
                   </div>
                 </div>
