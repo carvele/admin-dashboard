@@ -226,7 +226,9 @@ const SetPassword = () => {
             <h2>Set your password</h2>
             <p>
               Welcome to JezSy, {session.user.email}. Choose a password to activate your{' '}
-              {session.user.app_metadata?.staff_role === 'owner' ? 'Owner (Full Access)' : 'Sales Staff'} account.
+              {['owner', 'admin'].includes(session.user.app_metadata?.staff_role)
+                ? (session.user.app_metadata?.staff_role === 'owner' ? 'Owner (Full Access)' : 'Administrator (Full Access)')
+                : 'Sales Staff'} account.
             </p>
           </div>
 

@@ -488,7 +488,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
                 className="user-role-top"
                 style={{
                   fontSize: '0.75rem',
-                  color: (user as any)?.role === 'owner' ? 'var(--accent)' : 'var(--text-secondary)',
+                  color: ['owner', 'admin'].includes(String((user as any)?.role || '').toLowerCase()) ? 'var(--accent)' : 'var(--text-secondary)',
                   fontWeight: 500,
                 }}
               >

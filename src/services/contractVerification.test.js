@@ -49,16 +49,24 @@ describe('RPC Contract Verification (AST-Based Static Analysis)', () => {
       const fnName = member.name.text || member.name.escapedText;
       const args = { required: new Set(), optional: new Set() };
 
-      if (ts.isTypeLiteralNode(member.type)) {
-        for (const sub of member.type.members) {
-          const subName = sub.name.text || sub.name.escapedText;
-          if (subName === 'Args' && ts.isTypeLiteralNode(sub.type)) {
-            for (const argProp of sub.type.members) {
-              const argName = argProp.name.text || argProp.name.escapedText;
-              if (argProp.questionToken) {
-                args.optional.add(argName);
-              } else {
-                args.required.add(argName);
+      const typeNodes = ts.isUnionTypeNode(member.type)
+        ? member.type.types
+        : ts.isTypeLiteralNode(member.type)
+        ? [member.type]
+        : [];
+
+      for (const typeNode of typeNodes) {
+        if (ts.isTypeLiteralNode(typeNode)) {
+          for (const sub of typeNode.members) {
+            const subName = sub.name.text || sub.name.escapedText;
+            if (subName === 'Args' && ts.isTypeLiteralNode(sub.type)) {
+              for (const argProp of sub.type.members) {
+                const argName = argProp.name.text || argProp.name.escapedText;
+                if (argProp.questionToken || typeNodes.length > 1) {
+                  args.optional.add(argName);
+                } else {
+                  args.required.add(argName);
+                }
               }
             }
           }
