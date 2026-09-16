@@ -162,25 +162,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Auth identity creation via tokenized action link
-    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'invite',
+    // 2. Auth identity creation + email dispatch via inviteUserByEmail.
+    // Creates the auth user, issues an invite token, and sends the email
+    // through Supabase's configured mail delivery (Auth > Email settings) --
+    // not through Resend, so it is not sandbox-restricted to a single address.
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
-      options: { redirectTo: redirectUrl },
-    });
+      {
+        data: { staff_role: 'staff', role: 'staff' },
+        redirectTo: redirectUrl,
+      },
+    );
 
-    if (linkError || !linkData?.user) {
-      console.error('[create-staff-account] Link generation failed:', linkError?.message);
-      return json(req, { error: linkError?.message || 'Failed to create staff invitation identity.' }, 500);
+    if (inviteError || !inviteData?.user) {
+      console.error('[create-staff-account] inviteUserByEmail failed:', inviteError?.message);
+      return json(req, { error: inviteError?.message || 'Failed to create staff invitation identity.' }, 500);
     }
 
-    const createdUserId = linkData.user.id;
-    const actionLink = linkData.properties?.action_link;
-
-    if (!actionLink) {
-      await adminClient.auth.admin.deleteUser(createdUserId);
-      return json(req, { error: 'Failed to generate invitation action link.' }, 500);
-    }
+    const createdUserId = inviteData.user.id;
 
     // 3. Operational projection sync (app_metadata)
     let metaSynced = false;
@@ -284,139 +283,13 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Mandatory security audit logging failed. Provisioning transaction rolled back.' }, 500);
     }
 
-    // 6. Branded Email Dispatch via Resend
-    let emailSent = false;
-    let emailError: string | null = null;
-
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') ?? 'JezSy Collection <onboarding@resend.dev>';
-
-    if (!resendApiKey) {
-      emailError = 'RESEND_API_KEY is not configured in Supabase secrets.';
-      console.warn('[create-staff-account]', emailError);
-      await adminClient.from('profiles').update({ invite_delivery_status: 'failed' }).eq('id', createdUserId);
-    } else {
-      try {
-        const safeEmail = escapeHtml(email);
-        const safeActionLink = escapeHtml(actionLink);
-
-        const emailHtml = '<!DOCTYPE html>' +
-'<html>' +
-'<head>' +
-'  <meta charset="utf-8">' +
-'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-'  <title>Your Staff Account Invitation - JezSy Collection</title>' +
-'</head>' +
-'<body style="margin: 0; padding: 0; background-color: #f7f4ed; font-family: sans-serif;">' +
-'  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f7f4ed; padding: 32px 16px;">' +
-'    <tr>' +
-'      <td align="center">' +
-'        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; background-color: #ffffff; border: 1px solid #efe9db; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">' +
-'          <tr>' +
-'            <td style="background: #1f1c18; padding: 28px 32px; text-align: center; border-bottom: 3px solid #d4af37;">' +
-'              <h1 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 0.12em; font-weight: 700; text-transform: uppercase;">JEZSY COLLECTION</h1>' +
-'              <p style="color: #d4af37; margin: 6px 0 0 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;">Staff Management Portal</p>' +
-'            </td>' +
-'          </tr>' +
-'          <tr>' +
-'            <td style="padding: 32px 32px 24px 32px;">' +
-'              <h2 style="color: #1f1c18; font-size: 18px; margin: 0 0 12px 0; font-weight: 600;">Welcome to the Team</h2>' +
-'              <p style="color: #544b45; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">' +
-'                You have been invited by an administrator to join the JezSy management portal with <strong>Sales Staff</strong> access. To complete your setup, please click the secure button below to choose your password and activate your account:' +
-'              </p>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fdfbf7; border: 1px solid #efe9db; border-left: 4px solid #d4af37; border-radius: 8px; margin: 0 0 24px 0;">' +
-'                <tr>' +
-'                  <td style="padding: 16px 20px;">' +
-'                    <table width="100%" cellpadding="0" cellspacing="0" border="0">' +
-'                      <tr>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; width: 120px; font-weight: 600;">Staff Email:</td>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #1f1c18; font-family: monospace; font-weight: 600;">' + safeEmail + '</td>' +
-'                      </tr>' +
-'                      <tr>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #544b45; font-weight: 600;">Assigned Role:</td>' +
-'                        <td style="padding: 6px 0; font-size: 13px; color: #926f1a; font-weight: 600;">Sales Staff</td>' +
-'                      </tr>' +
-'                    </table>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 24px 0;">' +
-'                <tr>' +
-'                  <td align="center">' +
-'                    <a href="' + safeActionLink + '" target="_blank" style="background-color: #1f1c18; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; letter-spacing: 0.02em;">' +
-'                      Activate Staff Account & Set Password &rarr;' +
-'                    </a>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border: 1px solid #efe9db; border-radius: 6px; margin: 0 0 16px 0;">' +
-'                <tr>' +
-'                  <td style="padding: 14px 16px;">' +
-'                    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #1f1c18; text-transform: uppercase; letter-spacing: 0.04em;">Security Instructions</p>' +
-'                    <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #544b45; line-height: 1.5;">' +
-'                      <li>This invitation link expires automatically. Please activate your account promptly.</li>' +
-'                      <li>Do not forward or share this email with anyone.</li>' +
-'                      <li>If you did not expect this invitation, please notify your store administrator immediately.</li>' +
-'                    </ul>' +
-'                  </td>' +
-'                </tr>' +
-'              </table>' +
-'            </td>' +
-'          </tr>' +
-'          <tr>' +
-'            <td style="background-color: #fdfbf7; padding: 20px 32px; text-align: center; border-top: 1px solid #efe9db;">' +
-'              <p style="margin: 0; font-size: 11px; color: #888888; line-height: 1.4;">' +
-'                This is an automated administrative notification from JezSy Collection.<br>' +
-'                Please do not reply directly to this email.' +
-'              </p>' +
-'            </td>' +
-'          </tr>' +
-'        </table>' +
-'      </td>' +
-'    </tr>' +
-'  </table>' +
-'</body>' +
-'</html>';
-
-        const resendResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + resendApiKey,
-          },
-          body: JSON.stringify({
-            from: resendFromEmail,
-            to: [email],
-            subject: 'Your Staff Account Invitation - JezSy Collection',
-            html: emailHtml,
-          }),
-        });
-
-        if (resendResponse.ok) {
-          emailSent = true;
-          await adminClient.from('profiles').update({ invite_delivery_status: 'sent' }).eq('id', createdUserId);
-          console.log('[create-staff-account] Invitation email sent to ' + email + ' via Resend');
-        } else {
-          const errBody = await resendResponse.json().catch(() => ({}));
-          emailError = errBody?.message || ('Resend delivery failed with status ' + resendResponse.status);
-          await adminClient.from('profiles').update({ invite_delivery_status: 'failed' }).eq('id', createdUserId);
-          console.warn('[create-staff-account] Resend error:', emailError);
-        }
-      } catch (err: unknown) {
-        emailError = err instanceof Error ? err.message : 'Network error communicating with Resend';
-        await adminClient.from('profiles').update({ invite_delivery_status: 'failed' }).eq('id', createdUserId);
-        console.warn('[create-staff-account] Resend exception:', emailError);
-      }
-    }
-
     return json(
       req,
       {
         userId: createdUserId,
         email: email,
         role: 'staff',
-        emailSent: emailSent,
-        emailError: emailError,
+        emailSent: true,
       },
       200,
     );
