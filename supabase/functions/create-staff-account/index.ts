@@ -196,13 +196,14 @@ Deno.serve(async (req) => {
       metaSynced = false;
     }
 
-    // 4. Strict profile initialization & staff_memberships authority write
+    // 4. Strict profile initialization
     const nowIso = new Date().toISOString();
     
-    // 4a. Base profile identity (account_kind = 'workforce', no direct role/status write)
     const { error: profileInsertError } = await adminClient.from('profiles').upsert({
       id: createdUserId,
       email: email,
+      role: 'staff',
+      employment_status: 'invited',
       invite_delivery_status: 'pending',
       invited_at: nowIso,
       last_invited_at: nowIso,
@@ -216,24 +217,6 @@ Deno.serve(async (req) => {
       console.error('[create-staff-account] Profile insert failed, compensating auth identity:', profileInsertError.message);
       await adminClient.auth.admin.deleteUser(createdUserId);
       return json(req, { error: 'Failed to create staff profile. Provisioning rolled back.' }, 500);
-    }
-
-    // 4b. Canonical workforce authority: staff_memberships write
-    // Trigger trg_sync_membership_to_profile automatically projects role and employment_status to profiles
-    const { error: membershipInsertError } = await adminClient.from('staff_memberships').insert({
-      user_id: createdUserId,
-      role: 'staff',
-      employment_status: 'invited',
-      device_approval_state: 'not_required',
-      created_at: nowIso,
-      updated_at: nowIso,
-    });
-
-    if (membershipInsertError) {
-      console.error('[create-staff-account] Staff membership insert failed, compensating profile and auth user:', membershipInsertError.message);
-      await adminClient.from('profiles').delete().eq('id', createdUserId);
-      await adminClient.auth.admin.deleteUser(createdUserId);
-      return json(req, { error: 'Failed to establish staff membership authority. Provisioning rolled back.' }, 500);
     }
 
     // 5. Mandatory server audit logging & compensation on failure
