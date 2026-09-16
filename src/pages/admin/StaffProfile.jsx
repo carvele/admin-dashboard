@@ -819,11 +819,37 @@ const StaffProfile = () => {
               </p>
 
               {roleConfirm === 'admin' && (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginTop: '1rem' }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (rolePassword.trim() && !roleUpdating) {
+                      handleConfirmRoleChange();
+                    }
+                  }}
+                  autoComplete="on"
+                  style={{
+                    background: 'var(--surface-hover, var(--beige))',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginTop: '1rem',
+                  }}
+                >
+                  {/* Hidden username field prevents browser password managers from associating external inputs with this password */}
+                  <input
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={user?.email || ''}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+                  />
                   <label
                     className="sp-label"
                     htmlFor="sp-promote-pw"
-                    style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}
+                    style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-primary)' }}
                   >
                     Owner Password Confirmation <span className="sp-required" style={{ color: 'var(--color-danger, #ef4444)' }}>*</span>
                   </label>
@@ -833,6 +859,7 @@ const StaffProfile = () => {
                   <div style={{ position: 'relative', maxWidth: '320px' }}>
                     <input
                       id="sp-promote-pw"
+                      name="current-password"
                       type={showRolePassword ? 'text' : 'password'}
                       autoComplete="current-password"
                       placeholder="Enter owner password"
@@ -870,7 +897,7 @@ const StaffProfile = () => {
                       {showRolePassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                </div>
+                </form>
               )}
             </div>
             <div className="sp-modal-footer">
