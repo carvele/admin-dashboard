@@ -22,6 +22,8 @@ const SetPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('idle'); // idle, saving, success, error
   const [errorMsg, setErrorMsg] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -106,18 +108,19 @@ const SetPassword = () => {
         }
       }
 
-      if (hasCode) {
-        // Wait up to 3.5s for Supabase client to finish the PKCE exchange
-        setTimeout(async () => {
+      if (hasCode || hasHashTokens) {
+        // We are processing a token; give it 3s to finish exchanging code for session
+        // or for the onAuthStateChange event to fire.
+        setTimeout(() => {
           if (!mounted) return;
-          const { data: { session: retrySession } } = await supabase.auth.getSession();
-          if (!mounted) return;
-          if (retrySession && evaluateSession(retrySession)) {
-            return;
-          }
-          setChecking(false);
-        }, 3500);
+          supabase.auth.getSession().then(({ data: { session: delayedSession } }) => {
+            if (delayedSession && evaluateSession(delayedSession)) return;
+            // Still no session after 3s? Then the code/token was invalid or expired.
+            setChecking(false);
+          });
+        }, 3000);
       } else {
+        // No tokens in URL and no existing session = invalid state, stop checking immediately
         setChecking(false);
       }
     });
@@ -130,6 +133,15 @@ const SetPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!isRecoveryFlow) {
+      if (!firstName.trim() || !lastName.trim()) {
+        setStatus('error');
+        setErrorMsg('First name and last name are required to set up your profile.');
+        return;
+      }
+    }
+
     if (password.length < MIN_PASSWORD_LENGTH) {
       setStatus('error');
       setErrorMsg(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
@@ -149,9 +161,21 @@ const SetPassword = () => {
       const { error: passwordError } = await supabase.auth.updateUser({ password });
       if (passwordError) throw passwordError;
 
-      // 2. Only create the profile row on first-time invite. For password resets
-      //    or users whose profile is already present, this is not needed.
+      // 2. Profile row logic
       if (!isRecoveryFlow) {
+        // Update the profile with the provided names before activating
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            first_name: firstName.trim(),
+            last_name: lastName.trim()
+          })
+          .eq('id', session.user.id);
+          
+        if (profileError) {
+          console.warn('[SetPassword] profile update warning:', profileError.message);
+        }
+
         try {
           const { error: invokeError } = await supabase.functions.invoke('activate-staff-account');
           if (invokeError) {
@@ -243,19 +267,16 @@ const SetPassword = () => {
       <div className="set-password-right">
         <div className="set-password-form-wrapper">
           <div className="set-password-header">
-            <h2>Set your password</h2>
+            <h2>{isRecoveryFlow ? 'Reset your password' : 'Set up your profile'}</h2>
             <p>
-              Welcome to JezSy, {session.user.email}. Choose a password to activate your{' '}
-              {['owner', 'admin'].includes(session.user.app_metadata?.staff_role)
-                ? (session.user.app_metadata?.staff_role === 'owner' ? 'Owner (Full Access)' : 'Administrator (Full Access)')
-                : 'Sales Staff'} account.
+              Welcome to JezSy, {session.user.email}. {isRecoveryFlow ? 'Choose a new password.' : 'Please provide your name and choose a password to activate your account.'}
             </p>
           </div>
 
           {status === 'success' && (
             <div className="set-password-success">
               <CheckCircle2 size={40} style={{ margin: '0 auto 10px', display: 'block' }} />
-              Account activated! You can now sign in.
+              {isRecoveryFlow ? 'Password reset successfully!' : 'Account activated! You can now sign in.'}
               <br />
               <br />
               <small>Redirecting to sign in...</small>
@@ -268,22 +289,52 @@ const SetPassword = () => {
             <form onSubmit={handleSubmit} className="login-form">
               {/* Read-only email gives the browser/password-manager a username
                   to associate with the new password, so it offers to save it. */}
-              <div className="form-group">
-                <label className="label" htmlFor="set-password-email">
-                  Email
-                </label>
+              <div className="form-group" style={{ display: 'none' }}>
                 <input
                   id="set-password-email"
                   type="email"
-                  className="input-field"
                   name="username"
                   autoComplete="username"
                   value={session.user.email}
                   readOnly
-                  disabled
-                  style={{ backgroundColor: '#f9f9f9', color: '#888', cursor: 'not-allowed', border: '1px solid #eaeaea' }}
                 />
               </div>
+
+              {!isRecoveryFlow && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="label" htmlFor="first-name">
+                      First Name
+                    </label>
+                    <input
+                      id="first-name"
+                      type="text"
+                      className="input-field"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={status === 'saving'}
+                      placeholder="Jane"
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="label" htmlFor="last-name">
+                      Last Name
+                    </label>
+                    <input
+                      id="last-name"
+                      type="text"
+                      className="input-field"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      disabled={status === 'saving'}
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="label" htmlFor="set-password-new">
                   New Password
@@ -299,10 +350,8 @@ const SetPassword = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={status === 'saving'}
-                    // Autofocus is appropriate here: this is the primary input of a
-                    // just-opened account-activation form (email above is read-only).
                     // eslint-disable-next-line jsx-a11y/no-autofocus
-                    autoFocus
+                    autoFocus={isRecoveryFlow}
                   />
                   <button
                     type="button"
@@ -353,11 +402,11 @@ const SetPassword = () => {
               >
                 {status === 'saving' ? (
                   <span className="loading-dots">
-                    Activating<span>...</span>
+                    {isRecoveryFlow ? 'Saving' : 'Activating'}<span>...</span>
                   </span>
                 ) : (
                   <>
-                    <KeyRound size={18} /> Activate Account
+                    <KeyRound size={18} /> {isRecoveryFlow ? 'Save Password' : 'Activate Account'}
                   </>
                 )}
               </button>
