@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
     let inviteError = null;
 
     if (authUser?.user?.email_confirmed_at) {
-      const { error } = await adminClient.auth.admin.resetPasswordForEmail(
+      const { error } = await adminClient.auth.resetPasswordForEmail(
         targetProfile.email,
         { redirectTo: redirectUrl }
       );
