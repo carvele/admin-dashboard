@@ -98,6 +98,7 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   position: relative;
+  padding-bottom: 3.5rem;
 }
 
 .inv-table {
@@ -492,12 +493,16 @@
 
 /* Pagination */
 .inv-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border-color, #e5e7eb);
   background: var(--surface, #ffffff);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
 }
 
 
