@@ -517,58 +517,6 @@ export type Database = {
         }
         Relationships: []
       }
-      connections: {
-        Row: {
-          action_user_id: string
-          created_at: string | null
-          id: string
-          status: string
-          updated_at: string | null
-          user_id_1: string
-          user_id_2: string
-        }
-        Insert: {
-          action_user_id: string
-          created_at?: string | null
-          id?: string
-          status: string
-          updated_at?: string | null
-          user_id_1: string
-          user_id_2: string
-        }
-        Update: {
-          action_user_id?: string
-          created_at?: string | null
-          id?: string
-          status?: string
-          updated_at?: string | null
-          user_id_1?: string
-          user_id_2?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "connections_action_user_id_fkey"
-            columns: ["action_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "connections_user_id_1_fkey"
-            columns: ["user_id_1"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "connections_user_id_2_fkey"
-            columns: ["user_id_2"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       conversations: {
         Row: {
           created_at: string | null
@@ -3432,16 +3380,6 @@ export type Database = {
         Returns: {
           booked_count: number
           slot_time: string
-        }[]
-      }
-      get_suggested_connections: {
-        Args: never
-        Returns: {
-          first_name: string
-          id: string
-          last_name: string
-          mutual_count: number
-          username: string
         }[]
       }
       get_top_inventory_alerts: { Args: { p_limit?: number }; Returns: Json }
