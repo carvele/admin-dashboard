@@ -3256,6 +3256,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_product_sold_count: {
+        Args: { p_product_id: string }
+        Returns: number
+      }
       get_wardrobe_privacy: { Args: { p_user_id: string }; Returns: string }
       get_wishlist_privacy: { Args: { p_user_id: string }; Returns: string }
       increment_wear_count: {
@@ -3487,6 +3491,17 @@ export type Database = {
           p_style_tags?: string[]
         }
         Returns: undefined
+      }
+      reconcile_product_variants: {
+        Args: {
+          p_actor_id?: string
+          p_category?: string
+          p_desired_variants: Json
+          p_product_id: string
+          p_product_name?: string
+          p_style_code?: string
+        }
+        Returns: Json
       }
       search_catalog: {
         Args: {
