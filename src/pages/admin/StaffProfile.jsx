@@ -34,6 +34,7 @@ import {
 import HistoryTimeline from '../../components/HistoryTimeline';
 import { getLogsForTarget } from '../../lib/supabaseService';
 import MfaSettings from '../settings/MfaSettings';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './StaffProfile.css';
 
 // ── helpers ──────────────────────────────────────────────────
@@ -176,6 +177,7 @@ const StaffProfile = () => {
   // Status change modal
   const [pendingChange, setPendingChange] = useState(null); // { type, value }
   const [resetSending, setResetSending] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Change password (own profile only)
   const [pwForm, setPwForm] = useState({ newPw: '', confirmPw: '' });
@@ -344,6 +346,20 @@ const StaffProfile = () => {
       toast.error(err.message || 'Failed to update role.');
     } finally {
       setRoleUpdating(false);
+    }
+  };
+
+  const executePasswordReset = async () => {
+    if (resetSending || !profile?.email) return;
+    try {
+      setResetSending(true);
+      await sendPasswordResetEmail(profile.email);
+      toast.success(`Password reset link sent to ${profile.email}`);
+      setShowResetConfirm(false);
+    } catch (err) {
+      toast.error(err.message || 'Failed to send password reset link');
+    } finally {
+      setResetSending(false);
     }
   };
 
@@ -634,20 +650,10 @@ const StaffProfile = () => {
                 <div className="sp-status-label">Security Actions</div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                   <button
+                    type="button"
                     className="sp-btn-outline"
                     disabled={resetSending}
-                    onClick={async () => {
-                      if (!window.confirm(`Send a password reset link to ${profile.email}?`)) return;
-                      try {
-                        setResetSending(true);
-                        await sendPasswordResetEmail(profile.email);
-                        toast.success(`Password reset link sent to ${profile.email}`);
-                      } catch (err) {
-                        toast.error(err.message || 'Failed to send password reset link');
-                      } finally {
-                        setResetSending(false);
-                      }
-                    }}
+                    onClick={() => setShowResetConfirm(true)}
                   >
                     {resetSending ? (
                       <><Loader size={16} className="spin" style={{ marginRight: '8px' }} /> Sending...</>
@@ -923,6 +929,21 @@ const StaffProfile = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showResetConfirm}
+        title="Send Password Reset Link"
+        message={`Send a password reset link to ${profile?.email}?`}
+        confirmText="Send Reset Link"
+        cancelText="Cancel"
+        isDestructive={false}
+        severity="LOW"
+        isLoading={resetSending}
+        onConfirm={executePasswordReset}
+        onCancel={() => {
+          if (!resetSending) setShowResetConfirm(false);
+        }}
+      />
     </div>
   );
 };

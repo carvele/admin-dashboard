@@ -25,6 +25,8 @@ import {
 import { getStockHealth } from '../../utils/stockStatus';
 import ProductReviewsModal from './ProductReviewsModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 import StockStatusBadge from '../../components/inventory/StockStatusBadge';
 import PageHeader from '../../components/PageHeader';
 import {
@@ -1057,7 +1059,18 @@ const ClothingCatalog = () => {
           );
         })}
         {loading ? (
-          <div className="p-8 text-center text-secondary full-width">Loading catalog...</div>
+          Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="product-card card" style={{ pointerEvents: 'none' }} aria-busy="true">
+              <div className="product-image-area" style={{ height: '220px' }}>
+                <Skeleton height="100%" />
+              </div>
+              <div className="product-info-area" style={{ padding: '1rem' }}>
+                <Skeleton height={18} width="75%" style={{ marginBottom: '8px' }} />
+                <Skeleton height={13} width="45%" style={{ marginBottom: '12px' }} />
+                <Skeleton height={16} width="50%" />
+              </div>
+            </div>
+          ))
         ) : filteredCatalog.length === 0 ? (
           <div className="empty-state flex-col flex-center gap-3 p-8" style={{ width: '100%' }}>
             <div style={{ opacity: 0.3, marginBottom: '0.5rem' }}>

@@ -30,6 +30,7 @@ import { DEFAULT_AUTO_REPLY_MESSAGE } from '../../services/communicationService'
 import AppVersionSettings from '../settings/AppVersionSettings';
 import MfaSettings from '../settings/MfaSettings';
 import LegalManagement from '../settings/LegalManagement';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './Settings.css';
 
 const Settings = () => {
@@ -69,6 +70,7 @@ const Settings = () => {
   ]);
   const [closures, setClosures] = useState([]);
   const [newClosure, setNewClosure] = useState({ date: '', reason: '' });
+  const [closureToDelete, setClosureToDelete] = useState(null);
 
   const [formData, setFormData] = useState({
     storeName: 'JezSy Collection',
@@ -213,13 +215,15 @@ const Settings = () => {
     }
   };
 
-  const handleDeleteClosure = async (id) => {
+  const confirmDeleteClosure = async () => {
+    if (!closureToDelete || isLoading) return;
     setIsLoading(true);
     try {
-      await deleteStoreClosure(id);
-      setClosures(prev => prev.filter(c => c.closure_date !== id));
+      await deleteStoreClosure(closureToDelete.closure_date);
+      setClosures(prev => prev.filter(c => c.closure_date !== closureToDelete.closure_date));
       toast.success('Shop closure removed!');
-      await logAction(user, 'Removed shop closure date');
+      await logAction(user, 'Removed shop closure date', { date: closureToDelete.closure_date });
+      setClosureToDelete(null);
     } catch (err) {
       toast.error('Failed to remove closure: ' + err.message);
     } finally {
@@ -807,7 +811,7 @@ const Settings = () => {
                           <button
                             type="button"
                             className="btn-outline small text-danger"
-                            onClick={() => handleDeleteClosure(c.closure_date)}
+                            onClick={() => setClosureToDelete(c)}
                             disabled={isLoading}
                           >
                             <Trash2 size={14} /> Remove
@@ -1446,6 +1450,24 @@ const Settings = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(closureToDelete)}
+        title="Remove Store Closure"
+        message={`Are you sure you want to remove the closure for ${closureToDelete?.closure_date}?`}
+        confirmText="Remove Closure"
+        cancelText="Cancel"
+        isDestructive={true}
+        severity="MEDIUM"
+        consequences={[
+          'Boutique appointment slots for this date will become available for customer booking.',
+        ]}
+        isLoading={isLoading}
+        onConfirm={confirmDeleteClosure}
+        onCancel={() => {
+          if (!isLoading) setClosureToDelete(null);
+        }}
+      />
     </div>
   );
 };

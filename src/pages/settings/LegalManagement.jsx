@@ -3,6 +3,7 @@ import { Loader2, Plus, FileText, CheckCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalService } from '../../services/legalService';
 import MarkdownViewer from '../../components/MarkdownViewer';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function LegalManagement() {
   const [activeTab, setActiveTab] = useState('terms'); // 'terms' | 'privacy'
@@ -19,6 +20,7 @@ export default function LegalManagement() {
     content_markdown: '',
   });
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -65,17 +67,17 @@ export default function LegalManagement() {
     return `${ver}-new`;
   };
 
-  const handlePublish = async (e) => {
+  const handlePublish = (e) => {
     e.preventDefault();
     if (!draftData.version.trim() || !draftData.title.trim() || !draftData.content_markdown.trim()) {
       toast.error('All fields are required');
       return;
     }
+    setShowPublishConfirm(true);
+  };
 
-    // Confirm
-    if (!window.confirm(`Are you sure you want to publish version ${draftData.version}? This will immediately block all users (staff and customers) until they accept the new version.`)) {
-      return;
-    }
+  const confirmPublish = async () => {
+    if (isPublishing) return;
 
     setIsPublishing(true);
     try {
@@ -87,6 +89,7 @@ export default function LegalManagement() {
       );
       toast.success(`Successfully published new ${activeTab === 'terms' ? 'Terms' : 'Privacy'} version!`);
       setIsDrafting(false);
+      setShowPublishConfirm(false);
       await loadData();
     } catch (err) {
       toast.error(err.message || 'Failed to publish document');
@@ -285,6 +288,25 @@ export default function LegalManagement() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showPublishConfirm}
+        title={`Publish ${activeTab === 'terms' ? 'Terms of Service' : 'Privacy Policy'} v${draftData.version}`}
+        message={`Are you sure you want to publish version ${draftData.version}?`}
+        confirmText="Publish Document"
+        cancelText="Cancel"
+        isDestructive={true}
+        severity="HIGH"
+        consequences={[
+          'All active customer sessions will be gated until accepting the updated terms.',
+          'All staff members will be required to re-accept before accessing the admin dashboard.',
+        ]}
+        isLoading={isPublishing}
+        onConfirm={confirmPublish}
+        onCancel={() => {
+          if (!isPublishing) setShowPublishConfirm(false);
+        }}
+      />
     </div>
   );
 }

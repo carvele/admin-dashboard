@@ -3,6 +3,7 @@ import { ShieldCheck, ShieldAlert, Smartphone, Copy, Check, Loader2, Trash2 } fr
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './MfaSettings.css';
 
 const MfaSettings = () => {
@@ -14,6 +15,7 @@ const MfaSettings = () => {
   const [verifyCode, setVerifyCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [unenrollFactorId, setUnenrollFactorId] = useState(null);
 
   const fetchFactors = useCallback(async () => {
     try {
@@ -116,16 +118,15 @@ const MfaSettings = () => {
     await fetchFactors();
   };
 
-  const handleUnenroll = async (factorId) => {
-    if (!window.confirm('Are you sure you want to disable Two-Factor Authentication? Your account will be less secure.')) {
-      return;
-    }
+  const confirmUnenroll = async () => {
+    if (!unenrollFactorId || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      const { error } = await supabase.auth.mfa.unenroll({ factorId: unenrollFactorId });
       if (error) throw error;
       toast.success('Two-factor authentication has been disabled.');
+      setUnenrollFactorId(null);
       await fetchFactors();
     } catch (err) {
       console.error('MFA unenroll error:', err);
@@ -191,7 +192,7 @@ const MfaSettings = () => {
           <button
             type="button"
             className="btn-danger-outline mfa-action-btn"
-            onClick={() => handleUnenroll(verifiedFactor.id)}
+            onClick={() => setUnenrollFactorId(verifiedFactor.id)}
             disabled={isSubmitting}
           >
             {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -311,6 +312,25 @@ const MfaSettings = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(unenrollFactorId)}
+        title="Disable Two-Factor Authentication"
+        message="Are you sure you want to disable Two-Factor Authentication? Your account security will be downgraded."
+        confirmText="Disable 2FA"
+        cancelText="Keep 2FA"
+        isDestructive={true}
+        severity="HIGH"
+        consequences={[
+          'Your account will require only a password to sign in.',
+          'Two-factor verification codes will no longer be prompted at login.',
+        ]}
+        isLoading={isSubmitting}
+        onConfirm={confirmUnenroll}
+        onCancel={() => {
+          if (!isSubmitting) setUnenrollFactorId(null);
+        }}
+      />
     </div>
   );
 };

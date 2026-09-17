@@ -1384,9 +1384,9 @@ const Reservations = () => {
             })}
           </div>
         ) : viewMode === 'table' ? (
-          <div className="table-container">
+          <div className="table-container table-sticky-container">
             <table className="table res-list-table">
-              <thead>
+              <thead className="table-sticky-header">
                 <tr>
                   <th scope="col">ID</th>
                   <th
