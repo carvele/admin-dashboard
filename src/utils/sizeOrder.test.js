@@ -87,7 +87,7 @@ describe('Shared Parity Contract Fixtures (Admin)', () => {
   });
 
   it('satisfies all footwear formatting fixtures (reference-only helper, bare number handling)', () => {
-    sizingFixtures.footwearFormatting.forEach(({ size, category, subCategory, expected }) => {
+    sizingFixtures.footwearFormatting.forEach(({ size, category, expected }) => {
       const actual = formatFootwearDisplay(size, category);
       expect(actual.displayLabel).toBe(expected.displayLabel);
       expect(actual.approxHelper).toBe(expected.approxHelper);
