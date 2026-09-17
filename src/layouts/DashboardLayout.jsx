@@ -57,6 +57,9 @@ const DashboardLayout = () => {
 
   return (
     <>
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content
+      </a>
       <div className={`layout-container ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Sidebar
           isOpen={sidebarOpen}
@@ -66,7 +69,7 @@ const DashboardLayout = () => {
         />
         <div className="layout-main">
           <TopNav user={user} onHamburger={() => setSidebarOpen(true)} />
-          <main className="layout-content">
+          <main id="main-content" className="layout-content" tabIndex={-1}>
             <ErrorBoundary resetKey={location.pathname}>
               <AnimatePresence mode="wait">
                 {outlet && React.cloneElement(outlet, { key: location.pathname })}
