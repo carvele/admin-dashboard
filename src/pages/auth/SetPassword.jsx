@@ -20,6 +20,7 @@ const SetPassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [status, setStatus] = useState('idle'); // idle, saving, success, error
   const [errorMsg, setErrorMsg] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -357,7 +358,6 @@ const SetPassword = () => {
                     type="button"
                     className="password-toggle-btn"
                     onClick={() => setShowPassword((v) => !v)}
-                    tabIndex={-1}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -374,7 +374,7 @@ const SetPassword = () => {
                 <div className="password-input-wrapper">
                   <input
                     id="set-password-confirm"
-                    type={showPassword ? 'text' : 'password'}
+                    type={showConfirmPassword ? 'text' : 'password'}
                     className="input-field"
                     name="confirm-password"
                     autoComplete="new-password"
@@ -385,11 +385,10 @@ const SetPassword = () => {
                   <button
                     type="button"
                     className="password-toggle-btn"
-                    onClick={() => setShowPassword((v) => !v)}
-                    tabIndex={-1}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>

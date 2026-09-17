@@ -138,8 +138,84 @@
 
 .dialog-btn-cancel:disabled,
 .dialog-btn-confirm:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+.dialog-icon.warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.dialog-icon.info {
+  background-color: var(--category-indigo-bg);
+  color: var(--category-indigo-text);
+}
+
+.severity-badge.high {
+  display: inline-block;
+  margin-top: var(--spacing-xs);
+  padding: 2px 8px;
+  background-color: var(--status-cancelled-bg);
+  color: var(--color-danger);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dialog-consequences {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--spacing-sm);
+  background-color: var(--bg-hover, #f8fafc);
+  border: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.dialog-consequences-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--spacing-xs);
+}
+
+.dialog-consequences-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.dialog-consequences-list li {
+  margin-bottom: 2px;
+}
+
+.dialog-typed-confirm {
+  margin-top: var(--spacing-lg);
+  text-align: left;
+}
+
+.dialog-typed-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.dialog-keyword-prompt {
+  color: var(--color-danger);
+  font-family: monospace;
+}
+
+.dialog-typed-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
 }
 
 @keyframes fadeIn {

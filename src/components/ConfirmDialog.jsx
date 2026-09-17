@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
+import { useEffect, useState } from 'react';
+import { AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 import './ConfirmDialog.css';
 
 /**
  * A standard, accessible, styled modal dialog for destructive or high-impact actions.
- * Replaces native window.confirm() calls.
+ * Supports three severity tiers:
+ * - LOW: Informational or mild confirmation (cancel / confirm)
+ * - MEDIUM: Consequence descriptions with bullet points and loading locks
+ * - HIGH: Irreversible actions with optional typed keyword confirmation
  */
 const ConfirmDialog = ({
   isOpen,
@@ -15,8 +19,24 @@ const ConfirmDialog = ({
   onConfirm,
   onCancel,
   isDestructive = true,
-  isLoading = false
+  isLoading = false,
+  severity, // 'LOW' | 'MEDIUM' | 'HIGH' (defaults to 'MEDIUM' if isDestructive, else 'LOW')
+  consequences = [], // string[] of consequence summary bullet points
+  confirmKeyword, // string: if provided, user must type this keyword to enable confirm
+  confirmInputPlaceholder,
 }) => {
+  const [typedInput, setTypedInput] = useState('');
+
+  // Determine effective severity
+  const effectiveSeverity = severity || (isDestructive ? 'MEDIUM' : 'LOW');
+
+  // Reset typed input when modal opens or closes
+  useEffect(() => {
+    if (isOpen) {
+      setTypedInput('');
+    }
+  }, [isOpen]);
+
   // Prevent scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -42,23 +62,40 @@ const ConfirmDialog = ({
 
   if (!isOpen) return null;
 
+  // Validation for typed confirmation
+  const isKeywordMatching = !confirmKeyword || typedInput.trim().toLowerCase() === confirmKeyword.trim().toLowerCase();
+  const isConfirmDisabled = isLoading || !isKeywordMatching;
+
+  const renderIcon = () => {
+    if (effectiveSeverity === 'HIGH' || isDestructive) {
+      return (
+        <div className="dialog-icon destructive">
+          <AlertTriangle size={24} />
+        </div>
+      );
+    }
+    if (effectiveSeverity === 'MEDIUM') {
+      return (
+        <div className="dialog-icon warning">
+          <AlertCircle size={24} />
+        </div>
+      );
+    }
+    return (
+      <div className="dialog-icon info">
+        <Info size={24} />
+      </div>
+    );
+  };
+
   return (
     <div
       className="confirm-dialog-overlay"
       onClick={e => { if (!isLoading && e.target === e.currentTarget) onCancel(); }}
-      onKeyDown={e => {
-        if (!isLoading && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          onCancel();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={cancelText}
     >
       <div
-        className="confirm-dialog-content"
-        role="dialog"
+        className={`confirm-dialog-content severity-${effectiveSeverity.toLowerCase()}`}
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
         aria-describedby="dialog-message"
@@ -73,20 +110,51 @@ const ConfirmDialog = ({
         </button>
 
         <div className="dialog-header">
-          {isDestructive && (
-            <div className="dialog-icon destructive">
-              <AlertTriangle size={24} />
-            </div>
-          )}
+          {renderIcon()}
           <h2 id="dialog-title">{title}</h2>
+          {effectiveSeverity === 'HIGH' && (
+            <span className="severity-badge high">Irreversible Action</span>
+          )}
         </div>
 
         <div className="dialog-body">
           <p id="dialog-message">{message}</p>
+
+          {consequences && consequences.length > 0 && (
+            <div className="dialog-consequences">
+              <div className="dialog-consequences-title">Impact Summary:</div>
+              <ul className="dialog-consequences-list">
+                {consequences.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {confirmKeyword && (
+            <div className="dialog-typed-confirm">
+              <label htmlFor="confirm-keyword-input" className="dialog-typed-label">
+                To confirm, type <strong className="dialog-keyword-prompt">{confirmKeyword}</strong> below:
+              </label>
+              <input
+                id="confirm-keyword-input"
+                type="text"
+                className="input-field dialog-typed-input"
+                placeholder={confirmInputPlaceholder || `Type "${confirmKeyword}" to confirm`}
+                value={typedInput}
+                onChange={(e) => setTypedInput(e.target.value)}
+                disabled={isLoading}
+                autoComplete="off"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+              />
+            </div>
+          )}
         </div>
 
         <div className="dialog-footer">
           <button 
+            type="button"
             className="dialog-btn-cancel" 
             onClick={onCancel}
             disabled={isLoading}
@@ -94,9 +162,10 @@ const ConfirmDialog = ({
             {cancelText}
           </button>
           <button 
-            className={`dialog-btn-confirm ${isDestructive ? 'destructive' : 'primary'}`} 
+            type="button"
+            className={`dialog-btn-confirm ${isDestructive || effectiveSeverity === 'HIGH' ? 'destructive' : 'primary'}`} 
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isConfirmDisabled}
           >
             {isLoading ? 'Processing...' : confirmText}
           </button>
