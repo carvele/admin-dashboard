@@ -41,13 +41,15 @@ jest.mock('../../../lib/storage', () => ({
   uploadToCloudinary: jest.fn(),
 }));
 
-const MockAppVersion = () => <div data-testid="app-version-settings" />;
-const MockMfa = () => <div data-testid="mfa-settings" />;
-const MockLegal = () => <div data-testid="legal-management" />;
-
-jest.mock('../../settings/AppVersionSettings', () => MockAppVersion);
-jest.mock('../../settings/MfaSettings', () => MockMfa);
-jest.mock('../../settings/LegalManagement', () => MockLegal);
+jest.mock('../../settings/AppVersionSettings', () => function MockAppVersion() {
+  return <div data-testid="app-version-settings" />;
+});
+jest.mock('../../settings/MfaSettings', () => function MockMfa() {
+  return <div data-testid="mfa-settings" />;
+});
+jest.mock('../../settings/LegalManagement', () => function MockLegal() {
+  return <div data-testid="legal-management" />;
+});
 
 describe('Settings Closures Confirmation Dialog', () => {
   beforeEach(() => {
