@@ -36,6 +36,7 @@ import {
   avatarColor,
 } from '../../utils/activityLogFormat';
 import PageHeader from '../../components/PageHeader';
+import SkeletonTable from '../../components/SkeletonTable';
 import './ActivityLog.css';
 
 const PAGE_SIZE = 25;
@@ -334,7 +335,9 @@ const ActivityLog = () => {
       {/* Log feed */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="al-empty">Loading activity…</div>
+          <div className="p-4">
+            <SkeletonTable columns={4} rows={8} />
+          </div>
         ) : rows.length === 0 ? (
           <div className="al-empty">No log entries match the current filters.</div>
         ) : (

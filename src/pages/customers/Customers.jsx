@@ -621,13 +621,13 @@ const Customers = () => {
           </div>
         </div>
 
-        <div className="table-container">
+        <div className="table-container table-sticky-container">
           {loading ? (
             <div className="p-4"><SkeletonTable columns={6} rows={5} /></div>
           ) : (
             <>
               <table className="table">
-                <thead>
+                <thead className="table-sticky-header">
                   <tr>
                     <th>Customer</th>
                     <th title="Last time customer opened or engaged with the mobile app">Last Seen</th>

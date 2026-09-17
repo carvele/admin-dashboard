@@ -1219,12 +1219,12 @@ const Inventory = () => {
             )}
           </div>
         ) : (
-          <div className="table-container">
+          <div className="table-container table-sticky-container">
             {loading ? (
               <SkeletonTable columns={TABLE_COLUMNS} rows={8} />
             ) : (
               <table className="table inv-table">
-                <thead>
+                <thead className="table-sticky-header">
                   <tr>
                     <th scope="col" className="th-sku" aria-sort={ariaSort('sku')}>
                       <button

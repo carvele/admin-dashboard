@@ -31,6 +31,7 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { toast } from 'sonner';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import SkeletonTable from '../../components/SkeletonTable';
 import PageHeader from '../../components/PageHeader';
 import './StaffManagement.css';
 
@@ -759,9 +760,11 @@ const StaffManagement = () => {
 
         {/* Table */}
         <div className="table-container staff-table-container">
-          {viewMode === 'active' ? (
+          {loading ? (
+            <SkeletonTable columns={viewMode === 'active' ? 6 : 7} rows={6} />
+          ) : viewMode === 'active' ? (
             <table className="table staff-table">
-              <thead>
+              <thead className="table-sticky-header">
                 <tr>
                   <th>Member</th>
                   <th>Role</th>
@@ -775,7 +778,7 @@ const StaffManagement = () => {
             </table>
           ) : (
             <table className="table staff-table">
-              <thead>
+              <thead className="table-sticky-header">
                 <tr>
                   <th>Member</th>
                   <th>Role</th>

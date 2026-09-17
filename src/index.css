@@ -312,16 +312,21 @@ textarea:disabled {
 
 /* Reusable Sticky Table Header Contract */
 .table-sticky-container {
-  overflow-y: auto;
+  overflow-x: auto;
   position: relative;
-  max-height: 100%;
 }
 
-.table-sticky-header {
+.table-sticky-container.table-scroll-bounded {
+  overflow-y: auto;
+  max-height: min(70vh, 650px);
+}
+
+.table-sticky-header,
+.table-sticky-header th {
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: var(--beige);
+  background-color: var(--surface, var(--cream));
   box-shadow: 0 1px 0 var(--border-color);
 }
 

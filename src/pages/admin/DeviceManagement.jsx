@@ -10,6 +10,8 @@ import {
 } from '../../services/deviceService';
 import { PageHeader } from '../../components/PageHeader';
 import { toast } from 'sonner';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './DeviceManagement.css';
 
@@ -222,7 +224,21 @@ const DeviceManagement = () => {
             <ShieldAlert size={20} className="text-secondary" aria-label="Device access controls" />
           </div>
         </div>
-        {loading ? <div className="empty-state"><RefreshCw className="spin" /> Loading devices…</div> : filteredDevices.length === 0 ? (
+        {loading ? (
+          <div className="device-list" aria-busy="true" aria-label="Loading devices">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <article className="device-item" key={i} style={{ pointerEvents: 'none' }}>
+                <div className="device-icon-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Skeleton circle width={36} height={36} />
+                </div>
+                <div className="device-info" style={{ flex: 1 }}>
+                  <Skeleton width="35%" height={16} style={{ marginBottom: '6px' }} />
+                  <Skeleton width="55%" height={12} />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : filteredDevices.length === 0 ? (
           <div className="empty-state"><Laptop size={36} /><span>No devices in this view.</span></div>
         ) : (
           <div className="device-list">
