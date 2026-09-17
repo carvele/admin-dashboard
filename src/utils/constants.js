@@ -38,6 +38,9 @@ export const DEFAULT_MEASUREMENT_METRICS = {
   'Footwear': ['Foot Length', 'Foot Width'],
   'Outerwear': ['Shoulder', 'Chest', 'Sleeve Length', 'Total Length', 'Cuff'],
   'Bags': ['Width', 'Height', 'Depth', 'Strap Length'],
+  'Belts': ['Total Length', 'Width', 'Waist Fit Min', 'Waist Fit Max'],
+  'Hats': ['Circumference', 'Brim Width', 'Crown Height'],
+  'Rings': ['Inner Diameter', 'Inner Circumference'],
 };
 
 export const COLOR_DOT_MAP = {

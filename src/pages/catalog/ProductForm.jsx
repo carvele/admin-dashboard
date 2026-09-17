@@ -25,6 +25,11 @@ import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
 import { AVAILABLE_SIZES } from '../../utils/constants';
 import { normalizeSizes } from '../../utils/sizeOrder';
+import {
+  resolveSizingProfile,
+  formatFootwearDisplay,
+  STANDARD_SIZES,
+} from '../../utils/sizingProfiles';
 import { getColorList, getPatternList } from '../../services/inventoryService';
 import ReservationStatusBadge from '../../components/ReservationStatusBadge';
 import { toDisplayStatus } from '../../utils/reservationStatus';
@@ -57,6 +62,13 @@ const ProductForm = ({ readOnly = false }) => {
   const [productHistory, setProductHistory] = useState([]);
   const [loadingProductHistory, setLoadingProductHistory] = useState(false);
   const [showArConfirm, setShowArConfirm] = useState(false);
+  const [footwearSystem, setFootwearSystem] = useState('EU'); // 'EU' | 'US_W' | 'US_M' | 'UK'
+  const [beltSystem, setBeltSystem] = useState('CM'); // 'CM' | 'ALPHA' | 'ONE_SIZE'
+  const [hatSystem, setHatSystem] = useState('ONE_SIZE'); // 'ONE_SIZE' | 'ALPHA' | 'CM'
+  const [ringSystem, setRingSystem] = useState('US_RING'); // 'US_RING' | 'ONE_SIZE'
+  const [customSizeInput, setCustomSizeInput] = useState('');
+  const [categoryConfirmOpen, setCategoryConfirmOpen] = useState(false);
+  const [pendingCategoryChange, setPendingCategoryChange] = useState(null);
 
   // Uniqlo-like details
   const [formData, setFormData] = useState({
@@ -320,6 +332,22 @@ const ProductForm = ({ readOnly = false }) => {
  
  
  
+  // Determine active category sizing profile
+  const activeProfile = resolveSizingProfile(formData.category, formData.subCategory, formData.name);
+
+  // Auto-lock sizes to ['One Size'] when profile is one_size and product has no active stock
+  useEffect(() => {
+    if (activeProfile === 'one_size') {
+      const isOneSize = formData.sizes.length === 1 && formData.sizes[0] === 'One Size';
+      if (!isOneSize) {
+        const hasStock = existingVariants.some((v) => Number(v.total) > 0 || Number(v.reserved) > 0);
+        if (!isEditing || !hasStock) {
+          setFormData((prev) => ({ ...prev, sizes: ['One Size'] }));
+        }
+      }
+    }
+  }, [activeProfile, isEditing, existingVariants]);
+
   // Handle subcategory logic when category explicitly changes
   useEffect(() => {
     if (loading || !categories || categories.length === 0) return;
@@ -380,14 +408,171 @@ const ProductForm = ({ readOnly = false }) => {
   };
 
   const toggleSize = (size) => {
+    // Lock One Size if strictly in one_size profile
+    if (activeProfile === 'one_size' && size === 'One Size' && formData.sizes.includes('One Size')) {
+      toast.info('One Size is required for this product category.');
+      return;
+    }
+
     const currentSizes = formData.sizes;
-    const rawSizes = currentSizes.includes(size)
+    const isRemoving = currentSizes.includes(size);
+
+    if (isRemoving) {
+      // Safeguard: Check if this specific size has active stock or reservations
+      const variantsForSize = existingVariants.filter(
+        (v) => String(v.size).trim().toLowerCase() === String(size).trim().toLowerCase()
+      );
+      const stockOnSize = variantsForSize.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+      const reservedOnSize = variantsForSize.reduce((sum, v) => sum + (Number(v.reserved) || 0), 0);
+
+      if (stockOnSize > 0 || reservedOnSize > 0) {
+        toast.error(
+          `Cannot remove size "${size}": ${stockOnSize} unit(s) in stock and ${reservedOnSize} reservation(s) exist. Adjust stock to 0 first.`
+        );
+        return;
+      }
+    }
+
+    const rawSizes = isRemoving
       ? currentSizes.filter((s) => s !== size)
       : [...currentSizes, size];
     const newSizes = normalizeSizes(rawSizes, {
       onWarning: (msg) => toast.warning(msg),
     });
     setFormData({ ...formData, sizes: newSizes });
+  };
+
+  const handleQuickSelectRange = (system) => {
+    let sizesToAdd = [];
+    if (system === 'EU') {
+      sizesToAdd = ['EU 36', 'EU 37', 'EU 38', 'EU 39', 'EU 40', 'EU 41'];
+    } else if (system === 'US_W') {
+      sizesToAdd = ['US W 6', 'US W 6.5', 'US W 7', 'US W 7.5', 'US W 8', 'US W 8.5'];
+    } else if (system === 'US_M') {
+      sizesToAdd = ['US M 8', 'US M 8.5', 'US M 9', 'US M 9.5', 'US M 10', 'US M 10.5'];
+    } else if (system === 'UK') {
+      sizesToAdd = ['UK 4', 'UK 4.5', 'UK 5', 'UK 5.5', 'UK 6', 'UK 6.5', 'UK 7'];
+    }
+
+    const currentSizes = new Set(formData.sizes);
+    sizesToAdd.forEach((s) => currentSizes.add(s));
+    const nextSizes = normalizeSizes(Array.from(currentSizes));
+    setFormData((prev) => ({ ...prev, sizes: nextSizes }));
+    toast.success(`Selected common run for ${system.replace('_', ' ')}`);
+  };
+
+  const handleAddCustomSize = () => {
+    const trimmed = customSizeInput.trim();
+    if (!trimmed) return;
+    if (formData.sizes.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+      toast.info(`Size "${trimmed}" is already added.`);
+      return;
+    }
+    const newSizes = normalizeSizes([...formData.sizes, trimmed], {
+      onWarning: (msg) => toast.warning(msg),
+    });
+    setFormData((prev) => ({ ...prev, sizes: newSizes }));
+    setCustomSizeInput('');
+    toast.success(`Added size "${trimmed}"`);
+  };
+
+  const requestCategoryChange = (newCategory) => {
+    if (newCategory === formData.category) return;
+
+    const totalActiveStock = existingVariants.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+    const totalReservedStock = existingVariants.reduce((sum, v) => sum + (Number(v.reserved) || 0), 0);
+    const hasActiveStock = totalActiveStock > 0 || totalReservedStock > 0;
+
+    const currentProfile = resolveSizingProfile(formData.category, formData.subCategory, formData.name);
+    const newProfile = resolveSizingProfile(newCategory, '', formData.name);
+
+    if (isEditing && hasActiveStock && currentProfile !== newProfile) {
+      setPendingCategoryChange({
+        category: newCategory,
+        subCategory: '',
+        activeStock: totalActiveStock,
+        reservedStock: totalReservedStock,
+        profileChanged: true,
+      });
+      setCategoryConfirmOpen(true);
+      return;
+    }
+
+    applyCategoryChange(newCategory, '', currentProfile !== newProfile);
+  };
+
+  const requestSubCategoryChange = (newSubCategory) => {
+    if (newSubCategory === formData.subCategory) return;
+
+    const totalActiveStock = existingVariants.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+    const totalReservedStock = existingVariants.reduce((sum, v) => sum + (Number(v.reserved) || 0), 0);
+    const hasActiveStock = totalActiveStock > 0 || totalReservedStock > 0;
+
+    const currentProfile = resolveSizingProfile(formData.category, formData.subCategory, formData.name);
+    const newProfile = resolveSizingProfile(formData.category, newSubCategory, formData.name);
+
+    if (isEditing && hasActiveStock && currentProfile !== newProfile) {
+      setPendingCategoryChange({
+        category: formData.category,
+        subCategory: newSubCategory,
+        activeStock: totalActiveStock,
+        reservedStock: totalReservedStock,
+        profileChanged: true,
+      });
+      setCategoryConfirmOpen(true);
+      return;
+    }
+
+    applyCategoryChange(formData.category, newSubCategory, currentProfile !== newProfile);
+  };
+
+  const applyCategoryChange = (newCategory, newSubCat = '', profileChanged = false) => {
+    const newProfile = resolveSizingProfile(newCategory, newSubCat, formData.name);
+
+    setFormData((prev) => {
+      let nextSizes = prev.sizes;
+
+      // When switching to one_size profile for new or stock-free products, lock to 'One Size'
+      if (newProfile === 'one_size') {
+        nextSizes = ['One Size'];
+      } else if (profileChanged) {
+        // If switching from one_size or incompatible to footwear
+        if (newProfile === 'footwear' && (nextSizes.includes('One Size') || nextSizes.length === 0 || (nextSizes.length === 1 && nextSizes[0] === 'M'))) {
+          nextSizes = ['EU 38'];
+        } else if (newProfile === 'apparel' && (nextSizes.includes('One Size') || nextSizes.some((s) => s.startsWith('EU ')))) {
+          nextSizes = ['M'];
+        } else if (newProfile === 'accessories_belts' && (nextSizes.includes('One Size') || nextSizes.includes('M'))) {
+          nextSizes = ['85 cm'];
+        } else if (newProfile === 'accessories_rings' && (nextSizes.includes('One Size') || nextSizes.includes('M'))) {
+          nextSizes = ['US 7'];
+        }
+      }
+
+      return {
+        ...prev,
+        category: newCategory,
+        subCategory: newSubCat,
+        sizes: nextSizes,
+      };
+    });
+  };
+
+  const handleConfirmCategoryChange = () => {
+    if (pendingCategoryChange) {
+      setFormData((prev) => ({
+        ...prev,
+        category: pendingCategoryChange.category,
+        subCategory: pendingCategoryChange.subCategory || '',
+      }));
+      setPendingCategoryChange(null);
+      setCategoryConfirmOpen(false);
+      toast.info('Category updated. Existing variant stock has been preserved.');
+    }
+  };
+
+  const handleCancelCategoryChange = () => {
+    setPendingCategoryChange(null);
+    setCategoryConfirmOpen(false);
   };
 
   const toggleColor = (colorName) => {
@@ -437,6 +622,15 @@ const ProductForm = ({ readOnly = false }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let val = type === 'checkbox' ? checked : value;
+
+    if (name === 'category') {
+      requestCategoryChange(val);
+      return;
+    }
+    if (name === 'subCategory') {
+      requestSubCategoryChange(val);
+      return;
+    }
 
     setFormData((prev) => {
       let newData = { ...prev, [name]: val };
@@ -1115,40 +1309,381 @@ const ProductForm = ({ readOnly = false }) => {
               <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
                  <Ruler size={14} /> Sizing & Measurement Grid
               </h2>
-              <div className="flex items-center gap-4">
-                <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
+              <div className="flex items-center gap-2">
+                {activeProfile === 'footwear' && (
+                  <span className="sizing-profile-badge footwear">
+                    Footwear Sizing
+                  </span>
+                )}
+                {activeProfile === 'one_size' && (
+                  <span className="sizing-profile-badge one-size">
+                    One Size
+                  </span>
+                )}
+                {activeProfile.startsWith('accessories_') && (
+                  <span className="sizing-profile-badge accessories">
+                    Accessory Sizing
+                  </span>
+                )}
+                {activeProfile === 'apparel' && (
+                  <span className="sizing-profile-badge apparel">
+                    Apparel Sizing
+                  </span>
+                )}
+                <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded hidden sm:inline-block">
+                  SIZE GUIDE ENABLED
+                </div>
               </div>
            </div>
 
-           <div className="mb-6">
-              <span className="label">Available Sizes *</span>
-              <div className="flex flex-wrap gap-3 mt-3">
-                 {AVAILABLE_SIZES.map((size) => (
-                    <button
-                       key={size}
-                       type="button"
-                       onClick={() => toggleSize(size)}
-                       className={`size-btn font-bold border-2 ${
-                          formData.sizes.includes(size) 
-                          ? 'active shadow-lg' 
-                          : ''
-                       }`}
-                    >
-                       {size}
-                    </button>
-                 ))}
+           {/* Profile: ONE SIZE */}
+           {activeProfile === 'one_size' && (
+              <div className="mb-6 one-size-card">
+                 <Package className="text-amber-700 shrink-0 mt-0.5" size={20} />
+                 <div>
+                    <div className="one-size-title">One Size Product</div>
+                    <p className="one-size-desc">
+                       Items in this category ({formData.category}{formData.subCategory ? ` · ${formData.subCategory}` : ''}) are configured as One Size. Variants are stocked and managed under a single canonical <strong>One Size</strong> label.
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                       <span className="size-btn active font-bold shadow-sm" style={{ cursor: 'default' }}>
+                          One Size
+                       </span>
+                       <span className="text-[11px] text-secondary font-medium">Auto-configured</span>
+                    </div>
+                 </div>
               </div>
-           </div>
+           )}
+
+           {/* Profile: FOOTWEAR */}
+           {activeProfile === 'footwear' && (
+              <div className="mb-6">
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div>
+                       <span className="label mb-0">Canonical Footwear Sizes *</span>
+                       <p className="text-[11px] text-secondary mt-0.5">
+                          Select the exact sizes stocked. Conversions below chips are approximate reference aids only.
+                       </p>
+                    </div>
+                    <button
+                       type="button"
+                       onClick={() => handleQuickSelectRange(footwearSystem)}
+                       className="text-xs font-bold text-indigo-700 hover:text-indigo-900 self-start sm:self-auto bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200"
+                    >
+                       + Quick Select Common Run ({footwearSystem.replace('_', ' ')})
+                    </button>
+                 </div>
+
+                 {/* Sizing System Tabs */}
+                 <div className="flex flex-wrap gap-2 mb-4">
+                    <button
+                       type="button"
+                       className={`sizing-tab ${footwearSystem === 'EU' ? 'active' : ''}`}
+                       onClick={() => setFootwearSystem('EU')}
+                    >
+                       EU (Standard)
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${footwearSystem === 'US_W' ? 'active' : ''}`}
+                       onClick={() => setFootwearSystem('US_W')}
+                    >
+                       US Women (US W)
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${footwearSystem === 'US_M' ? 'active' : ''}`}
+                       onClick={() => setFootwearSystem('US_M')}
+                    >
+                       US Men (US M)
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${footwearSystem === 'UK' ? 'active' : ''}`}
+                       onClick={() => setFootwearSystem('UK')}
+                    >
+                       UK
+                    </button>
+                 </div>
+
+                 {/* Footwear Chips Grid */}
+                 <div className="footwear-grid">
+                    {(STANDARD_SIZES.footwear[footwearSystem] || []).map((size) => {
+                       const isSelected = formData.sizes.includes(size);
+                       const display = formatFootwearDisplay(size, 'Footwear');
+                       return (
+                          <button
+                             key={size}
+                             type="button"
+                             onClick={() => toggleSize(size)}
+                             className={`footwear-chip ${isSelected ? 'active shadow-md' : ''}`}
+                          >
+                             <span className="chip-label">{size}</span>
+                             {display.approxHelper && (
+                                <span className="chip-sub">
+                                   {display.approxHelper.replace('Approx. ', '')}
+                                </span>
+                             )}
+                          </button>
+                       );
+                    })}
+                 </div>
+              </div>
+           )}
+
+           {/* Profile: ACCESSORIES_BELTS */}
+           {activeProfile === 'accessories_belts' && (
+              <div className="mb-6">
+                 <div className="mb-3">
+                    <span className="label mb-0">Belt Sizes *</span>
+                    <p className="text-[11px] text-secondary mt-0.5">
+                       Choose waist length in cm, alpha standard (S–XL), or One Size.
+                    </p>
+                 </div>
+
+                 {/* Belt System Tabs */}
+                 <div className="flex gap-2 mb-4">
+                    <button
+                       type="button"
+                       className={`sizing-tab ${beltSystem === 'CM' ? 'active' : ''}`}
+                       onClick={() => setBeltSystem('CM')}
+                    >
+                       cm Lengths
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${beltSystem === 'ALPHA' ? 'active' : ''}`}
+                       onClick={() => setBeltSystem('ALPHA')}
+                    >
+                       Alpha Sizes
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${beltSystem === 'ONE_SIZE' ? 'active' : ''}`}
+                       onClick={() => setBeltSystem('ONE_SIZE')}
+                    >
+                       One Size
+                    </button>
+                 </div>
+
+                 {/* Chips Grid */}
+                 <div className="flex flex-wrap gap-2.5">
+                    {(STANDARD_SIZES.accessories_belts[beltSystem] || []).map((size) => (
+                       <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`size-btn font-bold border-2 ${
+                             formData.sizes.includes(size) ? 'active shadow-lg' : ''
+                          }`}
+                       >
+                          {size}
+                       </button>
+                    ))}
+                 </div>
+              </div>
+           )}
+
+           {/* Profile: ACCESSORIES_HATS */}
+           {activeProfile === 'accessories_hats' && (
+              <div className="mb-6">
+                 <div className="mb-3">
+                    <span className="label mb-0">Hat & Cap Sizes *</span>
+                    <p className="text-[11px] text-secondary mt-0.5">
+                       One Size fits most adjustable caps. Select alpha combos (S/M, M/L) or cm circumference for fitted hats.
+                    </p>
+                 </div>
+
+                 {/* Hat System Tabs */}
+                 <div className="flex gap-2 mb-4">
+                    <button
+                       type="button"
+                       className={`sizing-tab ${hatSystem === 'ONE_SIZE' ? 'active' : ''}`}
+                       onClick={() => setHatSystem('ONE_SIZE')}
+                    >
+                       One Size
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${hatSystem === 'ALPHA' ? 'active' : ''}`}
+                       onClick={() => setHatSystem('ALPHA')}
+                    >
+                       Alpha Combos
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${hatSystem === 'CM' ? 'active' : ''}`}
+                       onClick={() => setHatSystem('CM')}
+                    >
+                       cm Circumference
+                    </button>
+                 </div>
+
+                 {/* Chips Grid */}
+                 <div className="flex flex-wrap gap-2.5">
+                    {(STANDARD_SIZES.accessories_hats[hatSystem] || []).map((size) => (
+                       <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`size-btn font-bold border-2 ${
+                             formData.sizes.includes(size) ? 'active shadow-lg' : ''
+                          }`}
+                       >
+                          {size}
+                       </button>
+                    ))}
+                 </div>
+              </div>
+           )}
+
+           {/* Profile: ACCESSORIES_RINGS */}
+           {activeProfile === 'accessories_rings' && (
+              <div className="mb-6">
+                 <div className="mb-3">
+                    <span className="label mb-0">Ring Sizes *</span>
+                    <p className="text-[11px] text-secondary mt-0.5">
+                       Select standard US ring sizes (US 5–11) or One Size for adjustable bands.
+                    </p>
+                 </div>
+
+                 {/* Ring System Tabs */}
+                 <div className="flex gap-2 mb-4">
+                    <button
+                       type="button"
+                       className={`sizing-tab ${ringSystem === 'US_RING' ? 'active' : ''}`}
+                       onClick={() => setRingSystem('US_RING')}
+                    >
+                       US Ring Sizes
+                    </button>
+                    <button
+                       type="button"
+                       className={`sizing-tab ${ringSystem === 'ONE_SIZE' ? 'active' : ''}`}
+                       onClick={() => setRingSystem('ONE_SIZE')}
+                    >
+                       One Size (Adjustable)
+                    </button>
+                 </div>
+
+                 {/* Chips Grid */}
+                 <div className="flex flex-wrap gap-2.5">
+                    {(STANDARD_SIZES.accessories_rings[ringSystem] || []).map((size) => (
+                       <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`size-btn font-bold border-2 ${
+                             formData.sizes.includes(size) ? 'active shadow-lg' : ''
+                          }`}
+                       >
+                          {size}
+                       </button>
+                    ))}
+                 </div>
+              </div>
+           )}
+
+           {/* Profile: APPAREL */}
+           {activeProfile === 'apparel' && (
+              <div className="mb-6">
+                 <span className="label">Available Sizes *</span>
+                 <div className="flex flex-wrap gap-3 mt-3">
+                    {AVAILABLE_SIZES.map((size) => (
+                       <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`size-btn font-bold border-2 ${
+                             formData.sizes.includes(size) 
+                             ? 'active shadow-lg' 
+                             : ''
+                          }`}
+                       >
+                          {size}
+                       </button>
+                    ))}
+                 </div>
+              </div>
+           )}
+
+           {/* Selected Sizes Summary & Custom Size Adder (Shown for all non-one_size profiles) */}
+           {activeProfile !== 'one_size' && (
+              <div className="mt-4 pt-4 border-t">
+                 <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                    <div className="text-xs font-bold text-secondary uppercase tracking-wider">
+                       Active Selected Sizes ({formData.sizes.length}):
+                    </div>
+                    {formData.sizes.length === 0 && (
+                       <span className="text-xs text-red-500 font-semibold">
+                          At least one size is required.
+                       </span>
+                    )}
+                 </div>
+
+                 {formData.sizes.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                       {formData.sizes.map((s) => (
+                          <span
+                             key={s}
+                             className="selected-sizes-tag"
+                          >
+                             {s}
+                             <button
+                                type="button"
+                                onClick={() => toggleSize(s)}
+                                className="selected-sizes-remove"
+                                title={`Remove size ${s}`}
+                             >
+                                <X size={12} />
+                             </button>
+                          </span>
+                       ))}
+                    </div>
+                 ) : (
+                    <p className="text-xs text-secondary mb-3 italic">
+                       No sizes selected. Click any size chip above or add a custom size below.
+                    </p>
+                 )}
+
+                 {/* Custom Size Input */}
+                 <div className="flex flex-wrap items-center gap-2 pt-2">
+                    <span className="text-xs text-secondary font-medium">Add non-standard size:</span>
+                    <input
+                       type="text"
+                       placeholder="e.g. 115 cm or EU 34"
+                       value={customSizeInput}
+                       onChange={(e) => setCustomSizeInput(e.target.value)}
+                       onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                             e.preventDefault();
+                             handleAddCustomSize();
+                          }
+                       }}
+                       className="input-field py-1 px-3 text-xs"
+                       style={{ width: '10rem' }}
+                    />
+                    <button
+                       type="button"
+                       onClick={handleAddCustomSize}
+                       className="btn-secondary py-1 px-3 text-xs font-bold"
+                    >
+                       + Add Size
+                    </button>
+                 </div>
+              </div>
+           )}
 
            <div className="border-t pt-6">
               <div className="mb-4" style={{ maxWidth: '20rem' }}>
                  <label className="label" htmlFor="product-fit-type">Fit Type</label>
                  <select autoComplete="off" id="product-fit-type" name="fitAndSizing" className="input-field" value={formData.fitAndSizing || ''} onChange={handleChange}>
                     <option value="">Standard Fit</option>
+                    <option value="True to Size">True to Size</option>
+                    <option value="Runs Small">Runs Small (Size Up)</option>
+                    <option value="Runs Large">Runs Large (Size Down)</option>
                     <option value="Slim Fit">Slim Fit</option>
                     <option value="Regular Fit">Regular Fit</option>
                     <option value="Oversized">Oversized</option>
-                    <option value="True to Size">True to Size</option>
                  </select>
               </div>
               <MeasurementTable 
@@ -1455,6 +1990,21 @@ const ProductForm = ({ readOnly = false }) => {
         confirmText="Leave Page"
         onConfirm={() => navigate('/ar-assets')}
         onCancel={() => setShowArConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={categoryConfirmOpen}
+        title="Category Change with Active Stock"
+        message={
+          pendingCategoryChange
+            ? `This product currently has ${pendingCategoryChange.activeStock} unit(s) in stock and ${pendingCategoryChange.reservedStock} reserved unit(s). Changing the category to "${pendingCategoryChange.category}" alters the sizing model. Existing variant stock will be preserved in inventory. Are you sure you want to proceed?`
+            : ''
+        }
+        confirmText="Change Category"
+        cancelText="Keep Current"
+        isDestructive={false}
+        onConfirm={handleConfirmCategoryChange}
+        onCancel={handleCancelCategoryChange}
       />
     </div>
   );
