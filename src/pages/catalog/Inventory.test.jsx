@@ -139,7 +139,7 @@ jest.mock('../../services/stockNotifyService', () => ({
 }));
 
 jest.mock('../../services/inventoryService', () => ({
-  getPaginatedInventory: jest.fn((page = 0, pageSize = 50, filters = {}) => {
+  getPaginatedInventory: jest.fn((_page = 0, _pageSize = 50, filters = {}) => {
     let items = [...mockInventoryData];
     if (filters.searchTerm) {
       const lower = filters.searchTerm.toLowerCase();
