@@ -183,14 +183,17 @@ const ProductForm = ({ readOnly = false }) => {
              } catch (e) {
                console.warn('[ProductForm] Could not fetch variants:', e);
              }
-             const parsedColors = docParams.color
-               ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
-               : (docParams.baseColor ? [docParams.baseColor] : []);
-             const variantColors = existing.map((v) => v.color).filter(Boolean);
-             const mergedColors = [...new Set([...parsedColors, ...variantColors])];
-             setFormData(prev => ({
-                ...prev,
-                ...docParams,
+              const parsedColors = docParams.color
+                ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
+                : (docParams.baseColor ? [docParams.baseColor] : []);
+              // Product color field represents authoring intent; fall back to
+              // existing active variant colors only if product has no color definition at all.
+              const initialColors = parsedColors.length > 0
+                ? parsedColors
+                : [...new Set(existing.map((v) => v.color).filter(Boolean))];
+              setFormData(prev => ({
+                 ...prev,
+                 ...docParams,
                 name: docParams.name || '',
                 category: docParams.category || prev.category || 'Tops',
                 subCategory: docParams.subCategory || '',
@@ -211,7 +214,7 @@ const ProductForm = ({ readOnly = false }) => {
                 salePrice: docParams.salePrice ?? '',
                 isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
                 sizes: normalizeSizes(docParams.sizes || []),
-                colors: mergedColors,
+                colors: initialColors,
                 images: docParams.images || [],
                 measurements: docParams.measurements || {},
                 tags: docParams.tags || []
@@ -585,108 +588,43 @@ const ProductForm = ({ readOnly = false }) => {
       if (isEditing) {
         await updateProduct(id, payload);
 
-        // Sync inventory: create new variant combos, soft-delete removed ones
+        // Sync inventory: reconcile variants atomically via database RPC
         try {
-          const { getProductVariants } = await import('../../services/variantService');
-          const productInv = await getProductVariants(id);
+          const { reconcileProductVariants } = await import('../../services/variantService');
 
+          // Build desired list of { size, color } from selected matrix (or size x color cross)
+          let desiredVariants = [];
           if (variantColumnsReady && selectedVariants.size > 0) {
-            // Variant-aware path: add newly selected combos.
-            //
-            // Existence must be checked by (size, color) alone, NOT pattern:
-            // this form never exposes pattern selection, so every cell in
-            // variantMatrix and every createVariant() call below always uses
-            // pattern=''. Comparing full variantKey()s (which include the
-            // EXISTING row's real pattern, e.g. seed data's 'Solid') against
-            // a pattern='' cell key never matches even when the color/size
-            // already has a stocked variant -- confirmed live, this silently
-            // created a second, empty duplicate row for the same visible
-            // color swatch on every edit of an already-seeded product. The
-            // DB now also enforces (product_doc_id, size, color) uniqueness
-            // directly (see 20260908150000_fix_duplicate_inventory_variants),
-            // so this check just avoids surfacing that as a raw insert error.
-            const sizeColorKey = (size, color) => `${size ?? ''}|||${color ?? ''}`;
-            const existingKeys = new Set(
-              productInv.filter((inv) => !inv.deleted).map((inv) =>
-                sizeColorKey(inv.size, inv.color),
-              ),
-            );
-            const toCreate = variantMatrix.filter(
-              (cell) => selectedVariants.has(cell.key) && !existingKeys.has(sizeColorKey(cell.size, cell.color)),
-            );
-            for (const cell of toCreate) {
-              await createVariant(id, {
-                size: cell.size,
-                color: cell.color,
-                pattern: '',
-                item: payload.name,
-                category: payload.category,
-                sku: payload.styleCode,
-                // price: payload.price, // PGRST204 fix: price column does not exist on inventory
-              });
-            }
-            Logger.info(`Created ${toCreate.length} new variant rows for product ${id}`);
-
-            // Soft-delete deselected variants that have zero stock 
-            // Safety guard: Never soft-delete if color and size match current product selection
-            const selectedColorSet = new Set(formData.colors || []);
-            const toSoftDelete = productInv.filter((inv) => { 
-              if (inv.deleted) return false; 
-              const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' }); 
-              if (inv.color && selectedColorSet.has(inv.color) && (formData.sizes || []).includes(inv.size)) {
-                return false;
-              }
-              return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0; 
-            });
-            if (toSoftDelete.length > 0) {
-              await Promise.all(
-                toSoftDelete.map((inv) =>
-                  archiveInventoryItem(inv.id, 'Soft-deleted unstocked variant from ProductForm'),
-                ),
-              );
-              Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
-            }
-            await syncProductAttributesFromVariants(id);
+            desiredVariants = variantMatrix
+              .filter((cell) => selectedVariants.has(cell.key))
+              .map((cell) => ({ size: cell.size, color: cell.color }));
           } else {
-            // Legacy path: diff by size only
-            const existingSizes = productInv.filter((inv) => !inv.deleted).map((inv) => inv.size);
-            const newSizes = payload.sizes.filter((sz) => !existingSizes.includes(sz));
-            if (newSizes.length > 0) {
-              Logger.info(`Initializing missing inventory for updated sizes ${id}...`);
-              await Promise.all(
-                newSizes.map((size) =>
-                  createInventoryItem({
-                    productDocId: id,
-                    sku: payload.styleCode,
-                    variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
-                    item: payload.name,
-                    category: payload.category,
-                    size,
-                    total: 0,
-                    reserved: 0,
-                    available: 0,
-                  }),
-                ),
-              );
-            }
-            // Soft-delete removed sizes with zero stock
-            const removedInventory = productInv.filter(
-              (inv) =>
-                !inv.deleted &&
-                !payload.sizes.includes(inv.size) &&
-                Number(inv.total ?? 0) === 0,
-            );
-            if (removedInventory.length > 0) {
-              await Promise.all(
-                removedInventory.map((inv) =>
-                  archiveInventoryItem(inv.id, 'Soft-deleted removed size from ProductForm'),
-                ),
-              );
-              Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
+            const sizes = payload.sizes || [];
+            const colors = formData.colors || [];
+            for (const s of sizes) {
+              for (const c of colors) {
+                desiredVariants.push({ size: s, color: c });
+              }
             }
           }
+
+          const reconResult = await reconcileProductVariants(id, {
+            productInfo: {
+              name: payload.name,
+              category: payload.category,
+              styleCode: payload.styleCode,
+            },
+            desiredVariants,
+          });
+          Logger.info('Reconciled product variants:', reconResult);
         } catch (invErr) {
-          console.error('Checking/Adding missing variant combinations failed:', invErr);
+          console.error('Variant reconciliation failed:', invErr);
+          if (invErr?.message?.includes('reserved') || invErr?.code === 'P0001') {
+            toast.error(invErr.message || 'Cannot remove variant with active customer reservations.');
+            setSaving(false);
+            return;
+          }
+          toast.warning('Product details updated, but variant reconciliation encountered an issue.');
         }
 
         await logAction(user, 'Updated product details', {

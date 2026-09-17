@@ -51,6 +51,14 @@ export const variantKey = ({ size = '', color = '', pattern = '' } = {}) =>
   `${size}|||${color}|||${pattern}`;
 
 /**
+ * Canonical normalized key used for deterministic comparison across database and client.
+ * Standardizes casing (UPPER size, LOWER color) and removes surrounding whitespace.
+ */
+export const normalizeVariantKey = ({ size = '', color = '' } = {}) =>
+  `${String(size).trim().toUpperCase()}|||${String(color).trim().toLowerCase()}`;
+
+
+/**
  * Human label for a variant, skipping dimensions the product doesn't use.
  * e.g. `M / Red / Solid`, or just `M` when colour and pattern are empty.
  */
@@ -334,25 +342,13 @@ export const syncProductAttributesFromVariants = async (productDocId) => {
     ),
   ];
 
-  const updates = {};
-
-  if (colors.length) {
-    updates.color = colors.join(', ');
-    updates.base_color = colors[0];
-  }
+  const updates = {
+    color: colors.join(', '),
+    base_color: colors[0] || null,
+  };
 
   if (patterns.length) {
     updates.pattern = patterns.join(', ');
-  }
-
-  /*
-   * Nothing to synchronize.
-   *
-   * Preserve the existing behavior of returning null when there are
-   * no product attributes to update.
-   */
-  if (!Object.keys(updates).length) {
-    return null;
   }
 
   const { error } = await supabase
@@ -366,3 +362,38 @@ export const syncProductAttributesFromVariants = async (productDocId) => {
 
   return updates;
 };
+
+/**
+ * Transactional Catalog ↔ Inventory variant reconciliation via database RPC.
+ *
+ * Runs inside a single atomic PostgreSQL transaction:
+ * - Locks product and linked inventory rows FOR UPDATE
+ * - Atomically checks active customer reservation invariants before archiving
+ * - Archives unselected active variants (preserving on-hand stock and ledger)
+ * - Restores existing matching archived variants (preserving SKU, UUID, avoiding duplicates)
+ * - Creates brand-new variants with standard retail SKUs only when needed
+ * - Synchronizes products.color, base_color, stock, and status
+ *
+ * @param {string} productDocId - Product UUID
+ * @param {Object} options
+ * @param {Object} [options.productInfo] - { name, category, styleCode }
+ * @param {Array<{size: string, color: string}>} options.desiredVariants
+ * @returns {Promise<Object>} RPC result summary
+ */
+export const reconcileProductVariants = async (productDocId, { productInfo = {}, desiredVariants = [] } = {}) => {
+  if (!productDocId) throw new Error('reconcileProductVariants requires a product id');
+
+  const { data, error } = await supabase.rpc('reconcile_product_variants', {
+    p_product_id: productDocId,
+    p_desired_variants: desiredVariants.map((v) => ({
+      size: String(v.size || '').trim(),
+      color: String(v.color || '').trim(),
+    })),
+    p_product_name: productInfo.name || null,
+    p_category: productInfo.category || null,
+    p_style_code: productInfo.styleCode || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
