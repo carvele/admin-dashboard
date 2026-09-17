@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
@@ -10,6 +10,12 @@ jest.mock('../../lib/supabaseClient', () => ({
       update: jest.fn().mockReturnThis(),
       delete: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      range: jest.fn().mockResolvedValue({ data: [], count: 0 }),
+    })),
+    channel: jest.fn(() => ({
+      on: jest.fn().mockReturnThis(),
+      subscribe: jest.fn(() => ({ unsubscribe: jest.fn() })),
     })),
     rpc: jest.fn(),
   },
@@ -132,6 +138,32 @@ jest.mock('../../services/stockNotifyService', () => ({
   getWaitlistDemand: jest.fn(() => Promise.resolve([])),
 }));
 
+jest.mock('../../services/inventoryService', () => ({
+  getPaginatedInventory: jest.fn((_page = 0, _pageSize = 50, filters = {}) => {
+    let items = [...mockInventoryData];
+    if (filters.searchTerm) {
+      const lower = filters.searchTerm.toLowerCase();
+      items = items.filter((i) =>
+        (i.item || '').toLowerCase().includes(lower) ||
+        (i.sku || '').toLowerCase().includes(lower) ||
+        (i.variantSku || '').toLowerCase().includes(lower) ||
+        (i.id || '').toLowerCase().includes(lower)
+      );
+    }
+    if (filters.stockQuickFilter === 'alerts') {
+      items = items.filter((i) => (i.available ?? 0) <= 0);
+    } else if (filters.stockQuickFilter === 'reserved') {
+      items = items.filter((i) => (i.reserved ?? 0) > 0);
+    }
+    return Promise.resolve({
+      data: items,
+      count: items.length,
+    });
+  }),
+  getColorList: jest.fn(() => Promise.resolve([])),
+  getPatternList: jest.fn(() => Promise.resolve([])),
+}));
+
 jest.mock('../../services/staffService', () => ({
   logAction: jest.fn(() => Promise.resolve()),
 }));
@@ -226,14 +258,16 @@ describe('Inventory Modernized Grid', () => {
     fireEvent.click(alertsChip);
 
     // Only Cotton Pajama Set has available=0 (stock alert)
-    expect(screen.getByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
-    expect(screen.queryByText('JZ-LB-S-BLK')).not.toBeInTheDocument();
-    expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+    expect(await screen.findByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('JZ-LB-S-BLK')).not.toBeInTheDocument();
+      expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+    });
 
     // Click All Variants to reset
     const allChip = document.querySelector('.quick-filter-chip:not(.alert-chip):not(.reserved-chip)');
     fireEvent.click(allChip);
-    expect(screen.getByText('JZ-LB-S-BLK')).toBeInTheDocument();
+    expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
   });
 
   it('filters variants when summary stat cards are clicked', async () => {
@@ -246,14 +280,16 @@ describe('Inventory Modernized Grid', () => {
     fireEvent.click(stockAlertsCard);
 
     // Only Cotton Pajama Set has available=0 (stock alert)
-    expect(screen.getByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
-    expect(screen.queryByText('JZ-LB-S-BLK')).not.toBeInTheDocument();
-    expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+    expect(await screen.findByText('SEED-B0000007-M-BLU')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('JZ-LB-S-BLK')).not.toBeInTheDocument();
+      expect(screen.queryByText('JZ-LB-S-BRN')).not.toBeInTheDocument();
+    });
 
     // Click Total Active Variants stat card to reset
     const variantsCard = screen.getByLabelText('Show all variants');
     fireEvent.click(variantsCard);
-    expect(screen.getByText('JZ-LB-S-BLK')).toBeInTheDocument();
+    expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
   });
 
   it('houses AR Color and Publish actions inside the More Options dropdown menu rather than raw row icons', async () => {

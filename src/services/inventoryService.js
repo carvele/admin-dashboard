@@ -19,6 +19,55 @@ import {
 } from '../lib/supabaseService';
 import { queryCache } from '../utils/cache';
 
+/**
+ * Fetch a paginated slice of inventory variants with deterministic sorting.
+ * Implements [INV-004] requirements.
+ */
+export const getPaginatedInventory = async (page = 0, pageSize = 50, filters = {}, sortConfig = { key: 'item', direction: 'ascending' }) => {
+  let q = supabase.from('inventory').select('*', { count: 'exact' });
+
+  if (filters.viewMode === 'archived') {
+    q = q.eq('deleted', true);
+  } else {
+    q = q.eq('deleted', false);
+  }
+
+  if (filters.category && filters.category !== 'All') {
+    q = q.eq('category', filters.category);
+  }
+  if (filters.color && filters.color !== 'All') {
+    q = q.eq('color', filters.color);
+  }
+  if (filters.searchTerm && filters.searchTerm.trim()) {
+    const term = filters.searchTerm.trim();
+    q = q.or(`item.ilike.%${term}%,sku.ilike.%${term}%,variant_sku.ilike.%${term}%`);
+  }
+  if (filters.stockQuickFilter === 'reserved') {
+    q = q.gt('reserved', 0);
+  } else if (filters.stockQuickFilter === 'alerts') {
+    q = q.lte('available', 2);
+  }
+
+  let sortColumn = sortConfig.key || 'item';
+  if (sortColumn === 'stockStatus') sortColumn = 'available';
+
+  const ascending = sortConfig.direction === 'ascending';
+  q = q.order(sortColumn, { ascending, nullsFirst: false });
+  q = q.order('id', { ascending: true });
+
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  q = q.range(from, to);
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  
+  return { 
+    data: (data || []).map(toCamel), 
+    count: count ?? 0 
+  };
+};
+
 // ── Color List Functions ────────────────────────────────
 
 /**
