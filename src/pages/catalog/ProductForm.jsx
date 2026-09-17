@@ -6,6 +6,7 @@ import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight,
 import {
   createProduct,
   updateProduct,
+  upsertProductWithColorways,
   getProductById,
   createInventoryItem,
   archiveInventoryItem,
@@ -779,110 +780,28 @@ const ProductForm = ({ readOnly = false }) => {
         tags: formData.tags || [],
       };
 
+      // Atomic upsert via RPC
       if (isEditing) {
-        await updateProduct(id, payload);
-
-        // Sync inventory: reconcile variants atomically via database RPC
-        try {
-          const { reconcileProductVariants } = await import('../../services/variantService');
-
-          // Build desired list of { size, color } from selected matrix (or size x color cross)
-          let desiredVariants = [];
-          if (variantColumnsReady && selectedVariants.size > 0) {
-            desiredVariants = variantMatrix
-              .filter((cell) => selectedVariants.has(cell.key))
-              .map((cell) => ({ size: cell.size, color: cell.color }));
-          } else {
-            const sizes = payload.sizes || [];
-            const colors = formData.colors || [];
-            for (const s of sizes) {
-              for (const c of colors) {
-                desiredVariants.push({ size: s, color: c });
-              }
-            }
-          }
-
-          const reconResult = await reconcileProductVariants(id, {
-            productInfo: {
-              name: payload.name,
-              category: payload.category,
-              styleCode: payload.styleCode,
-            },
-            desiredVariants,
-          });
-          Logger.info('Reconciled product variants:', reconResult);
-        } catch (invErr) {
-          console.error('Variant reconciliation failed:', invErr);
-          if (invErr?.message?.includes('reserved') || invErr?.code === 'P0001') {
-            toast.error(invErr.message || 'Cannot remove variant with active customer reservations.');
-            setSaving(false);
-            return;
-          }
-          toast.warning('Product details updated, but variant reconciliation encountered an issue.');
-        }
-
-        await logAction(user, 'Updated product details', {
-          targetType: 'product',
-          targetId: id,
-          productName: payload.name,
-        });
-
-        toast.success('Product updated successfully!');
+        payload.id = id;
       } else {
         payload.created_by = user?.id || null;
         payload.stock = 0;
         payload.status = 'Out of Stock';
         payload.visibility = formData.visibility === 'public' ? 'public' : 'draft';
         payload.tags = ['New Arrival'];
-
-        const newDocId = await createProduct(payload);
-
-        try {
-          Logger.info(`Initializing inventory variants for new product ${newDocId}...`);
-          if (variantColumnsReady && selectedVariants.size > 0) {
-            // Variant-aware path: create one row per selected (size, color) combo
-            const toCreate = variantMatrix.filter((cell) => selectedVariants.has(cell.key));
-            for (const cell of toCreate) {
-              await createVariant(newDocId, {
-                size: cell.size,
-                color: cell.color,
-                pattern: '',
-                item: payload.name,
-                category: payload.category,
-                sku: payload.styleCode,
-              });
-            }
-            await syncProductAttributesFromVariants(newDocId);
-          } else {
-            // Legacy fallback: one row per size, no colour/pattern
-            const inventoryPromises = payload.sizes.map((size) =>
-              createInventoryItem({
-                productDocId: newDocId,
-                sku: payload.styleCode,
-                variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
-                item: payload.name,
-                category: payload.category,
-                size: size,
-                total: 0,
-                reserved: 0,
-                available: 0,
-              }),
-            );
-            await Promise.all(inventoryPromises);
-          }
-        } catch (variantErr) {
-          Logger.error('Variant creation failed, rolling back product', variantErr);
-          await supabase.from('products').delete().eq('id', newDocId);
-          throw new Error('Failed to create product variants. The product creation was rolled back.');
-        }
-
-        await logAction(user, 'Created new product', {
-          targetType: 'product',
-          targetId: newDocId,
-          productName: payload.name,
-        });
-        toast.success('Product created successfully!');
       }
+
+      const rpcResult = await upsertProductWithColorways(payload, null);
+      
+      const newDocId = isEditing ? id : rpcResult.product_id;
+
+      await logAction(user, isEditing ? 'Updated product details' : 'Created new product', {
+        targetType: 'product',
+        targetId: newDocId,
+        productName: payload.name,
+      });
+
+      toast.success(`Product ${isEditing ? 'updated' : 'created'} successfully!`);
 
       success = true;
     } catch (err) {

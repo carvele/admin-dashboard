@@ -27,8 +27,7 @@ import {
 } from 'lucide-react';
 import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockStatus';
 import {
-  subscribeToInventory,
-  subscribeToProducts,
+    subscribeToProducts,
   adjustInventoryOnHand,
   archiveInventoryItem,
   restoreInventoryItem,
@@ -38,8 +37,8 @@ import {
   recalculateAllInventoryStock,
   recordBoutiqueSale,
   subscribeToCategories,
-  searchInventoryPage,
-} from '../../services/productService';
+  } from '../../services/productService';
+import { getPaginatedInventory } from "../../services/inventoryService";
 import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
@@ -347,8 +346,7 @@ const Inventory = () => {
   const tableCardRef = useRef(null);
 
 
-  const [inventory, setInventory] = useState([]);
-  const [products, setProducts] = useState([]);
+    const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -366,13 +364,48 @@ const Inventory = () => {
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
 
-  React.useEffect(() => {
-    const unsub = subscribeToInventory((data) => {
+  const [inventory, setInventory] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const fetchCurrentPage = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, count } = await getPaginatedInventory(page, 50, {
+        viewMode,
+        category: categoryFilter,
+        color: colorFilter,
+        searchTerm
+      }, sortConfig);
       setInventory(data || []);
+      setTotalCount(count || 0);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load inventory");
+    } finally {
       setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+    }
+  }, [page, viewMode, categoryFilter, colorFilter, searchTerm, sortConfig]);
+
+  useEffect(() => {
+    fetchCurrentPage();
+  }, [fetchCurrentPage]);
+
+  useEffect(() => {
+    let timeout;
+    const unsub = supabase
+      .channel("public:inventory")
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fetchCurrentPage();
+        }, 500); // Debounce
+      })
+      .subscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsub.unsubscribe();
+    };
+  }, [fetchCurrentPage]);
 
   React.useEffect(() => {
     if (activeTab === 'waitlist' && waitlistDemand.length === 0) {
@@ -431,36 +464,8 @@ const Inventory = () => {
     setPage(0);
   }, [searchTerm, categoryFilter, colorFilter, viewMode, stockQuickFilter, viewGrouping]);
 
-  const [serverSearchResults, setServerSearchResults] = useState(null);
-  const [serverSearchLoading, setServerSearchLoading] = useState(false);
+    
 
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setServerSearchResults(null);
-      setServerSearchLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setServerSearchLoading(true);
-    searchInventoryPage(searchTerm, { viewMode, category: categoryFilter, color: colorFilter }, page, 50)
-      .then((res) => {
-        if (!cancelled) {
-          setServerSearchResults(res);
-          setServerSearchLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error('Server inventory search failed:', err);
-          setServerSearchLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [searchTerm, viewMode, categoryFilter, colorFilter, page]);
 
   const uniqueColors = useMemo(() => {
     const set = new Set();

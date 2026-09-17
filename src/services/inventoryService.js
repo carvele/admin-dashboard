@@ -19,6 +19,46 @@ import {
 } from '../lib/supabaseService';
 import { queryCache } from '../utils/cache';
 
+/**
+ * Fetch a paginated slice of inventory variants with deterministic sorting.
+ * Implements [INV-004] requirements.
+ */
+export const getPaginatedInventory = async (page = 0, pageSize = 50, filters = {}, sortConfig = { key: 'item', direction: 'ascending' }) => {
+  let q = supabase.from('inventory').select('*', { count: 'exact' });
+
+  if (filters.viewMode === 'archived') {
+    q = q.eq('deleted', true);
+  } else {
+    q = q.eq('deleted', false);
+  }
+
+  if (filters.category && filters.category !== 'All') {
+    q = q.eq('category', filters.category);
+  }
+  if (filters.color && filters.color !== 'All') {
+    q = q.eq('color', filters.color);
+  }
+  if (filters.searchTerm) {
+    q = q.or(`item.ilike.%${filters.searchTerm}%,sku.ilike.%${filters.searchTerm}%,variant_sku.ilike.%${filters.searchTerm}%`);
+  }
+
+  let sortColumn = sortConfig.key || 'item';
+  if (sortColumn === 'stockStatus') sortColumn = 'available';
+
+  const ascending = sortConfig.direction === 'ascending';
+  q = q.order(sortColumn, { ascending, nullsFirst: false });
+  q = q.order('id', { ascending: true });
+
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  q = q.range(from, to);
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  
+  return { data, count };
+};
+
 // ── Color List Functions ────────────────────────────────
 
 /**
