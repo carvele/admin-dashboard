@@ -1,0 +1,183 @@
+{
+  "taxonomyResolution": [
+    { "category": "Footwear", "subCategory": "Sneakers", "expectedProfile": "footwear" },
+    { "category": "Footwear", "subCategory": "Boots", "expectedProfile": "footwear" },
+    { "category": "Footwear", "subCategory": "Flats", "expectedProfile": "footwear" },
+    { "category": "Footwear", "subCategory": "Heels", "expectedProfile": "footwear" },
+    { "category": "Footwear", "subCategory": "Sandals", "expectedProfile": "footwear" },
+    { "category": "Footwear", "subCategory": "Slippers", "expectedProfile": "footwear" },
+    { "category": "Accessories", "subCategory": "Belts", "expectedProfile": "accessories_belts" },
+    { "category": "Accessories", "subCategory": "Hats / caps", "expectedProfile": "accessories_hats" },
+    { "category": "Accessories", "subCategory": "Jewelry", "productName": "Gold Knotted Ring", "expectedProfile": "accessories_rings" },
+    { "category": "Accessories", "subCategory": "Jewelry", "productName": "Double Diamond Golden Ring", "expectedProfile": "accessories_rings" },
+    { "category": "Accessories", "subCategory": "Jewelry", "productName": "Pearl Necklace", "expectedProfile": "one_size" },
+    { "category": "Accessories", "subCategory": "Bags", "expectedProfile": "one_size" },
+    { "category": "Accessories", "subCategory": "Scarves", "expectedProfile": "one_size" },
+    { "category": "Accessories", "subCategory": "Earings", "expectedProfile": "one_size" },
+    { "category": "Accessories", "subCategory": "Watch", "expectedProfile": "one_size" },
+    { "category": "Tops", "subCategory": "T-Shirts", "expectedProfile": "apparel" },
+    { "category": "Bottoms", "subCategory": "Jeans", "expectedProfile": "apparel" },
+    { "category": "Dresses & Jumpsuits", "subCategory": "Casual dresses", "expectedProfile": "apparel" },
+    { "category": "Outerwear", "subCategory": "Jackets", "expectedProfile": "apparel" }
+  ],
+  "sizeOrdering": [
+    {
+      "input": ["EU 40", "EU 36", "EU 38.5", "EU 37"],
+      "expected": ["EU 36", "EU 37", "EU 38.5", "EU 40"]
+    },
+    {
+      "input": ["US W 8", "US W 6.5", "US W 7", "US W 10"],
+      "expected": ["US W 6.5", "US W 7", "US W 8", "US W 10"]
+    },
+    {
+      "input": ["US M 11", "US M 8.5", "US M 9"],
+      "expected": ["US M 8.5", "US M 9", "US M 11"]
+    },
+    {
+      "input": ["UK 8", "UK 4.5", "UK 5"],
+      "expected": ["UK 4.5", "UK 5", "UK 8"]
+    },
+    {
+      "input": ["90 cm", "75 cm", "100 cm", "80 cm"],
+      "expected": ["75 cm", "80 cm", "90 cm", "100 cm"]
+    },
+    {
+      "input": ["M/L", "S/M", "L/XL"],
+      "expected": ["S/M", "M/L", "L/XL"]
+    },
+    {
+      "input": ["L", "XS", "M", "S", "2XL", "XL"],
+      "expected": ["XS", "S", "M", "L", "XL", "2XL"]
+    },
+    {
+      "input": ["US 8", "US 5", "US 7", "US 6"],
+      "expected": ["US 5", "US 6", "US 7", "US 8"]
+    },
+    {
+      "input": ["One Size"],
+      "expected": ["One Size"]
+    }
+  ],
+  "sizingClassification": [
+    {
+      "sizes": ["One Size"],
+      "variants": [{ "size": "One Size" }],
+      "expected": {
+        "state": "TRUE_ONE_SIZE",
+        "canonicalToken": "One Size",
+        "hideSelector": true
+      }
+    },
+    {
+      "sizes": ["OS"],
+      "variants": [{ "size": "OS" }],
+      "expected": {
+        "state": "TRUE_ONE_SIZE",
+        "canonicalToken": "OS",
+        "hideSelector": true
+      }
+    },
+    {
+      "sizes": ["Free Size"],
+      "variants": [{ "size": "Free Size" }],
+      "expected": {
+        "state": "TRUE_ONE_SIZE",
+        "canonicalToken": "Free Size",
+        "hideSelector": true
+      }
+    },
+    {
+      "sizes": ["EU 37", "EU 38"],
+      "variants": [{ "size": "EU 37" }, { "size": "EU 38" }],
+      "expected": {
+        "state": "MULTI_SIZE",
+        "canonicalToken": null,
+        "hideSelector": false
+      }
+    },
+    {
+      "sizes": [],
+      "variants": [],
+      "expected": {
+        "state": "UNAVAILABLE",
+        "canonicalToken": null,
+        "hideSelector": true
+      }
+    },
+    {
+      "sizes": null,
+      "variants": [],
+      "expected": {
+        "state": "UNAVAILABLE",
+        "canonicalToken": null,
+        "hideSelector": true
+      }
+    }
+  ],
+  "footwearFormatting": [
+    {
+      "size": "EU 38",
+      "category": "Footwear",
+      "expected": {
+        "displayLabel": "EU 38",
+        "approxHelper": "Approx. US W 7.5 · UK 5",
+        "canonicalKey": "EU 38"
+      }
+    },
+    {
+      "size": "38",
+      "category": "Footwear",
+      "expected": {
+        "displayLabel": "EU 38",
+        "approxHelper": "Approx. US W 7.5 · UK 5",
+        "canonicalKey": "38"
+      }
+    },
+    {
+      "size": "US W 7",
+      "category": "Footwear",
+      "expected": {
+        "displayLabel": "US W 7",
+        "approxHelper": "Approx. EU 37.5 · UK 4.5",
+        "canonicalKey": "US W 7"
+      }
+    },
+    {
+      "size": "US M 9",
+      "category": "Footwear",
+      "expected": {
+        "displayLabel": "US M 9",
+        "approxHelper": "Approx. EU 42.5 · UK 8.5",
+        "canonicalKey": "US M 9"
+      }
+    },
+    {
+      "size": "UK 5",
+      "category": "Footwear",
+      "expected": {
+        "displayLabel": "UK 5",
+        "approxHelper": "Approx. EU 38 · US W 7.5",
+        "canonicalKey": "UK 5"
+      }
+    },
+    {
+      "size": "US 5",
+      "category": "Accessories",
+      "subCategory": "Jewelry",
+      "expected": {
+        "displayLabel": "US 5",
+        "approxHelper": null,
+        "canonicalKey": "US 5"
+      }
+    },
+    {
+      "size": "38",
+      "category": "Bottoms",
+      "expected": {
+        "displayLabel": "38",
+        "approxHelper": null,
+        "canonicalKey": "38"
+      }
+    }
+  ]
+}

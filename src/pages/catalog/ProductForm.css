@@ -365,3 +365,185 @@
   border: 1px solid var(--border-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
+
+/* ── Category-Aware Sizing Controls ────────────────────────── */
+.sizing-tab {
+  padding: 0.375rem 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border-color);
+  background-color: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sizing-tab:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.sizing-tab.active {
+  background-color: var(--charcoal);
+  color: var(--white);
+  border-color: var(--charcoal);
+}
+
+.footwear-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+
+@media (min-width: 640px) {
+  .footwear-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .footwear-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .footwear-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+.footwear-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.5rem;
+  min-height: 2.85rem;
+  border-radius: 0.625rem;
+  cursor: pointer;
+  background-color: var(--surface);
+  border: 2px solid var(--border-color);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.footwear-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) rgba(0, 0, 0, 0.08);
+  border-color: var(--text-secondary);
+}
+
+.footwear-chip.active {
+  background-color: var(--charcoal) !important;
+  color: var(--white) !important;
+  border-color: var(--charcoal) !important;
+  transform: scale(1.02);
+}
+
+.footwear-chip .chip-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.footwear-chip .chip-sub {
+  font-size: 0.65rem;
+  line-height: 1.1;
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.footwear-chip.active .chip-sub {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.one-size-card {
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background-color: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.one-size-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+:root.dark .one-size-title {
+  color: #fcd34d;
+}
+
+.one-size-desc {
+  font-size: 0.75rem;
+  color: #78350f;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+:root.dark .one-size-desc {
+  color: #fde68a;
+}
+
+.sizing-profile-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sizing-profile-badge.footwear {
+  background-color: var(--category-indigo-bg);
+  color: var(--category-indigo-text);
+}
+
+.sizing-profile-badge.one-size {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.sizing-profile-badge.accessories {
+  background-color: rgba(13, 148, 136, 0.15);
+  color: #0f766e;
+}
+
+.sizing-profile-badge.apparel {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: var(--charcoal);
+}
+
+.selected-sizes-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: var(--charcoal);
+  color: var(--white);
+}
+
+.selected-sizes-remove {
+  background: none;
+  border: none;
+  color: var(--white);
+  opacity: 0.75;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.selected-sizes-remove:hover {
+  opacity: 1;
+  color: #fca5a5;
+}
+
