@@ -7,18 +7,27 @@
 const mockRpc = jest.fn();
 const mockInvoke = jest.fn().mockResolvedValue({ data: { expired: 0 }, error: null });
 const mockFrom = jest.fn();
+const mockCreateSignedUrl = jest.fn();
+const mockStorageFrom = jest.fn(() => ({
+  createSignedUrl: mockCreateSignedUrl,
+}));
 
 jest.mock('../lib/supabaseClient', () => ({
   supabase: {
     rpc: (...args) => mockRpc(...args),
     functions: { invoke: (...args) => mockInvoke(...args) },
     from: (...args) => mockFrom(...args),
+    storage: {
+      from: (...args) => mockStorageFrom(...args),
+    },
   },
 }));
 
 afterEach(() => {
   mockInvoke.mockClear();
   mockFrom.mockReset();
+  mockCreateSignedUrl.mockReset();
+  mockStorageFrom.mockClear();
 });
 
 jest.mock('../lib/supabaseService', () => ({
@@ -46,6 +55,9 @@ import {
   rescheduleReservation,
   markRefundDisbursed,
   getRefundQueue,
+  getReturnRefundRequests,
+  reviewReturnRefundRequest,
+  getSignedEvidenceUrl,
 } from './reservationService';
 
 
@@ -383,7 +395,7 @@ describe('markRefundDisbursed', () => {
 });
 
 describe('getRefundQueue', () => {
-  it('queries reservations with status Cancelled and inner payments requires_refund true', async () => {
+  it('queries reservations with status in Cancelled/Completed, payment_status Refund Required, and inner payments requires_refund true', async () => {
     const mockOrder = jest.fn().mockResolvedValue({
       data: [
         {
@@ -399,20 +411,180 @@ describe('getRefundQueue', () => {
     });
     const mockEqStatusPaid = jest.fn().mockReturnValue({ order: mockOrder });
     const mockEqRefund = jest.fn().mockReturnValue({ eq: mockEqStatusPaid });
-    const mockEqCancelled = jest.fn().mockReturnValue({ eq: mockEqRefund });
-    const mockSelect = jest.fn().mockReturnValue({ eq: mockEqCancelled });
+    const mockEqPaymentStatus = jest.fn().mockReturnValue({ eq: mockEqRefund });
+    const mockInStatus = jest.fn().mockReturnValue({ eq: mockEqPaymentStatus });
+    const mockSelect = jest.fn().mockReturnValue({ in: mockInStatus });
 
     mockFrom.mockReturnValue({ select: mockSelect });
 
     const result = await getRefundQueue();
 
     expect(mockFrom).toHaveBeenCalledWith('reservations');
-    expect(mockEqCancelled).toHaveBeenCalledWith('status', 'Cancelled');
+    expect(mockInStatus).toHaveBeenCalledWith('status', ['Cancelled', 'Completed']);
+    expect(mockEqPaymentStatus).toHaveBeenCalledWith('payment_status', 'Refund Required');
     expect(mockEqRefund).toHaveBeenCalledWith('payments.requires_refund', true);
     expect(mockEqStatusPaid).toHaveBeenCalledWith('payments.status', 'paid');
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('res-1');
   });
 });
+
+describe('reviewReturnRefundRequest', () => {
+  afterEach(() => mockRpc.mockReset());
+
+  it('invokes review_return_refund_request with canonical approve params', async () => {
+    mockRpc.mockResolvedValue({
+      data: { success: true, request_id: 'req-1', previous_status: 'submitted', new_status: 'approved' },
+      error: null,
+    });
+
+    const result = await reviewReturnRefundRequest('req-1', 'approve', 'Approved by manager');
+
+    expect(mockRpc).toHaveBeenCalledWith('review_return_refund_request', {
+      _request_id: 'req-1',
+      _decision:   'approve',
+      _notes:      'Approved by manager',
+    });
+    expect(result).toEqual({ success: true, request_id: 'req-1', previous_status: 'submitted', new_status: 'approved' });
+  });
+
+  it('invokes review_return_refund_request with canonical reject params', async () => {
+    mockRpc.mockResolvedValue({
+      data: { success: true, request_id: 'req-1', previous_status: 'under_review', new_status: 'rejected' },
+      error: null,
+    });
+
+    const result = await reviewReturnRefundRequest('req-1', 'reject', 'Item damaged by customer');
+
+    expect(mockRpc).toHaveBeenCalledWith('review_return_refund_request', {
+      _request_id: 'req-1',
+      _decision:   'reject',
+      _notes:      'Item damaged by customer',
+    });
+    expect(result.new_status).toBe('rejected');
+  });
+
+  it('invokes review_return_refund_request with under_review decision', async () => {
+    mockRpc.mockResolvedValue({
+      data: { success: true, request_id: 'req-1', previous_status: 'submitted', new_status: 'under_review' },
+      error: null,
+    });
+
+    const result = await reviewReturnRefundRequest('req-1', 'under_review');
+
+    expect(mockRpc).toHaveBeenCalledWith('review_return_refund_request', {
+      _request_id: 'req-1',
+      _decision:   'under_review',
+      _notes:      null,
+    });
+    expect(result.new_status).toBe('under_review');
+  });
+
+  it('throws error when RPC returns an error', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: new Error('A rejection reason is required.'),
+    });
+
+    await expect(reviewReturnRefundRequest('req-1', 'reject', '')).rejects.toThrow(
+      'A rejection reason is required.',
+    );
+  });
+});
+
+describe('getSignedEvidenceUrl', () => {
+  it('returns null when photoPath is empty or null', async () => {
+    const result = await getSignedEvidenceUrl(null);
+    expect(result).toBeNull();
+  });
+
+  it('invokes createSignedUrl on return-refund-evidence bucket', async () => {
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://supabase.co/storage/v1/object/sign/return-refund-evidence/cust1/proof.jpg?token=xyz' },
+      error: null,
+    });
+
+    const result = await getSignedEvidenceUrl('cust1/proof.jpg', 900);
+
+    expect(mockStorageFrom).toHaveBeenCalledWith('return-refund-evidence');
+    expect(mockCreateSignedUrl).toHaveBeenCalledWith('cust1/proof.jpg', 900);
+    expect(result).toContain('https://supabase.co/storage/v1/object/sign/return-refund-evidence/cust1/proof.jpg');
+  });
+
+  it('throws error when createSignedUrl fails', async () => {
+    mockCreateSignedUrl.mockResolvedValue({
+      data: null,
+      error: new Error('Object not found in storage bucket'),
+    });
+
+    await expect(getSignedEvidenceUrl('cust1/missing.jpg')).rejects.toThrow(
+      'Object not found in storage bucket',
+    );
+  });
+});
+
+describe('getReturnRefundRequests', () => {
+  it('fetches return refund requests with status filter and joins', async () => {
+    const mockOrder = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'req-1',
+          reservation_id: 'res-1',
+          customer_id: 'cust-1',
+          reason_category: 'damaged',
+          details: 'Torn seam',
+          photo_path: 'cust-1/photo.jpg',
+          status: 'submitted',
+        },
+      ],
+      error: null,
+    });
+    const mockEqStatus = jest.fn().mockReturnValue({ order: mockOrder });
+    const mockSelect = jest.fn().mockReturnValue({ eq: mockEqStatus });
+
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    const result = await getReturnRefundRequests('submitted');
+
+    expect(mockFrom).toHaveBeenCalledWith('return_refund_requests');
+    expect(mockEqStatus).toHaveBeenCalledWith('status', 'submitted');
+    expect(mockOrder).toHaveBeenCalledWith('submitted_at', { ascending: false });
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('req-1');
+  });
+
+  it('fetches return refund requests with array status filter', async () => {
+    const mockOrder = jest.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+    const mockInStatus = jest.fn().mockReturnValue({ order: mockOrder });
+    const mockSelect = jest.fn().mockReturnValue({ in: mockInStatus });
+
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    await getReturnRefundRequests(['submitted', 'under_review']);
+
+    expect(mockFrom).toHaveBeenCalledWith('return_refund_requests');
+    expect(mockInStatus).toHaveBeenCalledWith('status', ['submitted', 'under_review']);
+    expect(mockOrder).toHaveBeenCalledWith('submitted_at', { ascending: false });
+  });
+
+  it('fetches all return refund requests when status is null', async () => {
+    const mockOrder = jest.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+    const mockSelect = jest.fn().mockReturnValue({ order: mockOrder });
+
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    await getReturnRefundRequests();
+
+    expect(mockFrom).toHaveBeenCalledWith('return_refund_requests');
+    expect(mockOrder).toHaveBeenCalledWith('submitted_at', { ascending: false });
+  });
+});
+
 
 

@@ -844,6 +844,142 @@ export type Database = {
           },
         ]
       }
+      legal_acceptances: {
+        Row: {
+          acceptance_method: string
+          accepted_at: string
+          client_platform: string
+          content_sha256: string
+          document_id: string
+          document_type: string
+          document_version: string
+          id: string
+          legal_subject_id: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          acceptance_method?: string
+          accepted_at?: string
+          client_platform: string
+          content_sha256: string
+          document_id: string
+          document_type: string
+          document_version: string
+          id?: string
+          legal_subject_id: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          acceptance_method?: string
+          accepted_at?: string
+          client_platform?: string
+          content_sha256?: string
+          document_id?: string
+          document_type?: string
+          document_version?: string
+          id?: string
+          legal_subject_id?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptances_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_document_views: {
+        Row: {
+          client_platform: string
+          document_id: string
+          document_version: string
+          id: string
+          legal_subject_id: string
+          user_id: string | null
+          viewed_at: string
+        }
+        Insert: {
+          client_platform: string
+          document_id: string
+          document_version: string
+          id?: string
+          legal_subject_id: string
+          user_id?: string | null
+          viewed_at?: string
+        }
+        Update: {
+          client_platform?: string
+          document_id?: string
+          document_version?: string
+          id?: string
+          legal_subject_id?: string
+          user_id?: string | null
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_document_views_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          content_markdown: string
+          content_sha256: string
+          created_at: string
+          created_by: string | null
+          document_type: string
+          effective_at: string
+          id: string
+          is_active: boolean
+          is_published: boolean
+          published_at: string | null
+          published_by: string | null
+          title: string
+          version: string
+        }
+        Insert: {
+          content_markdown: string
+          content_sha256: string
+          created_at?: string
+          created_by?: string | null
+          document_type: string
+          effective_at?: string
+          id?: string
+          is_active?: boolean
+          is_published?: boolean
+          published_at?: string | null
+          published_by?: string | null
+          title: string
+          version: string
+        }
+        Update: {
+          content_markdown?: string
+          content_sha256?: string
+          created_at?: string
+          created_by?: string | null
+          document_type?: string
+          effective_at?: string
+          id?: string
+          is_active?: boolean
+          is_published?: boolean
+          published_at?: string | null
+          published_by?: string | null
+          title?: string
+          version?: string
+        }
+        Relationships: []
+      }
       logs: {
         Row: {
           action: string | null
@@ -2167,6 +2303,76 @@ export type Database = {
           },
         ]
       }
+      return_refund_requests: {
+        Row: {
+          created_at: string
+          customer_id: string
+          details: string | null
+          id: string
+          photo_path: string | null
+          reason_category: string
+          reservation_id: string
+          resolution_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          details?: string | null
+          id?: string
+          photo_path?: string | null
+          reason_category: string
+          reservation_id: string
+          resolution_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          details?: string | null
+          id?: string
+          photo_path?: string | null
+          reason_category?: string
+          reservation_id?: string
+          resolution_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "return_refund_requests_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_refund_requests_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_refund_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_votes: {
         Row: {
           created_at: string
@@ -2645,6 +2851,24 @@ export type Database = {
         }
         Relationships: []
       }
+      user_legal_subjects: {
+        Row: {
+          created_at: string
+          legal_subject_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          legal_subject_id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          legal_subject_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_measurements: {
         Row: {
           created_at: string
@@ -2704,6 +2928,7 @@ export type Database = {
           color_tags: string[] | null
           created_at: string
           deleted: boolean | null
+          description: string | null
           garment_type: string | null
           id: string
           image_url: string | null
@@ -2711,6 +2936,7 @@ export type Database = {
           product_id: string | null
           sub_category: string | null
           user_id: string | null
+          user_notes: string | null
           wear_count: number
         }
         Insert: {
@@ -2718,6 +2944,7 @@ export type Database = {
           color_tags?: string[] | null
           created_at?: string
           deleted?: boolean | null
+          description?: string | null
           garment_type?: string | null
           id?: string
           image_url?: string | null
@@ -2725,6 +2952,7 @@ export type Database = {
           product_id?: string | null
           sub_category?: string | null
           user_id?: string | null
+          user_notes?: string | null
           wear_count?: number
         }
         Update: {
@@ -2732,6 +2960,7 @@ export type Database = {
           color_tags?: string[] | null
           created_at?: string
           deleted?: boolean | null
+          description?: string | null
           garment_type?: string | null
           id?: string
           image_url?: string | null
@@ -2739,6 +2968,7 @@ export type Database = {
           product_id?: string | null
           sub_category?: string | null
           user_id?: string | null
+          user_notes?: string | null
           wear_count?: number
         }
         Relationships: [
@@ -2907,13 +3137,17 @@ export type Database = {
         }
         Returns: Json
       }
-      can_publish_legal_documents: { Args: never; Returns: boolean }
       can_manage_customers: { Args: never; Returns: boolean }
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
       can_operate_inventory: { Args: never; Returns: boolean }
       can_operate_reservations: { Args: never; Returns: boolean }
+      can_publish_legal_documents: { Args: never; Returns: boolean }
       can_view_customer_measurements: { Args: never; Returns: boolean }
+      cancel_customer_reservation: {
+        Args: { _reason?: string; _reservation_id: string }
+        Returns: Json
+      }
       cancel_reservation_as_manager: {
         Args: {
           _expected_status: string
@@ -3098,6 +3332,7 @@ export type Database = {
         }[]
       }
       get_inventory_health_analytics: { Args: never; Returns: Json }
+      get_legal_acceptance_status: { Args: never; Returns: Json }
       get_most_wishlisted_products: {
         Args: never
         Returns: {
@@ -3109,6 +3344,10 @@ export type Database = {
       }
       get_or_create_direct_chat: {
         Args: { other_user_id: string }
+        Returns: string
+      }
+      get_or_create_legal_subject_id: {
+        Args: { _user_id: string }
         Returns: string
       }
       get_outfit_privacy: { Args: { p_user_id: string }; Returns: string }
@@ -3136,6 +3375,10 @@ export type Database = {
           p_timezone?: string
         }
         Returns: Json
+      }
+      get_product_sold_count: {
+        Args: { p_product_id: string }
+        Returns: number
       }
       get_public_outfits_for_product: {
         Args: { p_product_id: string }
@@ -3191,7 +3434,6 @@ export type Database = {
           user_vote: string
         }[]
       }
-      get_legal_acceptance_status: { Args: never; Returns: Json }
       get_slot_booked_counts: {
         Args: { _date: string }
         Returns: {
@@ -3256,10 +3498,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_product_sold_count: {
-        Args: { p_product_id: string }
-        Returns: number
-      }
       get_wardrobe_privacy: { Args: { p_user_id: string }; Returns: string }
       get_wishlist_privacy: { Args: { p_user_id: string }; Returns: string }
       increment_wear_count: {
@@ -3269,6 +3507,7 @@ export type Database = {
           color_tags: string[] | null
           created_at: string
           deleted: boolean | null
+          description: string | null
           garment_type: string | null
           id: string
           image_url: string | null
@@ -3276,6 +3515,7 @@ export type Database = {
           product_id: string | null
           sub_category: string | null
           user_id: string | null
+          user_notes: string | null
           wear_count: number
         }
         SetofOptions: {
@@ -3300,6 +3540,10 @@ export type Database = {
       }
       is_device_approved: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
+      is_reservation_return_eligible: {
+        Args: { _reservation_id: string }
+        Returns: boolean
+      }
       is_staff_or_admin: { Args: never; Returns: boolean }
       low_stock_threshold: { Args: never; Returns: number }
       mark_direct_message_read: {
@@ -3362,6 +3606,26 @@ export type Database = {
         Returns: Json
       }
       recalculate_inventory_stock: { Args: never; Returns: Json }
+      recommend_size: {
+        Args: {
+          category?: string
+          fit_preference?: string
+          product_measurements: Json
+          user_measurements: Json
+        }
+        Returns: string
+      }
+      reconcile_product_variants: {
+        Args: {
+          p_actor_id?: string
+          p_category?: string
+          p_desired_variants: Json
+          p_product_id: string
+          p_product_name?: string
+          p_style_code?: string
+        }
+        Returns: Json
+      }
       record_boutique_sale: {
         Args: {
           p_idempotency_key: string
@@ -3373,10 +3637,7 @@ export type Database = {
         Returns: Json
       }
       record_legal_document_view: {
-        Args: {
-          _client_platform: string
-          _document_id: string
-        }
+        Args: { _client_platform: string; _document_id: string }
         Returns: Json
       }
       record_reservation_balance: {
@@ -3414,6 +3675,15 @@ export type Database = {
         Returns: Json
       }
       request_account_deletion: { Args: { _reason?: string }; Returns: string }
+      request_customer_refund: {
+        Args: {
+          _details?: string
+          _photo_path?: string
+          _reason_category: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       request_reschedule:
         | {
             Args: {
@@ -3474,6 +3744,10 @@ export type Database = {
         }
         Returns: Json
       }
+      review_return_refund_request: {
+        Args: { _decision: string; _notes?: string; _request_id: string }
+        Returns: Json
+      }
       save_pose_guide: {
         Args: {
           p_base_pose_type?: string
@@ -3492,17 +3766,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      reconcile_product_variants: {
-        Args: {
-          p_actor_id?: string
-          p_category?: string
-          p_desired_variants: Json
-          p_product_id: string
-          p_product_name?: string
-          p_style_code?: string
-        }
-        Returns: Json
-      }
       search_catalog: {
         Args: {
           ar_only?: boolean
@@ -3512,12 +3775,14 @@ export type Database = {
           material_filters?: string[]
           max_price?: number
           min_price?: number
+          my_size_only?: boolean
           new_arrivals_only?: boolean
           on_sale_only?: boolean
           search_query?: string
           size_filters?: string[]
           sort_by?: string
           tag_filters?: string[]
+          user_measurements?: Json
         }
         Returns: {
           ar_data: Json
@@ -3697,6 +3962,7 @@ export type Database = {
         }
         Returns: Json
       }
+      to_numeric: { Args: { val: Json }; Returns: number }
       transition_mfa_reset_to_awaiting: {
         Args: { p_operation_id: string; p_target_id: string }
         Returns: undefined

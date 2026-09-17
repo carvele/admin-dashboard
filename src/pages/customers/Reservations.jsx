@@ -72,7 +72,9 @@ import {
   rescheduleReservation,
   markRefundDisbursed,
   getRefundQueue,
+  getReturnRefundRequests,
 } from '../../services/reservationService';
+import ReturnRefundQueue from './ReturnRefundQueue';
 import {
   subscribeToCustomers,
 } from '../../services/customerService';
@@ -293,6 +295,23 @@ const Reservations = () => {
       setStatusFilter('All');
     }
   };
+  // Main Section Tab: 'reservations' | 'return_refunds'
+  const [mainTab, setMainTab] = useState(() => searchParams.get('tab') || 'reservations');
+  const [pendingReturnCount, setPendingReturnCount] = useState(0);
+
+  const refreshPendingReturnCount = useCallback(async () => {
+    try {
+      const data = await getReturnRefundRequests(['submitted', 'under_review']);
+      setPendingReturnCount(data?.length || 0);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPendingReturnCount();
+  }, [refreshPendingReturnCount]);
+
   // Board first: the day-to-day job is working the queue. List view (table) is for
   // scanning history like Cancelled or Completed reservations.
   const [viewMode, setViewMode] = useState(() => {
@@ -337,13 +356,14 @@ const Reservations = () => {
   // Keep URL search params in sync with active filters/view/pagination
   useEffect(() => {
     const params = new URLSearchParams();
+    if (mainTab && mainTab !== 'reservations') params.set('tab', mainTab);
     if (viewMode && viewMode !== 'board') params.set('view', viewMode);
     if (viewMode === 'table') params.set('scope', scopeFilter);
     if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
     if (searchTerm.trim()) params.set('search', searchTerm.trim());
     if (viewMode === 'table' && page > 0) params.set('page', String(page + 1));
     setSearchParams(params, { replace: true });
-  }, [viewMode, scopeFilter, statusFilter, searchTerm, page, setSearchParams]);
+  }, [mainTab, viewMode, scopeFilter, statusFilter, searchTerm, page, setSearchParams]);
 
   // Reset page to first whenever search, status filter, scope, or view mode changes
   useEffect(() => {
@@ -463,6 +483,7 @@ const Reservations = () => {
         getPaymentsForReservation(res.docId).then(setPaymentRecords).catch(() => {});
       }
       await loadRefundQueue();
+      await refreshPendingReturnCount();
       setRefundReferenceNumber('');
       setRefundNotes('');
     } catch (err) {
@@ -943,32 +964,34 @@ const Reservations = () => {
         category="OPERATIONS"
         actions={
           <div className="header-actions flex-center gap-2">
-            <div className="view-toggle">
-              <button
-                type="button"
-                className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
-                onClick={() => setViewMode('board')}
-                aria-pressed={viewMode === 'board'}
-              >
-                Board
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
-                onClick={() => setViewMode('table')}
-                aria-pressed={viewMode === 'table'}
-              >
-                List View
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-                onClick={() => setViewMode('calendar')}
-                aria-pressed={viewMode === 'calendar'}
-              >
-                Calendar
-              </button>
-            </div>
+            {mainTab === 'reservations' && (
+              <div className="view-toggle">
+                <button
+                  type="button"
+                  className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`}
+                  onClick={() => setViewMode('board')}
+                  aria-pressed={viewMode === 'board'}
+                >
+                  Board
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
+                  onClick={() => setViewMode('table')}
+                  aria-pressed={viewMode === 'table'}
+                >
+                  List View
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                  onClick={() => setViewMode('calendar')}
+                  aria-pressed={viewMode === 'calendar'}
+                >
+                  Calendar
+                </button>
+              </div>
+            )}
             {canManage && (
               <button
                 className="btn-outline flex-center gap-2"
@@ -987,7 +1010,48 @@ const Reservations = () => {
         }
       />
 
-      {/* Metric KPI Summary Cards for List View */}
+      {/* Primary Section Tabs: Reservations vs Return/Refund Requests */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className={`toggle-btn ${mainTab === 'reservations' ? 'active' : ''}`}
+          onClick={() => setMainTab('reservations')}
+          style={{ padding: '0.5rem 1.25rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <Package size={16} /> Reservations
+        </button>
+        <button
+          type="button"
+          className={`toggle-btn ${mainTab === 'return_refunds' ? 'active' : ''}`}
+          onClick={() => {
+            setMainTab('return_refunds');
+            refreshPendingReturnCount();
+          }}
+          style={{ padding: '0.5rem 1.25rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <AlertTriangle size={16} /> Return / Refund Requests
+          {pendingReturnCount > 0 && (
+            <span className="badge badge-warning" style={{ marginLeft: '4px', fontSize: '0.75rem' }}>
+              {pendingReturnCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {mainTab === 'return_refunds' ? (
+        <ReturnRefundQueue
+          onDisburseReservation={(res) => {
+            const target = reservations.find(r => r.id === res.id || r.docId === res.id) || {
+              ...res,
+              docId: res.id,
+              paymentStatus: 'Refund Required',
+            };
+            setViewModal(target);
+          }}
+        />
+      ) : (
+        <>
+          {/* Metric KPI Summary Cards for List View */}
       {viewMode === 'table' && (
         scopeFilter === 'active' ? (
           <div className="res-summary-grid">
@@ -1680,6 +1744,8 @@ const Reservations = () => {
           />
         )}
       </div>
+        </>
+      )}
 
       {/* ===== QR / TOKEN VERIFICATION MODAL ===== */}
       {showQRModal && (
