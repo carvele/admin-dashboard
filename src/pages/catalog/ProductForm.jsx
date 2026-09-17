@@ -11,8 +11,6 @@ import {
   archiveInventoryItem,
   getInventory,
   getStockMovements,
-  getProductColorways,
-  upsertProductWithColorways,
 } from '../../services/productService';
 import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
@@ -22,7 +20,6 @@ import { getReservationsByProduct } from '../../services/reservationService';
 import { subscribeToCategories } from '../../services/productService';
 import MeasurementTable from '../../components/catalog/MeasurementTable';
 import CompleteTheLookPanel from '../../components/catalog/CompleteTheLookPanel';
-import ColorwayMediaManager, { validateColorways } from '../../components/catalog/ColorwayMediaManager';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { validateForm, productRules, sanitizeText } from '../../utils/validation';
@@ -102,39 +99,6 @@ const ProductForm = ({ readOnly = false }) => {
   const [existingVariants, setExistingVariants] = useState([]);
   // Set<variantKey> of combinations the staff has ticked
   const [selectedVariants, setSelectedVariants] = useState(new Set());
-  // First-class Colorways state
-  const [colorways, setColorways] = useState([
-    {
-      id: 'temp-default',
-      colorName: 'Default',
-      displayName: 'Default',
-      hexColor: '#000000',
-      isDefault: true,
-      sortOrder: 0,
-      primaryImageUrl: '',
-      images: [],
-      pendingFiles: [],
-    },
-  ]);
-
-  const handleColorwaysChange = useCallback((newColorways) => {
-    setColorways(newColorways);
-    const colorNames = newColorways.map((cw) => (cw.colorName || '').trim()).filter(Boolean);
-    const defaultCw = newColorways.find((cw) => cw.isDefault) || newColorways[0];
-    const defaultColor = defaultCw?.colorName?.trim() || colorNames[0] || '';
-    const defaultPrimaryImg = defaultCw?.primaryImageUrl || (defaultCw?.images?.[0]?.imageUrl || defaultCw?.images?.[0] || '');
-    const defaultImgs = (defaultCw?.images || []).map((img) => (typeof img === 'string' ? img : img.imageUrl)).filter(Boolean);
-
-    setFormData((prev) => ({
-      ...prev,
-      colors: colorNames,
-      color: colorNames.join(', '),
-      baseColor: defaultColor,
-      imageUrl: defaultPrimaryImg || prev.imageUrl,
-      images: defaultImgs.length > 0 ? defaultImgs : prev.images,
-    }));
-  }, []);
-
   // File uploads
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -212,57 +176,20 @@ const ProductForm = ({ readOnly = false }) => {
              setOldData(docParams);
              // Colours are stored comma-joined in `color`; fall back to the
              // legacy single `baseColor` so older products still populate.
-              let existing = [];
-              try {
-                const { getProductVariants } = await import('../../services/variantService');
-                existing = await getProductVariants(id);
-                setExistingVariants(existing);
-              } catch (e) {
-                console.warn('[ProductForm] Could not fetch variants:', e);
-              }
-
-              // Load first-class colorways from DB
-              let existingColorways = [];
-              try {
-                existingColorways = await getProductColorways(id);
-              } catch (cwErr) {
-                console.warn('[ProductForm] Could not fetch colorways:', cwErr);
-              }
-
-              const parsedColors = docParams.color
-                ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
-                : (docParams.baseColor ? [docParams.baseColor] : []);
-              const variantColors = existing.map((v) => v.color).filter(Boolean);
-              const mergedColors = [...new Set([...parsedColors, ...variantColors])];
-
-              if (existingColorways && existingColorways.length > 0) {
-                setColorways(existingColorways);
-              } else {
-                // Synthesize initial colorway for legacy product
-                const initialColorName = docParams.baseColor || (parsedColors[0] || 'Default');
-                const initialImages = (docParams.images || []).map((img, idx) => ({
-                  id: `legacy-${idx}`,
-                  imageUrl: typeof img === 'string' ? img : img.url,
-                  sortOrder: idx,
-                  altText: '',
-                  imageType: 'gallery',
-                }));
-                setColorways([
-                  {
-                    id: `temp-${id}`,
-                    colorName: initialColorName,
-                    displayName: initialColorName,
-                    hexColor: '#000000',
-                    isDefault: true,
-                    sortOrder: 0,
-                    primaryImageUrl: docParams.imageUrl || docParams.images?.[0] || '',
-                    images: initialImages,
-                    pendingFiles: [],
-                  },
-                ]);
-              }
-
-              setFormData(prev => ({
+             let existing = [];
+             try {
+               const { getProductVariants } = await import('../../services/variantService');
+               existing = await getProductVariants(id);
+               setExistingVariants(existing);
+             } catch (e) {
+               console.warn('[ProductForm] Could not fetch variants:', e);
+             }
+             const parsedColors = docParams.color
+               ? String(docParams.color).split(',').map((c) => c.trim()).filter(Boolean)
+               : (docParams.baseColor ? [docParams.baseColor] : []);
+             const variantColors = existing.map((v) => v.color).filter(Boolean);
+             const mergedColors = [...new Set([...parsedColors, ...variantColors])];
+             setFormData(prev => ({
                 ...prev,
                 ...docParams,
                 name: docParams.name || '',
@@ -550,18 +477,14 @@ const ProductForm = ({ readOnly = false }) => {
     e.preventDefault();
     if (readOnly) return;
 
-    // 1. Validate Form & Colorways
+    // 1. Validate Form
     const { isValid, errors } = validateForm(formData, productRules);
-    if (!isValid || formData.sizes.length === 0) {
+    if (!isValid || formData.sizes.length === 0 || (formData.colors || []).length === 0) {
       const errorMsg =
-        formData.sizes.length === 0 ? 'At least one size is required' : Object.values(errors)[0];
+        formData.sizes.length === 0 ? 'At least one size is required'
+        : (formData.colors || []).length === 0 ? 'At least one color is required'
+        : Object.values(errors)[0];
       toast.error(errorMsg);
-      return;
-    }
-
-    const cwValidation = validateColorways(colorways);
-    if (!cwValidation.isValid) {
-      toast.error(cwValidation.error);
       return;
     }
 
@@ -575,32 +498,19 @@ const ProductForm = ({ readOnly = false }) => {
 
     let success = false;
     try {
-      // 2. Upload pending images per colorway
-      const processedColorways = [];
-      for (let i = 0; i < colorways.length; i++) {
-        const cw = colorways[i];
-        const existingImgs = [...(cw.images || [])];
-        if (cw.pendingFiles && cw.pendingFiles.length > 0) {
-          for (let j = 0; j < cw.pendingFiles.length; j++) {
-            const pending = cw.pendingFiles[j];
-            console.log(`[Storage] Uploading photo ${j + 1}/${cw.pendingFiles.length} for colorway "${cw.colorName}"...`);
-            const url = await routeAndUploadFile(pending.file);
-            if (url) {
-              existingImgs.push({
-                imageUrl: url,
-                sortOrder: existingImgs.length,
-                altText: '',
-                imageType: 'gallery',
-              });
-            }
-          }
+      // 2. Upload new images if any
+      setUploadProgress({ current: 0, total: selectedFiles.length });
+      let uploadedImages = [];
+
+      if (selectedFiles.length > 0) {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          setUploadProgress({ current: i + 1, total: selectedFiles.length });
+          console.log(`[Storage] Uploading gallery image ${i + 1}...`);
+          const url = await routeAndUploadFile(selectedFiles[i]);
+          if (url) uploadedImages.push(url);
         }
-        processedColorways.push({
-          ...cw,
-          images: existingImgs,
-          pendingFiles: [],
-        });
       }
+      const finalImages = [...formData.images, ...uploadedImages];
 
       // Safe Category & Category ID preservation logic
       const isNewProduct = !id;
@@ -611,6 +521,7 @@ const ProductForm = ({ readOnly = false }) => {
 
       let finalCategoryId = null;
       if (!isNewProduct && !categoryChanged && oldData?.category_id) {
+        // Strictly preserve existing category_id when category/subcategory were not explicitly changed
         finalCategoryId = oldData.category_id;
       } else {
         const norm = (s) => (s || '').trim().toLowerCase();
@@ -625,36 +536,22 @@ const ProductForm = ({ readOnly = false }) => {
         onWarning: (msg) => toast.warning(msg),
       });
 
-      // 3. Assemble colorways payload
-      const colorwaysPayload = processedColorways.map((cw, idx) => ({
-        ...(cw.id && !cw.id.startsWith('temp-') ? { id: cw.id } : {}),
-        color_name: cw.colorName.trim(),
-        display_name: cw.displayName?.trim() || cw.colorName.trim(),
-        hex_color: cw.hexColor || '#000000',
-        sort_order: idx,
-        is_default: Boolean(cw.isDefault),
-        is_active: true,
-        primary_image_url: cw.primaryImageUrl || (cw.images?.[0] ? (typeof cw.images[0] === 'string' ? cw.images[0] : cw.images[0].imageUrl) : ''),
-        images: (cw.images || []).map((img, imgIdx) => ({
-          image_url: typeof img === 'string' ? img : img.imageUrl,
-          sort_order: imgIdx,
-          alt_text: typeof img === 'string' ? '' : (img.altText || ''),
-          image_type: 'gallery',
-        })),
-      }));
-
-      // 4. Assemble product payload
-      const productPayload = {
-        ...(isEditing ? { id } : {}),
+      const payload = {
         name: sanitizeText(formData.name),
         category: formData.category,
-        sub_category: formData.subCategory,
+        subCategory: formData.subCategory,
+        category_id: finalCategoryId,
         price: parseFloat(formData.price),
+        sizes: normalizedSizes,
         description: sanitizeText(formData.description),
         material: sanitizeText(formData.material),
-        care_instructions: sanitizeText(formData.careInstructions),
-        fit_and_sizing: formData.fitAndSizing,
-        style_code: ensureStyleCode({
+        garment_metadata: { fabric_stretch: formData.fabric_stretch },
+        // Persist the selected colours comma-joined; the mobile product page
+        // splits `color` on ',' to render its colour picker.
+        color: (formData.colors || []).join(', '),
+        careInstructions: sanitizeText(formData.careInstructions),
+        fitAndSizing: formData.fitAndSizing,
+        styleCode: ensureStyleCode({
           existingStyleCode: formData.styleCode,
           productName: formData.name,
           productId: id || '',
@@ -662,115 +559,201 @@ const ProductForm = ({ readOnly = false }) => {
         season: formData.season,
         occasion: formData.occasion,
         visibility: formData.visibility,
-        is_featured: formData.isFeatured,
-        is_new_arrival: formData.isNewArrival,
-        is_alterable: formData.isAlterable,
-        on_sale: formData.onSale,
-        sale_price: formData.onSale ? parseFloat(formData.salePrice) : null,
-        discount_percentage: parseInt(formData.discountPercentage) || 0,
-        sizes: normalizedSizes,
-        stock: parseInt(formData.stock) || 0,
+        isFeatured: formData.isFeatured,
+        isNewArrival: formData.isNewArrival,
+        isAlterable: formData.isAlterable,
+        updated_by: user?.id || null,
+        images: finalImages,
+        // Falls back to the product's existing imageUrl (not a placeholder
+        // string) when finalImages is empty -- a legacy product whose real
+        // image predates the `images` array field has an empty array here
+        // even though products.image_url is a real URL. The previous
+        // '👗' fallback silently overwrote that real URL with a literal
+        // emoji on ANY unrelated edit (price, stock, description) to such
+        // a product. null only applies to genuinely new products.
+        imageUrl: finalImages.length > 0 ? finalImages[0] : (oldData?.imageUrl || null),
+        // Sale Fields
+        onSale: formData.onSale,
+        discountPercentage: parseInt(formData.discountPercentage) || 0,
+        salePrice: formData.onSale ? parseFloat(formData.salePrice) : null,
+        // New Categorization — primary colour drives admin catalog filtering
+        baseColor: (formData.colors || [])[0] || '',
+        pattern: formData.pattern,
+        measurements: formData.measurements,
+
         tags: formData.tags || [],
-        pattern: formData.pattern || 'Solid',
       };
 
-      // 5. Execute transactional upsert RPC
-      const upsertRes = await upsertProductWithColorways(productPayload, colorwaysPayload);
-      const targetDocId = isEditing ? id : (upsertRes?.product_id || upsertRes?.productId);
+      if (isEditing) {
+        await updateProduct(id, payload);
 
-      if (!targetDocId) {
-        throw new Error('Database failed to return product ID after upsert');
-      }
+        // Sync inventory: create new variant combos, soft-delete removed ones
+        try {
+          const { getProductVariants } = await import('../../services/variantService');
+          const productInv = await getProductVariants(id);
 
-      // Preserve category_id and garment_metadata if provided
-      if (finalCategoryId || formData.fabric_stretch) {
-        await supabase.from('products').update({
-          category_id: finalCategoryId,
-          garment_metadata: { fabric_stretch: formData.fabric_stretch },
-        }).eq('id', targetDocId);
-      }
-
-      // 6. Sync inventory variants
-      try {
-        const { getProductVariants } = await import('../../services/variantService');
-        const productInv = await getProductVariants(targetDocId);
-
-        if (variantColumnsReady && selectedVariants.size > 0) {
-          const sizeColorKey = (size, color) => `${size ?? ''}|||${color ?? ''}`;
-          const existingKeys = new Set(
-            productInv.filter((inv) => !inv.deleted).map((inv) =>
-              sizeColorKey(inv.size, inv.color),
-            ),
-          );
-          const toCreate = variantMatrix.filter(
-            (cell) => selectedVariants.has(cell.key) && !existingKeys.has(sizeColorKey(cell.size, cell.color)),
-          );
-          for (const cell of toCreate) {
-            await createVariant(targetDocId, {
-              size: cell.size,
-              color: cell.color,
-              pattern: '',
-              item: productPayload.name,
-              category: productPayload.category,
-              sku: productPayload.style_code,
-            });
-          }
-          if (toCreate.length > 0) {
-            Logger.info(`Created ${toCreate.length} new variant rows for product ${targetDocId}`);
-          }
-
-          // Soft-delete deselected variants that have zero stock
-          const selectedColorSet = new Set(processedColorways.map((cw) => cw.colorName));
-          const toSoftDelete = productInv.filter((inv) => {
-            if (inv.deleted) return false;
-            const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' });
-            if (inv.color && selectedColorSet.has(inv.color) && (formData.sizes || []).includes(inv.size)) {
-              return false;
+          if (variantColumnsReady && selectedVariants.size > 0) {
+            // Variant-aware path: add newly selected combos.
+            //
+            // Existence must be checked by (size, color) alone, NOT pattern:
+            // this form never exposes pattern selection, so every cell in
+            // variantMatrix and every createVariant() call below always uses
+            // pattern=''. Comparing full variantKey()s (which include the
+            // EXISTING row's real pattern, e.g. seed data's 'Solid') against
+            // a pattern='' cell key never matches even when the color/size
+            // already has a stocked variant -- confirmed live, this silently
+            // created a second, empty duplicate row for the same visible
+            // color swatch on every edit of an already-seeded product. The
+            // DB now also enforces (product_doc_id, size, color) uniqueness
+            // directly (see 20260908150000_fix_duplicate_inventory_variants),
+            // so this check just avoids surfacing that as a raw insert error.
+            const sizeColorKey = (size, color) => `${size ?? ''}|||${color ?? ''}`;
+            const existingKeys = new Set(
+              productInv.filter((inv) => !inv.deleted).map((inv) =>
+                sizeColorKey(inv.size, inv.color),
+              ),
+            );
+            const toCreate = variantMatrix.filter(
+              (cell) => selectedVariants.has(cell.key) && !existingKeys.has(sizeColorKey(cell.size, cell.color)),
+            );
+            for (const cell of toCreate) {
+              await createVariant(id, {
+                size: cell.size,
+                color: cell.color,
+                pattern: '',
+                item: payload.name,
+                category: payload.category,
+                sku: payload.styleCode,
+                // price: payload.price, // PGRST204 fix: price column does not exist on inventory
+              });
             }
-            return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0;
-          });
-          if (toSoftDelete.length > 0) {
-            await Promise.all(
-              toSoftDelete.map((inv) =>
-                archiveInventoryItem(inv.id, 'Soft-deleted unstocked variant from ProductForm'),
-              ),
+            Logger.info(`Created ${toCreate.length} new variant rows for product ${id}`);
+
+            // Soft-delete deselected variants that have zero stock 
+            // Safety guard: Never soft-delete if color and size match current product selection
+            const selectedColorSet = new Set(formData.colors || []);
+            const toSoftDelete = productInv.filter((inv) => { 
+              if (inv.deleted) return false; 
+              const k = variantKey({ size: inv.size ?? '', color: inv.color ?? '', pattern: inv.pattern ?? '' }); 
+              if (inv.color && selectedColorSet.has(inv.color) && (formData.sizes || []).includes(inv.size)) {
+                return false;
+              }
+              return !selectedVariants.has(k) && Number(inv.total ?? 0) === 0; 
+            });
+            if (toSoftDelete.length > 0) {
+              await Promise.all(
+                toSoftDelete.map((inv) =>
+                  archiveInventoryItem(inv.id, 'Soft-deleted unstocked variant from ProductForm'),
+                ),
+              );
+              Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
+            }
+            await syncProductAttributesFromVariants(id);
+          } else {
+            // Legacy path: diff by size only
+            const existingSizes = productInv.filter((inv) => !inv.deleted).map((inv) => inv.size);
+            const newSizes = payload.sizes.filter((sz) => !existingSizes.includes(sz));
+            if (newSizes.length > 0) {
+              Logger.info(`Initializing missing inventory for updated sizes ${id}...`);
+              await Promise.all(
+                newSizes.map((size) =>
+                  createInventoryItem({
+                    productDocId: id,
+                    sku: payload.styleCode,
+                    variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
+                    item: payload.name,
+                    category: payload.category,
+                    size,
+                    total: 0,
+                    reserved: 0,
+                    available: 0,
+                  }),
+                ),
+              );
+            }
+            // Soft-delete removed sizes with zero stock
+            const removedInventory = productInv.filter(
+              (inv) =>
+                !inv.deleted &&
+                !payload.sizes.includes(inv.size) &&
+                Number(inv.total ?? 0) === 0,
             );
-            Logger.info(`Soft-deleted ${toSoftDelete.length} empty variant rows`);
+            if (removedInventory.length > 0) {
+              await Promise.all(
+                removedInventory.map((inv) =>
+                  archiveInventoryItem(inv.id, 'Soft-deleted removed size from ProductForm'),
+                ),
+              );
+              Logger.info(`Soft-deleted ${removedInventory.length} inventory rows for removed sizes`);
+            }
           }
-          await syncProductAttributesFromVariants(targetDocId);
-        } else {
-          // Legacy fallback: one row per size
-          const existingSizes = productInv.filter((inv) => !inv.deleted).map((inv) => inv.size);
-          const newSizes = (productPayload.sizes || []).filter((sz) => !existingSizes.includes(sz));
-          if (newSizes.length > 0) {
-            await Promise.all(
-              newSizes.map((size) =>
-                createInventoryItem({
-                  productDocId: targetDocId,
-                  sku: productPayload.style_code,
-                  variant_sku: buildVariantSku({ styleCode: productPayload.style_code, size, color: '' }),
-                  item: productPayload.name,
-                  category: productPayload.category,
-                  size,
-                  total: 0,
-                  reserved: 0,
-                  available: 0,
-                }),
-              ),
-            );
-          }
+        } catch (invErr) {
+          console.error('Checking/Adding missing variant combinations failed:', invErr);
         }
-      } catch (invErr) {
-        console.error('Variant sync error:', invErr);
+
+        await logAction(user, 'Updated product details', {
+          targetType: 'product',
+          targetId: id,
+          productName: payload.name,
+        });
+
+        toast.success('Product updated successfully!');
+      } else {
+        payload.created_by = user?.id || null;
+        payload.stock = 0;
+        payload.status = 'Out of Stock';
+        payload.visibility = formData.visibility === 'public' ? 'public' : 'draft';
+        payload.tags = ['New Arrival'];
+
+        const newDocId = await createProduct(payload);
+
+        try {
+          Logger.info(`Initializing inventory variants for new product ${newDocId}...`);
+          if (variantColumnsReady && selectedVariants.size > 0) {
+            // Variant-aware path: create one row per selected (size, color) combo
+            const toCreate = variantMatrix.filter((cell) => selectedVariants.has(cell.key));
+            for (const cell of toCreate) {
+              await createVariant(newDocId, {
+                size: cell.size,
+                color: cell.color,
+                pattern: '',
+                item: payload.name,
+                category: payload.category,
+                sku: payload.styleCode,
+              });
+            }
+            await syncProductAttributesFromVariants(newDocId);
+          } else {
+            // Legacy fallback: one row per size, no colour/pattern
+            const inventoryPromises = payload.sizes.map((size) =>
+              createInventoryItem({
+                productDocId: newDocId,
+                sku: payload.styleCode,
+                variant_sku: buildVariantSku({ styleCode: payload.styleCode, size, color: '' }),
+                item: payload.name,
+                category: payload.category,
+                size: size,
+                total: 0,
+                reserved: 0,
+                available: 0,
+              }),
+            );
+            await Promise.all(inventoryPromises);
+          }
+        } catch (variantErr) {
+          Logger.error('Variant creation failed, rolling back product', variantErr);
+          await supabase.from('products').delete().eq('id', newDocId);
+          throw new Error('Failed to create product variants. The product creation was rolled back.');
+        }
+
+        await logAction(user, 'Created new product', {
+          targetType: 'product',
+          targetId: newDocId,
+          productName: payload.name,
+        });
+        toast.success('Product created successfully!');
       }
 
-      await logAction(user, isEditing ? 'Updated product details' : 'Created new product', {
-        targetType: 'product',
-        targetId: targetDocId,
-        productName: productPayload.name,
-      });
-
-      toast.success(isEditing ? 'Product updated successfully!' : 'Product created successfully!');
       success = true;
     } catch (err) {
       Logger.error('Error saving product:', err);
@@ -986,7 +969,7 @@ const ProductForm = ({ readOnly = false }) => {
 
            <div className={`grid grid-cols-1 ${formData.onSale ? 'md:grid-cols-3' : ''} gap-6`}>
               <div>
-                  <label className="label" htmlFor="product-price">Price (₱) *</label>
+                 <label className="label" htmlFor="product-price">Price (₱) *</label>
                  <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">₱</span>
                     <input autoComplete="off" id="product-price" type="number" name="price" className="input-field pl-8" placeholder="0.00" value={formData.price} onChange={handleChange} required step="0.01" min="0" />
@@ -1013,26 +996,62 @@ const ProductForm = ({ readOnly = false }) => {
         </section>
 
         {/* ══════════════════════════════════════════════
-            ZONE C — Colorways & Media Manager
+            ZONE C — Media & AR
         ══════════════════════════════════════════════ */}
         <section className="card p-6">
-           <div className="flex items-center justify-between mb-4">
-              <div>
-                 <h2 className="text-xs font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
-                    <Palette size={14} /> Colorways & Media Manager
-                 </h2>
-                 <p className="text-xs text-secondary mt-1">
-                    Manage multi-colorway swatches and dedicated image galleries. The designated default colorway serves as the storefront cover.
-                 </p>
-              </div>
-           </div>
+           <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Upload size={14} /> Product Gallery
+           </h2>
+           
+           <div className="flex flex-wrap gap-4">
+              {/* Existing Images */}
+              {formData.images.map((url, idx) => (
+                <div key={`exist-${idx}`} className="gallery-item relative border rounded-lg overflow-hidden group shadow-sm bg-gray-50">
+                  <img src={url} alt={`${formData.name || 'Product'} ${idx + 1}`} className="w-full h-full object-contain" />
+                  {idx === 0 && <div className="primary-badge">PRIMARY COVER</div>}
+                  
+                  {!readOnly && (
+                    <div className="gallery-overlay">
+                      <div className="flex items-center justify-center gap-2">
+                        <button type="button" onClick={() => moveExistingImage(idx, -1)} disabled={idx === 0} title="Move Left" className="gallery-btn disabled:opacity-30">
+                          <ChevronLeft size={16} />
+                        </button>
+                        <button type="button" onClick={() => setAsPrimary(idx)} disabled={idx === 0} title="Set as Primary" className={`gallery-btn ${idx === 0 ? 'text-yellow-400' : 'text-white'}`}>
+                          <Star size={16} fill={idx === 0 ? "currentColor" : "none"} />
+                        </button>
+                        <button type="button" onClick={() => moveExistingImage(idx, 1)} disabled={idx === formData.images.length - 1} title="Move Right" className="gallery-btn disabled:opacity-30">
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => removeExistingImage(idx)} className="w-full py-1 bg-red-500/80 hover:bg-red-600 rounded text-white text-[9px] font-bold transition-colors uppercase tracking-wider">
+                        Delete Image
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
 
-           <ColorwayMediaManager
-              colorways={colorways}
-              onChange={handleColorwaysChange}
-              colorList={colorList}
-              readOnly={readOnly}
-           />
+              {/* Previews */}
+              {previews.map((url, idx) => (
+                <div key={`prev-${idx}`} className="gallery-item relative border-2 border-dashed border-primary/50 rounded-lg overflow-hidden group bg-gray-50/50">
+                  <img src={url} alt={`New upload preview ${idx + 1}`} className="w-full h-full object-contain opacity-70" />
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button type="button" onClick={() => removeSelectedFile(idx)} className="p-1.5 bg-red-500 rounded-full text-white shadow-lg"><X size={16} /></button>
+                  </div>
+                </div>
+              ))}
+
+              {!readOnly && (
+                <label className="gallery-item border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer upload-dropzone transition-all">
+                  <Upload size={24} className="text-gray-400 mb-2" />
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Add Image</span>
+                  <input autoComplete="off" id="product-images" name="product-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </label>
+              )}
+              {readOnly && formData.images.length === 0 && (
+                <p className="text-secondary text-sm py-4 italic">No gallery images uploaded for this item.</p>
+              )}
+           </div>
 
            <div className="mt-6 pt-4 border-t border-dashed flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1055,28 +1074,39 @@ const ProductForm = ({ readOnly = false }) => {
         ══════════════════════════════════════════════ */}
         <section className="card p-6">
            <h2 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Palette size={14} /> Material & Fabric
+              <Palette size={14} /> Material & Color
            </h2>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                 <span className="label">Active Colorway Swatches</span>
-                 <div className="flex flex-wrap gap-2 mt-2">
-                    {colorways.map((cw) => (
-                       <div
-                          key={cw.id || cw.colorName}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border bg-white shadow-sm"
-                          style={{ borderColor: cw.isDefault ? '#f59e0b' : '#e5e7eb' }}
-                       >
-                          <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ backgroundColor: cw.hexColor || '#000000' }} />
-                          <span>{cw.displayName || cw.colorName}</span>
-                          {cw.isDefault && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">DEFAULT</span>}
-                       </div>
-                    ))}
-                 </div>
-                 <p className="text-xs text-secondary mt-2">
-                    Managed above in the Colorways & Media Manager panel.
-                 </p>
+                 <span className="label">Product Color *</span>
+                 {allAvailableColors.length === 0 ? (
+                    <p className="text-sm text-secondary mt-2">
+                       No colors defined yet. Add colors in Settings to enable selection.
+                    </p>
+                 ) : (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                       {allAvailableColors.map((colorName) => {
+                          const isSelected = (formData.colors || []).includes(colorName);
+                          return (
+                             <button
+                                key={colorName}
+                                type="button"
+                                onClick={() => !readOnly && toggleColor(colorName)}
+                                className={`color-chip ${isSelected ? 'active' : ''}`}
+                                disabled={readOnly}
+                             >
+                                {colorName}
+                             </button>
+                          );
+                       })}
+                    </div>
+                 )}
+                  {(formData.colors || []).length > 0 && (
+                     <p className="text-xs text-secondary mt-2">
+                        Selected color(s): <strong>{(formData.colors || []).join(', ')}</strong>
+                     </p>
+                  )}
 
                   {/* Dynamic Taxonomy Pattern Selection */}
                   <div className="mt-5 pt-4 border-t border-dashed">
