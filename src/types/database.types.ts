@@ -2835,6 +2835,15 @@ export type Database = {
         }
         Returns: Json
       }
+      accept_legal_documents: {
+        Args: {
+          _client_platform: string
+          _privacy_document_id: string
+          _terms_document_id: string
+          _user_agent?: string
+        }
+        Returns: Json
+      }
       activate_staff_account: { Args: never; Returns: Json }
       adjust_inventory_on_hand: {
         Args: { p_delta: number; p_inventory_id: string; p_reason: string }
@@ -2898,6 +2907,7 @@ export type Database = {
         }
         Returns: Json
       }
+      can_publish_legal_documents: { Args: never; Returns: boolean }
       can_manage_customers: { Args: never; Returns: boolean }
       can_manage_inventory: { Args: never; Returns: boolean }
       can_manage_staff: { Args: never; Returns: boolean }
@@ -3181,6 +3191,7 @@ export type Database = {
           user_vote: string
         }[]
       }
+      get_legal_acceptance_status: { Args: never; Returns: Json }
       get_slot_booked_counts: {
         Args: { _date: string }
         Returns: {
@@ -3336,6 +3347,16 @@ export type Database = {
         }
         Returns: Json
       }
+      publish_legal_document_version: {
+        Args: {
+          _content_markdown: string
+          _document_type: string
+          _effective_at?: string
+          _title: string
+          _version: string
+        }
+        Returns: Json
+      }
       recalculate_inventory_stock: { Args: never; Returns: Json }
       record_boutique_sale: {
         Args: {
@@ -3344,6 +3365,13 @@ export type Database = {
           p_payment_method: string
           p_quantity: number
           p_unit_price: number
+        }
+        Returns: Json
+      }
+      record_legal_document_view: {
+        Args: {
+          _client_platform: string
+          _document_id: string
         }
         Returns: Json
       }

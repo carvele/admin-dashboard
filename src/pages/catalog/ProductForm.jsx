@@ -78,7 +78,6 @@ const ProductForm = ({ readOnly = false }) => {
     occasion: '',
     visibility: 'draft',
     isFeatured: false,
-    isAlterable: false,
     isNewArrival: false,
     onSale: false,
     discountPercentage: 0,
@@ -561,7 +560,6 @@ const ProductForm = ({ readOnly = false }) => {
         visibility: formData.visibility,
         isFeatured: formData.isFeatured,
         isNewArrival: formData.isNewArrival,
-        isAlterable: formData.isAlterable,
         updated_by: user?.id || null,
         images: finalImages,
         // Falls back to the product's existing imageUrl (not a placeholder
@@ -1180,10 +1178,6 @@ const ProductForm = ({ readOnly = false }) => {
                  <Ruler size={14} /> Sizing & Measurement Grid
               </h2>
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input type="checkbox" name="isAlterable" checked={formData.isAlterable} onChange={handleChange} className="w-4 h-4 accent-primary" />
-                  <span className="text-sm font-bold text-primary transition-colors">ALTERABLE</span>
-                </label>
                 <div className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">SIZE GUIDE ENABLED</div>
               </div>
            </div>
