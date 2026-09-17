@@ -38,8 +38,14 @@ export const getPaginatedInventory = async (page = 0, pageSize = 50, filters = {
   if (filters.color && filters.color !== 'All') {
     q = q.eq('color', filters.color);
   }
-  if (filters.searchTerm) {
-    q = q.or(`item.ilike.%${filters.searchTerm}%,sku.ilike.%${filters.searchTerm}%,variant_sku.ilike.%${filters.searchTerm}%`);
+  if (filters.searchTerm && filters.searchTerm.trim()) {
+    const term = filters.searchTerm.trim();
+    q = q.or(`item.ilike.%${term}%,sku.ilike.%${term}%,variant_sku.ilike.%${term}%`);
+  }
+  if (filters.stockQuickFilter === 'reserved') {
+    q = q.gt('reserved', 0);
+  } else if (filters.stockQuickFilter === 'alerts') {
+    q = q.lte('available', 2);
   }
 
   let sortColumn = sortConfig.key || 'item';
@@ -56,7 +62,10 @@ export const getPaginatedInventory = async (page = 0, pageSize = 50, filters = {
   const { data, error, count } = await q;
   if (error) throw error;
   
-  return { data, count };
+  return { 
+    data: (data || []).map(toCamel), 
+    count: count ?? 0 
+  };
 };
 
 // ── Color List Functions ────────────────────────────────

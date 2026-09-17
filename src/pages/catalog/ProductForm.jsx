@@ -746,6 +746,7 @@ const ProductForm = ({ readOnly = false }) => {
         // Persist the selected colours comma-joined; the mobile product page
         // splits `color` on ',' to render its colour picker.
         color: (formData.colors || []).join(', '),
+        colors: formData.colors || [],
         careInstructions: sanitizeText(formData.careInstructions),
         fitAndSizing: formData.fitAndSizing,
         styleCode: ensureStyleCode({

@@ -39,6 +39,7 @@ import {
   subscribeToCategories,
   } from '../../services/productService';
 import { getPaginatedInventory } from "../../services/inventoryService";
+import { supabase } from '../../lib/supabaseClient';
 import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
 import { logAction } from '../../services/staffService';
@@ -364,48 +365,7 @@ const Inventory = () => {
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
 
-  const [inventory, setInventory] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchCurrentPage = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data, count } = await getPaginatedInventory(page, 50, {
-        viewMode,
-        category: categoryFilter,
-        color: colorFilter,
-        searchTerm
-      }, sortConfig);
-      setInventory(data || []);
-      setTotalCount(count || 0);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load inventory");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, viewMode, categoryFilter, colorFilter, searchTerm, sortConfig]);
-
-  useEffect(() => {
-    fetchCurrentPage();
-  }, [fetchCurrentPage]);
-
-  useEffect(() => {
-    let timeout;
-    const unsub = supabase
-      .channel("public:inventory")
-      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          fetchCurrentPage();
-        }, 500); // Debounce
-      })
-      .subscribe();
-    return () => {
-      clearTimeout(timeout);
-      unsub.unsubscribe();
-    };
-  }, [fetchCurrentPage]);
 
   React.useEffect(() => {
     if (activeTab === 'waitlist' && waitlistDemand.length === 0) {
@@ -447,7 +407,7 @@ const Inventory = () => {
     setStockQuickFilter(filter);
     setActiveTab('inventory');
     setPage(0);
-    setTimeout(() => tableCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    setTimeout(() => tableCardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
   }, []);
 
   useEffect(() => {
@@ -464,8 +424,50 @@ const Inventory = () => {
     setPage(0);
   }, [searchTerm, categoryFilter, colorFilter, viewMode, stockQuickFilter, viewGrouping]);
 
-    
+  const [inventory, setInventory] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
 
+  const fetchCurrentPage = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, count } = await getPaginatedInventory(page, 50, {
+        viewMode,
+        category: categoryFilter,
+        color: colorFilter,
+        searchTerm,
+        stockQuickFilter,
+      }, sortConfig);
+      setInventory(data || []);
+      setTotalCount(count || 0);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load inventory");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, viewMode, categoryFilter, colorFilter, searchTerm, stockQuickFilter, sortConfig]);
+
+  useEffect(() => {
+    fetchCurrentPage();
+  }, [fetchCurrentPage]);
+
+  useEffect(() => {
+    if (!supabase?.channel) return;
+    let timeout;
+    const unsub = supabase
+      .channel("public:inventory")
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fetchCurrentPage();
+        }, 500);
+      })
+      .subscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsub?.unsubscribe?.();
+    };
+  }, [fetchCurrentPage]);
 
   const uniqueColors = useMemo(() => {
     const set = new Set();
@@ -596,100 +598,11 @@ const Inventory = () => {
     return map;
   }, [products]);
 
-  // Primary filtering and sorting across all discrete variants
-  const sortedAndFilteredInv = useMemo(() => {
-    let list = [...inventory];
 
-    // Filter by active/archived
-    list = list.filter((item) => (viewMode === 'archived' ? item.deleted === true : item.deleted !== true));
-
-    // Search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      list = list.filter((item) => {
-        const resolvedSku = resolveVariantSku(item, productMetaById?.[item.productDocId || item.product_doc_id]);
-        return (
-          (item.item || '').toLowerCase().includes(term) ||
-          (item.sku || '').toLowerCase().includes(term) ||
-          (item.variantSku || item.variant_sku || '').toLowerCase().includes(term) ||
-          (resolvedSku || '').toLowerCase().includes(term) ||
-          (item.id || item.docId || '').toLowerCase().includes(term) ||
-          (item.color || '').toLowerCase().includes(term) ||
-          (item.size || '').toLowerCase().includes(term) ||
-          (item.category || '').toLowerCase().includes(term)
-        );
-      });
-    }
-
-    // Category filter
-    if (categoryFilter !== 'All') {
-      list = list.filter((item) => item.category === categoryFilter);
-    }
-
-    // Color filter
-    if (colorFilter !== 'All') {
-      list = list.filter((item) => (item.color || 'Standard') === colorFilter);
-    }
-
-    // Stock Quick Filters (All / Alerts / Reserved)
-    if (stockQuickFilter === 'alerts') {
-      list = list.filter((item) => isStockAlert(item.available, item.total, item.reserved || 0));
-    } else if (stockQuickFilter === 'reserved') {
-      list = list.filter((item) => (item.reserved || 0) > 0);
-    }
-
-    // Sorting
-    list.sort((a, b) => {
-      if (sortConfig.key === 'stockStatus') {
-        const pA = getStockPriority(a.available, a.total, a.reserved || 0);
-        const pB = getStockPriority(b.available, b.total, b.reserved || 0);
-        if (pA !== pB) {
-          return sortConfig.direction === 'ascending' ? pA - pB : pB - pA;
-        }
-        return (a.item || '').localeCompare(b.item || '');
-      }
-
-      if (sortConfig.key === 'size') {
-        const diff = compareSizes(a.size, b.size);
-        return sortConfig.direction === 'ascending' ? diff : -diff;
-      }
-
-      let valA = a[sortConfig.key];
-      let valB = b[sortConfig.key];
-      if (valA === undefined || valA === null) valA = '';
-      if (valB === undefined || valB === null) valB = '';
-
-      if (typeof valA === 'string') {
-        const cmp = valA.localeCompare(valB);
-        if (cmp !== 0) return sortConfig.direction === 'ascending' ? cmp : -cmp;
-      } else {
-        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-
-      // Tie-breaker: Product name -> size -> color
-      return (
-        (a.item || '').localeCompare(b.item || '') ||
-        compareSizes(a.size, b.size) ||
-        (a.color || '').localeCompare(b.color || '')
-      );
-    });
-
-    return list;
-  }, [inventory, viewMode, searchTerm, categoryFilter, colorFilter, stockQuickFilter, sortConfig, productMetaById]);
 
   const PAGE_SIZE = 50;
-  const isServerSearch = !!searchTerm.trim();
-  const displayItems = isServerSearch && serverSearchResults ? serverSearchResults.items : sortedAndFilteredInv;
-
-  const totalPages = isServerSearch
-    ? Math.max(1, Math.ceil((serverSearchResults?.totalCount ?? 0) / 50))
-    : Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE));
-
-  const pagedItems = useMemo(() => {
-    if (isServerSearch) return displayItems;
-    return displayItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  }, [isServerSearch, displayItems, page]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pagedItems = inventory;
 
   // Actions
   const handleRestock = async (e) => {
@@ -850,7 +763,7 @@ const Inventory = () => {
 
   const handleExportCSV = () => {
     const header = ['SKU/Variant', 'Product', 'Category', 'Size', 'Color', 'Pattern', 'Total', 'Reserved', 'Available'].join(',');
-    const rows = sortedAndFilteredInv.map((i) =>
+    const rows = inventory.map((i) =>
       [
         csvField(resolveVariantSku(i, productMetaById?.[i.productDocId || i.product_doc_id])),
         csvField(i.item),
@@ -1166,7 +1079,7 @@ const Inventory = () => {
                   className={`quick-filter-chip ${stockQuickFilter === 'all' ? 'active' : ''}`}
                   onClick={() => { setStockQuickFilter('all'); setSelectedStatCard('variants'); setPage(0); }}
                 >
-                  All Variants ({sortedAndFilteredInv.length})
+                  All Variants ({totalCount})
                 </button>
                 <button
                   type="button"
@@ -1446,7 +1359,7 @@ const Inventory = () => {
                   ← Previous
                 </button>
                 <span className="inv-pagination-info text-sm text-secondary">
-                  Page {page + 1} of {totalPages} ({displayItems.length} variants)
+                  Page {page + 1} of {totalPages} ({totalCount} variants)
                 </span>
                 <button
                   type="button"
