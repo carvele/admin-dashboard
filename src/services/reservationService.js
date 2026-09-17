@@ -599,8 +599,9 @@ export const markRefundDisbursed = async (
 };
 
 /**
- * Fetches cancelled reservations that have pending refund liability.
- * Canonical predicate: payments.status='paid' AND payments.requires_refund=true.
+ * Fetches reservations that have pending refund liability.
+ * Supports both Cancelled reservations and Completed reservations with approved return requests.
+ * Canonical predicate: payment_status='Refund Required' AND payments.requires_refund=true AND payments.status='paid'.
  * Used as the single source of truth for refund count and exact peso amount.
  */
 export const getRefundQueue = async () => {
@@ -612,10 +613,127 @@ export const getRefundQueue = async () => {
                      refund_disbursed_at, refund_disbursement_method, refund_reference_number,
                      status)
     `)
-    .eq('status', 'Cancelled')
+    .in('status', ['Cancelled', 'Completed'])
+    .eq('payment_status', 'Refund Required')
     .eq('payments.requires_refund', true)
     .eq('payments.status', 'paid')
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(toCamel);
 };
+
+/**
+ * Fetches customer return/refund requests with associated reservation, items, payments, and profiles.
+ * @param {string|string[]|null} status - Optional status filter ('submitted', 'under_review', 'approved', 'rejected', 'refunded')
+ */
+export const getReturnRefundRequests = async (status = null) => {
+  let query = supabase
+    .from('return_refund_requests')
+    .select(`
+      id,
+      reservation_id,
+      customer_id,
+      reason_category,
+      details,
+      photo_path,
+      status,
+      resolution_notes,
+      reviewed_by,
+      reviewed_at,
+      under_review_at,
+      under_review_by,
+      submitted_at,
+      created_at,
+      updated_at,
+      reservations!inner (
+        id,
+        display_id,
+        status,
+        payment_status,
+        total_amount,
+        customer_name,
+        created_at,
+        reservation_items (
+          id,
+          quantity,
+          unit_price,
+          selected_size,
+          selected_color,
+          products (
+            id,
+            name,
+            image_url
+          )
+        ),
+        payments (
+          id,
+          amount_centavos,
+          status,
+          requires_refund,
+          refund_disbursed_at,
+          refund_disbursement_method,
+          refund_reference_number
+        )
+      ),
+      customer:profiles!customer_id (
+        id,
+        full_name,
+        email,
+        phone_number
+      ),
+      reviewer:profiles!reviewed_by (
+        id,
+        full_name
+      ),
+      under_reviewer:profiles!under_review_by (
+        id,
+        full_name
+      )
+    `);
+
+  if (status) {
+    if (Array.isArray(status)) {
+      query = query.in('status', status);
+    } else {
+      query = query.eq('status', status);
+    }
+  }
+
+  query = query.order('submitted_at', { ascending: false });
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map(toCamel);
+};
+
+/**
+ * Reviews a customer return/refund request via RPC.
+ * @param {string} requestId - UUID of return_refund_requests row
+ * @param {'approve'|'reject'|'under_review'} decision - Review decision
+ * @param {string|null} notes - Mandatory for 'reject', optional resolution/context notes
+ */
+export const reviewReturnRefundRequest = async (requestId, decision, notes = null) => {
+  const { data, error } = await supabase.rpc('review_return_refund_request', {
+    _request_id: requestId,
+    _decision:   decision,
+    _notes:      notes,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Generates a signed read URL for return/refund photo evidence.
+ * Evidence is stored in the private 'return-refund-evidence' bucket.
+ * @param {string} photoPath - Path within the bucket
+ * @param {number} expiresIn - Expiration in seconds (default: 900 / 15 minutes)
+ */
+export const getSignedEvidenceUrl = async (photoPath, expiresIn = 900) => {
+  if (!photoPath) return null;
+  const { data, error } = await supabase.storage
+    .from('return-refund-evidence')
+    .createSignedUrl(photoPath, expiresIn);
+  if (error) throw error;
+  return data?.signedUrl ?? null;
+};
+
