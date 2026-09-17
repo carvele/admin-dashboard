@@ -281,14 +281,17 @@ const Settings = () => {
           });
           toast.success('Auto-acknowledgment settings saved!');
         } else if (activeTab === 'payments') {
+          const gcashOn = Boolean(formData.paymentGcashEnabled);
+          const bankOn = Boolean(formData.bankTransferEnabled);
+          const manualEnabled = gcashOn || bankOn;
           await upsertSettings({
             key: 'paymentInstructions',
             value: {
-              manual_payment_enabled: Boolean(formData.manualPaymentEnabled),
-              gcash_enabled: Boolean(formData.paymentGcashEnabled),
+              manual_payment_enabled: manualEnabled,
+              gcash_enabled: gcashOn,
               gcash_account_name: formData.paymentGcashAccountName || '',
               gcash_number: formData.paymentGcashNumber || '',
-              bank_transfer_enabled: Boolean(formData.bankTransferEnabled),
+              bank_transfer_enabled: bankOn,
               bank_name: formData.bankName || '',
               bank_account_name: formData.bankAccountName || '',
               bank_account_number: formData.bankAccountNumber || '',
@@ -311,10 +314,19 @@ const Settings = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    const finalVal = type === 'checkbox' ? checked : value;
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [name]: finalVal,
+      };
+      if (name === 'paymentGcashEnabled' || name === 'bankTransferEnabled') {
+        const gcashOn = name === 'paymentGcashEnabled' ? checked : Boolean(prev.paymentGcashEnabled);
+        const bankOn = name === 'bankTransferEnabled' ? checked : Boolean(prev.bankTransferEnabled);
+        next.manualPaymentEnabled = gcashOn || bankOn;
+      }
+      return next;
+    });
   };
 
     // ── Password Strength & Update ──────────────────────────────────────────────
