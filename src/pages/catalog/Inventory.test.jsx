@@ -29,6 +29,7 @@ jest.mock('../../components/inventory/AdminInventoryPanel', () => {
 
 import Inventory from './Inventory';
 import { adjustInventoryOnHand } from '../../services/productService';
+import { getActiveInventoryProductDocIds } from '../../services/inventoryService';
 
 const mockInventoryData = [
   {
@@ -162,6 +163,9 @@ jest.mock('../../services/inventoryService', () => ({
   }),
   getColorList: jest.fn(() => Promise.resolve([])),
   getPatternList: jest.fn(() => Promise.resolve([])),
+  getActiveInventoryProductDocIds: jest.fn(() =>
+    Promise.resolve(new Set(mockInventoryData.map((i) => i.productDocId).filter(Boolean)))
+  ),
 }));
 
 jest.mock('../../services/staffService', () => ({
@@ -385,5 +389,19 @@ describe('Inventory Modernized Grid', () => {
     // Directly in Reduce mode
     expect(screen.getByRole('heading', { name: 'Reduce Stock (Write-Off)' })).toBeInTheDocument();
     expect(screen.getByLabelText('Quantity to Remove')).toBeInTheDocument();
+  });
+
+  it('does not display missing inventory warning when all catalog products have inventory', async () => {
+    renderInventory();
+    expect(await screen.findByText('JZ-LB-S-BLK')).toBeInTheDocument();
+    expect(screen.queryByText(/Catalog products missing inventory rows/i)).not.toBeInTheDocument();
+  });
+
+  it('displays missing inventory warning only when a catalog product truly lacks inventory rows', async () => {
+    getActiveInventoryProductDocIds.mockResolvedValueOnce(new Set(['prod-1']));
+
+    renderInventory();
+    expect(await screen.findByText(/Catalog products missing inventory rows \(1\):/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Cotton Pajama Set').length).toBeGreaterThanOrEqual(1);
   });
 });

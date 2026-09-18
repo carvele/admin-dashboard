@@ -38,7 +38,7 @@ import {
   recordBoutiqueSale,
   subscribeToCategories,
   } from '../../services/productService';
-import { getPaginatedInventory } from "../../services/inventoryService";
+import { getPaginatedInventory, getActiveInventoryProductDocIds } from "../../services/inventoryService";
 import { supabase } from '../../lib/supabaseClient';
 import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
@@ -447,6 +447,24 @@ const Inventory = () => {
     }
   }, [page, viewMode, categoryFilter, colorFilter, searchTerm, stockQuickFilter, sortConfig]);
 
+  const [activeInventoryProductIds, setActiveInventoryProductIds] = useState(new Set());
+  const [loadingInventoryProductIds, setLoadingInventoryProductIds] = useState(true);
+
+  const refreshActiveInventoryProductIds = useCallback(async () => {
+    try {
+      const ids = await getActiveInventoryProductDocIds();
+      setActiveInventoryProductIds(ids);
+    } catch (err) {
+      console.error('Failed to load active inventory product IDs:', err);
+    } finally {
+      setLoadingInventoryProductIds(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshActiveInventoryProductIds();
+  }, [refreshActiveInventoryProductIds]);
+
   useEffect(() => {
     fetchCurrentPage();
   }, [fetchCurrentPage]);
@@ -460,6 +478,7 @@ const Inventory = () => {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
           fetchCurrentPage();
+          refreshActiveInventoryProductIds();
         }, 500);
       })
       .subscribe();
@@ -467,7 +486,7 @@ const Inventory = () => {
       clearTimeout(timeout);
       unsub?.unsubscribe?.();
     };
-  }, [fetchCurrentPage]);
+  }, [fetchCurrentPage, refreshActiveInventoryProductIds]);
 
   const uniqueColors = useMemo(() => {
     const set = new Set();
@@ -563,16 +582,10 @@ const Inventory = () => {
   const lowStockCount = stockBreakdown.alerts;
   const reservedCount = activeInventory.filter((i) => (i.reserved || 0) > 0).length;
 
-  const inventoryProductIds = useMemo(() => {
-    const ids = new Set();
-    inventory.forEach((r) => { if (r.productDocId) ids.add(r.productDocId); });
-    return ids;
-  }, [inventory]);
-
-  const productsWithNoInventory = useMemo(() =>
-    products.filter((p) => !p.deleted && !inventoryProductIds.has(p.id)),
-    [products, inventoryProductIds]
-  );
+  const productsWithNoInventory = useMemo(() => {
+    if (loadingInventoryProductIds) return [];
+    return products.filter((p) => !p.deleted && !activeInventoryProductIds.has(p.id));
+  }, [products, activeInventoryProductIds, loadingInventoryProductIds]);
 
   const dropdownCategories = ['All', ...categoryTree.map((c) => c.name)];
   const [noInvBannerDismissed, setNoInvBannerDismissed] = useState(false);
@@ -915,7 +928,7 @@ const Inventory = () => {
 
 
       {/* Catalog products missing inventory warning */}
-      {!loading && !loadingProducts && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
+      {!loading && !loadingProducts && !loadingInventoryProductIds && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
         <div
           style={{
             display: 'flex',
