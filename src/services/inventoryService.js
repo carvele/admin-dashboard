@@ -243,3 +243,19 @@ export const updateProductColor = async (productId, newColor) => {
 export const updateProductPattern = async (productId, newPattern) => {
   return updateDocument('products', productId, { pattern: newPattern });
 };
+
+/**
+ * Fetch the set of all product_doc_ids that have active (non-deleted) inventory rows.
+ * Used by Inventory page to accurately identify catalog products missing inventory.
+ * @returns {Promise<Set<string>>}
+ */
+export const getActiveInventoryProductDocIds = async () => {
+  const { data, error } = await supabase
+    .from('inventory')
+    .select('product_doc_id')
+    .eq('deleted', false);
+
+  if (error) throw error;
+  return new Set((data || []).map((r) => r.product_doc_id).filter(Boolean));
+};
+
