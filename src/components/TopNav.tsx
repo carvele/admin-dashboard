@@ -9,7 +9,7 @@ import {
   formatRelativeTime,
   sanitizeForDisplay,
 } from '../utils/helpers';
-import { subscribeToCollection, updateDocument, deleteDocument } from '../lib/supabaseService';
+import { subscribeToCollection } from '../lib/supabaseService';
 import { supabase } from '../lib/supabaseClient';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import './TopNav.css';
@@ -143,21 +143,26 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   useRealtimeSync();
 
   // ── Subscribe to notifications (Limited to 20 recent) ──
-  // Handles both web-created docs (createdAt: Timestamp) and
-  // Android-created docs (timestamp: epoch-ms long).
   useEffect(() => {
     const unsub = subscribeToCollection(
-      'admin_notifications',
-      (data: any[]) => {
-        // Sort by ISO createdAt string descending
-        const sorted = [...data].sort((a, b) => {
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : (a.timestamp || 0);
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : (b.timestamp || 0);
-          return bTime - aTime;
-        }).slice(0, 20);
-        setNotifications(sorted);
-        setUnreadCount(sorted.filter((n) => !n.isRead).length);
+      'admin_user_notifications_view',
+      async (data: any[]) => {
+        setNotifications(data);
+        
+        // Fetch exact unread count from server
+        try {
+          const { data: count, error } = await supabase.rpc('get_unread_notification_count');
+          if (!error && count !== null) {
+            setUnreadCount(count);
+          }
+        } catch (err) {
+          console.warn('Failed to fetch unread count', err);
+        }
       },
+      {},
+      false,
+      'admin_notification_receipts',
+      { limit: 20, orderBy: { column: 'created_at', ascending: false } }
     );
     return () => unsub();
   }, []);
@@ -189,38 +194,52 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     const notiId = n.id || n.docId;
 
     if (!n.isRead && notiId) {
+      const prevNotifications = [...notifications];
+      const prevUnreadCount = unreadCount;
+
       setNotifications((prev) =>
         prev.map((item) => ((item.id || item.docId) === notiId ? { ...item, isRead: true } : item))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
 
       try {
-        await updateDocument('admin_notifications', notiId, { isRead: true });
+        const { error } = await supabase.rpc('mark_admin_notifications_read', { p_receipt_ids: [notiId] });
+        if (error) throw error;
       } catch (err) {
         console.warn('Failed to mark notification as read:', err);
+        // Rollback on failure
+        setNotifications(prevNotifications);
+        setUnreadCount(prevUnreadCount);
       }
     }
 
     setShowNotifications(false);
 
-    const type = (n.type || '').toLowerCase();
+    const type = (n.entityType || n.entity_type || n.type || '').toLowerCase();
     const title = (n.title || '').toLowerCase();
     const message = (n.message || '').toLowerCase();
+    const entityId = n.entityId || n.entity_id;
 
     if (type === 'message' || title.includes('message') || message.includes('message')) {
-      navigate('/messages');
+      navigate(entityId ? `/messages/${entityId}` : '/messages');
     } else if (type === 'reservation' || title.includes('reservation') || message.includes('reservation')) {
-      navigate('/reservations');
+      navigate(entityId ? `/reservations/${entityId}` : '/reservations');
     } else if (type === 'customer' || title.includes('customer') || message.includes('customer')) {
-      navigate('/customers');
-    } else if (type === 'product' || title.includes('inventory') || message.includes('stock')) {
-      navigate('/inventory');
+      navigate(entityId ? `/customers/${entityId}` : '/customers');
+    } else if (type === 'product' || type === 'inventory' || title.includes('inventory') || message.includes('stock')) {
+      navigate(entityId ? `/inventory/${entityId}` : '/inventory');
+    } else if (type === 'payment' || type === 'returnrequest') {
+      navigate(entityId ? `/reservations/${entityId}` : '/reservations');
     }
   };
 
   const dismissNotification = async (e: any, n: any) => {
     e.stopPropagation();
     const notiId = n.id || n.docId;
+    if (!notiId) return;
+
+    const prevNotifications = [...notifications];
+    const prevUnreadCount = unreadCount;
 
     setNotifications((prev) => prev.filter((item) => (item.id || item.docId) !== notiId));
     if (!n.isRead) {
@@ -228,57 +247,64 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
     }
 
     try {
-      if (notiId) {
-        await deleteDocument('admin_notifications', notiId);
-      }
+      const { error } = await supabase.rpc('dismiss_admin_notifications', { p_receipt_ids: [notiId] });
+      if (error) throw error;
     } catch (err) {
       console.warn('Failed to dismiss notification:', err);
+      setNotifications(prevNotifications);
+      setUnreadCount(prevUnreadCount);
     }
   };
 
   const markAllRead = async () => {
+    const unreadIds = notifications
+      .filter((n) => !n.isRead)
+      .map((n) => n.id || n.docId)
+      .filter(Boolean);
+
+    if (unreadIds.length === 0) return;
+
+    const prevNotifications = [...notifications];
+    const prevUnreadCount = unreadCount;
+
     try {
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
 
-      const unreadIds = notifications
-        .filter((n) => !n.isRead)
-        .map((n) => n.id || n.docId)
-        .filter(Boolean);
-
-      if (unreadIds.length === 0) return;
-
-      const { error } = await supabase
-        .from('admin_notifications')
-        .update({ is_read: true })
-        .in('id', unreadIds);
+      const { error } = await supabase.rpc('mark_admin_notifications_read', { p_receipt_ids: unreadIds });
 
       if (error) {
         console.warn('Failed to mark notifications read in batch:', error.message);
+        throw error;
       }
     } catch (err) {
       console.error('Failed to mark notifications as read:', err);
+      setNotifications(prevNotifications);
+      setUnreadCount(prevUnreadCount);
     }
   };
 
   const clearAllNotifications = async () => {
+    const allIds = notifications.map((n) => n.id || n.docId).filter(Boolean);
+    if (allIds.length === 0) return;
+
+    const prevNotifications = [...notifications];
+    const prevUnreadCount = unreadCount;
+
     try {
-      const allIds = notifications.map((n) => n.id || n.docId).filter(Boolean);
       setNotifications([]);
       setUnreadCount(0);
 
-      if (allIds.length === 0) return;
-
-      const { error } = await supabase
-        .from('admin_notifications')
-        .delete()
-        .in('id', allIds);
+      const { error } = await supabase.rpc('dismiss_admin_notifications', { p_receipt_ids: allIds });
 
       if (error) {
         console.warn('Failed to clear notifications:', error.message);
+        throw error;
       }
     } catch (err) {
       console.error('Failed to clear all notifications:', err);
+      setNotifications(prevNotifications);
+      setUnreadCount(prevUnreadCount);
     }
   };
 

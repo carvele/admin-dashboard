@@ -98,7 +98,7 @@ export const useRealtimeSync = (onUpdate) => {
       messagesChannel = supabase
         .channel(msgTopic)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-          if (payload.new && payload.new.sender_id !== user?.uid) {
+          if (payload.new && payload.new.sender_role === 'customer' && payload.new.sender_id !== user?.uid) {
             playMessageAlert();
             showDesktopNotification('New Message', {
               body: `You received a new message from a customer.`

@@ -337,9 +337,11 @@ export const getPaginatedLogs = async (page = 0, pageSize = 25, filters = {}) =>
  * @param {Function} callback  - called with Array<normalised rows>
  * @param {Object}  [filters]  - optional eq filters applied to the initial fetch
  * @param {boolean} [includeDeleted]
+ * @param {string} [listenTable]
+ * @param {Object} [options] - e.g. { limit: 20, orderBy: { column: 'created_at', ascending: false } }
  * @returns {Function} unsubscribe
  */
-export const subscribeToCollection = (table, callback, filters = {}, includeDeleted = false) => {
+export const subscribeToCollection = (table, callback, filters = {}, includeDeleted = false, listenTable = null, options = {}) => {
   // Initial load
   const doFetch = async () => {
     let q = supabase.from(table).select('*');
@@ -348,6 +350,12 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
     }
     for (const [col, val] of Object.entries(filters)) {
       q = q.eq(col, val);
+    }
+    if (options.orderBy) {
+      q = q.order(options.orderBy.column, { ascending: options.orderBy.ascending });
+    }
+    if (options.limit) {
+      q = q.limit(options.limit);
     }
     const { data, error } = await q;
     if (error) {
@@ -362,8 +370,8 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
 
   // Real-time channel
   const channel = supabase
-    .channel(uniqueChannelName(`public:${table}`))
-    .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+    .channel(uniqueChannelName(`public:${listenTable || table}`))
+    .on('postgres_changes', { event: '*', schema: 'public', table: listenTable || table }, () => {
       doFetch();
     })
     .subscribe();
