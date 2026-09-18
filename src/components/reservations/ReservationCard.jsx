@@ -92,17 +92,21 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         <span className={`res-card-total${balance > 0 ? ' res-card-balance' : ''}`}>
           {balance > 0
             ? (res.balancePaymentStatus === 'submitted' ? 'Balance proof to check' : `${formatCurrency(balance)} to collect`)
-            : res.paymentStatus === 'Paid'
-              ? 'Paid in full'
-              : isCancelled
-                ? (res.paymentStatus === 'Refunded'
-                    ? 'Refunded'
-                    : res.paymentStatus === 'Refund Required'
-                      ? 'Refund Required'
-                      : 'Cancelled')
-                : awaitingReceipt
-                  ? 'Receipt to check'
-                  : ''}
+            // Refund state takes precedence over the operational status --
+            // a reservation stays 'Completed' after a return per the
+            // canonical lifecycle, but that must never read as a plain
+            // successful sale once the money has moved.
+            : res.paymentStatus === 'Refunded'
+              ? 'Refunded'
+              : res.paymentStatus === 'Refund Required'
+                ? 'Refund Required'
+                : res.paymentStatus === 'Paid'
+                  ? 'Paid in full'
+                  : isCancelled
+                    ? 'Cancelled'
+                    : awaitingReceipt
+                      ? 'Receipt to check'
+                      : ''}
         </span>
       </div>
 

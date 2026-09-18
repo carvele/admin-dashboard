@@ -48,7 +48,7 @@ import {
   primaryActionFor,
 } from '../../utils/reservationActions';
 import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
-import { toDisplayStatus } from '../../utils/reservationStatus';
+import { toDisplayStatus, presentationStatus, rescheduleModalTitle } from '../../utils/reservationStatus';
 import { outstandingBalance, balanceDue } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import { formatCurrency } from '../../utils/helpers';
@@ -1564,7 +1564,7 @@ const Reservations = () => {
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
-                          <StatusBadge status={res.displayStatus} />
+                          <StatusBadge status={presentationStatus(res)} />
                           {String(res.paymentStatus || '').toLowerCase() === 'refund required' && (() => {
                             const qItem = refundQueue.find((q) => q.id === res.id || q.docId === res.docId);
                             const totalRefund = qItem
@@ -2011,7 +2011,7 @@ const Reservations = () => {
             style={{ maxWidth: 500 }}
           >
             <div className="modal-header">
-              <h2 id="reschedule-dialog-title">Reschedule {rescheduleModal.id}</h2>
+              <h2 id="reschedule-dialog-title">{rescheduleModalTitle(rescheduleModal)}</h2>
               <button className="close-btn" onClick={() => setRescheduleModal(null)} aria-label="Close dialog">
                 &times;
               </button>
@@ -2200,7 +2200,7 @@ const Reservations = () => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
-                <StatusBadge status={viewModal.displayStatus || 'Pending'} />
+                <StatusBadge status={presentationStatus(viewModal) || 'Pending'} />
               </div>
               {viewModal.displayStatus === 'Completed' && (viewModal.completedAt || viewModal.balanceSettledAt || viewModal.updatedAt || viewModal.updated_at) && (
                 <div className="detail-row">

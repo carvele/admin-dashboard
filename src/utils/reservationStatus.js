@@ -145,3 +145,43 @@ export const isCommitted = (reservation) => {
   if (!reservation) return false;
   return COMMITTED_STATUSES.some((s) => normalise(s) === normalise(reservation.status));
 };
+
+/**
+ * The status a reservation should present, overriding the operational
+ * displayStatus once money has actually gone back to the customer.
+ *
+ * The canonical return/refund lifecycle deliberately leaves status at
+ * 'Completed' when a completed pickup is later refunded -- the pickup did
+ * happen, that fact shouldn't be rewritten. But showing "Completed" with no
+ * further context reads as a successful sale even after the money was
+ * returned, so the *presentation* layer substitutes 'Refunded' here. This is
+ * display-only: it never mutates reservation.status or payment_status.
+ */
+export const presentationStatus = (reservation) => {
+  if (!reservation) return undefined;
+  const paymentStatus = normalise(reservation.paymentStatus ?? reservation.payment_status);
+  if (paymentStatus === 'refunded') return 'Refunded';
+  return reservation.displayStatus;
+};
+
+/**
+ * The reschedule modal's heading text.
+ *
+ * Never falls back to the raw database UUID -- `displayId || display_id ||
+ * id` would preserve the exact leak this exists to fix. An absent display id
+ * falls back to a short id sliced from the UUID (the same convention the
+ * receipt list already uses), and a reservation with neither a name nor any
+ * id at all gets the neutral "Reservation" label rather than nothing.
+ */
+export const rescheduleModalTitle = (reservation) => {
+  if (!reservation) return 'Reschedule Reservation';
+  const name = reservation.customerName || reservation.customer;
+  const shortId =
+    reservation.displayId ||
+    reservation.display_id ||
+    (reservation.id ? reservation.id.slice(0, 8) : null);
+  if (name && shortId) return `Reschedule ${name} (${shortId})`;
+  if (name) return `Reschedule ${name}`;
+  if (shortId) return `Reschedule ${shortId}`;
+  return 'Reschedule Reservation';
+};
