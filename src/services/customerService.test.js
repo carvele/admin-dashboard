@@ -108,6 +108,24 @@ describe('getCustomerStatsBatch', () => {
     expect(stats[CUST].totalSpent).toBe(1890);
   });
 
+  test('completedCount is case-insensitive on status', async () => {
+    setData([
+      { customer_id: CUST, status: 'completed', rental_price: 500, created_at: daysAgo(1) },
+      { customer_id: CUST, status: 'Completed', rental_price: 500, created_at: daysAgo(2) },
+    ]);
+    const stats = await getCustomerStatsBatch([CUST]);
+    expect(stats[CUST].completedCount).toBe(2);
+  });
+
+  test('a refunded completed reservation no longer counts toward spend', async () => {
+    setData([
+      { customer_id: CUST, status: 'Completed', payment_status: 'Refunded', rental_price: 1890, created_at: daysAgo(1) },
+    ]);
+    const stats = await getCustomerStatsBatch([CUST]);
+    expect(stats[CUST].totalSpent).toBe(0);
+    expect(stats[CUST].completedCount).toBe(1);
+  });
+
   test('does not leak one customer\'s reservations into another', async () => {
     setData([
       { customer_id: CUST, status: 'Completed', rental_price: 100, created_at: daysAgo(1) },

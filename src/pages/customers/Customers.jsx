@@ -118,7 +118,7 @@ const Customers = () => {
   const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [lastDoc, setLastDoc] = useState(null);
+  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [msgModal, setMsgModal] = useState(null);
@@ -132,7 +132,7 @@ const Customers = () => {
     try {
       const PAGE_SIZE = 20;
       // Fetch without orderBy so Firestore doesn't drop legacy documents missing the field
-      const result = await getPaginatedCustomers(PAGE_SIZE, loadMore ? lastDoc : null);
+      const result = await getPaginatedCustomers(PAGE_SIZE, loadMore ? page : 0);
 
       if (signal?.aborted) return;
 
@@ -182,7 +182,7 @@ const Customers = () => {
         });
         return unique;
       });
-      setLastDoc(result.lastVisible);
+      setPage(result.nextPage);
       setHasMore(result.hasMore);
     } catch (e) {
       console.error('Failed to load customers API Error:', e);
@@ -199,9 +199,9 @@ const Customers = () => {
     return () => {
       controller.abort();
     };
-    // Intentionally mount-only: fetchCustomers closes over lastDoc, which it
+    // Intentionally mount-only: fetchCustomers closes over page, which it
     // sets after every fetch. Tracking it here would re-run this effect (and
-    // re-fetch page 1) every time lastDoc changes -- the "Load More" button
+    // re-fetch page 1) every time page changes -- the "Load More" button
     // at line ~600 is the only place pagination should advance.
      
   }, []);
