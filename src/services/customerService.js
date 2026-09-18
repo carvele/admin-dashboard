@@ -197,7 +197,7 @@ export const getCustomerStatsBatch = async (customerIds) => {
     if (!bucket) continue;
 
     bucket.reservationCount += 1;
-    if (r.status === 'Completed') bucket.completedCount += 1;
+    if (String(r.status ?? '').trim().toLowerCase() === 'completed') bucket.completedCount += 1;
     if (countsAsRevenue(r)) bucket.totalSpent += Number(r.rental_price) || 0;
     if (r.size) bucket.sizeTally[r.size] = (bucket.sizeTally[r.size] ?? 0) + 1;
     if (r.created_at && (!bucket.lastActivity || r.created_at > bucket.lastActivity)) {

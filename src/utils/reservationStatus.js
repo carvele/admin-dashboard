@@ -95,10 +95,13 @@ export const holdsStock = (status) => STOCK_HOLDING_STATUSES.includes(status);
 export const isCancelled = (status) => CANCELLED_STATUSES.includes(status);
 export const isPending = (status) => PENDING_STATUSES.includes(status);
 
-const normalise = (status) =>
+export const normalise = (status) =>
   String(status ?? '')
     .trim()
     .toLowerCase();
+
+/** Payment states where the money is no longer the shop's to keep, or was never collected as a sale. */
+const NON_REVENUE_PAYMENT_STATUSES = ['refund required', 'refunded', 'cancelled'];
 
 /**
  * Stored status to the 5-value customer-facing label: To Pay, Preparing,
@@ -132,6 +135,8 @@ export const toDisplayStatus = (status) => {
  */
 export const countsAsRevenue = (reservation) => {
   if (!reservation) return false;
+  const paymentStatus = normalise(reservation.paymentStatus ?? reservation.payment_status);
+  if (NON_REVENUE_PAYMENT_STATUSES.includes(paymentStatus)) return false;
   return EARNED_STATUSES.some((s) => normalise(s) === normalise(reservation.status));
 };
 
