@@ -650,15 +650,14 @@ export const getReturnRefundRequests = async (status = null) => {
         display_id,
         status,
         payment_status,
-        total_amount,
         customer_name,
         created_at,
         reservation_items (
           id,
           quantity,
           unit_price,
-          selected_size,
-          selected_color,
+          size,
+          color,
           products (
             id,
             name,
@@ -679,7 +678,7 @@ export const getReturnRefundRequests = async (status = null) => {
         id,
         full_name,
         email,
-        phone_number
+        phone
       ),
       reviewer:profiles!reviewed_by (
         id,

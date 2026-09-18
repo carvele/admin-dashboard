@@ -297,7 +297,7 @@ export default function ReturnRefundDetailModal({
                 <span className="detail-label"><User size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Customer</span>
                 <p style={{ margin: '4px 0 0', fontWeight: 600 }}>{customer.fullName || customer.full_name || res.customerName || res.customer_name || 'Guest'}</p>
                 <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{customer.email || 'No email'}</p>
-                {customer.phoneNumber && <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{customer.phoneNumber}</p>}
+                {customer.phone && <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{customer.phone}</p>}
               </div>
               <div>
                 <span className="detail-label"><Package size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Reservation</span>
@@ -424,8 +424,8 @@ export default function ReturnRefundDetailModal({
                             <span style={{ fontWeight: 500 }}>{prod.name || 'Custom Item'}</span>
                           </td>
                           <td>
-                            {item.selectedSize || item.selected_size || 'Std'}
-                            {(item.selectedColor || item.selected_color) ? ` / ${item.selectedColor || item.selected_color}` : ''}
+                            {item.size || 'Std'}
+                            {item.color ? ` / ${item.color}` : ''}
                           </td>
                           <td>{item.quantity || 1}</td>
                           <td>{formatCurrency(item.unitPrice || item.unit_price || 0)}</td>
