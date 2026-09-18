@@ -257,12 +257,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   };
 
   const markAllRead = async () => {
-    const unreadIds = notifications
-      .filter((n) => !n.isRead)
-      .map((n) => n.id || n.docId)
-      .filter(Boolean);
-
-    if (unreadIds.length === 0) return;
+    if (unreadCount === 0 && notifications.every((n) => n.isRead)) return;
 
     const prevNotifications = [...notifications];
     const prevUnreadCount = unreadCount;
@@ -271,7 +266,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
 
-      const { error } = await supabase.rpc('mark_admin_notifications_read', { p_receipt_ids: unreadIds });
+      const { error } = await supabase.rpc('mark_admin_notifications_read', { p_receipt_ids: null as any });
 
       if (error) {
         console.warn('Failed to mark notifications read in batch:', error.message);
@@ -285,8 +280,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
   };
 
   const clearAllNotifications = async () => {
-    const allIds = notifications.map((n) => n.id || n.docId).filter(Boolean);
-    if (allIds.length === 0) return;
+    if (notifications.length === 0) return;
 
     const prevNotifications = [...notifications];
     const prevUnreadCount = unreadCount;
@@ -295,7 +289,7 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
       setNotifications([]);
       setUnreadCount(0);
 
-      const { error } = await supabase.rpc('dismiss_admin_notifications', { p_receipt_ids: allIds });
+      const { error } = await supabase.rpc('dismiss_admin_notifications', { p_receipt_ids: null as any });
 
       if (error) {
         console.warn('Failed to clear notifications:', error.message);
