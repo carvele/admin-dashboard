@@ -162,4 +162,71 @@ describe('TopNav Notification System (NOTIF-STATE-001, NOTIF-SEC-001, NOTIF-NAV-
       p_receipt_ids: ['receipt-2'],
     });
   });
+
+  test('clicking "Mark all read" calls mark_admin_notifications_read with p_receipt_ids: null', async () => {
+    render(<TopNav user={mockUser} onHamburger={jest.fn()} />);
+
+    act(() => {
+      subscriptionCallback([
+        {
+          id: 'receipt-1',
+          notification_id: 'notif-1',
+          title: 'New Reservation',
+          message: 'A customer reserved a dress',
+          is_read: false,
+          is_dismissed: false,
+          entity_type: 'reservation',
+          entity_id: 'res-123',
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    });
+
+    const bellBtn = screen.getByLabelText('Toggle notifications');
+    fireEvent.click(bellBtn);
+
+    const markAllReadBtn = await screen.findByRole('button', { name: /mark all read/i });
+    fireEvent.click(markAllReadBtn);
+
+    expect(supabase.rpc).toHaveBeenCalledWith('mark_admin_notifications_read', {
+      p_receipt_ids: null,
+    });
+  });
+
+  test('clicking "Clear all" calls dismiss_admin_notifications with p_receipt_ids: null', async () => {
+    (supabase.rpc as jest.Mock).mockImplementation((fnName: string) => {
+      if (fnName === 'get_unread_notification_count') {
+        return Promise.resolve({ data: 0, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    render(<TopNav user={mockUser} onHamburger={jest.fn()} />);
+
+    act(() => {
+      subscriptionCallback([
+        {
+          id: 'receipt-1',
+          notification_id: 'notif-1',
+          title: 'New Reservation',
+          message: 'A customer reserved a dress',
+          is_read: true,
+          is_dismissed: false,
+          entity_type: 'reservation',
+          entity_id: 'res-123',
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    });
+
+    const bellBtn = screen.getByLabelText('Toggle notifications');
+    fireEvent.click(bellBtn);
+
+    const clearAllBtn = await screen.findByRole('button', { name: /clear all/i });
+    fireEvent.click(clearAllBtn);
+
+    expect(supabase.rpc).toHaveBeenCalledWith('dismiss_admin_notifications', {
+      p_receipt_ids: null,
+    });
+  });
 });

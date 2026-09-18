@@ -3373,8 +3373,8 @@ export type Database = {
         Returns: Json
       }
       dismiss_admin_notifications: {
-        Args: { p_receipt_ids: string[] }
-        Returns: undefined
+        Args: { p_receipt_ids?: string[] }
+        Returns: number
       }
       dispatch_pending_push: { Args: never; Returns: number }
       enqueue_admin_notification: {
@@ -3678,8 +3678,8 @@ export type Database = {
       is_staff_or_admin: { Args: never; Returns: boolean }
       low_stock_threshold: { Args: never; Returns: number }
       mark_admin_notifications_read: {
-        Args: { p_receipt_ids: string[] }
-        Returns: undefined
+        Args: { p_receipt_ids?: string[] }
+        Returns: number
       }
       mark_direct_message_read: {
         Args: { p_message_id: string }
@@ -4295,4 +4295,3 @@ export const Constants = {
     },
   },
 } as const
-
