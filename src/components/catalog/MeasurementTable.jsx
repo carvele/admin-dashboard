@@ -8,6 +8,11 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
   const [newMetric, setNewMetric] = useState('');
   const [unit, setUnit] = useState('cm'); // 'cm' | 'in'
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const formatMetricLabel = (key) =>
+    (key || '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
 
   // Smart template matching logic
   const findSmartTemplate = () => {
@@ -240,7 +245,7 @@ const MeasurementTable = ({ sizes, measurements, onChange, category, subCategory
               {metrics.map(metric => (
                 <th key={metric} className="px-3 py-2 text-left border-b font-semibold group">
                   <div className="flex items-center justify-between gap-2">
-                    {metric}
+                    {formatMetricLabel(metric)}
                     <button 
                       type="button"
                       className="text-danger opacity-0 group-hover:opacity-100 transition-opacity"
