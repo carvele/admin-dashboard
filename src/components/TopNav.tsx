@@ -215,10 +215,10 @@ const TopNav = ({ user, onHamburger }: TopNavProps) => {
 
     setShowNotifications(false);
 
-    const type = (n.entityType || n.type || '').toLowerCase();
+    const type = (n.entityType || n.entity_type || n.type || '').toLowerCase();
     const title = (n.title || '').toLowerCase();
     const message = (n.message || '').toLowerCase();
-    const entityId = n.entityId;
+    const entityId = n.entityId || n.entity_id;
 
     if (type === 'message' || title.includes('message') || message.includes('message')) {
       navigate(entityId ? `/messages/${entityId}` : '/messages');
