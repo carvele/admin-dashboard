@@ -110,32 +110,93 @@ export type Database = {
           },
         ]
       }
-      admin_notifications: {
+      admin_notification_receipts: {
         Row: {
           created_at: string | null
           id: string
+          is_dismissed: boolean | null
           is_read: boolean | null
-          message: string
-          title: string
-          type: string | null
+          notification_id: string
+          user_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
+          is_dismissed?: boolean | null
           is_read?: boolean | null
-          message: string
-          title: string
-          type?: string | null
+          notification_id: string
+          user_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          notification_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_receipts_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "admin_notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notifications: {
+        Row: {
+          actor_id: string | null
+          created_at: string | null
+          data: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          event_key: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          priority: string | null
+          title: string
+          type: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string | null
+          data?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_key?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          priority?: string | null
+          title: string
+          type?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string | null
+          data?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_key?: string | null
+          id?: string
           is_read?: boolean | null
           message?: string
+          priority?: string | null
           title?: string
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       announcement_dismissals: {
         Row: {
@@ -2317,6 +2378,8 @@ export type Database = {
           reviewed_by: string | null
           status: string
           submitted_at: string
+          under_review_at: string | null
+          under_review_by: string | null
           updated_at: string
         }
         Insert: {
@@ -2332,6 +2395,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: string
           submitted_at?: string
+          under_review_at?: string | null
+          under_review_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -2347,6 +2412,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: string
           submitted_at?: string
+          under_review_at?: string | null
+          under_review_by?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2367,6 +2434,13 @@ export type Database = {
           {
             foreignKeyName: "return_refund_requests_reviewed_by_fkey"
             columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_refund_requests_under_review_by_fkey"
+            columns: ["under_review_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3026,6 +3100,41 @@ export type Database = {
       }
     }
     Views: {
+      admin_user_notifications_view: {
+        Row: {
+          actor_id: string | null
+          created_at: string | null
+          data: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          event_key: string | null
+          id: string | null
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          message: string | null
+          notification_id: string | null
+          priority: string | null
+          title: string | null
+          type: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_receipts_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "admin_notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_variants: {
         Row: {
           color: string | null
@@ -3249,6 +3358,10 @@ export type Database = {
           p_target_id: string
         }
         Returns: Json
+      }
+      dismiss_admin_notifications: {
+        Args: { p_receipt_ids: string[] }
+        Returns: undefined
       }
       dispatch_pending_push: { Args: never; Returns: number }
       enqueue_admin_notification: {
@@ -3498,6 +3611,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_unread_notification_count: { Args: never; Returns: number }
       get_wardrobe_privacy: { Args: { p_user_id: string }; Returns: string }
       get_wishlist_privacy: { Args: { p_user_id: string }; Returns: string }
       increment_wear_count: {
@@ -3546,6 +3660,10 @@ export type Database = {
       }
       is_staff_or_admin: { Args: never; Returns: boolean }
       low_stock_threshold: { Args: never; Returns: number }
+      mark_admin_notifications_read: {
+        Args: { p_receipt_ids: string[] }
+        Returns: undefined
+      }
       mark_direct_message_read: {
         Args: { p_message_id: string }
         Returns: undefined
