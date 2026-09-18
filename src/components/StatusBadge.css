@@ -24,9 +24,14 @@
   color: var(--status-completed-text);
 }
 
-.status-cancelled {
+.status-cancelled, .status-refunded {
   background-color: var(--status-cancelled-bg);
   color: var(--status-cancelled-text);
+}
+
+.status-refund-required {
+  background-color: var(--status-pending-bg);
+  color: var(--status-pending-text);
 }
 
 .status-active {

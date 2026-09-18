@@ -12,6 +12,7 @@ import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Eye, MessageSquare } from 'lucide-react';
 import StatusBadge from '../ReservationStatusBadge';
 import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { presentationStatus } from '../../utils/reservationStatus';
 import { formatTimeLabel } from '../../utils/helpers';
 import './ReservationCalendar.css';
 
@@ -180,7 +181,7 @@ const ReservationCalendar = ({ reservations, onView, onMessage }) => {
                       </p>
                     )}
                   </div>
-                  <StatusBadge status={res.displayStatus} showLabel={false} />
+                  <StatusBadge status={presentationStatus(res)} showLabel={false} />
                   <button
                     type="button"
                     className="btn-outline res-card-icon"

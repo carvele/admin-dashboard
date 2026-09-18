@@ -12,7 +12,9 @@ import './StatusBadge.css';
 
 /**
  * @param {string} status - One of the displayStatus strings Reservations.jsx
- *   produces: To Pay, Preparing, To Pickup, Completed, Cancelled.
+ *   produces (To Pay, Preparing, To Pickup, Completed, Cancelled), or a
+ *   presentation-layer override from reservationStatus.js's
+ *   presentationStatus() (Refunded, Refund Required).
  */
 const getReservationStatusIcon = (status) => {
   switch (status) {
@@ -26,6 +28,10 @@ const getReservationStatusIcon = (status) => {
       return '✓';
     case 'Cancelled':
       return '✕';
+    case 'Refunded':
+      return '↩';
+    case 'Refund Required':
+      return '⚠';
     default:
       return '•';
   }
