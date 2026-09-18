@@ -372,7 +372,6 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
                   <th>Customer</th>
                   <th>Reason Category</th>
                   <th>Photo Evidence</th>
-                  <th>Submitted At</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -394,6 +393,9 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
                         <strong style={{ color: 'var(--accent, #9b2c2c)' }}>{dispId}</strong>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                           Total: {formatCurrency(res.totalAmount || res.total_amount || 0)}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Submitted {formatManilaDate(req.submittedAt || req.submitted_at)}
                         </div>
                       </td>
 
@@ -433,10 +435,6 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
                         ) : (
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>None</span>
                         )}
-                      </td>
-
-                      <td style={{ fontSize: '0.85rem' }}>
-                        {formatManilaDate(req.submittedAt || req.submitted_at)}
                       </td>
 
                       <td>
