@@ -29,7 +29,7 @@ jest.mock('../../components/inventory/AdminInventoryPanel', () => {
 
 import Inventory from './Inventory';
 import { adjustInventoryOnHand } from '../../services/productService';
-import { getActiveInventoryProductDocIds } from '../../services/inventoryService';
+import { getInventorySummary } from '../../services/inventoryService';
 
 const mockInventoryData = [
   {
@@ -166,6 +166,18 @@ jest.mock('../../services/inventoryService', () => ({
   getActiveInventoryProductDocIds: jest.fn(() =>
     Promise.resolve(new Set(mockInventoryData.map((i) => i.productDocId).filter(Boolean)))
   ),
+  getInventorySummary: jest.fn(() => {
+    const items = mockInventoryData.filter((i) => !i.deleted);
+    return Promise.resolve({
+      totalVariants: items.length,
+      totalStock: items.reduce((sum, i) => sum + (i.total || 0), 0),
+      totalReserved: items.reduce((sum, i) => sum + (i.reserved || 0), 0),
+      lowStockCount: items.filter((i) => (i.available ?? 0) <= 0).length,
+      stockBreakdown: { healthy: 2, low: 0, veryLow: 0, critical: 0, noStock: 1, fullyReserved: 0, alerts: 1 },
+      reservedCount: items.filter((i) => (i.reserved || 0) > 0).length,
+      activeProductDocIds: new Set(items.map((i) => i.productDocId).filter(Boolean)),
+    });
+  }),
 }));
 
 jest.mock('../../services/staffService', () => ({
@@ -398,10 +410,36 @@ describe('Inventory Modernized Grid', () => {
   });
 
   it('displays missing inventory warning only when a catalog product truly lacks inventory rows', async () => {
-    getActiveInventoryProductDocIds.mockResolvedValueOnce(new Set(['prod-1']));
+    getInventorySummary.mockResolvedValueOnce({
+      totalVariants: 1,
+      totalStock: 10,
+      totalReserved: 0,
+      lowStockCount: 0,
+      stockBreakdown: { healthy: 1, low: 0, veryLow: 0, critical: 0, noStock: 0, fullyReserved: 0, alerts: 0 },
+      reservedCount: 0,
+      activeProductDocIds: new Set(['prod-1']),
+    });
 
     renderInventory();
     expect(await screen.findByText(/Catalog products missing inventory rows \(1\):/i)).toBeInTheDocument();
     expect(screen.getAllByText('Cotton Pajama Set').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('displays catalog-wide summary metrics independently of paginated page slice', async () => {
+    getInventorySummary.mockResolvedValueOnce({
+      totalVariants: 661,
+      totalStock: 3309,
+      totalReserved: 4,
+      lowStockCount: 7,
+      stockBreakdown: { healthy: 654, low: 0, veryLow: 0, critical: 0, noStock: 7, fullyReserved: 0, alerts: 7 },
+      reservedCount: 4,
+      activeProductDocIds: new Set(['prod-1', 'prod-2']),
+    });
+
+    renderInventory();
+    expect(await screen.findByText('661')).toBeInTheDocument();
+    expect(screen.getByText('3,309')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
   });
 });

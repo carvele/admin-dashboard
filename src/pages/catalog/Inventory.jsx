@@ -25,7 +25,7 @@ import {
   Layers,
   List,
 } from 'lucide-react';
-import { getStockHealth, getStockPriority, isStockAlert, getStockBreakdown } from '../../utils/stockStatus';
+import { getStockHealth, getStockPriority, isStockAlert } from '../../utils/stockStatus';
 import {
     subscribeToProducts,
   adjustInventoryOnHand,
@@ -38,7 +38,7 @@ import {
   recordBoutiqueSale,
   subscribeToCategories,
   } from '../../services/productService';
-import { getPaginatedInventory, getActiveInventoryProductDocIds } from "../../services/inventoryService";
+import { getPaginatedInventory, getInventorySummary } from "../../services/inventoryService";
 import { supabase } from '../../lib/supabaseClient';
 import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
@@ -449,21 +449,30 @@ const Inventory = () => {
 
   const [activeInventoryProductIds, setActiveInventoryProductIds] = useState(new Set());
   const [loadingInventoryProductIds, setLoadingInventoryProductIds] = useState(true);
+  const [inventorySummary, setInventorySummary] = useState({
+    totalVariants: 0,
+    totalStock: 0,
+    totalReserved: 0,
+    lowStockCount: 0,
+    reservedCount: 0,
+    stockBreakdown: { healthy: 0, low: 0, veryLow: 0, critical: 0, noStock: 0, fullyReserved: 0, alerts: 0 },
+  });
 
-  const refreshActiveInventoryProductIds = useCallback(async () => {
+  const refreshInventorySummary = useCallback(async () => {
     try {
-      const ids = await getActiveInventoryProductDocIds();
-      setActiveInventoryProductIds(ids);
+      const summary = await getInventorySummary(viewMode);
+      setInventorySummary(summary);
+      setActiveInventoryProductIds(summary.activeProductDocIds);
     } catch (err) {
-      console.error('Failed to load active inventory product IDs:', err);
+      console.error('Failed to load inventory summary:', err);
     } finally {
       setLoadingInventoryProductIds(false);
     }
-  }, []);
+  }, [viewMode]);
 
   useEffect(() => {
-    refreshActiveInventoryProductIds();
-  }, [refreshActiveInventoryProductIds]);
+    refreshInventorySummary();
+  }, [refreshInventorySummary]);
 
   useEffect(() => {
     fetchCurrentPage();
@@ -478,7 +487,7 @@ const Inventory = () => {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
           fetchCurrentPage();
-          refreshActiveInventoryProductIds();
+          refreshInventorySummary();
         }, 500);
       })
       .subscribe();
@@ -486,7 +495,7 @@ const Inventory = () => {
       clearTimeout(timeout);
       unsub?.unsubscribe?.();
     };
-  }, [fetchCurrentPage, refreshActiveInventoryProductIds]);
+  }, [fetchCurrentPage, refreshInventorySummary]);
 
   const uniqueColors = useMemo(() => {
     const set = new Set();
@@ -571,16 +580,14 @@ const Inventory = () => {
     }
   };
 
-  const activeInventory = inventory.filter((i) => i.deleted !== true);
-  const totalVariants = activeInventory.length;
-  const totalStock = activeInventory.reduce((sum, i) => sum + (i.total || 0), 0);
-  const totalReserved = activeInventory.reduce((sum, i) => sum + (i.reserved || 0), 0);
-
-  const stockBreakdown = getStockBreakdown(
-    activeInventory.map((i) => ({ available: i.available, total: i.total, reserved: i.reserved || 0 }))
-  );
-  const lowStockCount = stockBreakdown.alerts;
-  const reservedCount = activeInventory.filter((i) => (i.reserved || 0) > 0).length;
+  const {
+    totalVariants,
+    totalStock,
+    totalReserved,
+    lowStockCount,
+    reservedCount,
+    stockBreakdown = { healthy: 0, low: 0, veryLow: 0, critical: 0, noStock: 0, fullyReserved: 0, alerts: 0 },
+  } = inventorySummary;
 
   const productsWithNoInventory = useMemo(() => {
     if (loadingInventoryProductIds) return [];
@@ -646,6 +653,8 @@ const Inventory = () => {
         );
         toast.success(`Reduced ${restockModal.item} (${restockModal.size}, ${restockModal.color || 'Standard'}) -${qty} units (${finalReason})`);
         handleCloseAdjustModal();
+        fetchCurrentPage();
+        refreshInventorySummary();
       } catch (err) {
         toast.error('Failed to reduce variant stock: ' + (err?.message || ''));
       } finally {
@@ -664,6 +673,8 @@ const Inventory = () => {
       );
       toast.success(`Restocked ${restockModal.item} (${restockModal.size}, ${restockModal.color || 'Standard'}) +${qty} units`);
       handleCloseAdjustModal();
+      fetchCurrentPage();
+      refreshInventorySummary();
     } catch (err) {
       toast.error('Failed to restock variant: ' + (err?.message || ''));
     } finally {
@@ -695,6 +706,8 @@ const Inventory = () => {
       setSellModal(null);
       setRestockQty('');
       setSalePriceInput('');
+      fetchCurrentPage();
+      refreshInventorySummary();
     } catch (e) {
       toast.error('Failed to record sale: ' + e.message, { id: toastId });
     }
@@ -706,6 +719,8 @@ const Inventory = () => {
     try {
       await archiveInventoryItem(item.docId || item.id, 'Season decommission');
       toast.success(`Archived ${item.item} (${item.size}, ${item.color || 'Standard'})`);
+      fetchCurrentPage();
+      refreshInventorySummary();
     } catch (err) {
       toast.error('Failed to archive item: ' + (err?.message || ''));
     } finally {
@@ -717,6 +732,8 @@ const Inventory = () => {
     try {
       await restoreInventoryItem(item.docId || item.id, 'Inventory reactivated');
       toast.success(`Restored ${item.item} (${item.size}, ${item.color || 'Standard'}) to active inventory`);
+      fetchCurrentPage();
+      refreshInventorySummary();
     } catch (err) {
       toast.error('Failed to restore item: ' + (err?.message || ''));
     }
@@ -733,6 +750,8 @@ const Inventory = () => {
       await recalculateAllInventoryStock();
       await logAction(user, 'Manually triggered Inventory Sync');
       toast.success('Inventory re-calculated and synchronized successfully!', { id: toastId });
+      fetchCurrentPage();
+      refreshInventorySummary();
     } catch (err) {
       console.error('Manual sync failed:', err);
       toast.error('Failed to synchronize inventory: ' + (err?.message || ''), { id: toastId });

@@ -18,6 +18,7 @@ import {
   toCamel,
 } from '../lib/supabaseService';
 import { queryCache } from '../utils/cache';
+import { getStockBreakdown } from '../utils/stockStatus';
 
 /**
  * Fetch a paginated slice of inventory variants with deterministic sorting.
@@ -245,17 +246,57 @@ export const updateProductPattern = async (productId, newPattern) => {
 };
 
 /**
+ * Fetch global inventory summary metrics across the whole catalog (independent of pagination).
+ * @param {'active' | 'archived'} [viewMode='active']
+ * @returns {Promise<{
+ *   totalVariants: number,
+ *   totalStock: number,
+ *   totalReserved: number,
+ *   lowStockCount: number,
+ *   reservedCount: number,
+ *   activeProductDocIds: Set<string>
+ * }>}
+ */
+export const getInventorySummary = async (viewMode = 'active') => {
+  let q = supabase
+    .from('inventory')
+    .select('product_doc_id, available, total, reserved');
+
+  if (viewMode === 'archived') {
+    q = q.eq('deleted', true);
+  } else {
+    q = q.eq('deleted', false);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  const items = data || [];
+  const totalVariants = items.length;
+  const totalStock = items.reduce((sum, i) => sum + (i.total || 0), 0);
+  const totalReserved = items.reduce((sum, i) => sum + (i.reserved || 0), 0);
+  const stockBreakdown = getStockBreakdown(items);
+  const reservedCount = items.filter((i) => (i.reserved || 0) > 0).length;
+  const activeProductDocIds = new Set(items.map((r) => r.product_doc_id).filter(Boolean));
+
+  return {
+    totalVariants,
+    totalStock,
+    totalReserved,
+    lowStockCount: stockBreakdown.alerts,
+    stockBreakdown,
+    reservedCount,
+    activeProductDocIds,
+  };
+};
+
+/**
  * Fetch the set of all product_doc_ids that have active (non-deleted) inventory rows.
  * Used by Inventory page to accurately identify catalog products missing inventory.
  * @returns {Promise<Set<string>>}
  */
 export const getActiveInventoryProductDocIds = async () => {
-  const { data, error } = await supabase
-    .from('inventory')
-    .select('product_doc_id')
-    .eq('deleted', false);
-
-  if (error) throw error;
-  return new Set((data || []).map((r) => r.product_doc_id).filter(Boolean));
+  const summary = await getInventorySummary('active');
+  return summary.activeProductDocIds;
 };
 
