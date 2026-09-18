@@ -2165,6 +2165,8 @@ export type Database = {
           payment_reminder_sent_at: string | null
           payment_status: string | null
           payment_type: string | null
+          pickup_reminder_1h_sent_for: string | null
+          pickup_reminder_24h_sent_for: string | null
           pickup_token: string | null
           product_id: string | null
           product_name: string | null
@@ -2230,6 +2232,8 @@ export type Database = {
           payment_reminder_sent_at?: string | null
           payment_status?: string | null
           payment_type?: string | null
+          pickup_reminder_1h_sent_for?: string | null
+          pickup_reminder_24h_sent_for?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
@@ -2295,6 +2299,8 @@ export type Database = {
           payment_reminder_sent_at?: string | null
           payment_status?: string | null
           payment_type?: string | null
+          pickup_reminder_1h_sent_for?: string | null
+          pickup_reminder_24h_sent_for?: string | null
           pickup_token?: string | null
           product_id?: string | null
           product_name?: string | null
@@ -3992,6 +3998,7 @@ export type Database = {
         Returns: string
       }
       send_payment_deadline_reminders: { Args: never; Returns: number }
+      send_pickup_reminders: { Args: never; Returns: number }
       set_customer_archive_state: {
         Args: {
           change_reason: string
