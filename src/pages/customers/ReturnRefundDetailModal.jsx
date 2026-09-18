@@ -211,8 +211,8 @@ export default function ReturnRefundDetailModal({
           {request.status === 'approved' && (
             <div
               style={{
-                backgroundColor: 'var(--status-ready-bg, #f3e8ff)',
-                color: 'var(--status-ready-color, #6b21a8)',
+                backgroundColor: 'var(--status-fitting-bg, #f3e8ff)',
+                color: 'var(--status-fitting-text, #6b21a8)',
                 padding: '0.875rem 1rem',
                 borderRadius: '8px',
                 border: '1px solid #d8b4fe',
@@ -251,7 +251,7 @@ export default function ReturnRefundDetailModal({
             <div
               style={{
                 backgroundColor: 'var(--status-cancelled-bg, #fee2e2)',
-                color: 'var(--status-cancelled-color, #991b1b)',
+                color: 'var(--status-cancelled-text, #991b1b)',
                 padding: '0.875rem 1rem',
                 borderRadius: '8px',
                 border: '1px solid #fca5a5',
@@ -271,7 +271,7 @@ export default function ReturnRefundDetailModal({
             <div
               style={{
                 backgroundColor: 'var(--status-completed-bg, #dcfce7)',
-                color: 'var(--status-completed-color, #166534)',
+                color: 'var(--status-completed-text, #166534)',
                 padding: '0.875rem 1rem',
                 borderRadius: '8px',
                 border: '1px solid #86efac',
@@ -315,7 +315,7 @@ export default function ReturnRefundDetailModal({
           {/* Claim Details */}
           <div>
             <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem', fontWeight: 600 }}>Return Claim Details</h4>
-            <div style={{ background: 'var(--bg-subtle, #f9fafb)', padding: '0.875rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--beige)', padding: '0.875rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <div style={{ marginBottom: '0.5rem' }}>
                 <span className="detail-label">Reason Category:</span>{' '}
                 <strong style={{ textTransform: 'capitalize' }}>
@@ -475,9 +475,9 @@ export default function ReturnRefundDetailModal({
 
           {/* Action Decision Boxes */}
           {showApproveBox && (
-            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px', padding: '1rem' }}>
-              <h5 style={{ margin: '0 0 0.5rem', color: '#5b21b6', fontSize: '0.9rem' }}>Confirm Return Approval</h5>
-              <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#4c1d95' }}>
+            <div style={{ background: 'var(--status-fitting-bg, #f5f3ff)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <h5 style={{ margin: '0 0 0.5rem', color: 'var(--status-fitting-text, #5b21b6)', fontSize: '0.9rem' }}>Confirm Return Approval</h5>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)' }}>
                 Approving this return will transition reservation payment status to <strong>Refund Required</strong> and mark paid payments for refund.
               </p>
               <textarea
@@ -511,9 +511,9 @@ export default function ReturnRefundDetailModal({
           )}
 
           {showRejectBox && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '1rem' }}>
-              <h5 style={{ margin: '0 0 0.5rem', color: '#991b1b', fontSize: '0.9rem' }}>Reject Return Request</h5>
-              <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#7f1d1d' }}>
+            <div style={{ background: 'var(--status-cancelled-bg, #fef2f2)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <h5 style={{ margin: '0 0 0.5rem', color: 'var(--status-cancelled-text, #991b1b)', fontSize: '0.9rem' }}>Reject Return Request</h5>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)' }}>
                 A rejection reason is <strong>mandatory</strong> and will be saved in the permanent ledger.
               </p>
               <textarea
