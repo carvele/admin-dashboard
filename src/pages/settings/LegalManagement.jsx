@@ -109,7 +109,7 @@ export default function LegalManagement() {
           <h1 className="text-2xl font-bold">Legal Document Management</h1>
           <p className="text-gray-500 text-sm">
             Publish and track Terms of Service and Privacy Policy versions. 
-            Publishing a new version will immediately gate all active user sessions.
+            Publishing a new version will immediately gate customer mobile app sessions.
           </p>
         </div>
         {canPublish && !isDrafting && (
@@ -234,7 +234,7 @@ export default function LegalManagement() {
               {isPublishing ? (
                 <><Loader2 size={16} className="animate-spin mr-2 inline" /> Publishing...</>
               ) : (
-                'Publish Immediately to All Users'
+                'Publish Immediately for Customers'
               )}
             </button>
           </div>
@@ -246,7 +246,7 @@ export default function LegalManagement() {
             <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg text-gray-500">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
               <p>No documents published yet.</p>
-              <p className="text-sm mt-1">Publish a version to enforce the legal gate.</p>
+              <p className="text-sm mt-1">Publish a version to enforce the customer legal gate.</p>
             </div>
           ) : (
             history.map((doc) => (
@@ -298,8 +298,8 @@ export default function LegalManagement() {
         isDestructive={true}
         severity="HIGH"
         consequences={[
-          'All active customer sessions will be gated until accepting the updated terms.',
-          'All staff members will be required to re-accept before accessing the admin dashboard.',
+          'All active customer mobile app sessions will be gated until explicitly reviewing and accepting the updated version.',
+          'The Admin Dashboard remains available for authorized staff with no legal acceptance gate.',
         ]}
         isLoading={isPublishing}
         onConfirm={confirmPublish}
