@@ -76,6 +76,17 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
     loadRequests();
   }, [loadRequests]);
 
+  // The modal is opened with a snapshot from `requests`. After approve/reject/
+  // disburse, onRefresh reloads `requests` but the modal keeps rendering the
+  // stale snapshot unless it's swapped for the matching fresh object here.
+  useEffect(() => {
+    if (!selectedRequest) return;
+    const updated = requests.find((r) => r.id === selectedRequest.id);
+    if (updated && updated !== selectedRequest) {
+      setSelectedRequest(updated);
+    }
+  }, [requests, selectedRequest]);
+
   // Counts for tabs and metrics
   const counts = useMemo(() => {
     const res = {
