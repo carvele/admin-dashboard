@@ -788,7 +788,9 @@ const Reservations = () => {
             ? `Deposit paid, ${formatCurrency(outstandingBalance(res))} due on collection`
             : res.paymentStatus === 'Paid'
               ? 'Paid in full ✓'
-              : 'Unpaid',
+              : (String(res.status || '').toLowerCase() === 'cancelled' || String(res.paymentStatus || '').toLowerCase() === 'cancelled')
+                ? (res.paymentStatus === 'Refunded' ? 'Refunded ✓' : res.paymentStatus === 'Refund Required' ? 'Refund required ⚠️' : 'Cancelled')
+                : 'Unpaid',
           imageUrl: res.imageUrl || '',
           customerName: cName,
         },
@@ -2242,6 +2244,7 @@ const Reservations = () => {
                         (viewModal.paymentStatus || '').toLowerCase() === 'paid' ? 'paid'
                         : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'submitted'
                         : (viewModal.paymentStatus || '').toLowerCase() === 'refunded' ? 'paid'
+                        : ((viewModal.paymentStatus || '').toLowerCase() === 'cancelled' || (viewModal.status || '').toLowerCase() === 'cancelled') ? 'unpaid'
                         : 'unpaid'
                       }`}>
                         {(viewModal.paymentStatus || '').toLowerCase() === 'paid'
@@ -2249,6 +2252,7 @@ const Reservations = () => {
                          : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? 'Refund required ⚠️'
                          : (viewModal.paymentStatus || '').toLowerCase() === 'refunded' ? 'Refunded ✓'
                          : ['submitted', 'processing'].includes((viewModal.paymentStatus || '').toLowerCase()) ? 'Receipt Submitted ⌛'
+                         : ((viewModal.paymentStatus || '').toLowerCase() === 'cancelled' || (viewModal.status || '').toLowerCase() === 'cancelled') ? 'Cancelled ✗'
                          : 'Unpaid ✗'}
                       </span>
                       {/* Cleaned up payment meta */}
@@ -2269,6 +2273,10 @@ const Reservations = () => {
                       ) : (viewModal.paymentStatus || '').toLowerCase() === 'refund required' ? (
                         <span className="text-secondary text-sm font-medium text-red-500 font-semibold">
                           Cancellation liability pending disbursement
+                        </span>
+                      ) : ((viewModal.paymentStatus || '').toLowerCase() === 'cancelled' || (viewModal.status || '').toLowerCase() === 'cancelled') ? (
+                        <span className="text-secondary text-sm font-medium">
+                          No payment due · Reservation cancelled
                         </span>
                       ) : (
                         <span className="text-secondary text-sm font-medium">

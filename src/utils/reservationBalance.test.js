@@ -41,6 +41,11 @@ describe('balanceDue', () => {
     expect(balanceDue(null)).toBe(0);
   });
 
+  it('is zero when the reservation is cancelled', () => {
+    expect(balanceDue(deposit({ status: 'Cancelled' }))).toBe(0);
+    expect(balanceDue(deposit({ status: 'cancelled' }))).toBe(0);
+  });
+
   it('matches on payment type regardless of casing', () => {
     expect(isDepositReservation({ paymentType: 'deposit' })).toBe(true);
     expect(balanceDue(deposit({ paymentStatus: 'paid' }))).toBe(945);
@@ -72,5 +77,10 @@ describe('outstandingBalance', () => {
 
   it('is zero for a reservation paid in full up front', () => {
     expect(outstandingBalance(deposit({ paymentType: 'Full', deposit: 1890 }))).toBe(0);
+  });
+
+  it('is zero when the reservation is cancelled', () => {
+    expect(outstandingBalance(deposit({ status: 'Cancelled' }))).toBe(0);
+    expect(outstandingBalance(deposit({ status: 'cancelled' }))).toBe(0);
   });
 });
