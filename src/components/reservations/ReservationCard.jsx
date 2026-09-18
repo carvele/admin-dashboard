@@ -25,11 +25,17 @@ const initialsOf = (name) =>
 
 const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage, onResolveReschedule }) => {
   const primary = primaryActionFor(res);
+  const isCancelled =
+    String(res.status || '').toLowerCase() === 'cancelled' ||
+    String(res.displayStatus || '').toLowerCase() === 'cancelled' ||
+    String(res.paymentStatus || '').toLowerCase() === 'cancelled';
   // payment_due_at is never cleared once paid -- it's the original deposit
   // deadline, not a pickup timer, so it has nothing meaningful to say once
-  // payment is settled (and would eventually read "Overdue" on a paid item).
+  // payment is settled or cancelled (and would eventually read "Overdue" on a paid/cancelled item).
   const deadline =
-    String(res.paymentStatus || '').toLowerCase() === 'paid' ? null : formatPaymentDeadline(res.paymentDueAt);
+    !isCancelled && res.displayStatus === 'To Pay'
+      ? formatPaymentDeadline(res.paymentDueAt)
+      : null;
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
   const balance = outstandingBalance(res);
@@ -88,9 +94,15 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
             ? (res.balancePaymentStatus === 'submitted' ? 'Balance proof to check' : `${formatCurrency(balance)} to collect`)
             : res.paymentStatus === 'Paid'
               ? 'Paid in full'
-              : awaitingReceipt
-                ? 'Receipt to check'
-                : ''}
+              : isCancelled
+                ? (res.paymentStatus === 'Refunded'
+                    ? 'Refunded'
+                    : res.paymentStatus === 'Refund Required'
+                      ? 'Refund Required'
+                      : 'Cancelled')
+                : awaitingReceipt
+                  ? 'Receipt to check'
+                  : ''}
         </span>
       </div>
 

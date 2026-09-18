@@ -35,6 +35,7 @@ export const isDepositReservation = (res) =>
  */
 export const balanceDue = (res) => {
   if (!res || !isDepositReservation(res)) return 0;
+  if (String(res.status ?? '').toLowerCase() === 'cancelled') return 0;
   if (String(res.paymentStatus ?? '').toLowerCase() !== 'paid') return 0;
 
   const outstanding = money(res.rentalPrice) - money(res.deposit);
