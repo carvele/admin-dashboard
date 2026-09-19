@@ -1043,10 +1043,13 @@ const Reservations = () => {
       {mainTab === 'return_refunds' ? (
         <ReturnRefundQueue
           onDisburseReservation={(res) => {
-            const target = reservations.find(r => r.id === res.id || r.docId === res.id) || {
-              ...res,
-              docId: res.id,
+            const found = reservations.find(r => r.id === res.id || r.docId === res.id);
+            const target = {
+              ...(found || res),
+              docId: res.id || res.docId || found?.docId || found?.id,
+              id: res.id || found?.id,
               paymentStatus: 'Refund Required',
+              payment_status: 'refund_required',
             };
             setViewModal(target);
           }}
@@ -2360,7 +2363,7 @@ const Reservations = () => {
               </div>
 
               {/* Operational Refund Action Panel (R-02 / Stage 3) */}
-              {(viewModal.paymentStatus || '').toLowerCase() === 'refund required' && (() => {
+              {((viewModal.paymentStatus || viewModal.payment_status || '').toLowerCase().replace(/_/g, ' ') === 'refund required') && (() => {
                 const qItem = refundQueue.find((q) => q.id === viewModal.id || q.docId === viewModal.docId);
                 const refundablePayments = (paymentRecords.length > 0 ? paymentRecords : (qItem?.payments ?? []))
                   .filter((p) => p.requiresRefund || p.requires_refund);

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { reviewReturnRefundRequest, getSignedEvidenceUrl } from '../../services/reservationService';
 import { formatCurrency } from '../../utils/helpers';
+import { useAuth } from '../../context/AuthContext';
+import { can } from '../../utils/permissions';
 import { toast } from 'sonner';
 
 const REASON_LABELS = {
@@ -51,9 +53,19 @@ export default function ReturnRefundDetailModal({
   onDisburse,
   canDisburse = false,
 }) {
+  const { user } = useAuth();
+  const effectiveCanDisburse = canDisburse || can(user?.role, 'disburse_refund') || ['owner', 'admin'].includes(String(user?.role || '').toLowerCase());
+
   const [evidenceUrl, setEvidenceUrl] = useState(null);
   const [loadingEvidence, setLoadingEvidence] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Local status override so UI responds instantly upon review
+  const [localStatus, setLocalStatus] = useState(request?.status);
+  useEffect(() => {
+    setLocalStatus(request?.status);
+  }, [request?.status]);
+  const currentStatus = localStatus || request?.status;
 
   // Review action state
   const [actionLoading, setActionLoading] = useState(false);
@@ -107,6 +119,7 @@ export default function ReturnRefundDetailModal({
     try {
       await reviewReturnRefundRequest(request.id, 'under_review');
       toast.success('Request marked as Under Review.');
+      setLocalStatus('under_review');
       if (onRefresh) await onRefresh();
     } catch (err) {
       console.error('Error updating status to under_review:', err);
@@ -116,13 +129,24 @@ export default function ReturnRefundDetailModal({
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (disburseImmediately = false) => {
     setActionLoading(true);
     try {
       await reviewReturnRefundRequest(request.id, 'approve', approveNotes.trim() || null);
       toast.success('Return request approved. Reservation moved to Refund Required.');
       setShowApproveBox(false);
+      setLocalStatus('approved');
       if (onRefresh) await onRefresh();
+      if (disburseImmediately && onDisburse) {
+        onClose();
+        onDisburse({
+          ...res,
+          id: res.id || request.reservation_id,
+          docId: res.id || request.reservation_id,
+          paymentStatus: 'Refund Required',
+          payment_status: 'refund_required',
+        });
+      }
     } catch (err) {
       console.error('Error approving return request:', err);
       toast.error(err.message || 'Failed to approve request.');
@@ -141,6 +165,7 @@ export default function ReturnRefundDetailModal({
       await reviewReturnRefundRequest(request.id, 'reject', rejectNotes.trim());
       toast.success('Return request rejected.');
       setShowRejectBox(false);
+      setLocalStatus('rejected');
       if (onRefresh) await onRefresh();
     } catch (err) {
       console.error('Error rejecting return request:', err);
@@ -157,7 +182,7 @@ export default function ReturnRefundDetailModal({
       case 'under_review':
         return <span className="badge badge-info flex-center gap-1"><HelpCircle size={12} /> Under Review</span>;
       case 'approved':
-        return <span className="badge badge-purple flex-center gap-1"><CheckCircle size={12} /> Approved — Awaiting Refund</span>;
+        return <span className="badge badge-success flex-center gap-1"><CheckCircle size={12} /> Approved</span>;
       case 'rejected':
         return <span className="badge badge-danger flex-center gap-1"><X size={12} /> Rejected</span>;
       case 'refunded':
@@ -175,7 +200,7 @@ export default function ReturnRefundDetailModal({
       aria-label="Close dialog"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'Escape') {
           e.preventDefault();
           onClose();
         }
@@ -208,7 +233,7 @@ export default function ReturnRefundDetailModal({
         <div className="modal-body" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
           {/* Status Alert Banners */}
-          {request.status === 'approved' && (
+          {(currentStatus === 'approved' || (res.payment_status || res.paymentStatus || '').toLowerCase().replace(/_/g, ' ') === 'refund required') && (
             <div
               style={{
                 backgroundColor: 'var(--status-fitting-bg, #f3e8ff)',
@@ -225,20 +250,26 @@ export default function ReturnRefundDetailModal({
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <CheckCircle size={18} />
                 <div>
-                  <strong>Approved Return — Refund Liability Active</strong>
+                  <strong>Approved Return - Refund Liability Active</strong>
                   <div style={{ fontSize: '0.8rem' }}>
                     Payment status is <em>Refund Required</em>. Total refundable: {formatCurrency(totalPaidPesos || res.totalAmount || res.total_amount || 0)}.
                   </div>
                 </div>
               </div>
-              {canDisburse && (
+              {effectiveCanDisburse && (
                 <button
                   type="button"
                   className="btn-primary"
                   style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
                   onClick={() => {
                     onClose();
-                    if (onDisburse) onDisburse(res);
+                    if (onDisburse) onDisburse({
+                      ...res,
+                      id: res.id || request.reservation_id,
+                      docId: res.id || request.reservation_id,
+                      paymentStatus: 'Refund Required',
+                      payment_status: 'refund_required',
+                    });
                   }}
                 >
                   Disburse Refund
@@ -500,12 +531,22 @@ export default function ReturnRefundDetailModal({
                 </button>
                 <button
                   type="button"
-                  className="btn-primary"
-                  onClick={handleApprove}
+                  className="btn-outline"
+                  onClick={() => handleApprove(false)}
                   disabled={actionLoading}
                 >
-                  {actionLoading ? 'Approving…' : 'Confirm Approval'}
+                  {actionLoading ? 'Approving...' : 'Approve Only'}
                 </button>
+                {effectiveCanDisburse && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => handleApprove(true)}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? 'Approving...' : 'Approve & Disburse'}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -540,7 +581,7 @@ export default function ReturnRefundDetailModal({
                   onClick={handleReject}
                   disabled={actionLoading || !rejectNotes.trim()}
                 >
-                  {actionLoading ? 'Rejecting…' : 'Confirm Rejection'}
+                  {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
               </div>
             </div>
@@ -556,7 +597,7 @@ export default function ReturnRefundDetailModal({
           </div>
 
           <div className="d-flex gap-2">
-            {request.status === 'submitted' && !showApproveBox && !showRejectBox && (
+            {currentStatus === 'submitted' && !showApproveBox && !showRejectBox && (
               <>
                 <button
                   type="button"
@@ -585,7 +626,7 @@ export default function ReturnRefundDetailModal({
               </>
             )}
 
-            {request.status === 'under_review' && !showApproveBox && !showRejectBox && (
+            {currentStatus === 'under_review' && !showApproveBox && !showRejectBox && (
               <>
                 <button
                   type="button"
@@ -606,13 +647,19 @@ export default function ReturnRefundDetailModal({
               </>
             )}
 
-            {request.status === 'approved' && canDisburse && (
+            {(currentStatus === 'approved' || (res.payment_status || res.paymentStatus || '').toLowerCase().replace(/_/g, ' ') === 'refund required') && effectiveCanDisburse && (
               <button
                 type="button"
                 className="btn-primary"
                 onClick={() => {
                   onClose();
-                  if (onDisburse) onDisburse(res);
+                  if (onDisburse) onDisburse({
+                    ...res,
+                    id: res.id || request.reservation_id,
+                    docId: res.id || request.reservation_id,
+                    paymentStatus: 'Refund Required',
+                    payment_status: 'refund_required',
+                  });
                 }}
               >
                 Disburse Refund

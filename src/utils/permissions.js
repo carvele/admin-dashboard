@@ -44,6 +44,7 @@ const PERMISSIONS = {
   assign_reservation: FULL,
   record_reservation_payment: ALL,
   delete_reservation: FULL,
+  disburse_refund: FULL,
 
   // ── Messaging (staff have full access for fast replies) ────
   view_messaging: ALL,
