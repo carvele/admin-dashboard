@@ -349,7 +349,7 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
         </div>
 
         {/* Requests Table */}
-        <div className="table-container">
+        <div className="table-container" style={{ marginTop: '1.5rem' }}>
           {loading ? (
             <SkeletonTable rows={5} columns={6} />
           ) : filteredRequests.length === 0 ? (
@@ -365,7 +365,7 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
               </p>
             </div>
           ) : (
-            <table className="data-table">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Booking ID</th>
@@ -388,6 +388,7 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
                       key={req.id}
                       onClick={() => handleOpenDetail(req)}
                       style={{ cursor: 'pointer' }}
+                      className="table-row-hover"
                     >
                       <td>
                         <strong style={{ color: 'var(--accent, #9b2c2c)' }}>{dispId}</strong>
