@@ -272,7 +272,14 @@ const Reservations = () => {
     debouncedSearch(e.target.value);
   };
 
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'All');
+  const VALID_STATUS_FILTERS = ['All', 'To Pay', 'Preparing', 'To Pickup', 'Completed', 'Cancelled'];
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const param = searchParams.get('status') || 'All';
+    // Raw DB values (e.g. 'ready', 'confirmed') are not valid display-status
+    // filter values and would leave the controlled <select> in an uncontrolled
+    // state, triggering React error #310. Normalise unknown values to 'All'.
+    return VALID_STATUS_FILTERS.includes(param) ? param : 'All';
+  });
   const [scopeFilter, setScopeFilter] = useState(() => {
     const paramScope = searchParams.get('scope');
     if (paramScope === 'refunds') return 'refunds';
