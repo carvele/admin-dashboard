@@ -433,6 +433,21 @@ export const getCustomerWardrobe = async (customerId) => {
 export const sendNotification = async (customerId, customerName, messageText, staffUser = null) => {
   const now = new Date().toISOString();
 
+  let staffUid = staffUser?.uid ?? staffUser?.id ?? null;
+  let staffName = (staffUser?.name && staffUser.name !== 'Staff') ? staffUser.name : (staffUser?.displayName || 'Boutique Support');
+  if (!staffUid) {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData?.user?.id) {
+        staffUid = authData.user.id;
+        const meta = authData.user.user_metadata || {};
+        staffName = meta.full_name || meta.name || staffName;
+      }
+    } catch {
+      // ignore auth resolution error; staffUid remains null
+    }
+  }
+
   // 1. Find existing conversation
   const { data: existing, error: convFetchErr } = await supabase
     .from('conversations')
@@ -474,8 +489,8 @@ export const sendNotification = async (customerId, customerName, messageText, st
     .from('messages')
     .insert({
       conversation_id: conversationId,
-      sender_id: staffUser?.uid ?? null,
-      sender_name: staffUser?.name ?? 'Staff',
+      sender_id: staffUid,
+      sender_name: staffName,
       text: messageText,
       created_at: now,
     })

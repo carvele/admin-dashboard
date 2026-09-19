@@ -453,7 +453,8 @@ const Customers = () => {
       await sendNotification(
         msgModal.docId,
         getUserDisplayName(msgModal),
-        msgText
+        msgText,
+        user
       );
       await logAction(user, 'Sent notification to customer', {
         targetType: 'profile',
