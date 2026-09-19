@@ -57,7 +57,7 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const canDisburse = can(user?.role, 'refund', 'disburse') || user?.role === 'owner' || user?.role === 'admin';
+  const canDisburse = can(user?.role, 'disburse_refund') || ['owner', 'admin'].includes(String(user?.role || '').toLowerCase());
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -443,17 +443,39 @@ export default function ReturnRefundQueue({ onDisburseReservation }) {
                       </td>
 
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="btn-outline"
-                          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenDetail(req);
-                          }}
-                        >
-                          Review <ChevronRight size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                          {req.status === 'approved' && canDisburse && (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', whiteSpace: 'nowrap' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onDisburseReservation) {
+                                  onDisburseReservation(req.reservations || {
+                                    id: req.reservation_id,
+                                    docId: req.reservation_id,
+                                    paymentStatus: 'Refund Required',
+                                    payment_status: 'refund_required',
+                                  });
+                                }
+                              }}
+                            >
+                              Disburse Refund
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-outline"
+                            style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDetail(req);
+                            }}
+                          >
+                            Review <ChevronRight size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
