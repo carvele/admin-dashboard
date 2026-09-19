@@ -265,7 +265,7 @@
 
 .catalog-grid-display {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1.25rem;
   padding-bottom: 2rem;
 }
@@ -289,7 +289,7 @@
 }
 
 .product-image-area {
-  height: 180px;
+  height: 160px;
   background-color: var(--cream);
   display: flex;
   align-items: center;
@@ -403,7 +403,7 @@
 }
 
 .product-info-area {
-  padding: 1.25rem;
+  padding: 0.85rem;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -423,7 +423,7 @@
 }
 
 .product-name {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--charcoal);
   margin-bottom: 0.2rem;
@@ -443,7 +443,7 @@
   text-align: right;
 }
 .product-price {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--charcoal);
   white-space: nowrap;
