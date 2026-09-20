@@ -48,7 +48,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
           <span className="res-card-avatar" aria-hidden="true">{initialsOf(res.displayName)}</span>
           <div>
             <p className="res-card-name">{res.displayName}</p>
-            <p className="res-card-id">{res.displayId || res.id}</p>
+            <p className="res-card-id">{res.displayId ? `Booking ${res.displayId}` : 'Booking reference pending'}</p>
           </div>
         </div>
         {deadline ? (
