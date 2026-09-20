@@ -154,6 +154,19 @@ export const getReservations = async (maxResults = 0) => {
   return (data ?? []).map(normaliseReservation);
 };
 
+export const getReservationByPickupToken = async (pickupToken) => {
+  const token = String(pickupToken || '').trim();
+  if (!token) return null;
+
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('pickup_token', token)
+    .maybeSingle();
+  if (error) throw error;
+  return normaliseReservation(data);
+};
+
 export const getPaginatedReservations = async (pageSize, page = 0, filters = {}) => {
   const result = await getPaginatedCollection('reservations', pageSize, page, filters, true);
   return { ...result, data: result.data.map(normaliseReservation) };

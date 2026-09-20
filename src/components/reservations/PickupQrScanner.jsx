@@ -12,7 +12,12 @@ const PickupQrScanner = ({ onDecode }) => {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const lastValueRef = useRef(null);
+  const onDecodeRef = useRef(onDecode);
   const [cameraError, setCameraError] = useState(null);
+
+  useEffect(() => {
+    onDecodeRef.current = onDecode;
+  }, [onDecode]);
 
   const scanFrame = useCallback(() => {
     const video = webcamRef.current?.video;
@@ -35,17 +40,17 @@ const PickupQrScanner = ({ onDecode }) => {
       return;
     }
 
-    const code = jsQR(imageData.data, width, height, { inversionAttempts: 'dontInvert' });
+    const code = jsQR(imageData.data, width, height, { inversionAttempts: 'attemptBoth' });
     if (code?.data && code.data !== lastValueRef.current) {
       lastValueRef.current = code.data;
-      onDecode(code.data);
+      onDecodeRef.current(code.data);
       // A decoded value stays "seen" for a couple seconds so the same pass
       // held in front of the camera doesn't re-fire onDecode on every frame.
       setTimeout(() => {
         lastValueRef.current = null;
       }, 2000);
     }
-  }, [onDecode]);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(scanFrame, SCAN_INTERVAL_MS);
@@ -65,7 +70,8 @@ const PickupQrScanner = ({ onDecode }) => {
           <Webcam
             ref={webcamRef}
             audio={false}
-            videoConstraints={{ facingMode: 'environment' }}
+            videoConstraints={{ facingMode: { ideal: 'environment' } }}
+            onUserMedia={() => setCameraError(null)}
             onUserMediaError={(err) => setCameraError(err?.message || 'Permission denied')}
             className="qr-scanner-video"
           />
