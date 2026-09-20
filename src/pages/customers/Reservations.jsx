@@ -518,7 +518,13 @@ const Reservations = () => {
     // tracker silently renders with every step unfilled the moment any live
     // update (e.g. recording a payment) refreshes `reservations` while this
     // modal is open.
-    setViewModal({ ...current, displayStatus: toDisplayStatus(current.status) });
+    setViewModal((previous) => ({
+      ...current,
+      // Reservation lines arrive through their own realtime feed. Preserve
+      // the enriched modal data while the base reservation row refreshes.
+      lines: previous?.lines ?? current.lines ?? [],
+      displayStatus: toDisplayStatus(current.status),
+    }));
   }, [reservations, viewModal?.id]);
 
   useEffect(() => {
@@ -2178,8 +2184,8 @@ const Reservations = () => {
                 </div>
               )}
               <div className="detail-row">
-                <span className="detail-label">ID</span>
-                <span className="font-mono">{viewModal.id}</span>
+                <span className="detail-label">Booking reference</span>
+                <span className="font-mono">{viewModal.displayId || 'Pending assignment'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Customer</span>

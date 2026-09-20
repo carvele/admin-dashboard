@@ -96,8 +96,9 @@ const normaliseReservation = (row) => {
   return {
     ...c,
     docId: c.id,
-    // Legacy field: UI sometimes uses 'id' as the display reservation number
-    displayId: c.displayId ?? c.id,
+    // The UUID is internal-only. A missing display ID must remain visibly
+    // missing instead of being presented to customers or staff as a reference.
+    displayId: c.displayId ?? null,
     // appointmentTime as the extracted "HH:MM" string
     appointmentTime: extractTime(c.appointmentTime),
     // date as JS Date object for UI components that call .toDate() style methods
