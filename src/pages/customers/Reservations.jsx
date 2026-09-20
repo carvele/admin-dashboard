@@ -73,6 +73,7 @@ import {
   markRefundDisbursed,
   getRefundQueue,
   getReturnRefundRequests,
+  getReservationByPickupToken,
 } from '../../services/reservationService';
 import ReturnRefundQueue from './ReturnRefundQueue';
 import {
@@ -680,17 +681,47 @@ const Reservations = () => {
   // The mobile app's pickup pass QR encodes `jezsy-pickup:<pickup_token>`.
   // Manual entry accepts either the bare token or the customer-visible
   // display ID, since staff may not have the QR in front of them.
-  const lookupByPickupCode = (rawInput) => {
-    const value = rawInput.trim();
+  const lookupByPickupCode = async (rawInput) => {
+    const value = String(rawInput || '').trim();
     const token = value.toLowerCase().startsWith('jezsy-pickup:')
       ? value.slice('jezsy-pickup:'.length)
       : value;
-    const found = filteredReservations.find(
+    if (!token) {
+      setQrResult({ found: false });
+      return;
+    }
+
+    const loadedReservation = reservations.find(
       (r) =>
         (r.pickupToken && r.pickupToken === token) ||
         (r.displayId && r.displayId.toUpperCase() === value.toUpperCase()),
     );
-    setQrResult(found ? { found: true, res: found } : { found: false });
+    const forPickupResult = (reservation) => ({
+      ...reservation,
+      displayStatus: toDisplayStatus(reservation.status),
+      displayDate: parseDate(reservation.reservationDate || reservation.date),
+      displayName: reservation.customerName || reservation.customer || 'Unknown Customer',
+    });
+    if (loadedReservation) {
+      setQrResult({ found: true, res: forPickupResult(loadedReservation) });
+      return;
+    }
+
+    try {
+      const reservation = await getReservationByPickupToken(token);
+      if (!reservation) {
+        setQrResult({ found: false });
+        return;
+      }
+      setReservations((current) =>
+        current.some((item) => item.id === reservation.id) ? current : [reservation, ...current],
+      );
+      setQrResult({ found: true, res: forPickupResult(reservation) });
+    } catch (error) {
+      console.error('Failed to validate pickup pass:', error);
+      toast.error('Could not validate this pickup pass. Please try again.');
+      setQrResult({ found: false });
+    }
   };
 
   const handleQrDecode = (decoded) => {
@@ -1855,7 +1886,7 @@ const Reservations = () => {
                     Look Up
                   </button>
                 )}
-                {qrResult?.found && qrResult.res.displayStatus === 'To Pickup' && (
+                {qrResult?.found && ['Ready', 'To Pickup'].includes(qrResult.res.displayStatus) && (
                   <button
                     type="button"
                     className="btn-primary"
