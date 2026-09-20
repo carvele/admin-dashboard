@@ -9,7 +9,7 @@ import {
   createAnnouncement,
   deleteAnnouncement,
 } from '../../services/announcementService';
-import { Plus, Trash2, Megaphone, Bell } from 'lucide-react';
+import { Plus, Trash2, Megaphone, Bell, Store } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import './Announcements.css';
@@ -27,6 +27,11 @@ const Announcements = () => {
     body: '',
     type: 'promo',
     expires_at: '',
+    placement: 'inbox',
+    storefront_image_url: '',
+    cta_label: '',
+    cta_target_type: 'none',
+    cta_target_value: '',
   });
 
   const fetchAnnouncements = async () => {
@@ -67,6 +72,11 @@ const Announcements = () => {
         body: formData.body,
         type: formData.type,
         created_by: user?.uid || user?.id,
+        placement: formData.placement,
+        storefront_image_url: formData.storefront_image_url.trim() || null,
+        cta_label: formData.cta_label.trim() || null,
+        cta_target_type: formData.cta_target_type,
+        cta_target_value: formData.cta_target_type === 'none' ? null : formData.cta_target_value.trim() || null,
       };
       if (formData.expires_at) {
         payload.expires_at = new Date(formData.expires_at).toISOString();
@@ -79,6 +89,11 @@ const Announcements = () => {
         body: '',
         type: 'promo',
         expires_at: '',
+        placement: 'inbox',
+        storefront_image_url: '',
+        cta_label: '',
+        cta_target_type: 'none',
+        cta_target_value: '',
       });
       fetchAnnouncements();
     } catch (error) {
@@ -121,11 +136,11 @@ const Announcements = () => {
     <div className="announcements-page">
       <PageHeader
         category="MARKETING & COMMUNICATIONS"
-        title="Broadcast Announcements"
-        subtitle="Push broadcast messages, promotional alerts, and system notices to mobile users."
+        title="Announcements & Storefront"
+        subtitle="Send Inbox broadcasts or publish a campaign directly on the mobile storefront."
         actions={
           <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={18} /> New Broadcast
+            <Plus size={18} /> Create announcement
           </button>
         }
       />
@@ -152,6 +167,9 @@ const Announcements = () => {
                       {announcement.type === 'promo' ? <Megaphone size={12} style={{marginRight: 'var(--spacing-xs)'}} /> : <Bell size={12} style={{marginRight: 'var(--spacing-xs)'}} />}
                       {announcement.type}
                     </span>
+                    {announcement.placement && announcement.placement !== 'inbox' && (
+                      <span className="badge promo" style={{ marginLeft: 8 }}><Store size={12} style={{ marginRight: 'var(--spacing-xs)' }} /> Storefront</span>
+                    )}
                     <span style={{ marginLeft: 8 }}>{getStatusBadge(announcement)}</span>
                   </div>
                 </div>
@@ -180,7 +198,7 @@ const Announcements = () => {
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-broadcast-title">
           <div className="modal-content">
             <div className="modal-header">
-              <h2 id="modal-broadcast-title">New Broadcast</h2>
+              <h2 id="modal-broadcast-title">Create announcement</h2>
               <button className="close-btn" onClick={() => setIsModalOpen(false)} aria-label="Close modal">
                 &times;
               </button>
@@ -200,6 +218,59 @@ const Announcements = () => {
                   required
                 />
               </div>
+
+              <div className="form-group">
+                <label className="label" htmlFor="announcement-placement">Where should it appear?</label>
+                <select
+                  id="announcement-placement"
+                  name="placement"
+                  value={formData.placement}
+                  onChange={handleInputChange}
+                  className="input-field"
+                >
+                  <option value="inbox">Inbox notification only</option>
+                  <option value="storefront">Mobile storefront only</option>
+                  <option value="both">Inbox notification and storefront</option>
+                </select>
+              </div>
+
+              {formData.placement !== 'inbox' && (
+                <>
+                  <div className="form-group">
+                    <label className="label" htmlFor="announcement-image">Campaign image URL (optional)</label>
+                    <input
+                      id="announcement-image"
+                      type="url"
+                      name="storefront_image_url"
+                      value={formData.storefront_image_url}
+                      onChange={handleInputChange}
+                      className="input-field"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="announcement-action">Campaign destination</label>
+                    <select id="announcement-action" name="cta_target_type" value={formData.cta_target_type} onChange={handleInputChange} className="input-field">
+                      <option value="none">No link</option>
+                      <option value="catalog">Open all products</option>
+                      <option value="category">Open a category</option>
+                      <option value="product">Open a product</option>
+                    </select>
+                  </div>
+                  {formData.cta_target_type !== 'none' && formData.cta_target_type !== 'catalog' && (
+                    <div className="form-group">
+                      <label className="label" htmlFor="announcement-target">{formData.cta_target_type === 'product' ? 'Product ID' : 'Category name'}</label>
+                      <input id="announcement-target" type="text" name="cta_target_value" value={formData.cta_target_value} onChange={handleInputChange} className="input-field" required />
+                    </div>
+                  )}
+                  {formData.cta_target_type !== 'none' && (
+                    <div className="form-group">
+                      <label className="label" htmlFor="announcement-cta">Button label (optional)</label>
+                      <input id="announcement-cta" type="text" name="cta_label" value={formData.cta_label} onChange={handleInputChange} className="input-field" placeholder="Shop collection" />
+                    </div>
+                  )}
+                </>
+              )}
 
               <div className="form-group">
                 <label className="label" htmlFor="announcement-type">Type</label>
@@ -246,7 +317,7 @@ const Announcements = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Broadcast Now
+                  Publish announcement
                 </button>
               </div>
             </form>
