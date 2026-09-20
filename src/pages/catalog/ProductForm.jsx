@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Shirt, Tag as TagIcon, ChevronLeft, ChevronRight, Ruler, DollarSign, Eye, Layers, Palette, BookOpen, Package, Star, Sparkles, Edit2, Grid3X3, CheckSquare, Square } from 'lucide-react';
 import {
   createProduct,
@@ -52,8 +52,11 @@ import './ProductForm.css';
 const ProductForm = ({ readOnly = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAdminUnlocked } = useAuth();
   const isEditing = Boolean(id);
+  const catalogPath = `/catalog${location.search}`;
+  const withCatalogContext = (path) => `${path}${location.search}`;
 
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
@@ -283,7 +286,7 @@ const ProductForm = ({ readOnly = false }) => {
              }
           } else {
              toast.error('Product not found.');
-             navigate('/catalog');
+             navigate(catalogPath);
           }
         } catch {
           toast.error('Failed to load product details.');
@@ -816,7 +819,7 @@ const ProductForm = ({ readOnly = false }) => {
     } finally {
       clearTimeout(safetyTimeout);
       setSaving(false);
-      if (success) navigate('/catalog');
+      if (success) navigate(catalogPath);
     }
   };
 
@@ -842,13 +845,13 @@ const ProductForm = ({ readOnly = false }) => {
     <div className="p-6">
       {/* ── Page Header ── */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate('/catalog')} className="btn-secondary p-2">
+        <button onClick={() => navigate(catalogPath)} className="btn-secondary p-2">
           <ArrowLeft size={20} />
         </button>
         
           <div className="flex-1">
             <nav className="flex items-center gap-2 mb-1 text-sm font-medium text-gray-500">
-              <span role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/catalog'); } }} onClick={() => navigate('/catalog')} className="cursor-pointer breadcrumb-link transition-colors">Catalog</span>
+              <span role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(catalogPath); } }} onClick={() => navigate(catalogPath)} className="cursor-pointer breadcrumb-link transition-colors">Catalog</span>
               <ChevronRight size={14} className="opacity-50" />
               <span className="text-gray-900">{readOnly ? 'View Product' : isEditing ? 'Edit Product' : 'New Product'}</span>
             </nav>
@@ -872,7 +875,7 @@ const ProductForm = ({ readOnly = false }) => {
         {readOnly && (
           <button
             type="button"
-            onClick={() => navigate('/catalog/edit/' + id)}
+            onClick={() => navigate(withCatalogContext('/catalog/edit/' + id))}
             className="btn-primary flex items-center gap-2"
           >
             <Edit2 size={16} /> Edit Product
@@ -1880,14 +1883,14 @@ const ProductForm = ({ readOnly = false }) => {
             </div>
 
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => navigate('/catalog')} className="btn-secondary">
+              <button type="button" onClick={() => navigate(catalogPath)} className="btn-secondary">
                 {readOnly ? 'Back to Catalog' : 'Cancel'}
               </button>
               {readOnly ? (
                 isAdminUnlocked && (
                   <button
                     type="button"
-                    onClick={() => navigate('/catalog/edit/' + id)}
+                    onClick={() => navigate(withCatalogContext('/catalog/edit/' + id))}
                     className="btn-primary flex items-center gap-2"
                   >
                     <Edit2 size={16} /> Edit Product

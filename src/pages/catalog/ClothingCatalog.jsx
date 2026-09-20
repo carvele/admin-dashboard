@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
  
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -49,6 +49,7 @@ import './ClothingCatalog.css';
 const ClothingCatalog = () => {
   const { isAdminUnlocked, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [catalog, setCatalog] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]);
@@ -143,13 +144,34 @@ const ClothingCatalog = () => {
     fetchCategories();
   }, []);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [activeType, setActiveType] = useState('All');
-  const [activeColor, setActiveColor] = useState('All Colors');
-  const [activeStock, setActiveStock] = useState('all');
-  const [activeTag, setActiveTag] = useState('All Tags');
-  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
+  const [activeCategory, setActiveCategory] = useState(() => searchParams.get('category') || 'All');
+  const [activeType, setActiveType] = useState(() => searchParams.get('type') || 'All');
+  const [activeColor, setActiveColor] = useState(() => searchParams.get('color') || 'All Colors');
+  const [activeStock, setActiveStock] = useState(() => searchParams.get('stock') || 'all');
+  const [activeTag, setActiveTag] = useState(() => searchParams.get('tag') || 'All Tags');
+  const [viewMode, setViewMode] = useState(() => searchParams.get('view') || 'active'); // 'active' | 'archived'
+
+  // Keep the catalog context in the URL so it survives opening, saving, or cancelling a product form.
+  const catalogContext = React.useMemo(() => {
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) params.set('search', searchTerm.trim());
+    if (activeCategory !== 'All') params.set('category', activeCategory);
+    if (activeType !== 'All') params.set('type', activeType);
+    if (activeColor !== 'All Colors') params.set('color', activeColor);
+    if (activeStock !== 'all') params.set('stock', activeStock);
+    if (activeTag !== 'All Tags') params.set('tag', activeTag);
+    if (viewMode !== 'active') params.set('view', viewMode);
+    return params.toString();
+  }, [searchTerm, activeCategory, activeType, activeColor, activeStock, activeTag, viewMode]);
+
+  useEffect(() => {
+    if (searchParams.toString() !== catalogContext) {
+      setSearchParams(catalogContext, { replace: true });
+    }
+  }, [catalogContext, searchParams, setSearchParams]);
+
+  const withCatalogContext = (path) => (catalogContext ? `${path}?${catalogContext}` : path);
 
   const categories = ['All', ...dbCategories];
 
@@ -486,7 +508,7 @@ const ClothingCatalog = () => {
           isAdminUnlocked && (
             <button
               className="btn-primary flex-center gap-2"
-              onClick={() => navigate('/catalog/new')}
+              onClick={() => navigate(withCatalogContext('/catalog/new'))}
             >
               <Plus size={18} /> Add New Product
             </button>
@@ -833,13 +855,13 @@ const ClothingCatalog = () => {
             <div
               key={item.id}
               className={`product-card card ${item.deleted ? 'archived-card' : ''}`}
-              onClick={() => navigate('/catalog/view/' + item.docId)}
+              onClick={() => navigate(withCatalogContext('/catalog/view/' + item.docId))}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  navigate('/catalog/view/' + item.docId);
+                  navigate(withCatalogContext('/catalog/view/' + item.docId));
                 }
               }}
               style={{ cursor: 'pointer' }}
@@ -1038,7 +1060,7 @@ const ClothingCatalog = () => {
                       <>
                         <button
                           className="btn-outline btn-sm flex-center gap-1"
-                          onClick={(e) => { e.stopPropagation(); navigate('/catalog/edit/' + item.docId); }}
+                          onClick={(e) => { e.stopPropagation(); navigate(withCatalogContext('/catalog/edit/' + item.docId)); }}
                         >
                           <Edit size={14} /> Edit
                         </button>
@@ -1098,7 +1120,7 @@ const ClothingCatalog = () => {
             ) : isAdminUnlocked ? (
               <button
                 className="btn-primary mt-3 flex-center gap-2"
-                onClick={() => navigate('/catalog/new')}
+                onClick={() => navigate(withCatalogContext('/catalog/new'))}
               >
                 <Plus size={16} /> Add First Product
               </button>
