@@ -129,6 +129,24 @@
   transition: background-color 0.2s;
 }
 
+.edit-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  color: var(--accent);
+  border: none;
+  padding: 0.5rem;
+  border-radius: var(--spacing-xs);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background-color 0.2s;
+}
+
+.edit-btn:hover {
+  background: var(--surface-muted, #f1f5f9);
+}
+
 .delete-btn:hover {
   background: var(--status-cancelled-bg);
 }
