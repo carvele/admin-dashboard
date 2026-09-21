@@ -29,6 +29,21 @@ export const createAnnouncement = async (announcement) => {
   return data;
 };
 
+export const updateAnnouncement = async (id, announcement) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .update(announcement)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating announcement:', error);
+    throw error;
+  }
+  return data;
+};
+
 export const deleteAnnouncement = async (id) => {
   const { error } = await supabase
     .from('announcements')

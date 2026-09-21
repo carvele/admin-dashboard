@@ -7,9 +7,10 @@ import { useAuth } from '../../context/AuthContext';
 import {
   getAnnouncements,
   createAnnouncement,
+  updateAnnouncement,
   deleteAnnouncement,
 } from '../../services/announcementService';
-import { Plus, Trash2, Megaphone, Bell, Store } from 'lucide-react';
+import { Plus, Pencil, Trash2, Megaphone, Bell, Store } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { supabase } from '../../lib/supabaseClient';
@@ -18,7 +19,15 @@ import './Announcements.css';
 const initialFormData = {
   title: '', body: '', type: 'promo', expires_at: '', placement: 'inbox',
   storefront_image_url: '', cta_label: '', cta_target_type: 'none', cta_target_value: '',
-  storefront_position: 'top', storefront_sort_order: 0, storefront_status: 'published', storefront_starts_at: '',
+  storefront_eyebrow: '', storefront_position: 'top', storefront_sort_order: 0, storefront_status: 'published', storefront_starts_at: '',
+};
+
+const toDateTimeInputValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
 const uploadCampaignImage = async (file) => {
@@ -42,6 +51,7 @@ const Announcements = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -82,6 +92,41 @@ const Announcements = () => {
     }));
   };
 
+  const openCreateModal = () => {
+    setEditingAnnouncement(null);
+    setCampaignImage(null);
+    setFormData(initialFormData);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (announcement) => {
+    setEditingAnnouncement(announcement);
+    setCampaignImage(null);
+    setFormData({
+      title: announcement.title || '',
+      body: announcement.body || '',
+      type: announcement.type || 'promo',
+      expires_at: toDateTimeInputValue(announcement.expires_at),
+      placement: announcement.placement || 'inbox',
+      storefront_image_url: announcement.storefront_image_url || '',
+      cta_label: announcement.cta_label || '',
+      cta_target_type: announcement.cta_target_type || 'none',
+      cta_target_value: announcement.cta_target_value || '',
+      storefront_eyebrow: announcement.storefront_eyebrow || '',
+      storefront_position: announcement.storefront_position || 'top',
+      storefront_sort_order: announcement.storefront_sort_order ?? 0,
+      storefront_status: announcement.storefront_status || 'published',
+      storefront_starts_at: toDateTimeInputValue(announcement.storefront_starts_at),
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingAnnouncement(null);
+    setCampaignImage(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.body) {
@@ -106,20 +151,22 @@ const Announcements = () => {
 
     try {
       let imageUrl = formData.storefront_image_url.trim() || null;
-      let imageStoragePath = null;
+      let imageStoragePath = editingAnnouncement?.storefront_image_storage_path || null;
       if (campaignImage) {
         const uploadedImage = await uploadCampaignImage(campaignImage);
         imageUrl = uploadedImage.url;
         imageStoragePath = uploadedImage.path;
+      } else if (imageUrl !== (editingAnnouncement?.storefront_image_url || null)) {
+        imageStoragePath = null;
       }
       const payload = {
         title: formData.title,
         body: formData.body,
         type: formData.type,
-        created_by: user?.uid || user?.id,
         placement: formData.placement,
         storefront_image_url: imageUrl,
         storefront_image_storage_path: imageStoragePath,
+        storefront_eyebrow: formData.storefront_eyebrow.trim() || null,
         cta_label: formData.cta_label.trim() || null,
         cta_target_type: formData.cta_target_type,
         cta_target_value: formData.cta_target_type === 'none' ? null : formData.cta_target_value.trim() || null,
@@ -131,11 +178,14 @@ const Announcements = () => {
       if (expiresAt) {
         payload.expires_at = expiresAt.toISOString();
       }
-      await createAnnouncement(payload);
-      toast.success(formData.storefront_status === 'draft' ? 'Campaign saved as a draft' : 'Announcement published successfully');
-      setIsModalOpen(false);
-      setCampaignImage(null);
-      setFormData(initialFormData);
+      if (editingAnnouncement) {
+        await updateAnnouncement(editingAnnouncement.id, payload);
+        toast.success('Announcement updated');
+      } else {
+        await createAnnouncement({ ...payload, created_by: user?.uid || user?.id });
+        toast.success(formData.storefront_status === 'draft' ? 'Campaign saved as a draft' : 'Announcement published successfully');
+      }
+      closeModal();
       fetchAnnouncements();
     } catch (error) {
       toast.error(error?.message || 'Failed to create announcement');
@@ -186,7 +236,7 @@ const Announcements = () => {
         title="Announcements & Storefront"
         subtitle="Send Inbox broadcasts or publish a campaign directly on the mobile storefront."
         actions={
-          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+          <button className="btn-primary" onClick={openCreateModal}>
             <Plus size={18} /> Create announcement
           </button>
         }
@@ -237,13 +287,18 @@ const Announcements = () => {
                 <span className="announcement-meta" style={{ flexGrow: 1 }}>
                   Posted {formatPHDate(announcement.created_at)}
                 </span>
-                <button 
-                  className="delete-btn"
-                  onClick={() => handleDelete(announcement.id)}
-                  title="Delete Announcement"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="edit-btn" onClick={() => openEditModal(announcement)} title="Edit announcement">
+                    <Pencil size={16} /> Edit
+                  </button>
+                  <button
+                    className="delete-btn"
+                    onClick={() => handleDelete(announcement.id)}
+                    title="Delete Announcement"
+                  >
+                    <Trash2 size={16} /> Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -254,8 +309,8 @@ const Announcements = () => {
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-broadcast-title">
           <div className="modal-content">
             <div className="modal-header">
-              <h2 id="modal-broadcast-title">Create announcement</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)} aria-label="Close modal">
+              <h2 id="modal-broadcast-title">{editingAnnouncement ? 'Edit announcement' : 'Create announcement'}</h2>
+              <button className="close-btn" onClick={closeModal} aria-label="Close modal">
                 &times;
               </button>
             </div>
@@ -295,6 +350,10 @@ const Announcements = () => {
                   <div className="form-group">
                     <label className="label" htmlFor="announcement-image-upload">Campaign image</label>
                     <input id="announcement-image-upload" type="file" accept="image/*" onChange={(e) => setCampaignImage(e.target.files?.[0] || null)} className="input-field" />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="announcement-eyebrow">Campaign label (optional)</label>
+                    <input id="announcement-eyebrow" type="text" name="storefront_eyebrow" value={formData.storefront_eyebrow} onChange={handleInputChange} className="input-field" placeholder="JEZSY EDIT" maxLength={40} />
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="announcement-image">Or paste an image URL (optional)</label>
@@ -388,11 +447,11 @@ const Announcements = () => {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn-outline" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="btn-outline" onClick={closeModal}>
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Publish announcement
+                  {editingAnnouncement ? 'Save changes' : 'Publish announcement'}
                 </button>
               </div>
             </form>
