@@ -105,6 +105,7 @@ const normaliseReservation = (row) => {
     date: c.date ? new Date(c.date) : null,
     returnDate: c.returnDate ? new Date(c.returnDate) : null,
     confirmedAt: c.confirmedAt ? new Date(c.confirmedAt) : null,
+    pickupDeadlineAt: c.pickupDeadlineAt ? new Date(c.pickupDeadlineAt) : null,
   };
 };
 
