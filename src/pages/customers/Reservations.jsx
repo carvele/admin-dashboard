@@ -2227,24 +2227,50 @@ const Reservations = () => {
                   </strong>
                 </div>
               )}
-              <div className="detail-row">
-                <span className="detail-label">Pickup Date & Time</span>
-                <strong>
-                  {parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString('en-PH', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    timeZone: 'Asia/Manila',
-                  })}{' '}
-                  at{' '}
-                  {viewModal.appointmentTime || parseDate(viewModal.reservationDate || viewModal.date).toLocaleTimeString('en-PH', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Asia/Manila',
-                  })}
-                </strong>
-              </div>
+              {(viewModal.pickupDeadlineAt || viewModal.pickup_deadline_at) ? (
+                <div className="detail-row">
+                  <span className="detail-label">Collect By (Deadline)</span>
+                  <strong>
+                    {parseDate(viewModal.pickupDeadlineAt || viewModal.pickup_deadline_at).toLocaleDateString('en-PH', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      timeZone: 'Asia/Manila',
+                    })}{' '}
+                    at{' '}
+                    {parseDate(viewModal.pickupDeadlineAt || viewModal.pickup_deadline_at).toLocaleTimeString('en-PH', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              ) : (viewModal.reservationDate || viewModal.date) ? (
+                <div className="detail-row">
+                  <span className="detail-label">Pickup Date & Time</span>
+                  <strong>
+                    {parseDate(viewModal.reservationDate || viewModal.date).toLocaleDateString('en-PH', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      timeZone: 'Asia/Manila',
+                    })}{' '}
+                    at{' '}
+                    {viewModal.appointmentTime || parseDate(viewModal.reservationDate || viewModal.date).toLocaleTimeString('en-PH', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Manila',
+                    })}
+                  </strong>
+                </div>
+              ) : (
+                <div className="detail-row">
+                  <span className="detail-label">Pickup Window</span>
+                  <strong>Collect within 3 open days once Ready</strong>
+                </div>
+              )}
               <div className="detail-row">
                 <span className="detail-label">Status</span>
                 <StatusBadge status={presentationStatus(viewModal) || 'Pending'} />

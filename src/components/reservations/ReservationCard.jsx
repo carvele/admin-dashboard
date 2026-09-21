@@ -74,17 +74,19 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
 
       <div className="res-card-meta">
         <span>
-          {res.displayDate?.toLocaleDateString?.('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}
-          {', '}
-          {/* res.appointmentTime (the real scheduled time, already resolved to
-              Asia/Manila) over reformatting displayDate: displayDate comes
-              from the midnight-anchored `date` column, so a time derived from
-              it is midnight reinterpreted in the browser's local timezone,
-              not the actual appointment -- this showed 08:00 AM for a 1:00 PM
-              booking on a Manila-zoned machine. */}
-          {res.appointmentTime
-            ? formatTimeLabel(res.appointmentTime)
-            : res.displayDate?.toLocaleTimeString?.('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+          {res.pickupDeadlineAt ? (
+            <>Collect by {res.pickupDeadlineAt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })} • {res.pickupDeadlineAt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}</>
+          ) : (res.displayDate && (res.appointmentTime || res.date)) ? (
+            <>
+              {res.displayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}
+              {', '}
+              {res.appointmentTime
+                ? formatTimeLabel(res.appointmentTime)
+                : res.displayDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+            </>
+          ) : (
+            <>Pickup in 3 open days once Ready</>
+          )}
         </span>
         {/* "Paid" alone was a half-truth on a deposit reservation: the webhook
             marks it paid once the 50% clears, so this read Paid while the rest
