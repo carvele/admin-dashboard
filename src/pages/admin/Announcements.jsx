@@ -89,6 +89,21 @@ const Announcements = () => {
       return;
     }
 
+    const startsAt = formData.storefront_starts_at ? new Date(formData.storefront_starts_at) : null;
+    const expiresAt = formData.expires_at ? new Date(formData.expires_at) : null;
+    if ((startsAt && Number.isNaN(startsAt.getTime())) || (expiresAt && Number.isNaN(expiresAt.getTime()))) {
+      toast.error('Enter valid campaign dates and times');
+      return;
+    }
+    if (startsAt && expiresAt && expiresAt <= startsAt) {
+      toast.error('Expiry must be later than the campaign start time');
+      return;
+    }
+    if (formData.storefront_status === 'published' && expiresAt && expiresAt <= new Date()) {
+      toast.error('A published announcement cannot already be expired');
+      return;
+    }
+
     try {
       let imageUrl = formData.storefront_image_url.trim() || null;
       let imageStoragePath = null;
@@ -111,10 +126,10 @@ const Announcements = () => {
         storefront_position: formData.storefront_position,
         storefront_sort_order: Number(formData.storefront_sort_order) || 0,
         storefront_status: formData.storefront_status,
-        storefront_starts_at: formData.storefront_starts_at ? new Date(formData.storefront_starts_at).toISOString() : null,
+        storefront_starts_at: startsAt?.toISOString() || null,
       };
-      if (formData.expires_at) {
-        payload.expires_at = new Date(formData.expires_at).toISOString();
+      if (expiresAt) {
+        payload.expires_at = expiresAt.toISOString();
       }
       await createAnnouncement(payload);
       toast.success(formData.storefront_status === 'draft' ? 'Campaign saved as a draft' : 'Announcement published successfully');
@@ -146,6 +161,9 @@ const Announcements = () => {
   const getStatusBadge = (announcement) => {
     if (announcement.storefront_status === 'draft') {
       return <span className="badge" style={{ background: '#64748b', color: '#fff' }}>Draft</span>;
+    }
+    if (announcement.storefront_starts_at && new Date(announcement.storefront_starts_at) > new Date()) {
+      return <span className="badge" style={{ background: '#2563eb', color: '#fff' }}>Scheduled</span>;
     }
     if (announcement.expires_at && new Date(announcement.expires_at) < new Date()) {
       return <span className="badge expired">Expired</span>;
@@ -362,6 +380,11 @@ const Announcements = () => {
                   onChange={handleInputChange}
                   className="input-field"
                 />
+                {formData.placement !== 'inbox' && (
+                  <small style={{ color: 'var(--text-secondary, #64748b)', display: 'block', marginTop: 6 }}>
+                    Published campaigns are hidden after this exact time. Leave it empty to keep the campaign visible.
+                  </small>
+                )}
               </div>
 
               <div className="modal-footer">
