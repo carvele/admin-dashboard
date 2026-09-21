@@ -1696,7 +1696,7 @@ const Reservations = () => {
                               {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                             </button>
                           )}
-                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && (
+                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && Boolean(res.date || res.reservationDate) && (
                             <button
                               className="res-action-btn reschedule"
                               title="Reschedule"
