@@ -12,7 +12,29 @@ import {
 import { Plus, Trash2, Megaphone, Bell, Store } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { supabase } from '../../lib/supabaseClient';
 import './Announcements.css';
+
+const initialFormData = {
+  title: '', body: '', type: 'promo', expires_at: '', placement: 'inbox',
+  storefront_image_url: '', cta_label: '', cta_target_type: 'none', cta_target_value: '',
+  storefront_position: 'top', storefront_sort_order: 0, storefront_status: 'published', storefront_starts_at: '',
+};
+
+const uploadCampaignImage = async (file) => {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Campaign images must be 5 MB or smaller');
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+  const objectPath = `campaigns/${crypto.randomUUID()}-${safeName}`;
+  const { data, error } = await supabase.storage
+    .from('storefront-images')
+    .upload(objectPath, file, { upsert: false, contentType: file.type });
+  if (error) throw error;
+
+  const { data: publicUrl } = supabase.storage.from('storefront-images').getPublicUrl(data.path);
+  return { path: data.path, url: publicUrl.publicUrl };
+};
 
 const Announcements = () => {
   const { user } = useAuth();
@@ -21,18 +43,11 @@ const Announcements = () => {
   const [hasMore, setHasMore] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [campaignImage, setCampaignImage] = useState(null);
   
-  const [formData, setFormData] = useState({
-    title: '',
-    body: '',
-    type: 'promo',
-    expires_at: '',
-    placement: 'inbox',
-    storefront_image_url: '',
-    cta_label: '',
-    cta_target_type: 'none',
-    cta_target_value: '',
-  });
+  const [formData, setFormData] = useState(initialFormData);
 
   const fetchAnnouncements = async () => {
     try {
@@ -49,6 +64,13 @@ const Announcements = () => {
 
   useEffect(() => {
     fetchAnnouncements();
+    Promise.all([
+      supabase.from('products').select('id,name').eq('deleted', false).order('name').limit(500),
+      supabase.from('categories').select('id,name').is('parent_id', null).order('sort_order'),
+    ]).then(([productRes, categoryRes]) => {
+      if (!productRes.error) setProducts(productRes.data || []);
+      if (!categoryRes.error) setCategories(categoryRes.data || []);
+    });
   }, []);
 
   const handleInputChange = (e) => {
@@ -56,6 +78,7 @@ const Announcements = () => {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === 'cta_target_type' ? { cta_target_value: '' } : {}),
     }));
   };
 
@@ -67,37 +90,40 @@ const Announcements = () => {
     }
 
     try {
+      let imageUrl = formData.storefront_image_url.trim() || null;
+      let imageStoragePath = null;
+      if (campaignImage) {
+        const uploadedImage = await uploadCampaignImage(campaignImage);
+        imageUrl = uploadedImage.url;
+        imageStoragePath = uploadedImage.path;
+      }
       const payload = {
         title: formData.title,
         body: formData.body,
         type: formData.type,
         created_by: user?.uid || user?.id,
         placement: formData.placement,
-        storefront_image_url: formData.storefront_image_url.trim() || null,
+        storefront_image_url: imageUrl,
+        storefront_image_storage_path: imageStoragePath,
         cta_label: formData.cta_label.trim() || null,
         cta_target_type: formData.cta_target_type,
         cta_target_value: formData.cta_target_type === 'none' ? null : formData.cta_target_value.trim() || null,
+        storefront_position: formData.storefront_position,
+        storefront_sort_order: Number(formData.storefront_sort_order) || 0,
+        storefront_status: formData.storefront_status,
+        storefront_starts_at: formData.storefront_starts_at ? new Date(formData.storefront_starts_at).toISOString() : null,
       };
       if (formData.expires_at) {
         payload.expires_at = new Date(formData.expires_at).toISOString();
       }
       await createAnnouncement(payload);
-      toast.success('Announcement broadcasted successfully');
+      toast.success(formData.storefront_status === 'draft' ? 'Campaign saved as a draft' : 'Announcement published successfully');
       setIsModalOpen(false);
-      setFormData({
-        title: '',
-        body: '',
-        type: 'promo',
-        expires_at: '',
-        placement: 'inbox',
-        storefront_image_url: '',
-        cta_label: '',
-        cta_target_type: 'none',
-        cta_target_value: '',
-      });
+      setCampaignImage(null);
+      setFormData(initialFormData);
       fetchAnnouncements();
     } catch (error) {
-      toast.error('Failed to create announcement');
+      toast.error(error?.message || 'Failed to create announcement');
     }
   };
 
@@ -118,6 +144,9 @@ const Announcements = () => {
   };
 
   const getStatusBadge = (announcement) => {
+    if (announcement.storefront_status === 'draft') {
+      return <span className="badge" style={{ background: '#64748b', color: '#fff' }}>Draft</span>;
+    }
     if (announcement.expires_at && new Date(announcement.expires_at) < new Date()) {
       return <span className="badge expired">Expired</span>;
     }
@@ -176,6 +205,15 @@ const Announcements = () => {
               </div>
               
               <p className="announcement-body">{announcement.body}</p>
+
+              {announcement.placement && announcement.placement !== 'inbox' && (
+                <div className="announcement-meta" style={{ gap: 10, marginBottom: 12 }}>
+                  <span>Placement: {(announcement.storefront_position || 'top').replaceAll('_', ' ')}</span>
+                  <span>Order: {announcement.storefront_sort_order ?? 0}</span>
+                  <span>{announcement.storefront_impressions ?? 0} views</span>
+                  <span>{announcement.storefront_taps ?? 0} taps</span>
+                </div>
+              )}
               
               <div className="announcement-footer">
                 <span className="announcement-meta" style={{ flexGrow: 1 }}>
@@ -237,7 +275,11 @@ const Announcements = () => {
               {formData.placement !== 'inbox' && (
                 <>
                   <div className="form-group">
-                    <label className="label" htmlFor="announcement-image">Campaign image URL (optional)</label>
+                    <label className="label" htmlFor="announcement-image-upload">Campaign image</label>
+                    <input id="announcement-image-upload" type="file" accept="image/*" onChange={(e) => setCampaignImage(e.target.files?.[0] || null)} className="input-field" />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="announcement-image">Or paste an image URL (optional)</label>
                     <input
                       id="announcement-image"
                       type="url"
@@ -257,12 +299,22 @@ const Announcements = () => {
                       <option value="product">Open a product</option>
                     </select>
                   </div>
-                  {formData.cta_target_type !== 'none' && formData.cta_target_type !== 'catalog' && (
+                  <div className="form-group">
+                    <label className="label" htmlFor="announcement-position">Storefront position</label>
+                    <select id="announcement-position" name="storefront_position" value={formData.storefront_position} onChange={handleInputChange} className="input-field">
+                      <option value="top">Top campaign</option><option value="after_featured">After Featured Collection</option><option value="after_categories">After Shop by Category</option>
+                    </select>
+                  </div>
+                  <div className="form-group"><label className="label" htmlFor="announcement-order">Display order</label><input id="announcement-order" type="number" min="0" name="storefront_sort_order" value={formData.storefront_sort_order} onChange={handleInputChange} className="input-field" /></div>
+                  <div className="form-group"><label className="label" htmlFor="announcement-status">Publishing status</label><select id="announcement-status" name="storefront_status" value={formData.storefront_status} onChange={handleInputChange} className="input-field"><option value="draft">Draft — hidden from customers</option><option value="published">Published</option></select></div>
+                  <div className="form-group"><label className="label" htmlFor="announcement-start">Show from (optional)</label><input id="announcement-start" type="datetime-local" name="storefront_starts_at" value={formData.storefront_starts_at} onChange={handleInputChange} className="input-field" /></div>
+                  {formData.cta_target_type === 'product' && (
                     <div className="form-group">
-                      <label className="label" htmlFor="announcement-target">{formData.cta_target_type === 'product' ? 'Product ID' : 'Category name'}</label>
-                      <input id="announcement-target" type="text" name="cta_target_value" value={formData.cta_target_value} onChange={handleInputChange} className="input-field" required />
+                      <label className="label" htmlFor="announcement-target">Product</label>
+                      <select id="announcement-target" name="cta_target_value" value={formData.cta_target_value} onChange={handleInputChange} className="input-field" required><option value="">Select a product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
                     </div>
                   )}
+                  {formData.cta_target_type === 'category' && <div className="form-group"><label className="label" htmlFor="announcement-category">Category</label><select id="announcement-category" name="cta_target_value" value={formData.cta_target_value} onChange={handleInputChange} className="input-field" required><option value="">Select a category</option>{categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select></div>}
                   {formData.cta_target_type !== 'none' && (
                     <div className="form-group">
                       <label className="label" htmlFor="announcement-cta">Button label (optional)</label>
