@@ -110,13 +110,23 @@ export const getProductColorways = async (productId) => {
 
 /**
  * Transactional upsert of a product and all its colorways + image galleries.
+ * Enforces canonical database/RPC payload serialization (snake_case sub_category).
  */
 export const upsertProductWithColorways = async (productPayload, colorwaysPayload) => {
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
 
+  // Canonical serialization: map React camelCase subCategory -> RPC sub_category
+  const canonicalProductPayload = { ...productPayload };
+  if ('subCategory' in canonicalProductPayload) {
+    if (canonicalProductPayload.sub_category === undefined) {
+      canonicalProductPayload.sub_category = canonicalProductPayload.subCategory || null;
+    }
+    delete canonicalProductPayload.subCategory;
+  }
+
   const { data, error } = await supabase.rpc('upsert_product_with_colorways', {
-    _product_payload: productPayload,
+    _product_payload: canonicalProductPayload,
     _colorways_payload: colorwaysPayload,
   });
 

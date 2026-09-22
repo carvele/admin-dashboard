@@ -212,7 +212,7 @@ const ProductForm = ({ readOnly = false }) => {
                  ...docParams,
                 name: docParams.name || '',
                 category: docParams.category || prev.category || 'Tops',
-                subCategory: docParams.subCategory || '',
+                subCategory: docParams.subCategory || docParams.sub_category || '',
                 price: docParams.price ?? '',
                 description: docParams.description || '',
                 material: docParams.material || '',
@@ -719,17 +719,30 @@ const ProductForm = ({ readOnly = false }) => {
         oldData.subCategory !== formData.subCategory
       );
 
+      // Exact Category & Subcategory taxonomy resolution
+      const norm = (s) => (s || '').trim().toLowerCase();
+      const parentCat = categories.find((c) => norm(c.name) === norm(formData.category));
       let finalCategoryId = null;
-      if (!isNewProduct && !categoryChanged && oldData?.category_id) {
-        // Strictly preserve existing category_id when category/subcategory were not explicitly changed
-        finalCategoryId = oldData.category_id;
-      } else {
-        const norm = (s) => (s || '').trim().toLowerCase();
-        const parentCat = categories.find((c) => norm(c.name) === norm(formData.category));
+
+      if (formData.subCategory) {
         const subCat = parentCat?.subcategories?.find(
           (s) => norm(typeof s === 'string' ? s : s.name) === norm(formData.subCategory)
         );
-        finalCategoryId = subCat?.id || (!formData.subCategory && parentCat ? parentCat.id : null) || oldData?.category_id || null;
+        if (subCat?.id) {
+          finalCategoryId = subCat.id;
+        } else if (oldData?.category_id && !categoryChanged) {
+          finalCategoryId = oldData.category_id;
+        } else {
+          toast.error(`Selected subcategory "${formData.subCategory}" could not be resolved in category taxonomy.`);
+          return;
+        }
+      } else if (parentCat?.id) {
+        finalCategoryId = parentCat.id;
+      } else if (oldData?.category_id && !categoryChanged) {
+        finalCategoryId = oldData.category_id;
+      } else {
+        toast.error(`Selected category "${formData.category}" could not be resolved in category taxonomy.`);
+        return;
       }
 
       const normalizedSizes = normalizeSizes(formData.sizes || [], {
