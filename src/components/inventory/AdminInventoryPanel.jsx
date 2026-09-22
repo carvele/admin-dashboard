@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Upload, Settings2, Palette, FolderTree } from 'lucide-react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { Upload, Settings2, Palette, FolderTree, Search, Check, ChevronDown } from 'lucide-react';
 import {
   addColor,
   addPattern,
@@ -114,6 +114,11 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
   const [dialogMsg, setDialogMsg] = useState(''); // for deletion-blocked dialog
   const [deleteConfirmState, setDeleteConfirmState] = useState(null);
 
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [baselineSuccess, setBaselineSuccess] = useState('');
+
   // Sub-category add form state
   const [newSubName, setNewSubName] = useState('');
   const [newSubParentId, setNewSubParentId] = useState('');
@@ -144,19 +149,87 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
 
   const product = products.find((p) => p.id === productId);
 
+  // Filter products by name, style_code, or sku for combobox
+  const filteredProducts = useMemo(() => {
+    const q = (productSearchQuery || '').trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const name = (p.name || '').toLowerCase();
+      const style = (p.style_code || p.styleCode || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      return name.includes(q) || style.includes(q) || sku.includes(q);
+    });
+  }, [products, productSearchQuery]);
+
+  const comboboxRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(e.target)) {
+        setIsProductPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectProduct = (selectedProd) => {
+    if (!selectedProd) return;
+    setProductId(selectedProd.id);
+    setProductSearchQuery(selectedProd.name || '');
+    setIsProductPickerOpen(false);
+    setHighlightedIndex(-1);
+    setBaselineSuccess('');
+
+    // Current baseline reflection (preserves 0 cleanly)
+    const currentBaseline =
+      selectedProd.stockbaseline ?? selectedProd.stockBaseline ?? selectedProd.baseline ?? '';
+    setBaseline(currentBaseline !== '' && currentBaseline !== null && currentBaseline !== undefined ? String(currentBaseline) : '');
+  };
+
+  const handleComboboxKeyDown = (e) => {
+    if (!isProductPickerOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsProductPickerOpen(true);
+        setHighlightedIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < filteredProducts.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredProducts.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
+        handleSelectProduct(filteredProducts[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsProductPickerOpen(false);
+    }
+  };
+
   const save = async (e) => {
     e.preventDefault();
     const n = Number(baseline);
     if (!product || !Number.isInteger(n) || n < 0) {
       setError('Enter a non-negative whole number.');
+      setBaselineSuccess('');
       return;
     }
     try {
       await updateStockBaseline(product.id, n);
       setError('');
+      setBaselineSuccess(`Baseline updated to ${n} for "${product.name}".`);
       await onProductUpdated();
     } catch (err) {
       setError(err.message);
+      setBaselineSuccess('');
     }
   };
 
@@ -350,23 +423,124 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
               </div>
             </div>
 
+            {baselineSuccess && (
+              <div className="aip-baseline-success" role="status">
+                <Check size={16} />
+                <span>{baselineSuccess}</span>
+              </div>
+            )}
+
             <form onSubmit={save} className="aip-baseline-row">
-              <div className="aip-field">
-                <label className="label" htmlFor="baseline-product-select">Select Product</label>
-                <select autoComplete="off"
-                  id="baseline-product-select"
-                  className="input-field"
-                  value={productId}
-                  onChange={(e) => {
-                    setProductId(e.target.value);
-                    setBaseline(products.find((p) => p.id === e.target.value)?.stockbaseline ?? '');
-                  }}
-                >
-                  <option value="">Choose a product...</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+              <div className="aip-field aip-combobox-container" ref={comboboxRef}>
+                <label className="label" htmlFor="baseline-product-search">
+                  Select Product
+                </label>
+                <div className="aip-combobox-input-wrap">
+                  <Search size={16} className="aip-combobox-search-icon" aria-hidden="true" />
+                  <input
+                    id="baseline-product-search"
+                    type="text"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isProductPickerOpen}
+                    aria-controls="baseline-product-listbox"
+                    aria-activedescendant={
+                      highlightedIndex >= 0 && filteredProducts[highlightedIndex]
+                        ? `baseline-product-opt-${filteredProducts[highlightedIndex].id}`
+                        : undefined
+                    }
+                    className="input-field aip-combobox-input"
+                    placeholder="Search product name, style code, SKU..."
+                    value={productSearchQuery}
+                    onChange={(e) => {
+                      setProductSearchQuery(e.target.value);
+                      setIsProductPickerOpen(true);
+                      setHighlightedIndex(-1);
+                    }}
+                    onFocus={() => setIsProductPickerOpen(true)}
+                    onKeyDown={handleComboboxKeyDown}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="aip-combobox-toggle-btn"
+                    onClick={() => setIsProductPickerOpen((prev) => !prev)}
+                    aria-label="Toggle product list"
+                    tabIndex={-1}
+                  >
+                    <ChevronDown
+                      size={16}
+                      className={`aip-combobox-chevron ${isProductPickerOpen ? 'open' : ''}`}
+                    />
+                  </button>
+                </div>
+
+                {isProductPickerOpen && (
+                  <ul
+                    id="baseline-product-listbox"
+                    role="listbox"
+                    aria-label="Products"
+                    className="aip-combobox-listbox"
+                  >
+                    {filteredProducts.length === 0 ? (
+                      <li className="aip-combobox-empty" role="presentation">
+                        No matching products found
+                      </li>
+                    ) : (
+                      filteredProducts.map((p, idx) => {
+                        const isSelected = p.id === productId;
+                        const isHighlighted = idx === highlightedIndex;
+                        const pBaseline =
+                          p.stockbaseline ?? p.stockBaseline ?? p.baseline ?? null;
+
+                        return (
+                          <li
+                            key={p.id}
+                            id={`baseline-product-opt-${p.id}`}
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`aip-combobox-option ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+                            onClick={() => handleSelectProduct(p)}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                          >
+                            <div className="aip-combobox-option-info">
+                              <span className="aip-combobox-option-name">{p.name}</span>
+                              <div className="aip-combobox-option-meta">
+                                {p.category && (
+                                  <span className="aip-combobox-meta-tag">{p.category}</span>
+                                )}
+                                {(p.style_code || p.styleCode) && (
+                                  <span className="aip-combobox-meta-sku">
+                                    Style: {p.style_code || p.styleCode}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="aip-combobox-option-baseline">
+                              <span className="aip-combobox-baseline-label">Baseline:</span>
+                              <span className="aip-combobox-baseline-val">
+                                {pBaseline !== null && pBaseline !== undefined ? pBaseline : 'Not set'}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                )}
+                {product && (
+                  <div className="aip-product-selected-info">
+                    <span className="aip-product-selected-badge">Selected:</span>
+                    <span className="aip-product-selected-name">{product.name}</span>
+                    <span className="aip-product-selected-baseline">
+                      (Current baseline:{' '}
+                      <strong>
+                        {product.stockbaseline ?? product.stockBaseline ?? product.baseline ?? 'None'}
+                      </strong>
+                      )
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="aip-field">
                 <label className="label" htmlFor="baseline-qty-input">Baseline Quantity</label>

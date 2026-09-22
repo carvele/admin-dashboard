@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import AdminInventoryPanel from './AdminInventoryPanel';
 import '@testing-library/jest-dom';
 
@@ -90,12 +90,55 @@ describe('AdminInventoryPanel', () => {
     expect(await screen.findByText('Upload image for Gowns')).toBeInTheDocument();
   });
 
-  it('populates the baseline field when a product is chosen', async () => {
+  it('populates the baseline field when a product is chosen via searchable combobox', async () => {
     renderPanel();
 
-    const select = await screen.findByLabelText('Select Product');
-    expect(within(select).getByRole('option', { name: 'Ivory Gown' })).toBeInTheDocument();
+    const searchInput = await screen.findByLabelText('Select Product');
+    expect(searchInput).toBeInTheDocument();
+
+    // Focus / type in search combobox to open listbox
+    fireEvent.focus(searchInput);
+
+    const option = await screen.findByRole('option', { name: /Ivory Gown/i });
+    expect(option).toBeInTheDocument();
+
+    // Select the product
+    fireEvent.click(option);
+
+    // Verify baseline field is populated with 10
+    const baselineInput = screen.getByLabelText('Baseline Quantity');
+    expect(baselineInput.value).toBe('10');
+
+    // Verify selected indicator is shown
+    expect(screen.getByText(/Selected:/i)).toBeInTheDocument();
   });
+
+  it('filters products by name or style code in combobox', async () => {
+    const multiProducts = [
+      { id: 'p1', name: 'Silk Blouse', style_code: 'TOP-101', stockbaseline: 5 },
+      { id: 'p2', name: 'Linen Trousers', style_code: 'BOT-202', stockbaseline: 0 },
+    ];
+
+    render(
+      <AdminInventoryPanel
+        products={multiProducts}
+        onClose={() => {}}
+        onProductUpdated={() => {}}
+      />
+    );
+
+    const searchInput = await screen.findByLabelText('Select Product');
+    fireEvent.change(searchInput, { target: { value: 'BOT-202' } });
+
+    expect(screen.getByRole('option', { name: /Linen Trousers/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Silk Blouse/i })).not.toBeInTheDocument();
+
+    // Select product with 0 baseline to verify 0 is preserved cleanly
+    fireEvent.click(screen.getByRole('option', { name: /Linen Trousers/i }));
+    const baselineInput = screen.getByLabelText('Baseline Quantity');
+    expect(baselineInput.value).toBe('0');
+  });
+
   it('provides a parent category filter for subcategories', async () => {
     renderPanel();
 
