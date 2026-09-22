@@ -116,13 +116,43 @@ export const upsertProductWithColorways = async (productPayload, colorwaysPayloa
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
 
-  // Canonical serialization: map React camelCase subCategory -> RPC sub_category
+  // Canonical serialization: map React camelCase keys -> RPC snake_case
   const canonicalProductPayload = { ...productPayload };
   if ('subCategory' in canonicalProductPayload) {
     if (canonicalProductPayload.sub_category === undefined) {
       canonicalProductPayload.sub_category = canonicalProductPayload.subCategory || null;
     }
     delete canonicalProductPayload.subCategory;
+  }
+  if ('isFeatured' in canonicalProductPayload) {
+    if (canonicalProductPayload.is_featured === undefined) {
+      canonicalProductPayload.is_featured = Boolean(canonicalProductPayload.isFeatured);
+    }
+    delete canonicalProductPayload.isFeatured;
+  }
+  if ('isNewArrival' in canonicalProductPayload) {
+    if (canonicalProductPayload.is_new_arrival === undefined) {
+      canonicalProductPayload.is_new_arrival = Boolean(canonicalProductPayload.isNewArrival);
+    }
+    delete canonicalProductPayload.isNewArrival;
+  }
+  if ('careInstructions' in canonicalProductPayload) {
+    if (canonicalProductPayload.care_instructions === undefined) {
+      canonicalProductPayload.care_instructions = canonicalProductPayload.careInstructions || null;
+    }
+    delete canonicalProductPayload.careInstructions;
+  }
+  if ('fitAndSizing' in canonicalProductPayload) {
+    if (canonicalProductPayload.fit_and_sizing === undefined) {
+      canonicalProductPayload.fit_and_sizing = canonicalProductPayload.fitAndSizing || null;
+    }
+    delete canonicalProductPayload.fitAndSizing;
+  }
+  if ('styleCode' in canonicalProductPayload) {
+    if (canonicalProductPayload.style_code === undefined) {
+      canonicalProductPayload.style_code = canonicalProductPayload.styleCode || null;
+    }
+    delete canonicalProductPayload.styleCode;
   }
 
   const { data, error } = await supabase.rpc('upsert_product_with_colorways', {

@@ -228,6 +228,7 @@ const ProductForm = ({ readOnly = false }) => {
                 visibility: docParams.visibility || 'draft',
                 discountPercentage: docParams.discountPercentage ?? 0,
                 salePrice: docParams.salePrice ?? '',
+                isFeatured: docParams.is_featured ?? docParams.isFeatured ?? (docParams.tags || []).includes('Featured') ?? false,
                 isNewArrival: docParams.isNewArrival ?? (docParams.tags || []).includes('New Arrival'),
                 sizes: normalizeSizes(docParams.sizes || []),
                 colors: initialColors,
@@ -1771,6 +1772,7 @@ const ProductForm = ({ readOnly = false }) => {
                  <span className="label flex items-center gap-2 mb-2"><TagIcon size={14} /> Product Tags & Attributes</span>
                  <div className="flex flex-wrap gap-3">
                     {[
+                       { label: 'Featured', stateKey: 'isFeatured' },
                        { label: 'New Arrival', stateKey: 'isNewArrival' },
                        { label: 'AR Try-On', tagValue: 'AR Try-On' },
                        { label: 'Limited Edition', tagValue: 'Limited Edition' },

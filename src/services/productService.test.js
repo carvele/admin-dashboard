@@ -119,5 +119,42 @@ describe('upsertProductWithColorways RPC Serialization', () => {
     expect(rpcArgs.args._product_payload.sub_category).toBe('Trousers');
     expect(rpcArgs.args._product_payload.subCategory).toBeUndefined();
   });
+
+  test('serializes isFeatured, isNewArrival, careInstructions, fitAndSizing, and styleCode to snake_case', async () => {
+    let rpcArgs = null;
+    mockRpc.mockImplementation((fnName, args) => {
+      rpcArgs = { fnName, args };
+      return Promise.resolve({ data: { product_id: 'prod-featured-1' }, error: null });
+    });
+
+    const productPayload = {
+      id: 'prod-featured-1',
+      name: 'Featured Silk Dress',
+      category: 'Dresses',
+      subCategory: 'Evening Gowns',
+      isFeatured: true,
+      isNewArrival: true,
+      careInstructions: 'Dry clean only',
+      fitAndSizing: 'True to size',
+      styleCode: 'DRS-001',
+    };
+
+    await upsertProductWithColorways(productPayload, null);
+
+    expect(rpcArgs.args._product_payload.sub_category).toBe('Evening Gowns');
+    expect(rpcArgs.args._product_payload.is_featured).toBe(true);
+    expect(rpcArgs.args._product_payload.is_new_arrival).toBe(true);
+    expect(rpcArgs.args._product_payload.care_instructions).toBe('Dry clean only');
+    expect(rpcArgs.args._product_payload.fit_and_sizing).toBe('True to size');
+    expect(rpcArgs.args._product_payload.style_code).toBe('DRS-001');
+
+    // Ensure camelCase keys are purged
+    expect(rpcArgs.args._product_payload.subCategory).toBeUndefined();
+    expect(rpcArgs.args._product_payload.isFeatured).toBeUndefined();
+    expect(rpcArgs.args._product_payload.isNewArrival).toBeUndefined();
+    expect(rpcArgs.args._product_payload.careInstructions).toBeUndefined();
+    expect(rpcArgs.args._product_payload.fitAndSizing).toBeUndefined();
+    expect(rpcArgs.args._product_payload.styleCode).toBeUndefined();
+  });
 });
 
