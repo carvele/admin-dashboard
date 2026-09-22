@@ -2106,36 +2106,38 @@ const Reservations = () => {
 
       {/* ===== VIEW DETAILS MODAL ===== */}
       {/* ===== VIEW DETAILS WORKSPACE MODAL ===== */}
-      <ReservationDetailModal
-        isOpen={Boolean(viewModal)}
-        res={viewModal}
-        user={user}
-        canManage={canManage}
-        canRecordPayment={canRecordPayment}
-        customers={customers}
-        products={products}
-        refundQueue={refundQueue}
-        onClose={() => setViewModal(null)}
-        onMessage={(r) => handleMessageBuyer(r)}
-        onReschedule={(r) => {
-          setRescheduleModal(r);
-          setNewDate(r.date);
-        }}
-        onResolveReschedule={handleResolveReschedule}
-        onAction={handleAction}
-        onVerifyPayment={handleVerifyPayment}
-        onRejectReceipt={handleRejectReceipt}
-        onCancelForFraud={handleCancelForFraud}
-        onVerifyBalancePayment={handleVerifyBalancePayment}
-        onRejectBalanceReceipt={handleRejectBalanceReceipt}
-        onMarkRefundDisbursed={handleMarkRefundDisbursed}
-        onViewCustomer={(customerId) => {
-          if (customerId) {
-            navigate(`/customers?id=${customerId}`);
-            setViewModal(null);
-          }
-        }}
-      />
+      {viewModal && (
+        <ReservationDetailModal
+          isOpen={Boolean(viewModal)}
+          res={viewModal}
+          user={user}
+          canManage={canManage}
+          canRecordPayment={canRecordPayment}
+          customers={customers}
+          products={products}
+          refundQueue={refundQueue}
+          onClose={() => setViewModal(null)}
+          onMessage={(r) => handleMessageBuyer(r)}
+          onReschedule={(r) => {
+            setRescheduleModal(r);
+            setNewDate(r.date);
+          }}
+          onResolveReschedule={handleResolveReschedule}
+          onAction={handleAction}
+          onVerifyPayment={handleVerifyPayment}
+          onRejectReceipt={handleRejectReceipt}
+          onCancelForFraud={handleCancelForFraud}
+          onVerifyBalancePayment={handleVerifyBalancePayment}
+          onRejectBalanceReceipt={handleRejectBalanceReceipt}
+          onMarkRefundDisbursed={handleMarkRefundDisbursed}
+          onViewCustomer={(customerId) => {
+            if (customerId) {
+              navigate(`/customers?id=${customerId}`);
+              setViewModal(null);
+            }
+          }}
+        />
+      )}
 
       {receiptModalUrl && (
         <div

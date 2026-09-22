@@ -305,4 +305,14 @@ describe('ReservationDetailModal', () => {
     expect(screen.getByText('Alex Staff')).toBeInTheDocument();
     expect(screen.getByText('Marked Ready for Pickup')).toBeInTheDocument();
   });
+
+  test('safely handles null reservation and closed modal without throwing', () => {
+    const { container } = render(<ReservationDetailModal {...defaultProps} res={null} isOpen={false} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  test('safely handles null reservation when isOpen is true without throwing', () => {
+    const { container } = render(<ReservationDetailModal {...defaultProps} res={null} isOpen={true} />);
+    expect(container.firstChild).toBeNull();
+  });
 });
