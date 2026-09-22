@@ -34,4 +34,13 @@ describe('canCancelReservation', () => {
   it('allows an unpaid reservation to be cancelled', () => {
     expect(canCancelReservation({ paymentStatus: 'Pending' })).toBe(true);
   });
+
+  it('safely handles null/undefined arguments across all helpers', () => {
+    expect(isAwaitingReceipt(null)).toBe(false);
+    expect(isAwaitingReceipt(undefined)).toBe(false);
+    expect(primaryActionFor(null)).toBeNull();
+    expect(primaryActionFor(undefined)).toBeNull();
+    expect(canCancelReservation(null)).toBe(false);
+    expect(canCancelReservation(undefined)).toBe(false);
+  });
 });

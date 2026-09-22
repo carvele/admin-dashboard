@@ -312,19 +312,22 @@ const ReservationDetailModal = ({
 
   // ── Canonical Operational & Financial States ──────────────────
   const opStatus = useMemo(() => {
-    return res?.displayStatus || toDisplayStatus(res?.status) || 'Pending';
-  }, [res?.displayStatus, res?.status]);
+    if (!res) return 'Pending';
+    return res.displayStatus || toDisplayStatus(res.status) || 'Pending';
+  }, [res]);
 
   const isCancelled = useMemo(() => {
+    if (!res) return false;
     return (
-      String(res?.status || '').toLowerCase() === 'cancelled' ||
-      String(res?.displayStatus || '').toLowerCase() === 'cancelled' ||
-      String(res?.paymentStatus || '').toLowerCase() === 'cancelled'
+      String(res.status || '').toLowerCase() === 'cancelled' ||
+      String(res.displayStatus || '').toLowerCase() === 'cancelled' ||
+      String(res.paymentStatus || '').toLowerCase() === 'cancelled'
     );
-  }, [res?.status, res?.displayStatus, res?.paymentStatus]);
+  }, [res]);
 
   const financialState = useMemo(() => {
-    const rawPayment = String(res?.paymentStatus || '').toLowerCase();
+    if (!res) return { key: 'unpaid', label: 'Unpaid' };
+    const rawPayment = String(res.paymentStatus || '').toLowerCase();
     if (rawPayment === 'refund required') return { key: 'refund-required', label: 'Refund Required' };
     if (rawPayment === 'refunded') return { key: 'refunded', label: 'Refunded' };
     if (isAwaitingReceipt(res)) return { key: 'submitted', label: 'Receipt to Verify' };
@@ -339,50 +342,55 @@ const ReservationDetailModal = ({
 
   // ── Canonical Financial Calculations ──────────────────────────
   const orderTotal = useMemo(() => {
-    if (res?.rentalPrice != null) return Number(res.rentalPrice);
-    if (res?.lines?.length) {
+    if (!res) return 0;
+    if (res.rentalPrice != null) return Number(res.rentalPrice);
+    if (res.lines?.length) {
       return res.lines.reduce((sum, l) => sum + (Number(l.unitPrice ?? l.unit_price ?? 0) * (l.quantity ?? 1)), 0);
     }
     return 0;
-  }, [res?.rentalPrice, res?.lines]);
+  }, [res]);
 
   const requiredDeposit = useMemo(() => {
-    if (res?.deposit != null) return Number(res.deposit);
+    if (!res) return 0;
+    if (res.deposit != null) return Number(res.deposit);
     return orderTotal > 0 ? orderTotal * 0.5 : 0;
-  }, [res?.deposit, orderTotal]);
+  }, [res, orderTotal]);
 
   const currentBalance = useMemo(() => {
+    if (!res) return 0;
     if (isCancelled && financialState.key !== 'refund-required') return 0;
     if (financialState.key === 'refunded') return 0;
     return outstandingBalance(res);
   }, [res, isCancelled, financialState.key]);
 
   const totalPaid = useMemo(() => {
+    if (!res) return 0;
     // Verified payment rows take precedence if present
     const paidSum = paymentRecords
       .filter((p) => p.status === 'paid')
       .reduce((sum, p) => sum + ((p.amountCentavos ?? 0) / 100), 0);
     if (paidSum > 0) return paidSum;
 
-    if (res?.paymentStatus === 'Paid') {
+    if (res.paymentStatus === 'Paid') {
       return orderTotal - currentBalance;
     }
     return 0;
-  }, [paymentRecords, res?.paymentStatus, orderTotal, currentBalance]);
+  }, [res, paymentRecords, orderTotal, currentBalance]);
 
   // ── Line Items Snapshot Precedence ────────────────────────────
   const lineItems = useMemo(() => {
-    const rawLines = res?.lines?.length
+    if (!res) return [];
+    const rawLines = res.lines?.length
       ? res.lines
       : [{
-          id: res?.id,
-          productId: res?.productId || res?.product_id,
-          productName: res?.productName || res?.outfit,
-          size: res?.size,
-          color: res?.color,
-          quantity: res?.quantity ?? 1,
-          unitPrice: res?.rentalPrice,
-          imageUrl: res?.imageUrl || res?.image_url,
+          id: res.id,
+          productId: res.productId || res.product_id,
+          productName: res.productName || res.outfit,
+          size: res.size,
+          color: res.color,
+          quantity: res.quantity ?? 1,
+          unitPrice: res.rentalPrice,
+          imageUrl: res.imageUrl || res.image_url,
         }];
 
     return rawLines.map((line) => {

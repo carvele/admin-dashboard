@@ -9,10 +9,14 @@
 // One primary action per column: the common move is a single click, and
 // everything rarer (cancel, reschedule) is secondary.
 export const isAwaitingReceipt = (res) =>
-  res.displayStatus === 'To Pay' &&
-  ['submitted', 'processing'].includes(String(res.paymentStatus || '').toLowerCase());
+  Boolean(
+    res &&
+    res.displayStatus === 'To Pay' &&
+    ['submitted', 'processing'].includes(String(res.paymentStatus || '').toLowerCase()),
+  );
 
 export const primaryActionFor = (res) => {
+  if (!res) return null;
   if (res.displayStatus === 'To Pay') {
     if (isAwaitingReceipt(res)) return { action: 'review_receipt', label: 'Verify receipt' };
     if (String(res.paymentStatus || '').toLowerCase() === 'paid') {
@@ -28,6 +32,9 @@ export const primaryActionFor = (res) => {
 export const CAN_RESCHEDULE_STATUSES = new Set(['To Pay', 'Preparing', 'To Pickup']);
 
 export const canCancelReservation = (res) =>
-  !['paid', 'submitted', 'processing', 'refund required'].includes(
-    String(res.paymentStatus || '').toLowerCase(),
+  Boolean(
+    res &&
+    !['paid', 'submitted', 'processing', 'refund required'].includes(
+      String(res.paymentStatus || '').toLowerCase(),
+    ),
   );
