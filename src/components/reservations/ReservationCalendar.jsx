@@ -11,7 +11,7 @@
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Eye, MessageSquare } from 'lucide-react';
 import StatusBadge from '../ReservationStatusBadge';
-import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { getActivePaymentDeadline } from '../../utils/reservationDeadline';
 import { presentationStatus } from '../../utils/reservationStatus';
 import { formatTimeLabel } from '../../utils/helpers';
 import './ReservationCalendar.css';
@@ -111,7 +111,7 @@ const ReservationCalendar = ({ reservations, onView, onMessage }) => {
           // whole-month scan, not just be discoverable by clicking in --
           // a 6px dot buried among others didn't do that.
           const hasUrgent = dayRes.some(
-            (res) => res.displayStatus === 'To Pay' && formatPaymentDeadline(res.paymentDueAt)?.urgent,
+            (res) => getActivePaymentDeadline(res)?.urgent,
           );
           return (
             <button
@@ -153,7 +153,7 @@ const ReservationCalendar = ({ reservations, onView, onMessage }) => {
         ) : (
           <ul className="res-calendar-agenda-list">
             {selectedDayReservations.map((res) => {
-              const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+              const deadline = getActivePaymentDeadline(res);
               const itemNames = (res.lines || []).map((l) => l.productName).filter(Boolean);
               return (
                 <li key={res.id} className={`res-calendar-agenda-item${deadline?.urgent ? ' res-calendar-agenda-item-urgent' : ''}`}>

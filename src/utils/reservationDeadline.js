@@ -1,3 +1,5 @@
+import { toDisplayStatus } from './reservationStatus';
+
 /**
  * The payment window is stamped on the reservation as payment_due_at, and
  * until now nothing in the dashboard surfaced it -- staff had no way to see
@@ -47,3 +49,39 @@ export const formatPaymentDeadline = (dueAt) => {
   // Under an hour is the point where staff can still save it with a nudge.
   return { label: `${hours}h left`, urgent: remaining < HOUR_MS };
 };
+
+/**
+ * Resolves the active payment deposit countdown for a reservation.
+ *
+ * Payment deadline (payment_due_at) tracks the deposit collection window
+ * for unpaid reservations awaiting payment in 'To Pay'. Once payment has
+ * been made ('Paid', 'Submitted', 'Processing') or if the reservation has
+ * been cancelled or refunded, the deposit countdown is no longer relevant
+ * and must be suppressed to avoid showing contradictory countdowns or
+ * false "Overdue" badges on settled orders.
+ *
+ * @param {object|null|undefined} res - Reservation object
+ * @returns {{label: string, urgent: boolean}|null}
+ */
+export const getActivePaymentDeadline = (res) => {
+  if (!res) return null;
+
+  const isCancelled =
+    String(res.status || '').toLowerCase() === 'cancelled' ||
+    String(res.displayStatus || '').toLowerCase() === 'cancelled' ||
+    String(res.paymentStatus || res.payment_status || '').toLowerCase() === 'cancelled';
+  if (isCancelled) return null;
+
+  const paymentStatus = String(res.paymentStatus || res.payment_status || '').toLowerCase();
+  if (['paid', 'submitted', 'processing', 'refunded', 'refund required'].includes(paymentStatus)) {
+    return null;
+  }
+
+  const displayStatus = res.displayStatus || (res.status ? toDisplayStatus(res.status) : '');
+  if (displayStatus !== 'To Pay') {
+    return null;
+  }
+
+  return formatPaymentDeadline(res.paymentDueAt || res.payment_due_at);
+};
+

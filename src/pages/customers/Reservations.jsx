@@ -48,7 +48,7 @@ import {
   isAwaitingReceipt,
   primaryActionFor,
 } from '../../utils/reservationActions';
-import { formatPaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
+import { getActivePaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
 import { toDisplayStatus, presentationStatus, rescheduleModalTitle } from '../../utils/reservationStatus';
 import { outstandingBalance, balanceDue } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
@@ -1475,7 +1475,7 @@ const Reservations = () => {
                 {pagedReservations.map((res) => {
                   const balance = outstandingBalance(res);
                   const primaryAction = primaryActionFor(res);
-                  const deadline = res.displayStatus === 'To Pay' ? formatPaymentDeadline(res.paymentDueAt) : null;
+                  const deadline = getActivePaymentDeadline(res);
                   const firstLine = res.lines[0];
                   const imageUrl = res.imageUrl || firstLine?.imageUrl;
                   const isExpanded = !!expandedRows[res.id];
