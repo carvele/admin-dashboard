@@ -187,6 +187,16 @@ describe('ReservationDetailModal', () => {
     expect(screen.getByText(/deposit deadline/i)).toBeInTheDocument();
   });
 
+  test('financial ledger suppresses deposit deadline when order is paid', () => {
+    const paidResWithDeadline = {
+      ...defaultProps.res,
+      paymentStatus: 'Paid',
+      paymentDueAt: new Date(Date.now() + 7200000).toISOString(),
+    };
+    render(<ReservationDetailModal {...defaultProps} res={paidResWithDeadline} />);
+    expect(screen.queryByText(/deposit deadline/i)).not.toBeInTheDocument();
+  });
+
   test('preparing paid order enables Mark Ready for Pickup button', () => {
     const paidPreparingRes = {
       ...defaultProps.res,

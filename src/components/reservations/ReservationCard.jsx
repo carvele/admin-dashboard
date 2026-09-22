@@ -8,7 +8,7 @@
  */
 
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
-import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { getActivePaymentDeadline } from '../../utils/reservationDeadline';
 import { canCancelReservation, isAwaitingReceipt, primaryActionFor } from '../../utils/reservationActions';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
@@ -32,10 +32,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
   // payment_due_at is never cleared once paid -- it's the original deposit
   // deadline, not a pickup timer, so it has nothing meaningful to say once
   // payment is settled or cancelled (and would eventually read "Overdue" on a paid/cancelled item).
-  const deadline =
-    !isCancelled && res.displayStatus === 'To Pay'
-      ? formatPaymentDeadline(res.paymentDueAt)
-      : null;
+  const deadline = getActivePaymentDeadline(res);
   const lines = res.lines || [];
   const awaitingReceipt = isAwaitingReceipt(res);
   const balance = outstandingBalance(res);

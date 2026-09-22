@@ -45,3 +45,42 @@ describe('ReservationCard refund presentation (RES-002)', () => {
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
   });
 });
+
+describe('ReservationCard payment deadline badge presentation', () => {
+  const futureDue = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+  test('displays deadline badge for unpaid reservation awaiting deposit in To Pay', () => {
+    renderCard({
+      displayStatus: 'To Pay',
+      paymentStatus: 'Pending',
+      status: 'Confirmed',
+      paymentDueAt: futureDue,
+    });
+    expect(screen.getByText('2h left')).toBeInTheDocument();
+  });
+
+  test('suppresses deadline badge when reservation is already paid in full', () => {
+    renderCard({
+      displayStatus: 'To Pay',
+      paymentStatus: 'Paid',
+      status: 'Confirmed',
+      paymentDueAt: futureDue,
+    });
+    expect(screen.queryByText('2h left')).not.toBeInTheDocument();
+    expect(screen.queryByText('Overdue')).not.toBeInTheDocument();
+    expect(screen.getByText('Paid in full')).toBeInTheDocument();
+  });
+
+  test('suppresses deadline badge when reservation is cancelled', () => {
+    renderCard({
+      displayStatus: 'To Pay',
+      paymentStatus: 'Cancelled',
+      status: 'Cancelled',
+      paymentDueAt: futureDue,
+    });
+    expect(screen.queryByText('2h left')).not.toBeInTheDocument();
+    expect(screen.queryByText('Overdue')).not.toBeInTheDocument();
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+  });
+});
+

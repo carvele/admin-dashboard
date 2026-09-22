@@ -34,7 +34,7 @@ import {
 import StatusBadge from '../ReservationStatusBadge';
 import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
 import { outstandingBalance } from '../../utils/reservationBalance';
-import { formatPaymentDeadline } from '../../utils/reservationDeadline';
+import { getActivePaymentDeadline } from '../../utils/reservationDeadline';
 import { toDisplayStatus } from '../../utils/reservationStatus';
 import { formatProposedAppointment } from '../../utils/rescheduleRequest';
 import {
@@ -591,9 +591,7 @@ const ReservationDetailModal = ({
   if (!isOpen || !res) return null;
 
   const pendingReschedule = formatProposedAppointment(res);
-  const deadlineInfo = opStatus === 'To Pay' && !isCancelled
-    ? formatPaymentDeadline(res.paymentDueAt)
-    : null;
+  const deadlineInfo = getActivePaymentDeadline(res);
 
   const isAdminOrOwner = ['admin', 'owner'].includes(String(user?.role || '').toLowerCase());
 
