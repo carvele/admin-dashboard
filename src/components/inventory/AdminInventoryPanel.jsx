@@ -498,9 +498,16 @@ export default function AdminInventoryPanel({ products, onClose, onProductUpdate
                             key={p.id}
                             id={`baseline-product-opt-${p.id}`}
                             role="option"
+                            tabIndex={-1}
                             aria-selected={isSelected}
                             className={`aip-combobox-option ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
                             onClick={() => handleSelectProduct(p)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleSelectProduct(p);
+                              }
+                            }}
                             onMouseEnter={() => setHighlightedIndex(idx)}
                           >
                             <div className="aip-combobox-option-info">
