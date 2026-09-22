@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminInventoryPanel from './AdminInventoryPanel';
 import '@testing-library/jest-dom';
 
