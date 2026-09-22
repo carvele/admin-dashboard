@@ -1,4 +1,4 @@
-﻿/* ──────────────────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────────────────
    Admin Inventory Panel (.aip-*)
    Dedicated stylesheet for the inventory administration card & taxonomy.
    ────────────────────────────────────────────────────────────────────────── */
@@ -159,6 +159,204 @@
 .aip-save-btn {
   padding: 0.6rem 1.5rem;
   white-space: nowrap;
+}
+
+/* ── Stock Baseline Combobox & Feedback ── */
+
+.aip-baseline-success {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background-color: var(--status-confirmed-bg, #f0fdf4);
+  color: var(--status-confirmed-text, #166534);
+  border: 1px solid rgba(22, 101, 52, 0.15);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.aip-combobox-container {
+  position: relative;
+}
+
+.aip-combobox-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.aip-combobox-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary, #78716c);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.aip-combobox-input {
+  padding-left: 2.25rem !important;
+  padding-right: 2.25rem !important;
+  width: 100%;
+}
+
+.aip-combobox-toggle-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #78716c);
+  border-radius: 4px;
+}
+
+.aip-combobox-toggle-btn:hover {
+  color: var(--charcoal, #1f1c18);
+}
+
+.aip-combobox-chevron {
+  transition: transform 0.2s ease;
+}
+
+.aip-combobox-chevron.open {
+  transform: rotate(180deg);
+}
+
+.aip-combobox-listbox {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--border-color, #efe9db);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  z-index: 50;
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.aip-combobox-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.aip-combobox-option:last-child {
+  border-bottom: none;
+}
+
+.aip-combobox-option:hover,
+.aip-combobox-option.highlighted {
+  background-color: var(--beige, #f5eedc);
+}
+
+.aip-combobox-option.selected {
+  background-color: #faf5eb;
+  font-weight: 600;
+}
+
+.aip-combobox-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.aip-combobox-option-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aip-combobox-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #78716c);
+}
+
+.aip-combobox-meta-tag {
+  background: var(--cream, #fdfbf7);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #efe9db);
+}
+
+.aip-combobox-meta-sku {
+  font-family: monospace;
+}
+
+.aip-combobox-option-baseline {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.aip-combobox-baseline-label {
+  color: var(--text-secondary, #78716c);
+}
+
+.aip-combobox-baseline-val {
+  font-weight: 700;
+  color: var(--charcoal, #1f1c18);
+  background: var(--beige, #f5eedc);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.aip-combobox-empty {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #78716c);
+  font-style: italic;
+}
+
+.aip-product-selected-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  color: var(--text-secondary, #78716c);
+}
+
+.aip-product-selected-badge {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  color: var(--accent, #d4af37);
+}
+
+.aip-product-selected-name {
+  font-weight: 600;
+  color: var(--charcoal, #1f1c18);
+}
+
+.aip-product-selected-baseline {
+  color: var(--text-secondary, #78716c);
 }
 
 /* ── Add forms ── */
