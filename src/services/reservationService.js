@@ -435,14 +435,18 @@ export const transitionReservationStatus = async (reservationId, expectedStatus,
 export const cancelReservation = async (reservationId, expectedStatus, reason) => {
   const trimmed = String(reason || '').trim();
   if (!trimmed) throw new Error('Enter the reason shown to the customer.');
-  await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
-    _reservation_id: reservationId,
-    _expected_status: expectedStatus,
-    _reason: trimmed,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
+      _reservation_id: reservationId,
+      _expected_status: expectedStatus,
+      _reason: trimmed,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 /** Server-derived financial outcome shown before a staff cancellation. */
@@ -649,24 +653,32 @@ export const subscribeToPendingChangeRequests = (callback) => {
  * was free when requested, but may have been taken since.
  */
 export const resolveRescheduleRequest = async (requestId, approve, notes = null) => {
-  const { data, error } = await supabase.rpc('resolve_reschedule_request_v2', {
-    _request_id: requestId,
-    _approve: approve,
-    _resolution_notes: notes,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('resolve_reschedule_request_v2', {
+      _request_id: requestId,
+      _approve: approve,
+      _resolution_notes: notes,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 /** Approving applies the existing customer-fault forfeiture policy server-side. */
 export const resolveReadyCancellationRequest = async (requestId, approve, notes = null) => {
-  const { data, error } = await supabase.rpc('resolve_ready_cancellation_request', {
-    _request_id: requestId,
-    _approve: approve,
-    _resolution_notes: notes,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('resolve_ready_cancellation_request', {
+      _request_id: requestId,
+      _approve: approve,
+      _resolution_notes: notes,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 // Direct staff change of a pre-Ready appointment; the reason reaches the customer.
@@ -679,15 +691,19 @@ export const rescheduleReservation = async (
 ) => {
   const trimmed = String(reason || '').trim();
   if (!trimmed) throw new Error('Enter the reason shown to the customer.');
-  const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
-    _reservation_id:       reservationId,
-    _expected_status:      expectedStatus,
-    _new_date:             newDate,           // 'YYYY-MM-DD' (Asia/Manila)
-    _new_appointment_time: newAppointmentTime, // 'HH:MM:SS' (Asia/Manila)
-    _reason:               trimmed,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
+      _reservation_id:       reservationId,
+      _expected_status:      expectedStatus,
+      _new_date:             newDate,           // 'YYYY-MM-DD' (Asia/Manila)
+      _new_appointment_time: newAppointmentTime, // 'HH:MM:SS' (Asia/Manila)
+      _reason:               trimmed,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const getSlotBookedCounts = async (date) => {

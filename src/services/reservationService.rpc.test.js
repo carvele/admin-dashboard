@@ -683,7 +683,7 @@ describe('optimistic concurrency contract & zero mutation retry', () => {
 
     let thrownError;
     try {
-      await rescheduleReservation('res-stale', 'To Pay', '2026-10-01', '14:00:00');
+      await rescheduleReservation('res-stale', 'To Pay', '2026-10-01', '14:00:00', 'Staff shortage');
     } catch (err) {
       thrownError = err;
     }
