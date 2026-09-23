@@ -9,9 +9,15 @@
 
 import { Eye, Calendar, XCircle, MessageSquare } from 'lucide-react';
 import { getActivePaymentDeadline } from '../../utils/reservationDeadline';
-import { canCancelReservation, isAwaitingReceipt, primaryActionFor } from '../../utils/reservationActions';
+import {
+  canCancelReservation,
+  canRescheduleReservation,
+  hasBlockingChangeRequest,
+  isAwaitingReceipt,
+  primaryActionFor,
+} from '../../utils/reservationActions';
 import { outstandingBalance } from '../../utils/reservationBalance';
-import { formatProposedAppointment } from '../../utils/rescheduleRequest';
+import { formatProposedAppointment, hasPendingReadyCancellation } from '../../utils/rescheduleRequest';
 import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
 
 const initialsOf = (name) =>
@@ -23,7 +29,7 @@ const initialsOf = (name) =>
     .join('')
     .toUpperCase();
 
-const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMessage, onResolveReschedule }) => {
+const ReservationCard = ({ res, canManage, busy = false, onView, onAction, onReschedule, onMessage }) => {
   const primary = primaryActionFor(res);
   const isCancelled =
     String(res.status || '').toLowerCase() === 'cancelled' ||
@@ -37,6 +43,7 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
   const awaitingReceipt = isAwaitingReceipt(res);
   const balance = outstandingBalance(res);
   const pendingReschedule = formatProposedAppointment(res);
+  const blockingRequest = hasBlockingChangeRequest(res);
 
   return (
     <article className={`res-card${deadline?.urgent ? ' res-card-urgent' : ''}`}>
@@ -119,24 +126,17 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
       {/* A pending request sits above the actions, not in the meta row: it is
           work waiting on a decision, and the live booking above it still
           stands until someone answers. */}
-      {pendingReschedule && (
+      {blockingRequest && (
         <div className="res-card-reschedule">
           <p className="res-card-reschedule-text">
-            Wants to move to <strong>{pendingReschedule}</strong>
+            {hasPendingReadyCancellation(res)
+              ? <>Customer asked to <strong>cancel</strong> this order</>
+              : <>Wants to move to <strong>{pendingReschedule}</strong></>}
           </p>
           {canManage && (
             <div className="res-card-reschedule-actions">
-              <button
-                className="btn-primary res-card-reschedule-btn"
-                onClick={() => onResolveReschedule(res.id, true)}
-              >
-                Approve
-              </button>
-              <button
-                className="btn-outline res-card-reschedule-btn"
-                onClick={() => onResolveReschedule(res.id, false)}
-              >
-                Decline
+              <button className="btn-primary res-card-reschedule-btn" onClick={onView}>
+                Review request
               </button>
             </div>
           )}
@@ -147,13 +147,14 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         {canManage && primary && (
           <button
             className="btn-primary res-card-primary"
+            disabled={busy}
             // A submitted-receipt reservation used to mutate payment the
             // instant this button was clicked,
             // just relabeled "Verify receipt" -- so staff could mark a
             // payment verified without the receipt image ever having been
             // opened. Now opens the detail modal instead, where the receipt
             // renders next to its own dedicated Verify Payment button.
-            onClick={() => (primary.action === 'review_receipt' || res.balancePaymentStatus === 'submitted' ? onView() : onAction(res.id, primary.action))}
+            onClick={() => (primary.action === 'review_receipt' || res.balancePaymentStatus === 'submitted' || blockingRequest ? onView() : onAction(res.id, primary.action))}
           >
             {awaitingReceipt ? 'Verify receipt' : res.balancePaymentStatus === 'submitted' ? 'Verify balance proof' : primary.label}
           </button>
@@ -166,9 +167,11 @@ const ReservationCard = ({ res, canManage, onView, onAction, onReschedule, onMes
         </button>
         {canManage && (
           <>
-            <button className="btn-outline res-card-icon" onClick={onReschedule} aria-label="Reschedule" title="Reschedule">
-              <Calendar size={15} />
-            </button>
+            {canRescheduleReservation(res) && (
+              <button className="btn-outline res-card-icon" onClick={onReschedule} disabled={busy} aria-label="Reschedule" title="Reschedule">
+                <Calendar size={15} />
+              </button>
+            )}
             {canCancelReservation(res) && (
               <button
                 className="btn-outline res-card-icon"

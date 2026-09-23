@@ -1,26 +1,28 @@
 /**
- * A customer's pending request to move an appointment.
- *
- * The live booking stays in date/appointment_time; the proposal lives in its
- * own columns until staff answer. requested_at alone decides whether one is
- * outstanding -- the other two columns are meaningless without it, and a CHECK
- * keeps all three together.
+ * Customer change requests (reservation_change_requests), attached to a
+ * reservation as `pendingRequest` by the Reservations page. The live booking
+ * stays on the reservation row until staff approve.
  */
 
-export const hasPendingReschedule = (res) => Boolean(res?.rescheduleRequestedAt);
+export const hasPendingReschedule = (res) => res?.pendingRequest?.requestType === 'reschedule';
+
+export const hasPendingReadyCancellation = (res) => res?.pendingRequest?.requestType === 'cancel_ready';
 
 /** The proposed appointment as a Date, or null when nothing is pending. */
 export const proposedAppointment = (res) => {
   if (!hasPendingReschedule(res)) return null;
-  const raw = res.rescheduleRequestedAtTime;
-  if (!raw) return null;
-  const d = new Date(raw);
+  const d = new Date(res.pendingRequest.requestedFor);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-/** "Mon, 11 Aug at 02:00 PM", or null. */
-export const formatProposedAppointment = (res) => {
-  const d = proposedAppointment(res);
-  if (!d) return null;
-  return `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+/** "Fri, Sep 25 · 2:00 PM" in Asia/Manila, or null. */
+export const formatManilaSlot = (value) => {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const date = d.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+  const time = d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' });
+  return `${date} · ${time}`;
 };
+
+export const formatProposedAppointment = (res) => formatManilaSlot(proposedAppointment(res));

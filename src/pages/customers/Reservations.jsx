@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import debounce from 'lodash.debounce';
 import { useAuth } from '../../context/AuthContext';
@@ -43,15 +43,19 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import PageHeader from '../../components/PageHeader';
 import '../../components/reservations/ReservationBoard.css';
 import {
-  CAN_RESCHEDULE_STATUSES,
   canCancelReservation,
+  canRescheduleReservation,
+  hasBlockingChangeRequest,
   isAwaitingReceipt,
   primaryActionFor,
 } from '../../utils/reservationActions';
 import { getActivePaymentDeadline, computePaymentDueAt } from '../../utils/reservationDeadline';
-import { toDisplayStatus, presentationStatus, rescheduleModalTitle } from '../../utils/reservationStatus';
+import { toDisplayStatus, presentationStatus } from '../../utils/reservationStatus';
 import { outstandingBalance, balanceDue } from '../../utils/reservationBalance';
-import { formatProposedAppointment } from '../../utils/rescheduleRequest';
+import { formatManilaSlot } from '../../utils/rescheduleRequest';
+import { runSingleFlight, SKIPPED, isStaleStateError, STALE_STATE_MESSAGE } from '../../utils/singleFlight';
+import RescheduleDialog from '../../components/reservations/RescheduleDialog';
+import CancelReservationDialog from '../../components/reservations/CancelReservationDialog';
 import { formatCurrency } from '../../utils/helpers';
 import {
   subscribeToReservations,
@@ -69,6 +73,8 @@ import {
   getPaymentReviewHistory,
   completeReservationHandover,
   resolveRescheduleRequest,
+  resolveReadyCancellationRequest,
+  subscribeToPendingChangeRequests,
   getPaymentsForReservation,
   rescheduleReservation,
   markRefundDisbursed,
@@ -216,21 +222,29 @@ const Reservations = () => {
   }, [loadRefundQueue]);
 
 
+  // Customer change requests awaiting staff review, keyed by reservation id.
+  const [pendingRequests, setPendingRequests] = useState({});
+  const reservationsFeedRef = useRef(null);
+  const repairAttemptedRef = useRef(new Set());
+
   useEffect(() => {
     setLoading(true);
 
     // Auto-cancellation has been moved to a server-side pg_cron job `expire_all_stale_reservations`
 
-    // Real-time Reservations Listener
+    // Realtime callbacks only replace local state; they never run lifecycle commands.
     const unsubR = subscribeToReservations((data) => {
-      // Auto-healing for broken data (Names or Product Names)
+      // Name auto-heal runs at most once per reservation per session, so a
+      // realtime burst cannot fan out into repeated profile lookups/writes.
       data.forEach(res => {
+        if (repairAttemptedRef.current.has(res.id)) return;
         const cName = res.customerName || res.customer || '';
         const pName = res.productName || res.outfit || '';
         const isId = (str) => /^[a-zA-Z0-9-]{15,40}$/.test(str);
-        
+
         if (isId(cName) || isId(pName) || !cName || !pName) {
-          repairReservationData(res);
+          repairAttemptedRef.current.add(res.id);
+          repairReservationData(res).catch(() => {});
         }
       });
 
@@ -238,6 +252,9 @@ const Reservations = () => {
       setReservations(data.slice(0, 200));
       setLoading(false);
     });
+    reservationsFeedRef.current = unsubR;
+
+    const unsubReq = subscribeToPendingChangeRequests(setPendingRequests);
 
     const unsubI = subscribeToReservationItems(setItemsByReservation);
 
@@ -251,6 +268,8 @@ const Reservations = () => {
 
     return () => {
       unsubR();
+      unsubReq();
+      reservationsFeedRef.current = null;
       unsubI();
       unsubC();
       unsubP();
@@ -332,6 +351,9 @@ const Reservations = () => {
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rescheduleModal, setRescheduleModal] = useState(null);
+  const [cancelModal, setCancelModal] = useState(null);
+  // Reservation id whose command is in flight; disables its buttons immediately.
+  const [busyReservationId, setBusyReservationId] = useState(null);
   const [viewModal, setViewModal] = useState(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrToken, setQrToken] = useState('');
@@ -383,15 +405,16 @@ const Reservations = () => {
   useEffect(() => {
     const onEsc = (e) => {
       if (e.key !== 'Escape') return;
+      // Command dialogs handle their own Escape (and refuse it while submitting).
+      if (rescheduleModal || cancelModal) return;
       if (receiptModalUrl) setReceiptModalUrl(null);
       else if (viewModal) setViewModal(null);
-      else if (rescheduleModal) setRescheduleModal(null);
       else if (isModalOpen) setIsModalOpen(false);
       else if (showQRModal) setShowQRModal(false);
     };
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
-  }, [receiptModalUrl, viewModal, rescheduleModal, isModalOpen, showQRModal]);
+  }, [receiptModalUrl, viewModal, rescheduleModal, cancelModal, isModalOpen, showQRModal]);
 
   // receipt_url on the row is a bare storage path in a private bucket, not a
   // usable URL -- resolve it to a signed URL whenever the detail modal opens
@@ -528,8 +551,27 @@ const Reservations = () => {
       // the enriched modal data while the base reservation row refreshes.
       lines: previous?.lines ?? current.lines ?? [],
       displayStatus: toDisplayStatus(current.status),
+      pendingRequest: pendingRequests[current.id] ?? null,
     }));
-  }, [reservations, viewModal?.id]);
+  }, [reservations, pendingRequests, viewModal?.id]);
+
+  // An action dialog opened against an older snapshot must not outlive a
+  // status change made elsewhere (customer, cron, another staff member).
+  useEffect(() => {
+    const staleDialog = (dialogRes) => {
+      if (!dialogRes) return false;
+      const current = reservations.find((r) => r.id === dialogRes.id);
+      return !current || current.status !== dialogRes.status;
+    };
+    if (staleDialog(rescheduleModal)) {
+      setRescheduleModal(null);
+      toast.info(STALE_STATE_MESSAGE);
+    }
+    if (staleDialog(cancelModal)) {
+      setCancelModal(null);
+      toast.info(STALE_STATE_MESSAGE);
+    }
+  }, [reservations]);
 
   useEffect(() => {
     setPaymentRecords([]);
@@ -552,7 +594,6 @@ const Reservations = () => {
     size: 'M',
     date: '',
   });
-  const [newDate, setNewDate] = useState('');
   const [expandedRows, setExpandedRows] = useState({});
 
   const toggleExpandRow = (resId) => {
@@ -622,8 +663,9 @@ const Reservations = () => {
       ...r,
       lines,
       displayStatus: displayStatus,
-      displayDate: parseDate(r.reservationDate || r.date),
-      displayName: r.customerName || r.customer || 'Unknown Customer'
+      displayDate: parseDate(r.appointmentAt || r.reservationDate || r.date),
+      displayName: r.customerName || r.customer || 'Unknown Customer',
+      pendingRequest: pendingRequests[r.id] ?? null,
     };
   }).filter((r) => {
     const matchesSearch =
@@ -673,19 +715,52 @@ const Reservations = () => {
   // re-checks the slot inside the RPC: it was free when they asked, but the
   // request may have sat in the queue while another reservation took it, so a
   // clash surfaces here rather than as a double-booked morning.
-  const handleResolveReschedule = async (id, approve) => {
-    const res = filteredReservations.find((r) => r.id === id);
-    if (!res) return;
+  // One explicit click = one command. Stale-state and domain errors are shown
+  // once and followed by a single refetch -- never an automatic retry.
+  const runReservationCommand = async (reservationId, command, fn) => {
+    setBusyReservationId(reservationId);
     try {
-      await resolveRescheduleRequest(id, approve);
-      toast.success(
-        approve
-          ? `Moved ${res.displayId || id} to ${formatProposedAppointment(res)}`
-          : `Declined the new time for ${res.displayId || id}`,
-      );
-    } catch (e) {
-      toast.error(e?.message || 'Could not answer that request.');
+      const result = await runSingleFlight(`${command}:${reservationId}`, fn);
+      return result === SKIPPED ? SKIPPED : true;
+    } catch (err) {
+      console.error(`Reservation command ${command} failed:`, err);
+      if (isStaleStateError(err)) {
+        setRescheduleModal(null);
+        setCancelModal(null);
+        reservationsFeedRef.current?.refetch?.();
+        toast.error(STALE_STATE_MESSAGE);
+      } else {
+        toast.error(err?.message || 'Failed to update reservation');
+      }
+      return false;
+    } finally {
+      setBusyReservationId((current) => (current === reservationId ? null : current));
     }
+  };
+
+  const handleResolveRequest = async (request, approve, notes) => {
+    const res = reservations.find((r) => r.id === request.reservationId);
+    const label = res?.displayId || request.reservationId;
+    const isReschedule = request.requestType === 'reschedule';
+    const ok = await runReservationCommand(request.reservationId, `resolve-${request.requestType}`, async () => {
+      const outcome = isReschedule
+        ? await resolveRescheduleRequest(request.id, approve, notes)
+        : await resolveReadyCancellationRequest(request.id, approve, notes);
+      if (outcome?.outcome === 'superseded') {
+        toast.info(`The request on ${label} no longer applies (reservation is ${outcome.reservation_status}).`);
+        return;
+      }
+      toast.success(
+        isReschedule
+          ? approve
+            ? `Moved ${label} to ${formatManilaSlot(request.requestedFor)}`
+            : `Declined the new time for ${label}`
+          : approve
+            ? `Cancelled ${label} at the customer's request`
+            : `Declined the cancellation of ${label}`,
+      );
+    });
+    return ok === true;
   };
 
   // The mobile app's pickup pass QR encodes `jezsy-pickup:<pickup_token>`.
@@ -742,66 +817,62 @@ const Reservations = () => {
   const handleAction = async (id, action) => {
     const res = reservations.find((r) => r.id === id);
     if (!res) return;
+    const label = res.displayId || id;
 
-    try {
+    if (action === 'cancel') {
+      if (!canCancelReservation(res)) {
+        toast.error('Resolve or refund the payment before cancelling this reservation.');
+        return;
+      }
+      setCancelModal({ ...res, displayStatus: toDisplayStatus(res.status), lines: itemsByReservation[res.id] ?? res.lines });
+      return;
+    }
+
+    if ((action === 'ready_pickup' || action === 'complete') && pendingRequests[res.id]) {
+      toast.error("Review the customer's request first.");
+      return;
+    }
+
+    await runReservationCommand(res.docId, action, async () => {
       if (action === 'start_preparing') {
         if (String(res.paymentStatus || '').toLowerCase() !== 'paid') {
           throw new Error('Payment must be confirmed before preparation starts.');
         }
         await transitionReservationStatus(res.docId, res.status, 'Preparing');
-        toast.success(`Reservation ${id} payment received — preparing item`);
+        toast.success(`Reservation ${label} payment received — preparing item`);
       } else if (action === 'ready_pickup') {
         await transitionReservationStatus(res.docId, res.status, 'Ready');
-        toast.success(`Reservation ${id} marked ready for pickup`);
+        toast.success(`Reservation ${label} marked ready for pickup`);
       } else if (action === 'complete') {
         const outstanding = outstandingBalance(res);
         if (outstanding > 0) {
           throw new Error(`Record the ${formatCurrency(outstanding)} balance and its payment method in Details before handover.`);
         }
-
         await completeReservationHandover(res.docId);
-        toast.success(`Reservation ${id} completed — stock consumed permanently`);
-        return;
-      } else if (action === 'cancel') {
-        if (!canCancelReservation(res)) {
-          throw new Error('Resolve or refund the payment before cancelling this reservation.');
-        }
-        await cancelReservation(res.docId, res.status);
-        toast.error(`Reservation ${id} cancelled`);
+        toast.success(`Reservation ${label} completed — stock consumed permanently`);
       }
-    } catch (err) {
-      console.error('Reservation action failed:', err);
-      toast.error(err.message || 'Failed to update reservation');
-    }
+    });
   };
 
-  const handleReschedule = async (e) => {
-    e.preventDefault();
-    if (!newDate) {
-      toast.error('Select a new date');
-      return;
-    }
+  const handleCancelSubmit = async (reason) => {
+    const target = cancelModal;
+    if (!target) return;
+    const ok = await runReservationCommand(target.docId, 'cancel', async () => {
+      await cancelReservation(target.docId, target.status, reason);
+      toast.success(`Reservation ${target.displayId || target.id} cancelled — customer notified`);
+    });
+    if (ok === true) setCancelModal(null);
+  };
 
-    // Extract HH:MM from the time input (falls back to midnight if absent).
-    const newTime = rescheduleModal.newTime || '10:00';
-    const appointmentTimePadded = newTime.length === 5 ? `${newTime}:00` : newTime;
-
-    try {
-      // Server owns: capacity advisory lock, slot validation, deadline recompute.
-      await rescheduleReservation(
-        rescheduleModal.docId,
-        rescheduleModal.status,
-        newDate,
-        appointmentTimePadded,
-        null,
-      );
-      toast.success(`Reservation ${rescheduleModal.id} rescheduled`);
-      setRescheduleModal(null);
-      setNewDate('');
-    } catch (err) {
-      console.error('Failed to reschedule:', err);
-      toast.error(err.message || 'Failed to reschedule');
-    }
+  const handleReschedule = async ({ date, time, reason }) => {
+    const target = rescheduleModal;
+    if (!target) return;
+    const ok = await runReservationCommand(target.docId, 'reschedule', async () => {
+      // Server owns: future-slot check, capacity lock, deadline recompute.
+      await rescheduleReservation(target.docId, target.status, date, time, reason);
+      toast.success(`Reservation ${target.displayId || target.id} rescheduled — customer notified`);
+    });
+    if (ok === true) setRescheduleModal(null);
   };
 
   // Shared by the modal footer, the board card, and the table row -- used to
@@ -1421,13 +1492,10 @@ const Reservations = () => {
                         key={res.id}
                         res={res}
                         canManage={canManage}
+                        busy={busyReservationId === res.docId}
                         onView={() => setViewModal(res)}
                         onAction={handleAction}
-                        onResolveReschedule={handleResolveReschedule}
-                        onReschedule={() => {
-                          setRescheduleModal(res);
-                          setNewDate(res.date);
-                        }}
+                        onReschedule={() => setRescheduleModal(res)}
                         onMessage={() => handleMessageBuyer(res)}
                       />
                     ))
@@ -1695,22 +1763,23 @@ const Reservations = () => {
                               // without ever opening the receipt image. Opens
                               // the detail modal instead, where the receipt
                               // renders next to its own Verify Payment button.
-                              onClick={() => (primaryAction.action === 'review_receipt' ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
+                              disabled={busyReservationId === res.docId}
+                              onClick={() => (primaryAction.action === 'review_receipt' || hasBlockingChangeRequest(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
                             >
                               {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
                             </button>
                           )}
-                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && Boolean(res.date || res.reservationDate) && (
+                          {canManage && canRescheduleReservation(res) && (
                             <button
                               className="res-action-btn reschedule"
                               title="Reschedule"
                               aria-label={`Reschedule reservation ${res.displayId || res.id}`}
-                              onClick={() => { setRescheduleModal(res); setNewDate(res.date); }}
+                              onClick={() => setRescheduleModal(res)}
                             >
                               <Calendar size={14} />
                             </button>
                           )}
-                          {canManage && CAN_RESCHEDULE_STATUSES.has(res.displayStatus) && canCancelReservation(res) && (
+                          {canManage && ['To Pay', 'Preparing', 'To Pickup'].includes(res.displayStatus) && canCancelReservation(res) && (
                             <button
                               className="res-action-btn reject"
                               title="Cancel"
@@ -2041,67 +2110,25 @@ const Reservations = () => {
 
       {/* ===== RESCHEDULE MODAL ===== */}
       {rescheduleModal && (
-        <div
-          className="modal-overlay"
-          role="button"
-          tabIndex={0}
-          aria-label="Close dialog"
-          onClick={(e) => { if (e.target === e.currentTarget) setRescheduleModal(null); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setRescheduleModal(null);
-            }
-          }}
-        >
-          <div
-            className="modal-content"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reschedule-dialog-title"
-            style={{ maxWidth: 500 }}
-          >
-            <div className="modal-header">
-              <h2 id="reschedule-dialog-title">{rescheduleModalTitle(rescheduleModal)}</h2>
-              <button className="close-btn" onClick={() => setRescheduleModal(null)} aria-label="Close dialog">
-                &times;
-              </button>
-            </div>
-            <form className="modal-body" onSubmit={handleReschedule}>
-              <p className="text-secondary">
-                Current:{' '}
-                {parseDate(
-                  rescheduleModal.reservationDate || rescheduleModal.date,
-                ).toLocaleString()}
-              </p>
-              <div className="form-group">
-                <label className="label" htmlFor="reschedule-date">New Date & Time</label>
-                <input autoComplete="off"
-                  id="reschedule-date"
-                  type="datetime-local"
-                  className="input-field"
-                  min={new Date().toISOString().slice(0, 16)}
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  required
-                />
-                <span className="form-hint">Store hours: 9:00 AM – 5:00 PM, Mon – Sat</span>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => setRescheduleModal(null)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Confirm Reschedule
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <RescheduleDialog
+          key={rescheduleModal.id}
+          isOpen
+          res={rescheduleModal}
+          submitting={busyReservationId === rescheduleModal.docId}
+          onClose={() => setRescheduleModal(null)}
+          onSubmit={handleReschedule}
+        />
+      )}
+
+      {cancelModal && (
+        <CancelReservationDialog
+          key={cancelModal.id}
+          isOpen
+          res={cancelModal}
+          submitting={busyReservationId === cancelModal.docId}
+          onClose={() => setCancelModal(null)}
+          onSubmit={handleCancelSubmit}
+        />
       )}
 
       {/* ===== VIEW DETAILS MODAL ===== */}
@@ -2118,11 +2145,10 @@ const Reservations = () => {
           refundQueue={refundQueue}
           onClose={() => setViewModal(null)}
           onMessage={(r) => handleMessageBuyer(r)}
-          onReschedule={(r) => {
-            setRescheduleModal(r);
-            setNewDate(r.date);
-          }}
-          onResolveReschedule={handleResolveReschedule}
+          onReschedule={(r) => setRescheduleModal(r)}
+          onResolveRequest={handleResolveRequest}
+          requestBusy={busyReservationId === viewModal.docId}
+          actionBusy={busyReservationId === viewModal.docId}
           onAction={handleAction}
           onVerifyPayment={handleVerifyPayment}
           onRejectReceipt={handleRejectReceipt}

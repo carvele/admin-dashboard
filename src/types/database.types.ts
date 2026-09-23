@@ -2123,6 +2123,79 @@ export type Database = {
         }
         Relationships: []
       }
+      reservation_change_requests: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          original_for: string | null
+          payment_status_at_request: string | null
+          reason: string
+          request_type: string
+          requested_for: string | null
+          reservation_id: string
+          reservation_status_at_request: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          original_for?: string | null
+          payment_status_at_request?: string | null
+          reason: string
+          request_type: string
+          requested_for?: string | null
+          reservation_id: string
+          reservation_status_at_request: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          original_for?: string | null
+          payment_status_at_request?: string | null
+          reason?: string
+          request_type?: string
+          requested_for?: string | null
+          reservation_id?: string
+          reservation_status_at_request?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_change_requests_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_change_requests_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_change_requests_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservation_items: {
         Row: {
           color: string | null
@@ -3482,6 +3555,10 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: undefined
       }
+      assert_reservation_command_rate: {
+        Args: { _command: string; _reservation_id: string }
+        Returns: undefined
+      }
       backfill_canonical_sibling_colorways: { Args: never; Returns: Json }
       begin_workforce_mfa_reset: {
         Args: {
@@ -3525,7 +3602,7 @@ export type Database = {
       cancel_reservation_as_manager: {
         Args: {
           _expected_status: string
-          _reason?: string
+          _reason: string
           _reservation_id: string
         }
         Returns: Json
@@ -3575,6 +3652,10 @@ export type Database = {
       }
       compute_pickup_deadline: {
         Args: { _start_at: string; _window_days?: number }
+        Returns: string
+      }
+      compute_reservation_payment_due_at: {
+        Args: { _appointment: string }
         Returns: string
       }
       create_reservation: {
@@ -3904,6 +3985,10 @@ export type Database = {
       get_unread_notification_count: { Args: never; Returns: number }
       get_wardrobe_privacy: { Args: { p_user_id: string }; Returns: string }
       get_wishlist_privacy: { Args: { p_user_id: string }; Returns: string }
+      has_pending_blocking_reservation_change: {
+        Args: { _reservation_id: string }
+        Returns: boolean
+      }
       increment_wear_count: {
         Args: { p_item_id: string }
         Returns: {
@@ -3953,6 +4038,10 @@ export type Database = {
         Returns: boolean
       }
       is_staff_or_admin: { Args: never; Returns: boolean }
+      lock_reservation_capacity_dates: {
+        Args: { _a: string; _b?: string }
+        Returns: undefined
+      }
       low_stock_threshold: { Args: never; Returns: number }
       mark_admin_notifications_read: {
         Args: { p_receipt_ids?: string[] }
@@ -3985,6 +4074,10 @@ export type Database = {
       }
       merge_message_reaction: {
         Args: { p_emoji: string; p_message_id: string }
+        Returns: Json
+      }
+      preview_reservation_cancellation: {
+        Args: { _reservation_id: string }
         Returns: Json
       }
       process_account_deletion: { Args: { _request_id: string }; Returns: Json }
@@ -4131,6 +4224,10 @@ export type Database = {
         }
         Returns: Json
       }
+      request_ready_cancellation: {
+        Args: { _reason: string; _reservation_id: string }
+        Returns: Json
+      }
       request_reschedule:
         | {
             Args: {
@@ -4148,6 +4245,15 @@ export type Database = {
             }
             Returns: Json
           }
+      request_reschedule_v2: {
+        Args: {
+          _new_date: string
+          _new_time: string
+          _reason: string
+          _reservation_id: string
+        }
+        Returns: Json
+      }
       require_aal2: { Args: never; Returns: undefined }
       require_recent_mfa: { Args: never; Returns: undefined }
       reschedule_reservation_as_manager: {
@@ -4168,12 +4274,28 @@ export type Database = {
         Args: { _approve: boolean; _notes?: string; _reservation_id: string }
         Returns: Json
       }
+      resolve_ready_cancellation_request: {
+        Args: {
+          _approve: boolean
+          _request_id: string
+          _resolution_notes?: string
+        }
+        Returns: Json
+      }
       resolve_reschedule: {
         Args: { _approve: boolean; _reservation_id: string }
         Returns: Json
       }
       resolve_reschedule_as_manager: {
         Args: { _approve: boolean; _reservation_id: string }
+        Returns: Json
+      }
+      resolve_reschedule_request_v2: {
+        Args: {
+          _approve: boolean
+          _request_id: string
+          _resolution_notes?: string
+        }
         Returns: Json
       }
       resolve_username: { Args: { p_username: string }; Returns: string }

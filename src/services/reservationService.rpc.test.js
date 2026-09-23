@@ -163,15 +163,21 @@ describe('reservation lifecycle commands', () => {
 
   test('cancels through the guarded command', async () => {
     mockRpc.mockResolvedValue({ data: { status: 'Cancelled' }, error: null });
-    await cancelReservation('res-1', 'To Pay');
+    await cancelReservation('res-1', 'To Pay', '  Item damaged  ');
     expect(mockInvoke).toHaveBeenCalledWith('payments-expire', {
       body: { reservation_id: 'res-1' },
     });
     expect(mockRpc).toHaveBeenCalledWith('cancel_reservation_as_manager', {
       _reservation_id: 'res-1',
       _expected_status: 'To Pay',
-      _reason: 'Cancelled by owner',
+      _reason: 'Item damaged',
     });
+  });
+
+  test('refuses to cancel without a customer-facing reason', async () => {
+    mockRpc.mockClear();
+    await expect(cancelReservation('res-1', 'To Pay', '   ')).rejects.toThrow('reason');
+    expect(mockRpc).not.toHaveBeenCalledWith('cancel_reservation_as_manager', expect.anything());
   });
 
   test('reviews a receipt through the payment command', async () => {
@@ -243,12 +249,13 @@ describe('reservation lifecycle commands', () => {
 describe('resolveRescheduleRequest', () => {
   afterEach(() => mockRpc.mockReset());
 
-  test('calls the owner-only reschedule command with the reservation id and approve flag', async () => {
-    mockRpc.mockResolvedValue({ data: { rescheduled: true }, error: null });
-    await resolveRescheduleRequest('res-2', true);
-    expect(mockRpc).toHaveBeenCalledWith('resolve_reschedule_as_manager', {
-      _reservation_id: 'res-2',
+  test('resolves the canonical change request by request id', async () => {
+    mockRpc.mockResolvedValue({ data: { outcome: 'approved' }, error: null });
+    await resolveRescheduleRequest('req-2', true, 'See you then');
+    expect(mockRpc).toHaveBeenCalledWith('resolve_reschedule_request_v2', {
+      _request_id: 'req-2',
       _approve: true,
+      _resolution_notes: 'See you then',
     });
   });
 
@@ -356,9 +363,17 @@ describe('rescheduleReservation', () => {
       error: new Error('Selected slot is full'),
     });
 
-    await expect(rescheduleReservation('res-1', 'To Pay', '2026-09-20', '14:00:00')).rejects.toThrow(
+    await expect(rescheduleReservation('res-1', 'To Pay', '2026-09-20', '14:00:00', 'Staff shortage')).rejects.toThrow(
       'Selected slot is full',
     );
+  });
+});
+
+describe('rescheduleReservation reason', () => {
+  it('requires a reason before calling the RPC', async () => {
+    mockRpc.mockReset();
+    await expect(rescheduleReservation('res-1', 'To Pay', '2026-09-20', '14:00:00', '')).rejects.toThrow('reason');
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
 
