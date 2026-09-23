@@ -3,17 +3,9 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 import React, { useState, useEffect } from 'react';
 import { X, Check, AlertTriangle, ArrowRight, Info, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
-import { GarmentIngestor } from '../../utils/garmentIngestor';
+import { GarmentIngestor, getCategorySkeletonProfile, UNIVERSAL_CANONICAL_BONES } from '../../utils/garmentIngestor';
 import CalibrationValidator from './CalibrationValidator';
 import '@google/model-viewer';
-
-const STANDARD_BONES = [
-  'Spine', 'Spine1', 'Spine2',
-  'LeftShoulder', 'LeftArm', 'LeftForeArm',
-  'RightShoulder', 'RightArm', 'RightForeArm',
-];
-
-const REQUIRED_BONES = ['Spine', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm'];
 
 const ANCHOR_CONFIDENCE_LABELS = {
   HIGH: { label: 'High Confidence', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
@@ -42,6 +34,10 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
   const [totalBoneCount, setTotalBoneCount] = useState(0);
   const [riggedBlob, setRiggedBlob] = useState(null);
   const [riggedUrl, setRiggedUrl] = useState(null);
+
+  const skeletonProfile = getCategorySkeletonProfile(category);
+  const standardBones = skeletonProfile.displayBones;
+  const requiredBones = skeletonProfile.requiredBones;
 
   useEffect(() => {
     let isMounted = true;
@@ -83,7 +79,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
           setError('Model is not AR compatible. It must meet minimal geometry requirements.');
           setLoading(false);
         } else if (md.ingestionStatus === 'NEEDS_MERCHANT_MAPPING') {
-          const hasRequired = REQUIRED_BONES.every(b => md.boneMap[b]);
+          const hasRequired = requiredBones.every(b => md.boneMap[b]);
           setStep(hasRequired ? 3 : 2);
           setLoading(false);
         } else if (md.ingestionStatus === 'NEEDS_CALIBRATION') {
@@ -118,16 +114,19 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
   const handleBoneMapChange = (stdBone, glbBone) => {
     setMetadata(prev => {
       const newBoneMap = { ...prev.boneMap };
-      if (glbBone) newBoneMap[stdBone] = glbBone;
-      else delete newBoneMap[stdBone];
+      if (glbBone) {
+        newBoneMap[stdBone] = glbBone;
+      } else {
+        delete newBoneMap[stdBone];
+      }
       return { ...prev, boneMap: newBoneMap };
     });
   };
 
   const handleContinueFromMapping = () => {
-    const hasRequired = REQUIRED_BONES.every(b => metadata.boneMap[b]);
+    const hasRequired = requiredBones.every(b => metadata.boneMap[b]);
     if (!hasRequired) {
-      alert('Spine, LeftArm, RightArm, LeftForeArm, and RightForeArm are required.');
+      alert(`The following bones are required for ${category}: ${requiredBones.join(', ')}.`);
       return;
     }
     setStep(3);
@@ -145,7 +144,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
   };
 
   const mappedCount = metadata ? Object.keys(metadata.boneMap).length : 0;
-  const requiredMapped = metadata ? REQUIRED_BONES.filter(b => metadata.boneMap[b]).length : 0;
+  const requiredMapped = metadata ? requiredBones.filter(b => metadata.boneMap[b]).length : 0;
 
   // ── Loading screen ──
   if (loading) {
@@ -201,10 +200,10 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
               <div className="mb-4 p-3 rounded border bg-yellow-50 border-yellow-200 flex items-start gap-3">
                 <AlertTriangle size={20} className="text-yellow-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-bold text-yellow-800">Calibration Required</p>
+                  <p className="font-bold text-yellow-800">Calibration Required ({category})</p>
                   <p className="text-sm text-yellow-700">
-                    We couldn&apos;t automatically match all required bones. 
-                    Map at least <strong>Spine</strong>, <strong>LeftArm</strong>, <strong>RightArm</strong>, <strong>LeftForeArm</strong>, and <strong>RightForeArm</strong> to continue.
+                    We couldn&apos;t automatically match all required bones for this {category}. 
+                    Map at least: <strong>{requiredBones.join(', ')}</strong> to continue.
                   </p>
                 </div>
               </div>
@@ -214,9 +213,9 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                 <div className="flex-1">
                   <h4 className="text-sm font-bold mb-3 text-gray-700">Canonical Bone → GLB Bone</h4>
                   <div className="space-y-2">
-                    {STANDARD_BONES.map(stdBone => {
+                    {standardBones.map(stdBone => {
                       const isMapped = !!metadata.boneMap[stdBone];
-                      const isRequired = REQUIRED_BONES.includes(stdBone);
+                      const isRequired = requiredBones.includes(stdBone);
                       return (
                         <div key={stdBone} className="flex items-center gap-2">
                           <div className="w-5">
@@ -268,11 +267,11 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
 
               <div className="mt-4 pt-4 border-t flex justify-between items-center">
                 <p className="text-sm text-gray-500">
-                  {requiredMapped}/5 required bones mapped — {mappedCount}/{STANDARD_BONES.length} total
+                  {requiredMapped}/{requiredBones.length} required bones mapped — {mappedCount}/{standardBones.length} total
                 </p>
                 <button
                   onClick={handleContinueFromMapping}
-                  disabled={requiredMapped < 5}
+                  disabled={requiredMapped < requiredBones.length}
                   className="bg-primary text-white px-6 py-2 rounded flex items-center disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Continue <ArrowRight size={16} className="ml-2" />
@@ -344,9 +343,23 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Detected Measurements</h4>
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Shoulder width</span>
+                        <span className="text-gray-600">
+                          {category === 'pants' || category === 'skirt' ? 'Reference Waist width' : 'Reference Shoulder width'}
+                        </span>
                         <span className="font-mono font-bold">{metadata.restPoseMetricWidth.toFixed(3)} m</span>
                       </div>
+                      {metadata.fitProfileV2?.referenceMeasurements?.hipWidthMeters && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Reference Hip width</span>
+                          <span className="font-mono font-bold">{metadata.fitProfileV2.referenceMeasurements.hipWidthMeters.toFixed(3)} m</span>
+                        </div>
+                      )}
+                      {metadata.fitProfileV2?.coverageProfile && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Total Length ({metadata.fitProfileV2.coverageProfile.extent})</span>
+                          <span className="font-mono font-bold">{metadata.fitProfileV2.coverageProfile.authoredLengthMeters.toFixed(3)} m</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Anchor position</span>
                         <span className="font-mono text-xs">
@@ -354,21 +367,36 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Category</span>
-                        <span className="font-medium capitalize">{metadata.category}</span>
+                        <span className="text-gray-600">Category / Region</span>
+                        <span className="font-medium capitalize">{metadata.category} ({metadata.fitProfileV2?.region || 'standard'})</span>
                       </div>
                     </div>
                   </div>
 
+                  {/* ── Fit Bands (V2) ── */}
+                  {metadata.fitProfileV2?.fitBands && metadata.fitProfileV2.fitBands.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Authored Fit Bands</h4>
+                      <div className="space-y-1">
+                        {metadata.fitProfileV2.fitBands.map((band) => (
+                          <div key={band.name} className="flex justify-between text-xs">
+                            <span className="text-gray-600 font-medium">{band.name}</span>
+                            <span className="font-mono">{band.authoredWidthMeters.toFixed(3)} m ({(band.authoredWidthMeters * 100).toFixed(1)} cm)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Bone map summary ── */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">
-                      Skeleton ({mappedCount}/{STANDARD_BONES.length} mapped)
+                      Skeleton ({mappedCount}/{standardBones.length} mapped)
                     </h4>
                     <div className="grid grid-cols-3 gap-1">
-                      {STANDARD_BONES.map(b => {
+                      {standardBones.map(b => {
                         const mapped = !!metadata.boneMap[b];
-                        const required = REQUIRED_BONES.includes(b);
+                        const required = requiredBones.includes(b);
                         return (
                           <div
                             key={b}
@@ -397,16 +425,11 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                   </div>
 
                   {/* ── Editable fields ── */}
-                  {/* Only Shoulder Width sets anchorConfidence: 'merchant_confirmed' below.
-                      Rest Pose and Anchor Type used to set it too, which was wrong -- this
-                      modal has no editable field for anatomicalAnchorOffset at all (it's
-                      display-only above), so picking a rest pose or anchor type was
-                      silently stamping the anchor position as human-reviewed when nobody
-                      had looked at it. Confirmed live: two catalog products ended up with
-                      merchant_confirmed anchor data that was actually never reviewed. */}
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-bold mb-1">Shoulder Width (m)</label>
+                      <label className="block text-sm font-bold mb-1">
+                        {category === 'pants' || category === 'skirt' ? 'Reference Waist Width (m)' : 'Shoulder Width (m)'}
+                      </label>
                       <input autoComplete="off" id="field_qsptygk" name="field_qsptygk"
                         type="number"
                         step="0.01"
@@ -420,7 +443,11 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                           anchorConfidence: 'merchant_confirmed'
                         })}
                       />
-                      <p className="text-xs text-gray-400 mt-1">Measured from LeftShoulder bone to RightShoulder bone.</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {category === 'pants' || category === 'skirt'
+                          ? 'Measured across waistband slice at pelvis/hip level.'
+                          : 'Measured from LeftShoulder bone to RightShoulder bone.'}
+                      </p>
                     </div>
 
                     <div>
@@ -484,6 +511,7 @@ export default function GarmentIngestionModal({ productId, category, glbUrl, exi
                 <CalibrationValidator 
                   glbUrl={riggedUrl || glbUrl} 
                   metadata={metadata} 
+                  category={category}
                   onPass={handleSave} 
                   onFail={() => {
                      setStep(3);

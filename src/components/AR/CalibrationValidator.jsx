@@ -12,6 +12,8 @@ const LANDMARK_INDICES = {
   LEFT_ELBOW: 13, RIGHT_ELBOW: 14,
   LEFT_WRIST: 15, RIGHT_WRIST: 16,
   LEFT_HIP: 23, RIGHT_HIP: 24,
+  LEFT_KNEE: 25, RIGHT_KNEE: 26,
+  LEFT_ANKLE: 27, RIGHT_ANKLE: 28,
 };
 
 function buildSyntheticLandmarks(angles) {
@@ -32,8 +34,7 @@ function buildSyntheticLandmarks(angles) {
   const lowerLen = 0.25;
 
   // Left Arm (Angles from body: 0 = down, 90 = out/horizontal, 180 = up)
-  const laRad = angles.leftArm * Math.PI / 180;
-  // X goes positive for left arm going out
+  const laRad = (angles.leftArm ?? 90) * Math.PI / 180;
   const le = {
     x: ls.x + Math.sin(laRad) * upperLen,
     y: ls.y + Math.cos(laRad) * upperLen,
@@ -42,8 +43,7 @@ function buildSyntheticLandmarks(angles) {
   lm[LANDMARK_INDICES.LEFT_ELBOW] = { ...le, visibility: 1 };
 
   // Left Forearm (Angles relative to upper arm: 0 = straight, 90 = bent forward/up)
-  const lfaRad = angles.leftForearm * Math.PI / 180;
-  // If we just bend it "forward" (Z axis)
+  const lfaRad = (angles.leftForearm ?? 0) * Math.PI / 180;
   const lw = {
     x: le.x + Math.sin(laRad) * lowerLen * Math.cos(lfaRad),
     y: le.y + Math.cos(laRad) * lowerLen * Math.cos(lfaRad),
@@ -52,8 +52,7 @@ function buildSyntheticLandmarks(angles) {
   lm[LANDMARK_INDICES.LEFT_WRIST] = { ...lw, visibility: 1 };
 
   // Right Arm
-  const raRad = angles.rightArm * Math.PI / 180;
-  // X goes negative for right arm going out
+  const raRad = (angles.rightArm ?? 90) * Math.PI / 180;
   const re = {
     x: rs.x - Math.sin(raRad) * upperLen,
     y: rs.y + Math.cos(raRad) * upperLen,
@@ -61,7 +60,7 @@ function buildSyntheticLandmarks(angles) {
   };
   lm[LANDMARK_INDICES.RIGHT_ELBOW] = { ...re, visibility: 1 };
 
-  const rfaRad = angles.rightForearm * Math.PI / 180;
+  const rfaRad = (angles.rightForearm ?? 0) * Math.PI / 180;
   const rw = {
     x: re.x - Math.sin(raRad) * lowerLen * Math.cos(rfaRad),
     y: re.y + Math.cos(raRad) * lowerLen * Math.cos(rfaRad),
@@ -69,28 +68,80 @@ function buildSyntheticLandmarks(angles) {
   };
   lm[LANDMARK_INDICES.RIGHT_WRIST] = { ...rw, visibility: 1 };
 
+  // Legs Synthesis (Upper leg = 0.4m, lower leg = 0.4m)
+  const legLen = 0.4;
+  const stanceSpread = ((angles.stanceWidth ?? 0) * Math.PI) / 180;
+
+  // Left Leg
+  const lUpPitch = ((angles.leftUpLeg ?? 0) * Math.PI) / 180;
+  const lKnee = {
+    x: lh.x + Math.sin(stanceSpread) * legLen,
+    y: lh.y + Math.cos(lUpPitch) * legLen,
+    z: lh.z + Math.sin(lUpPitch) * legLen,
+  };
+  lm[LANDMARK_INDICES.LEFT_KNEE] = { ...lKnee, visibility: 1 };
+
+  const lLegBend = ((angles.leftLeg ?? 0) * Math.PI) / 180;
+  const lAnkle = {
+    x: lKnee.x,
+    y: lKnee.y + Math.cos(lUpPitch - lLegBend) * legLen,
+    z: lKnee.z + Math.sin(lUpPitch - lLegBend) * legLen,
+  };
+  lm[LANDMARK_INDICES.LEFT_ANKLE] = { ...lAnkle, visibility: 1 };
+
+  // Right Leg
+  const rUpPitch = ((angles.rightUpLeg ?? 0) * Math.PI) / 180;
+  const rKnee = {
+    x: rh.x - Math.sin(stanceSpread) * legLen,
+    y: rh.y + Math.cos(rUpPitch) * legLen,
+    z: rh.z + Math.sin(rUpPitch) * legLen,
+  };
+  lm[LANDMARK_INDICES.RIGHT_KNEE] = { ...rKnee, visibility: 1 };
+
+  const rLegBend = ((angles.rightLeg ?? 0) * Math.PI) / 180;
+  const rAnkle = {
+    x: rKnee.x,
+    y: rKnee.y + Math.cos(rUpPitch - rLegBend) * legLen,
+    z: rKnee.z + Math.sin(rUpPitch - rLegBend) * legLen,
+  };
+  lm[LANDMARK_INDICES.RIGHT_ANKLE] = { ...rAnkle, visibility: 1 };
+
   return lm;
 }
 
-export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail }) {
+export default function CalibrationValidator({ glbUrl, metadata, category, onPass, onFail }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const bonesRef = useRef({});
   
+  const isLower = category === 'pants' || category === 'skirt' || metadata?.category === 'pants' || metadata?.category === 'skirt';
+
   const [angles, setAngles] = useState({
-    leftArm: 90, // T-Pose
+    leftArm: 90,
     rightArm: 90,
     leftForearm: 0,
     rightForearm: 0,
+    leftUpLeg: 0,
+    rightUpLeg: 0,
+    leftLeg: 0,
+    rightLeg: 0,
+    stanceWidth: 0,
   });
 
   const applyPreset = (preset) => {
     switch (preset) {
-      case 'T_POSE': setAngles({ leftArm: 90, rightArm: 90, leftForearm: 0, rightForearm: 0 }); break;
-      case 'A_POSE': setAngles({ leftArm: 55, rightArm: 55, leftForearm: 0, rightForearm: 0 }); break;
-      case 'ARMS_UP': setAngles({ leftArm: 170, rightArm: 170, leftForearm: 0, rightForearm: 0 }); break;
-      case 'ARMS_DOWN': setAngles({ leftArm: 10, rightArm: 10, leftForearm: 0, rightForearm: 0 }); break;
-      case 'CROSSED': setAngles({ leftArm: 70, rightArm: 70, leftForearm: 90, rightForearm: 90 }); break;
+      // Upper Presets
+      case 'T_POSE': setAngles(a => ({ ...a, leftArm: 90, rightArm: 90, leftForearm: 0, rightForearm: 0 })); break;
+      case 'A_POSE': setAngles(a => ({ ...a, leftArm: 55, rightArm: 55, leftForearm: 0, rightForearm: 0 })); break;
+      case 'ARMS_UP': setAngles(a => ({ ...a, leftArm: 170, rightArm: 170, leftForearm: 0, rightForearm: 0 })); break;
+      case 'ARMS_DOWN': setAngles(a => ({ ...a, leftArm: 10, rightArm: 10, leftForearm: 0, rightForearm: 0 })); break;
+      case 'CROSSED': setAngles(a => ({ ...a, leftArm: 70, rightArm: 70, leftForearm: 90, rightForearm: 90 })); break;
+      // Lower Presets
+      case 'NEUTRAL_STAND': setAngles(a => ({ ...a, leftUpLeg: 0, rightUpLeg: 0, leftLeg: 0, rightLeg: 0, stanceWidth: 0 })); break;
+      case 'WIDE_STANCE': setAngles(a => ({ ...a, leftUpLeg: 0, rightUpLeg: 0, leftLeg: 0, rightLeg: 0, stanceWidth: 15 })); break;
+      case 'LEFT_STRIDE': setAngles(a => ({ ...a, leftUpLeg: 25, rightUpLeg: -15, leftLeg: 15, rightLeg: 0, stanceWidth: 5 })); break;
+      case 'RIGHT_STRIDE': setAngles(a => ({ ...a, leftUpLeg: -15, rightUpLeg: 25, leftLeg: 0, rightLeg: 15, stanceWidth: 5 })); break;
+      case 'KNEE_FLEX': setAngles(a => ({ ...a, leftUpLeg: 20, rightUpLeg: 20, leftLeg: 40, rightLeg: 40, stanceWidth: 8 })); break;
     }
   };
 
@@ -184,12 +235,24 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <button onClick={() => applyPreset('T_POSE')} className="btn-primary small">T-Pose</button>
-        <button onClick={() => applyPreset('A_POSE')} className="btn-primary small">A-Pose</button>
-        <button onClick={() => applyPreset('ARMS_UP')} className="btn-primary small">Arms Up</button>
-        <button onClick={() => applyPreset('ARMS_DOWN')} className="btn-primary small">Neutral</button>
-        <button onClick={() => applyPreset('CROSSED')} className="btn-primary small">Crossed</button>
+      <div className="flex flex-wrap gap-2">
+        {isLower ? (
+          <>
+            <button onClick={() => applyPreset('NEUTRAL_STAND')} className="btn-primary small">Neutral Stand</button>
+            <button onClick={() => applyPreset('WIDE_STANCE')} className="btn-primary small">Wide Stance</button>
+            <button onClick={() => applyPreset('LEFT_STRIDE')} className="btn-primary small">Left Stride</button>
+            <button onClick={() => applyPreset('RIGHT_STRIDE')} className="btn-primary small">Right Stride</button>
+            <button onClick={() => applyPreset('KNEE_FLEX')} className="btn-primary small">Knee Flex</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => applyPreset('T_POSE')} className="btn-primary small">T-Pose</button>
+            <button onClick={() => applyPreset('A_POSE')} className="btn-primary small">A-Pose</button>
+            <button onClick={() => applyPreset('ARMS_UP')} className="btn-primary small">Arms Up</button>
+            <button onClick={() => applyPreset('ARMS_DOWN')} className="btn-primary small">Neutral</button>
+            <button onClick={() => applyPreset('CROSSED')} className="btn-primary small">Crossed</button>
+          </>
+        )}
       </div>
 
       <div className="flex gap-4">
@@ -198,22 +261,49 @@ export default function CalibrationValidator({ glbUrl, metadata, onPass, onFail 
         
         {/* Sliders */}
         <div className="w-64 space-y-4 bg-gray-50 p-4 rounded-lg">
-          <div>
-            <label className="text-xs font-bold block">Left Arm (Pitch)</label>
-            <input autoComplete="off" id="field_p8ptwn2" name="field_p8ptwn2" type="range" min="0" max="180" value={angles.leftArm} onChange={e => setAngles(a => ({...a, leftArm: Number(e.target.value)}))} className="w-full" />
-          </div>
-          <div>
-            <label className="text-xs font-bold block">Right Arm (Pitch)</label>
-            <input autoComplete="off" id="field_uetcj6r" name="field_uetcj6r" type="range" min="0" max="180" value={angles.rightArm} onChange={e => setAngles(a => ({...a, rightArm: Number(e.target.value)}))} className="w-full" />
-          </div>
-          <div>
-            <label className="text-xs font-bold block">Left Forearm (Bend)</label>
-            <input autoComplete="off" id="field_bnwitvk" name="field_bnwitvk" type="range" min="0" max="140" value={angles.leftForearm} onChange={e => setAngles(a => ({...a, leftForearm: Number(e.target.value)}))} className="w-full" />
-          </div>
-          <div>
-            <label className="text-xs font-bold block">Right Forearm (Bend)</label>
-            <input autoComplete="off" id="field_068mtvm" name="field_068mtvm" type="range" min="0" max="140" value={angles.rightForearm} onChange={e => setAngles(a => ({...a, rightForearm: Number(e.target.value)}))} className="w-full" />
-          </div>
+          {isLower ? (
+            <>
+              <div>
+                <label className="text-xs font-bold block">Left Leg Stride (-30° to 45°)</label>
+                <input autoComplete="off" id="field_leg_l" name="field_leg_l" type="range" min="-30" max="45" value={angles.leftUpLeg} onChange={e => setAngles(a => ({...a, leftUpLeg: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Right Leg Stride (-30° to 45°)</label>
+                <input autoComplete="off" id="field_leg_r" name="field_leg_r" type="range" min="-30" max="45" value={angles.rightUpLeg} onChange={e => setAngles(a => ({...a, rightUpLeg: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Left Knee Bend (0° to 90°)</label>
+                <input autoComplete="off" id="field_knee_l" name="field_knee_l" type="range" min="0" max="90" value={angles.leftLeg} onChange={e => setAngles(a => ({...a, leftLeg: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Right Knee Bend (0° to 90°)</label>
+                <input autoComplete="off" id="field_knee_r" name="field_knee_r" type="range" min="0" max="90" value={angles.rightLeg} onChange={e => setAngles(a => ({...a, rightLeg: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Stance Width (0° to 30°)</label>
+                <input autoComplete="off" id="field_stance" name="field_stance" type="range" min="0" max="30" value={angles.stanceWidth} onChange={e => setAngles(a => ({...a, stanceWidth: Number(e.target.value)}))} className="w-full" />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-bold block">Left Arm (Pitch)</label>
+                <input autoComplete="off" id="field_p8ptwn2" name="field_p8ptwn2" type="range" min="0" max="180" value={angles.leftArm} onChange={e => setAngles(a => ({...a, leftArm: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Right Arm (Pitch)</label>
+                <input autoComplete="off" id="field_uetcj6r" name="field_uetcj6r" type="range" min="0" max="180" value={angles.rightArm} onChange={e => setAngles(a => ({...a, rightArm: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Left Forearm (Bend)</label>
+                <input autoComplete="off" id="field_bnwitvk" name="field_bnwitvk" type="range" min="0" max="140" value={angles.leftForearm} onChange={e => setAngles(a => ({...a, leftForearm: Number(e.target.value)}))} className="w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-bold block">Right Forearm (Bend)</label>
+                <input autoComplete="off" id="field_068mtvm" name="field_068mtvm" type="range" min="0" max="140" value={angles.rightForearm} onChange={e => setAngles(a => ({...a, rightForearm: Number(e.target.value)}))} className="w-full" />
+              </div>
+            </>
+          )}
 
           <div className="pt-4 border-t mt-4 flex flex-col gap-2">
             <h4 className="font-bold text-gray-800 text-sm">Automated Quality Check</h4>
