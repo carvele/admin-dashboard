@@ -36,12 +36,14 @@ import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
 import { outstandingBalance } from '../../utils/reservationBalance';
 import { getActivePaymentDeadline } from '../../utils/reservationDeadline';
 import { toDisplayStatus } from '../../utils/reservationStatus';
-import { formatProposedAppointment } from '../../utils/rescheduleRequest';
+import { formatManilaSlot } from '../../utils/rescheduleRequest';
 import {
   canCancelReservation,
   isAwaitingReceipt,
-  CAN_RESCHEDULE_STATUSES,
+  canRescheduleReservation,
+  hasBlockingChangeRequest,
 } from '../../utils/reservationActions';
+import ChangeRequestCard from './ChangeRequestCard';
 import {
   getPaymentsForReservation,
   findDuplicatePaymentReference,
@@ -90,6 +92,21 @@ const formatManilaDateTime = (dateVal) => {
   return `${dateStr} · ${timeStr}`;
 };
 
+// Reason, old/new appointment and resolution note recorded by the command RPCs.
+const describeLogDetails = (details) => {
+  if (!details) return null;
+  if (details.reasonCode) return `Reason: ${REASON_CODE_LABELS[details.reasonCode] || details.reasonCode}`;
+  const parts = [];
+  const oldAt = formatManilaSlot(details.oldAppointment);
+  const newAt = formatManilaSlot(details.newAppointment || details.requestedAppointment);
+  if (oldAt && newAt) parts.push(`${oldAt} → ${newAt}`);
+  if (details.reason) parts.push(`Reason: "${details.reason}"`);
+  if (details.resolutionNote) parts.push(`Note: "${details.resolutionNote}"`);
+  if (details.staffNote) parts.push(`Note: "${details.staffNote}"`);
+  if (details.extensionClosed) parts.push('Pending pickup extension closed automatically.');
+  return parts.length ? parts.join(' · ') : null;
+};
+
 const initialsOf = (name) =>
   (name || '?')
     .split(/\s+/)
@@ -111,7 +128,9 @@ const ReservationDetailModal = ({
   onClose,
   onMessage,
   onReschedule,
-  onResolveReschedule,
+  onResolveRequest,
+  requestBusy = false,
+  actionBusy = false,
   onAction,
   onVerifyPayment,
   onRejectReceipt,
@@ -232,7 +251,7 @@ const ReservationDetailModal = ({
   useEffect(() => {
     const cancel = loadLogs();
     return cancel;
-  }, [loadLogs]);
+  }, [loadLogs, res?.updatedAt]);
 
   // ── Resolve Receipt URLs ──────────────────────────────────────
   useEffect(() => {
@@ -479,15 +498,7 @@ const ReservationDetailModal = ({
       });
     }
 
-    // 5. Reschedule requested
-    if (res?.rescheduleRequestedAt || res?.reschedule_requested_at) {
-      events.push({
-        id: 'evt-reschedule-req',
-        time: parseDate(res.rescheduleRequestedAt || res.reschedule_requested_at),
-        label: `Customer requested reschedule to ${res.rescheduleRequestedDate || res.reschedule_requested_date || ''} ${res.rescheduleRequestedAtTime || res.reschedule_requested_at_time || ''}`,
-        actor: res.customerName || 'Customer',
-      });
-    }
+    // 5. Change requests are recorded by their command RPCs in the audit log (step 7).
 
     // 6. In-person balance collected
     if (res?.balanceSettledAt || res?.balance_settled_at) {
@@ -507,9 +518,7 @@ const ReservationDetailModal = ({
         time: parseDate(log.timestamp || log.createdAt),
         label: log.action || 'Logged action',
         actor: log.userName || log.user_name || 'Staff',
-        detail: log.details?.reasonCode
-          ? `Reason: ${REASON_CODE_LABELS[log.details.reasonCode] || log.details.reasonCode}`
-          : (log.details?.staffNote ? `Note: "${log.details.staffNote}"` : null),
+        detail: describeLogDetails(log.details),
       });
     });
 
@@ -590,8 +599,8 @@ const ReservationDetailModal = ({
 
   if (!isOpen || !res) return null;
 
-  const pendingReschedule = formatProposedAppointment(res);
   const deadlineInfo = getActivePaymentDeadline(res);
+  const blockingRequest = hasBlockingChangeRequest(res);
 
   const isAdminOrOwner = ['admin', 'owner'].includes(String(user?.role || '').toLowerCase());
 
@@ -632,10 +641,10 @@ const ReservationDetailModal = ({
               <span>Customer: <strong>{res.displayName || res.customerName || 'Unknown'}</strong></span>
               <span>•</span>
               <span>Created: <strong>{formatManilaDateTime(res.createdAt || res.created_at)}</strong></span>
-              {(res.date || res.reservationDate) && (
+              {res.appointmentAt && (
                 <>
                   <span>•</span>
-                  <span>Pickup: <strong>{formatManilaDateTime(res.date || res.reservationDate)}</strong></span>
+                  <span>Appointment: <strong>{formatManilaDateTime(res.appointmentAt)}</strong></span>
                 </>
               )}
             </div>
@@ -703,6 +712,17 @@ const ReservationDetailModal = ({
                 )}
               </div>
             </div>
+          )}
+
+          {res.pendingRequest && !isCancelled && (
+            <ChangeRequestCard
+              key={res.pendingRequest.id}
+              request={res.pendingRequest}
+              currentAppointment={res.appointmentAt}
+              canManage={canManage && Boolean(onResolveRequest)}
+              busy={requestBusy}
+              onResolve={onResolveRequest}
+            />
           )}
 
           {/* TWO-COLUMN OPERATIONAL GRID */}
@@ -1188,37 +1208,6 @@ const ReservationDetailModal = ({
                   </div>
                 </div>
 
-                {/* Customer Reschedule Request Alert */}
-                {pendingReschedule && (
-                  <div className="res-reschedule-alert">
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#92400e' }}>
-                      Customer requested to move appointment to:
-                    </div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>
-                      {pendingReschedule}
-                    </div>
-                    {canManage && onResolveReschedule && (
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                        <button
-                          type="button"
-                          className="res-btn-primary"
-                          style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}
-                          onClick={() => onResolveReschedule(res.id, true)}
-                        >
-                          Approve Move
-                        </button>
-                        <button
-                          type="button"
-                          className="res-btn-outline"
-                          style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}
-                          onClick={() => onResolveReschedule(res.id, false)}
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </section>
             </div>
           </div>
@@ -1315,10 +1304,15 @@ const ReservationDetailModal = ({
 
           <div className="res-detail-footer-right">
             {/* Primary Workflow Buttons */}
+            {canManage && blockingRequest && ['Preparing', 'To Pickup'].includes(opStatus) && (
+              <span className="res-handover-hint">Review the customer&apos;s request first.</span>
+            )}
+
             {canManage && opStatus === 'To Pay' && res.paymentStatus === 'Paid' && (
               <button
                 type="button"
                 className="res-btn-primary"
+                disabled={actionBusy}
                 onClick={() => onAction(res.id, 'start_preparing')}
               >
                 <Package size={16} /> Start Preparing
@@ -1329,6 +1323,7 @@ const ReservationDetailModal = ({
               <button
                 type="button"
                 className="res-btn-primary"
+                disabled={actionBusy || blockingRequest}
                 onClick={() => onAction(res.id, 'ready_pickup')}
               >
                 <CheckCircle size={16} /> Mark Ready for Pickup
@@ -1339,19 +1334,24 @@ const ReservationDetailModal = ({
               <button
                 type="button"
                 className="res-btn-primary"
-                disabled={currentBalance > 0}
+                disabled={actionBusy || blockingRequest || currentBalance > 0}
                 onClick={() => onAction(res.id, 'complete')}
-                title={currentBalance > 0 ? 'Collect outstanding balance before handover' : 'Complete order handover'}
+                title={
+                  blockingRequest
+                    ? "Review the customer's request first."
+                    : currentBalance > 0 ? 'Collect outstanding balance before handover' : 'Complete order handover'
+                }
               >
                 <CheckCircle size={16} /> Complete Handover
               </button>
             )}
 
-            {/* Reschedule appointment button */}
-            {canManage && CAN_RESCHEDULE_STATUSES.has(opStatus) && onReschedule && (
+            {/* Reschedule: pre-Ready legacy appointments only */}
+            {canManage && canRescheduleReservation({ ...res, displayStatus: opStatus }) && onReschedule && (
               <button
                 type="button"
                 className="res-btn-outline"
+                disabled={actionBusy}
                 onClick={() => onReschedule(res)}
               >
                 <Calendar size={16} /> Reschedule
@@ -1359,10 +1359,11 @@ const ReservationDetailModal = ({
             )}
 
             {/* Cancel order button */}
-            {canManage && canCancelReservation(res) && (
+            {canManage && canCancelReservation(res) && !isCancelled && opStatus !== 'Completed' && (
               <button
                 type="button"
                 className="res-btn-danger-outline"
+                disabled={actionBusy}
                 onClick={() => onAction(res.id, 'cancel')}
               >
                 <X size={16} /> Cancel Order

@@ -29,7 +29,21 @@ export const primaryActionFor = (res) => {
   return null;
 };
 
-export const CAN_RESCHEDULE_STATUSES = new Set(['To Pay', 'Preparing', 'To Pickup']);
+// Pre-Ready only: once Ready, pickup extension is the one date-change workflow.
+export const CAN_RESCHEDULE_STATUSES = new Set(['To Pay', 'Preparing']);
+
+/** A pending customer reschedule/cancellation must be answered first. */
+export const hasBlockingChangeRequest = (res) => Boolean(res?.pendingRequest);
+
+/** Only legacy reservations with a real appointment can be moved. */
+export const canRescheduleReservation = (res) =>
+  Boolean(
+    res &&
+    CAN_RESCHEDULE_STATUSES.has(res.displayStatus) &&
+    res.appointmentTime &&
+    (res.date || res.reservationDate) &&
+    !hasBlockingChangeRequest(res),
+  );
 
 export const canCancelReservation = (res) =>
   Boolean(

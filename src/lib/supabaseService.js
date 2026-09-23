@@ -368,18 +368,29 @@ export const subscribeToCollection = (table, callback, filters = {}, includeDele
 
   doFetch();
 
-  // Real-time channel
+  // Realtime events only schedule a refetch; a burst collapses into one read.
+  let refetchTimer = null;
+  let closed = false;
+  const scheduleFetch = () => {
+    if (closed || refetchTimer) return;
+    refetchTimer = setTimeout(() => {
+      refetchTimer = null;
+      if (!closed) doFetch();
+    }, 250);
+  };
+
   const channel = supabase
     .channel(uniqueChannelName(`public:${listenTable || table}`))
-    .on('postgres_changes', { event: '*', schema: 'public', table: listenTable || table }, () => {
-      doFetch();
-    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: listenTable || table }, scheduleFetch)
     .subscribe();
 
-  // Return unsubscribe
-  return () => {
+  const unsubscribe = () => {
+    closed = true;
+    if (refetchTimer) clearTimeout(refetchTimer);
     supabase.removeChannel(channel);
   };
+  unsubscribe.refetch = scheduleFetch;
+  return unsubscribe;
 };
 
 /**

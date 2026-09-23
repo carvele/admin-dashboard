@@ -101,6 +101,8 @@ const normaliseReservation = (row) => {
     displayId: c.displayId ?? null,
     // appointmentTime as the extracted "HH:MM" string
     appointmentTime: extractTime(c.appointmentTime),
+    // Full appointment instant, for Manila date/time formatting and slot logic.
+    appointmentAt: c.appointmentTime ? new Date(c.appointmentTime) : null,
     // date as JS Date object for UI components that call .toDate() style methods
     date: c.date ? new Date(c.date) : null,
     returnDate: c.returnDate ? new Date(c.returnDate) : null,
@@ -429,19 +431,27 @@ export const transitionReservationStatus = async (reservationId, expectedStatus,
   }
 };
 
+// The reason is shown to the customer; the server rejects a blank one.
 export const cancelReservation = async (reservationId, expectedStatus, reason) => {
-  try {
-    await expireReservationPaymentSessions(reservationId);
-    const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
-      _reservation_id: reservationId,
-      _expected_status: expectedStatus,
-      _reason: reason || 'Cancelled by owner',
-    });
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    throw normalizeReservationError(err);
-  }
+  const trimmed = String(reason || '').trim();
+  if (!trimmed) throw new Error('Enter the reason shown to the customer.');
+  await expireReservationPaymentSessions(reservationId);
+  const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
+    _reservation_id: reservationId,
+    _expected_status: expectedStatus,
+    _reason: trimmed,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/** Server-derived financial outcome shown before a staff cancellation. */
+export const previewReservationCancellation = async (reservationId) => {
+  const { data, error } = await supabase.rpc('preview_reservation_cancellation', {
+    _reservation_id: reservationId,
+  });
+  if (error) throw error;
+  return data;
 };
 
 export const reviewReservationReceipt = async (reservationId, approve, reasonCode = null, staffNote = null) => {
@@ -621,45 +631,69 @@ export const repairReservationData = async (reservation) => {
 };
 
 /**
- * Answers a customer's reschedule request.
- *
- * Approving re-checks the slot before moving the booking: the time was free
- * when it was asked for, but the request may have sat in the queue while
- * another reservation took it.
+ * Pending customer change requests (reschedule / ready cancellation), keyed
+ * by reservation id. The realtime callback only replaces local state.
  */
-export const resolveRescheduleRequest = async (reservationId, approve) => {
-  try {
-    const { data, error } = await supabase.rpc('resolve_reschedule_as_manager', {
-      _reservation_id: reservationId,
-      _approve: approve,
-    });
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    throw normalizeReservationError(err);
-  }
+export const subscribeToPendingChangeRequests = (callback) => {
+  return subscribeToCollection('reservation_change_requests', (rows) => {
+    const byReservation = {};
+    for (const row of rows) {
+      if (row.reservationId) byReservation[row.reservationId] = row;
+    }
+    callback(byReservation);
+  }, { status: 'pending' });
 };
 
+/**
+ * Answers a customer's reschedule request. Approving re-checks the slot: it
+ * was free when requested, but may have been taken since.
+ */
+export const resolveRescheduleRequest = async (requestId, approve, notes = null) => {
+  const { data, error } = await supabase.rpc('resolve_reschedule_request_v2', {
+    _request_id: requestId,
+    _approve: approve,
+    _resolution_notes: notes,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/** Approving applies the existing customer-fault forfeiture policy server-side. */
+export const resolveReadyCancellationRequest = async (requestId, approve, notes = null) => {
+  const { data, error } = await supabase.rpc('resolve_ready_cancellation_request', {
+    _request_id: requestId,
+    _approve: approve,
+    _resolution_notes: notes,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Direct staff change of a pre-Ready appointment; the reason reaches the customer.
 export const rescheduleReservation = async (
   reservationId,
   expectedStatus,
   newDate,
   newAppointmentTime,
-  reason = null,
+  reason,
 ) => {
-  try {
-    const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
-      _reservation_id:       reservationId,
-      _expected_status:      expectedStatus,
-      _new_date:             newDate,           // 'YYYY-MM-DD'
-      _new_appointment_time: newAppointmentTime, // 'HH:MM:SS'
-      _reason:               reason,
-    });
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    throw normalizeReservationError(err);
-  }
+  const trimmed = String(reason || '').trim();
+  if (!trimmed) throw new Error('Enter the reason shown to the customer.');
+  const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
+    _reservation_id:       reservationId,
+    _expected_status:      expectedStatus,
+    _new_date:             newDate,           // 'YYYY-MM-DD' (Asia/Manila)
+    _new_appointment_time: newAppointmentTime, // 'HH:MM:SS' (Asia/Manila)
+    _reason:               trimmed,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const getSlotBookedCounts = async (date) => {
+  const { data, error } = await supabase.rpc('get_slot_booked_counts', { _date: date });
+  if (error) throw error;
+  return data ?? [];
 };
 
 export const markRefundDisbursed = async (
