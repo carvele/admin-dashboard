@@ -34,7 +34,6 @@ const Dashboard = lazyWithRetry(() => import('../pages/dashboard/Dashboard'));
 const Reservations = lazyWithRetry(() => import('../pages/customers/Reservations'));
 const Customers = lazyWithRetry(() => import('../pages/customers/Customers'));
 const Messages = lazyWithRetry(() => import('../pages/messaging/Messages'));
-const DigitalWardrobe = lazyWithRetry(() => import('../pages/wardrobe/DigitalWardrobe'));
 const ClothingCatalog = lazyWithRetry(() => import('../pages/catalog/ClothingCatalog'));
 const Reviews = lazyWithRetry(() => import('../pages/catalog/Reviews'));
 const ProductForm = lazyWithRetry(() => import('../pages/catalog/ProductForm'));
@@ -212,16 +211,7 @@ const AnimatedRoutes = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="wardrobe"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <DigitalWardrobe />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="wardrobe" element={<Navigate to="/dashboard" replace />} />
 
           <Route
             path="inventory"

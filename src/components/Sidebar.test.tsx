@@ -24,5 +24,6 @@ describe('Sidebar Component', () => {
       </BrowserRouter>,
     );
     expect(screen.getByText('JezSy Collection')).toBeInTheDocument();
+    expect(screen.queryByText('Digital Wardrobe')).not.toBeInTheDocument();
   });
 });

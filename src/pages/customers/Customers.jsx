@@ -20,6 +20,8 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { logAction } from '../../services/staffService';
 import { getLogsForTarget } from '../../lib/supabaseService';
@@ -29,6 +31,7 @@ import {
   setCustomerBlockState,
   setCustomerArchiveState,
   sendNotification,
+  getCustomers,
   getPaginatedCustomers,
   getCustomerMeasurements,
   getCustomerStatsBatch,
@@ -119,24 +122,22 @@ const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageSize, setPageSize] = useState(10);
   const [msgModal, setMsgModal] = useState(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
-  const fetchCustomers = async (loadMore = false, signal = null) => {
-    if (loadMore) setLoadingMore(true);
-    else setLoading(true);
+  const fetchCustomers = async (signal = null) => {
+    setLoading(true);
 
     try {
-      const PAGE_SIZE = 20;
-      // Fetch without orderBy so Firestore doesn't drop legacy documents missing the field
-      const result = await getPaginatedCustomers(PAGE_SIZE, loadMore ? page : 0);
+      const result = typeof getCustomers === 'function'
+        ? await getCustomers()
+        : (await getPaginatedCustomers(1000, 0))?.data || [];
 
       if (signal?.aborted) return;
 
-      const appUsers = result.data.filter((u) => !u.role || u.role === 'customer');
+      const appUsers = (Array.isArray(result) ? result : result?.data || []).filter((u) => !u.role || u.role === 'customer');
 
       // Engagement figures aren't columns on `profiles` — derive them from real
       // reservation/wardrobe data (batched: 2 queries for the whole page).
@@ -154,7 +155,7 @@ const Customers = () => {
             ...u, 
             ...s,
             ...w,
-            engagementScore
+            engagementScore,
           };
         });
       } catch (statsErr) {
@@ -170,40 +171,30 @@ const Customers = () => {
         const timeB = new Date(b.createdAt ?? 0).getTime() || 0;
         return timeB - timeA;
       });
-      setCustomers((prev) => {
-        const d = loadMore ? [...prev, ...enriched] : enriched;
-        const unique = [];
-        const seen = new Set();
-        d.forEach((user) => {
-          if (!seen.has(user.id)) {
-            unique.push(user);
-            seen.add(user.id);
-          }
-        });
-        return unique;
+      const unique = [];
+      const seen = new Set();
+      enriched.forEach((user) => {
+        const uid = user.id || user.docId;
+        if (!seen.has(uid)) {
+          unique.push(user);
+          seen.add(uid);
+        }
       });
-      setPage(result.nextPage);
-      setHasMore(result.hasMore);
+      setCustomers(unique);
     } catch (e) {
       console.error('Failed to load customers API Error:', e);
       toast.error('Failed to load customers: ' + e.message);
     } finally {
-      if (loadMore) setLoadingMore(false);
-      else setLoading(false);
+      setLoading(false);
     }
   };
 
   React.useEffect(() => {
     const controller = new AbortController();
-    fetchCustomers(false, controller.signal);
+    fetchCustomers(controller.signal);
     return () => {
       controller.abort();
     };
-    // Intentionally mount-only: fetchCustomers closes over page, which it
-    // sets after every fetch. Tracking it here would re-run this effect (and
-    // re-fetch page 1) every time page changes -- the "Load More" button
-    // at line ~600 is the only place pagination should advance.
-     
   }, []);
 
   const [searchInput, setSearchInput] = useState('');
@@ -384,6 +375,22 @@ const Customers = () => {
     }
     return true;
   });
+
+  const effectivePageSize = pageSize === 'all' ? Math.max(1, filteredCustomers.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / effectivePageSize));
+  const pagedCustomers = React.useMemo(() => {
+    return filteredCustomers.slice(page * effectivePageSize, (page + 1) * effectivePageSize);
+  }, [filteredCustomers, page, effectivePageSize]);
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    tableCardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  };
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [searchTerm, customerFilter, pageSize]);
+
   const avgEngagement =
     customers.length > 0
       ? Math.round(
@@ -639,7 +646,7 @@ const Customers = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCustomers.map((cust) => (
+                  {pagedCustomers.map((cust) => (
                     <tr key={cust.id} className="table-row-hover">
                       <td>
                         <div className="flex-center gap-3 customer-cell">
@@ -776,20 +783,85 @@ const Customers = () => {
                   )}
                 </tbody>
               </table>
-              {hasMore && (
-                <div
-                  className="flex-center py-4"
-                  style={{ borderTop: '1px solid var(--border-light)' }}
-                >
-                  <button
-                    className="btn-outline"
-                    onClick={() => fetchCustomers(true)}
-                    disabled={loadingMore}
-                  >
-                    {loadingMore ? 'Loading...' : 'Load More'}
-                  </button>
+              {/* Premium Pagination & Range Navigator */}
+              <div className="catalog-pagination-bar">
+                <div className="pagination-range">
+                  {filteredCustomers.length === 0 ? (
+                    '0 customers'
+                  ) : (
+                    <>
+                      Showing <strong>{page * effectivePageSize + 1}</strong>–<strong>{Math.min(filteredCustomers.length, (page + 1) * effectivePageSize)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                    </>
+                  )}
                 </div>
-              )}
+
+                {totalPages > 1 && (
+                  <div className="pagination-controls-pills">
+                    <button
+                      type="button"
+                      className="pagination-pill-arrow"
+                      onClick={() => handlePageChange(Math.max(0, page - 1))}
+                      disabled={page === 0}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, i) => {
+                      if (
+                        i === 0 ||
+                        i === totalPages - 1 ||
+                        (i >= page - 1 && i <= page + 1)
+                      ) {
+                        return (
+                          <button
+                            type="button"
+                            key={i}
+                            className={`pagination-pill-btn ${page === i ? 'active' : ''}`}
+                            onClick={() => handlePageChange(i)}
+                            aria-current={page === i ? 'page' : undefined}
+                          >
+                            {i + 1}
+                          </button>
+                        );
+                      }
+                      if (i === page - 2 || i === page + 2) {
+                        return <span key={i} className="pagination-pill-ellipsis">…</span>;
+                      }
+                      return null;
+                    })}
+
+                    <button
+                      type="button"
+                      className="pagination-pill-arrow"
+                      onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
+                      disabled={page >= totalPages - 1}
+                      aria-label="Next page"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="pagination-size-wrapper">
+                  <label htmlFor="customers-pagesize-select" className="text-xs text-secondary">Display:</label>
+                  <select
+                    id="customers-pagesize-select"
+                    className="pagination-size-select"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                      setPage(0);
+                    }}
+                    aria-label="Customers per page"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={25}>25 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value="all">View All ({filteredCustomers.length})</option>
+                  </select>
+                </div>
+              </div>
             </>
           )}
         </div>
