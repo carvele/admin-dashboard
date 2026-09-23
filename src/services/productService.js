@@ -179,19 +179,13 @@ export const archiveProduct = async (docId) => {
 export const restoreProduct = async (docId) => {
   const now = new Date().toISOString();
 
-  // Restore product
+  // Restore product — linked inventory rows are unarchived automatically
+  // by the trg_cascade_soft_delete_inventory PostgreSQL trigger.
   const { error: pErr } = await supabase
     .from('products')
     .update({ deleted: false, deleted_at: null, updated_at: now })
     .eq('id', docId);
   if (pErr) throw pErr;
-
-  // Restore linked inventory rows
-  const { error: iErr } = await supabase
-    .from('inventory')
-    .update({ deleted: false, deleted_at: null, updated_at: now })
-    .eq('product_doc_id', docId);
-  if (iErr) console.warn('[Inventory] Restore cascade failed:', iErr.message);
 
   queryCache.invalidateByPrefix('products');
   queryCache.invalidateByPrefix('inventory');
