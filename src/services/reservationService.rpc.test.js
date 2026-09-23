@@ -58,6 +58,9 @@ import {
   getReturnRefundRequests,
   reviewReturnRefundRequest,
   getSignedEvidenceUrl,
+  isReservationConcurrencyConflict,
+  normalizeReservationError,
+  getReservationById,
 } from './reservationService';
 
 
@@ -583,6 +586,119 @@ describe('getReturnRefundRequests', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('return_refund_requests');
     expect(mockOrder).toHaveBeenCalledWith('submitted_at', { ascending: false });
+  });
+});
+
+describe('optimistic concurrency contract & zero mutation retry', () => {
+  afterEach(() => {
+    mockRpc.mockReset();
+    mockInvoke.mockClear();
+    mockFrom.mockReset();
+  });
+
+  test('isReservationConcurrencyConflict correctly classifies PT409', () => {
+    expect(isReservationConcurrencyConflict({ code: 'PT409' })).toBe(true);
+    expect(isReservationConcurrencyConflict({ code: '40001' })).toBe(false);
+    expect(isReservationConcurrencyConflict({ code: 'P0001' })).toBe(false);
+    expect(isReservationConcurrencyConflict(new Error('Random error'))).toBe(false);
+    expect(isReservationConcurrencyConflict(null)).toBe(false);
+    expect(isReservationConcurrencyConflict(undefined)).toBe(false);
+  });
+
+  test('normalizeReservationError normalizes PT409 into an Error object with metadata', () => {
+    const rawError = {
+      code: 'PT409',
+      message: 'Reservation changed since it was loaded. Refresh and try again.',
+      details: 'stale status mismatch',
+    };
+    const normalized = normalizeReservationError(rawError);
+
+    expect(normalized).toBeInstanceOf(Error);
+    expect(normalized.message).toBe('Reservation changed. The latest information has been loaded.');
+    expect(normalized.code).toBe('PT409');
+    expect(normalized.status).toBe(409);
+    expect(normalized.isConcurrencyConflict).toBe(true);
+    expect(normalized.cause).toBe(rawError);
+  });
+
+  test('normalizeReservationError returns non-PT409 error unchanged', () => {
+    const original = new Error('Database down');
+    original.code = '500';
+    expect(normalizeReservationError(original)).toBe(original);
+  });
+
+  test('transitionReservationStatus on PT409 invokes RPC exactly once (zero automatic retry)', async () => {
+    const pt409Error = { code: 'PT409', message: 'Reservation changed since it was loaded.' };
+    mockRpc.mockResolvedValueOnce({ data: null, error: pt409Error });
+
+    let thrownError;
+    try {
+      await transitionReservationStatus('res-stale', 'To Pay', 'Preparing');
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(thrownError).toBeDefined();
+    expect(thrownError.code).toBe('PT409');
+    expect(thrownError.isConcurrencyConflict).toBe(true);
+    expect(thrownError.message).toBe('Reservation changed. The latest information has been loaded.');
+  });
+
+  test('cancelReservation on PT409 invokes RPC exactly once (zero automatic retry)', async () => {
+    const pt409Error = { code: 'PT409', message: 'Reservation changed since it was loaded.' };
+    mockRpc.mockResolvedValueOnce({ data: null, error: pt409Error });
+
+    let thrownError;
+    try {
+      await cancelReservation('res-stale', 'To Pay', 'Owner cancel');
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(thrownError).toBeDefined();
+    expect(thrownError.code).toBe('PT409');
+    expect(thrownError.isConcurrencyConflict).toBe(true);
+  });
+
+  test('rescheduleReservation on PT409 invokes RPC exactly once (zero automatic retry)', async () => {
+    const pt409Error = { code: 'PT409', message: 'Reservation changed since it was loaded.' };
+    mockRpc.mockResolvedValueOnce({ data: null, error: pt409Error });
+
+    let thrownError;
+    try {
+      await rescheduleReservation('res-stale', 'To Pay', '2026-10-01', '14:00:00');
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(thrownError).toBeDefined();
+    expect(thrownError.code).toBe('PT409');
+    expect(thrownError.isConcurrencyConflict).toBe(true);
+  });
+
+  test('getReservationById fetches single reservation by ID', async () => {
+    const mockRow = {
+      id: 'res-10',
+      display_id: 'RES-TEST10',
+      status: 'Ready',
+      created_at: '2026-09-20T00:00:00Z',
+    };
+    const mockMaybeSingle = jest.fn().mockResolvedValue({ data: mockRow, error: null });
+    const mockEq = jest.fn().mockReturnValue({ maybeSingle: mockMaybeSingle });
+    const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    const result = await getReservationById('res-10');
+
+    expect(mockFrom).toHaveBeenCalledWith('reservations');
+    expect(mockSelect).toHaveBeenCalledWith('*');
+    expect(mockEq).toHaveBeenCalledWith('id', 'res-10');
+    expect(result.id).toBe('res-10');
+    expect(result.docId).toBe('res-10');
+    expect(result.status).toBe('Ready');
   });
 });
 

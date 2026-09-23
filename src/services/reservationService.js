@@ -222,6 +222,17 @@ export const getReservationsByProduct = async (productId, productName) => {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
+export const getReservationById = async (reservationId) => {
+  if (!reservationId) return null;
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('id', reservationId)
+    .maybeSingle();
+  if (error) throw error;
+  return normaliseReservation(data);
+};
+
 /**
  * PayMongo transaction history for a reservation.
  *
@@ -372,59 +383,97 @@ export const deleteReservation = async (docId) => {
  * which matter because this is the moment money changes hands with no
  * electronic trail behind it.
  */
+export const isReservationConcurrencyConflict = (error) => {
+  return error?.code === 'PT409';
+};
+
+export const normalizeReservationError = (error) => {
+  if (isReservationConcurrencyConflict(error)) {
+    const normalized = new Error(
+      'Reservation changed. The latest information has been loaded.'
+    );
+    normalized.code = 'PT409';
+    normalized.status = 409;
+    normalized.isConcurrencyConflict = true;
+    normalized.cause = error;
+    return normalized;
+  }
+  return error;
+};
+
 export const settleReservationBalance = async (reservationId, method = 'cash') => {
-  await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('record_reservation_balance', {
-    _reservation_id: reservationId,
-    _method: method,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('record_reservation_balance', {
+      _reservation_id: reservationId,
+      _method: method,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const transitionReservationStatus = async (reservationId, expectedStatus, nextStatus) => {
-  const { data, error } = await supabase.rpc('transition_reservation_status', {
-    _reservation_id: reservationId,
-    _expected_status: expectedStatus,
-    _next_status: nextStatus,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('transition_reservation_status', {
+      _reservation_id: reservationId,
+      _expected_status: expectedStatus,
+      _next_status: nextStatus,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const cancelReservation = async (reservationId, expectedStatus, reason) => {
-  await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
-    _reservation_id: reservationId,
-    _expected_status: expectedStatus,
-    _reason: reason || 'Cancelled by owner',
-  });
-  if (error) throw error;
-  return data;
+  try {
+    await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('cancel_reservation_as_manager', {
+      _reservation_id: reservationId,
+      _expected_status: expectedStatus,
+      _reason: reason || 'Cancelled by owner',
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const reviewReservationReceipt = async (reservationId, approve, reasonCode = null, staffNote = null) => {
-  if (approve) await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('review_reservation_receipt', {
-    _reservation_id: reservationId,
-    _approve: approve,
-    _reason_code: approve ? null : reasonCode,
-    _staff_note: approve ? null : staffNote,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    if (approve) await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('review_reservation_receipt', {
+      _reservation_id: reservationId,
+      _approve: approve,
+      _reason_code: approve ? null : reasonCode,
+      _staff_note: approve ? null : staffNote,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const reviewReservationBalanceReceipt = async (reservationId, approve, reasonCode = null, staffNote = null) => {
-  if (approve) await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('review_reservation_balance_receipt', {
-    _reservation_id: reservationId,
-    _approve: approve,
-    _reason_code: approve ? null : reasonCode,
-    _staff_note: approve ? null : staffNote,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    if (approve) await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('review_reservation_balance_receipt', {
+      _reservation_id: reservationId,
+      _approve: approve,
+      _reason_code: approve ? null : reasonCode,
+      _staff_note: approve ? null : staffNote,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 /**
@@ -438,14 +487,18 @@ export const reviewReservationBalanceReceipt = async (reservationId, approve, re
  * unchanged here too.
  */
 export const cancelReservationForFraud = async (reservationId, expectedStatus, reasonCode, staffNote = null) => {
-  const { data, error } = await supabase.rpc('cancel_reservation_for_fraud', {
-    _reservation_id: reservationId,
-    _expected_status: expectedStatus,
-    _reason_code: reasonCode,
-    _staff_note: staffNote,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('cancel_reservation_for_fraud', {
+      _reservation_id: reservationId,
+      _expected_status: expectedStatus,
+      _reason_code: reasonCode,
+      _staff_note: staffNote,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 /**
@@ -485,13 +538,17 @@ export const getPaymentReviewHistory = async (reservationId) => {
 };
 
 export const completeReservationHandover = async (reservationId, method = 'cash') => {
-  await expireReservationPaymentSessions(reservationId);
-  const { data, error } = await supabase.rpc('complete_reservation_handover', {
-    _reservation_id: reservationId,
-    _method: method,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    await expireReservationPaymentSessions(reservationId);
+    const { data, error } = await supabase.rpc('complete_reservation_handover', {
+      _reservation_id: reservationId,
+      _method: method,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 const expireReservationPaymentSessions = async (reservationId) => {
@@ -571,12 +628,16 @@ export const repairReservationData = async (reservation) => {
  * another reservation took it.
  */
 export const resolveRescheduleRequest = async (reservationId, approve) => {
-  const { data, error } = await supabase.rpc('resolve_reschedule_as_manager', {
-    _reservation_id: reservationId,
-    _approve: approve,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('resolve_reschedule_as_manager', {
+      _reservation_id: reservationId,
+      _approve: approve,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const rescheduleReservation = async (
@@ -586,15 +647,19 @@ export const rescheduleReservation = async (
   newAppointmentTime,
   reason = null,
 ) => {
-  const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
-    _reservation_id:       reservationId,
-    _expected_status:      expectedStatus,
-    _new_date:             newDate,           // 'YYYY-MM-DD'
-    _new_appointment_time: newAppointmentTime, // 'HH:MM:SS'
-    _reason:               reason,
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('reschedule_reservation_as_manager', {
+      _reservation_id:       reservationId,
+      _expected_status:      expectedStatus,
+      _new_date:             newDate,           // 'YYYY-MM-DD'
+      _new_appointment_time: newAppointmentTime, // 'HH:MM:SS'
+      _reason:               reason,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
 };
 
 export const markRefundDisbursed = async (
