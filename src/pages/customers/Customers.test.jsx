@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import Customers from './Customers';
-import { getPaginatedCustomers } from '../../services/customerService';
+import { getCustomers, getPaginatedCustomers } from '../../services/customerService';
 
 jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { uid: 'staff-1', role: 'staff' } }),
@@ -29,6 +29,7 @@ jest.mock('../../services/customerService', () => ({
   setCustomerBlockState: jest.fn(),
   setCustomerArchiveState: jest.fn(),
   sendNotification: jest.fn(),
+  getCustomers: jest.fn(),
   getPaginatedCustomers: jest.fn(),
   getCustomerMeasurements: jest.fn(),
   getCustomerStatsBatch: jest.fn().mockResolvedValue({}),
@@ -36,13 +37,13 @@ jest.mock('../../services/customerService', () => ({
   ENGAGEMENT_FORMULA: 'recency + frequency + wardrobe',
 }));
 
-// Three pages of two customers each -- page indexes and ids are distinct per
-// page so a duplicate id, or a fetch that keeps re-requesting page 0, is
-// immediately visible in the assertions below.
-const PAGES = [
-  { data: [{ id: 'c-1', docId: 'c-1', name: 'Alice One', email: 'alice@example.com' }, { id: 'c-2', docId: 'c-2', name: 'Bob Two', email: 'bob@example.com' }], hasMore: true, nextPage: 1, total: 6 },
-  { data: [{ id: 'c-3', docId: 'c-3', name: 'Cara Three', email: 'cara@example.com' }, { id: 'c-4', docId: 'c-4', name: 'Dan Four', email: 'dan@example.com' }], hasMore: true, nextPage: 2, total: 6 },
-  { data: [{ id: 'c-5', docId: 'c-5', name: 'Eve Five', email: 'eve@example.com' }, { id: 'c-6', docId: 'c-6', name: 'Finn Six', email: 'finn@example.com' }], hasMore: false, nextPage: 3, total: 6 },
+const MOCK_CUSTOMERS = [
+  { id: 'c-1', docId: 'c-1', name: 'Alice One', email: 'alice@example.com', createdAt: '2026-09-06T00:00:00Z' },
+  { id: 'c-2', docId: 'c-2', name: 'Bob Two', email: 'bob@example.com', createdAt: '2026-09-05T00:00:00Z' },
+  { id: 'c-3', docId: 'c-3', name: 'Cara Three', email: 'cara@example.com', createdAt: '2026-09-04T00:00:00Z' },
+  { id: 'c-4', docId: 'c-4', name: 'Dan Four', email: 'dan@example.com', createdAt: '2026-09-03T00:00:00Z' },
+  { id: 'c-5', docId: 'c-5', name: 'Eve Five', email: 'eve@example.com', createdAt: '2026-09-02T00:00:00Z' },
+  { id: 'c-6', docId: 'c-6', name: 'Finn Six', email: 'finn@example.com', createdAt: '2026-09-01T00:00:00Z' },
 ];
 
 const renderPage = () =>
@@ -52,47 +53,76 @@ const renderPage = () =>
     </MemoryRouter>,
   );
 
-describe('Customers pagination (CUST-001)', () => {
+describe('Customers catalog-style pagination', () => {
   beforeEach(() => {
+    getCustomers.mockReset();
+    getCustomers.mockResolvedValue(MOCK_CUSTOMERS);
     getPaginatedCustomers.mockReset();
-    getPaginatedCustomers.mockImplementation((pageSize, page) => Promise.resolve(PAGES[page]));
+    getPaginatedCustomers.mockResolvedValue({ data: MOCK_CUSTOMERS, hasMore: false, nextPage: 1, total: 6 });
   });
 
-  test('mount fetches page 0 once', async () => {
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Alice One')).toBeInTheDocument());
-    expect(getPaginatedCustomers).toHaveBeenCalledTimes(1);
-    expect(getPaginatedCustomers).toHaveBeenNthCalledWith(1, 20, 0);
-  });
-
-  test('Load More fetches page 1, then page 2, appending unique customers', async () => {
+  test('mount fetches customers and renders catalog-style range bar', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Alice One')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Load More'));
-    await waitFor(() => expect(screen.getByText('Cara Three')).toBeInTheDocument());
-    expect(getPaginatedCustomers).toHaveBeenNthCalledWith(2, 20, 1);
-
-    fireEvent.click(screen.getByText('Load More'));
-    await waitFor(() => expect(screen.getByText('Eve Five')).toBeInTheDocument());
-    expect(getPaginatedCustomers).toHaveBeenNthCalledWith(3, 20, 2);
-
-    // All 6 customers present, each exactly once.
-    for (const name of ['Alice One', 'Bob Two', 'Cara Three', 'Dan Four', 'Eve Five', 'Finn Six']) {
-      expect(screen.getAllByText(name)).toHaveLength(1);
-    }
+    // By default 10 per page, all 6 customers fit on page 1
+    expect(screen.getByText(/Showing/)).toBeInTheDocument();
+    expect(screen.getByText('Alice One')).toBeInTheDocument();
+    expect(screen.getByText('Finn Six')).toBeInTheDocument();
   });
 
-  test('exhausted pagination hides the Load More button', async () => {
+  test('display page size dropdown and pagination pill navigation work as in catalog', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Alice One')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Load More'));
-    await waitFor(() => expect(screen.getByText('Cara Three')).toBeInTheDocument());
+    // Select 10 per page by default, change to 10 or test with filtered subset
+    const displaySelect = screen.getByLabelText('Customers per page');
+    expect(displaySelect).toBeInTheDocument();
+    expect(displaySelect).toHaveValue('10');
 
-    fireEvent.click(screen.getByText('Load More'));
-    await waitFor(() => expect(screen.getByText('Eve Five')).toBeInTheDocument());
+    // Change to 'all'
+    fireEvent.change(displaySelect, { target: { value: 'all' } });
+    expect(displaySelect).toHaveValue('all');
+    expect(screen.getByText('Alice One')).toBeInTheDocument();
+    expect(screen.getByText('Finn Six')).toBeInTheDocument();
+  });
 
-    expect(screen.queryByText('Load More')).not.toBeInTheDocument();
+  test('multi-page pill and arrow navigation switches pages correctly', async () => {
+    const manyCustomers = Array.from({ length: 25 }, (_, i) => ({
+      id: `c-${i + 1}`,
+      docId: `c-${i + 1}`,
+      name: `Customer ${String(i + 1).padStart(2, '0')}`,
+      email: `cust${i + 1}@example.com`,
+      createdAt: new Date(2026, 8, 25 - i).toISOString(),
+    }));
+    getCustomers.mockResolvedValueOnce(manyCustomers);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Customer 01')).toBeInTheDocument());
+
+    // Page 1: shows 1-10
+    const range = screen.getByText((_, el) => el?.classList?.contains('pagination-range'));
+    expect(range).toHaveTextContent('Showing 1–10 of 25 customers');
+    expect(screen.getByText('Customer 10')).toBeInTheDocument();
+    expect(screen.queryByText('Customer 11')).not.toBeInTheDocument();
+
+    // Click pill 2
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(range).toHaveTextContent('Showing 11–20 of 25 customers');
+    expect(screen.getByText('Customer 11')).toBeInTheDocument();
+    expect(screen.queryByText('Customer 01')).not.toBeInTheDocument();
+
+    // Click Next page arrow
+    fireEvent.click(screen.getByLabelText('Next page'));
+    expect(range).toHaveTextContent('Showing 21–25 of 25 customers');
+    expect(screen.getByText('Customer 25')).toBeInTheDocument();
+
+    // Next page arrow is now disabled on last page
+    expect(screen.getByLabelText('Next page')).toBeDisabled();
+
+    // Click Previous page arrow
+    fireEvent.click(screen.getByLabelText('Previous page'));
+    expect(range).toHaveTextContent('Showing 11–20 of 25 customers');
   });
 });
+
