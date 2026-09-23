@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import debounce from 'lodash.debounce';
 import { useAuth } from '../../context/AuthContext';
@@ -75,6 +75,9 @@ import {
   getRefundQueue,
   getReturnRefundRequests,
   getReservationByPickupToken,
+  getReservations,
+  getReservationById,
+  isReservationConcurrencyConflict,
 } from '../../services/reservationService';
 import ReturnRefundQueue from './ReturnRefundQueue';
 import {
@@ -666,6 +669,39 @@ const Reservations = () => {
   const totalPages = Math.max(1, Math.ceil(sortedReservations.length / PAGE_SIZE));
   const pagedReservations = sortedReservations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
+  const refreshingRef = useRef(false);
+
+  const handleConcurrencyConflict = useCallback(async (staleDocId = null) => {
+    setRescheduleModal(null);
+    setReasonModal(null);
+    setShowQRModal(false);
+
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+
+    try {
+      if (staleDocId) {
+        const fresh = await getReservationById(staleDocId);
+        if (fresh) {
+          setReservations((prev) =>
+            prev.map((r) => (r.docId === staleDocId ? { ...r, ...fresh } : r))
+          );
+          if (viewModal?.docId === staleDocId) {
+            setViewModal((prev) => (prev ? { ...prev, ...fresh, displayStatus: toDisplayStatus(fresh.status) } : null));
+          }
+        }
+      } else {
+        const latest = await getReservations(200);
+        setReservations(latest);
+      }
+      toast.info('Reservation changed. The latest information has been loaded.');
+    } catch (refreshErr) {
+      console.error('Failed to reload reservation after conflict:', refreshErr);
+    } finally {
+      refreshingRef.current = false;
+    }
+  }, [viewModal?.docId]);
+
   // --- LIFECYCLE ACTIONS ---
   // Lifecycle: To Pay → Preparing → To Pickup → Completed | Cancelled.
   // Legacy Pending rows can still be activated from the list view.
@@ -684,6 +720,10 @@ const Reservations = () => {
           : `Declined the new time for ${res.displayId || id}`,
       );
     } catch (e) {
+      if (isReservationConcurrencyConflict(e) || e.code === 'PT409' || e.isConcurrencyConflict) {
+        await handleConcurrencyConflict(res?.docId || id);
+        return;
+      }
       toast.error(e?.message || 'Could not answer that request.');
     }
   };
@@ -771,6 +811,10 @@ const Reservations = () => {
       }
     } catch (err) {
       console.error('Reservation action failed:', err);
+      if (isReservationConcurrencyConflict(err) || err.code === 'PT409' || err.isConcurrencyConflict) {
+        await handleConcurrencyConflict(res.docId);
+        return;
+      }
       toast.error(err.message || 'Failed to update reservation');
     }
   };
@@ -800,6 +844,10 @@ const Reservations = () => {
       setNewDate('');
     } catch (err) {
       console.error('Failed to reschedule:', err);
+      if (isReservationConcurrencyConflict(err) || err.code === 'PT409' || err.isConcurrencyConflict) {
+        await handleConcurrencyConflict(rescheduleModal?.docId);
+        return;
+      }
       toast.error(err.message || 'Failed to reschedule');
     }
   };
@@ -852,7 +900,14 @@ const Reservations = () => {
       await reviewReservationReceipt(res.docId, true);
       setViewModal((prev) => prev ? { ...prev, status: 'Preparing', paymentStatus: 'Paid' } : prev);
       toast.success('Payment verified — preparing item');
-    } catch (err) { console.error('Failed to verify payment:', err); toast.error(err.message || 'Failed to verify payment'); }
+    } catch (err) {
+      console.error('Failed to verify payment:', err);
+      if (isReservationConcurrencyConflict(err) || err.code === 'PT409' || err.isConcurrencyConflict) {
+        await handleConcurrencyConflict(res?.docId);
+        return;
+      }
+      toast.error(err.message || 'Failed to verify payment');
+    }
   };
 
   // A receipt only leaves 'Submitted' when an owner has looked at it. Rejecting
@@ -881,6 +936,10 @@ const Reservations = () => {
       toast.success('Balance payment verified');
     } catch (err) {
       console.error('Failed to verify balance payment:', err);
+      if (isReservationConcurrencyConflict(err) || err.code === 'PT409' || err.isConcurrencyConflict) {
+        await handleConcurrencyConflict(res?.docId);
+        return;
+      }
       toast.error(err.message || 'Failed to verify balance payment');
     }
   };
@@ -932,6 +991,10 @@ const Reservations = () => {
       setReasonModal(null);
     } catch (err) {
       console.error(`Failed to ${mode} reservation:`, err);
+      if (isReservationConcurrencyConflict(err) || err.code === 'PT409' || err.isConcurrencyConflict) {
+        await handleConcurrencyConflict(reservation?.docId);
+        return;
+      }
       toast.error(err.message || `Failed to ${mode.startsWith('reject') ? 'reject the receipt' : 'cancel the reservation'}`);
     } finally {
       setReasonSubmitting(false);
