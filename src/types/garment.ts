@@ -1,6 +1,66 @@
 import type { Vec3 } from './pose';
+export type { Vec3 };
 
-export type GarmentCategory = 'shirt' | 'dress' | 'jacket' | 'pants' | 'skirt';
+export type GarmentCategory = 'shirt' | 'dress' | 'jacket' | 'pants' | 'skirt' | 'necklace' | 'bag' | 'earrings';
+
+export type GarmentRegion = 'upper' | 'lower' | 'full';
+
+export type FitBandName = 'WAIST' | 'HIP' | 'UPPER_THIGH' | 'KNEE' | 'HEM' | 'SHOULDER' | 'CHEST';
+
+export interface FitBand {
+  name: FitBandName;
+  heightRatio: number;
+  authoredWidthMeters: number;
+}
+
+export type CoverageExtent = 'crop' | 'regular' | 'longline' | 'shorts' | 'full';
+
+export interface CoverageProfile {
+  extent: CoverageExtent;
+  authoredLengthMeters: number;
+}
+
+export interface SkeletonProfile {
+  requiredBones: string[];
+  optionalBones: string[];
+  unusedBones: string[];
+}
+
+export interface RootAnchorProfile {
+  type: 'WAIST' | 'SHOULDER_CENTER' | 'NECK' | 'PELVIS';
+  offset: Vec3;
+}
+
+export interface ReferenceMeasurements {
+  primaryWidthMeters: number;
+  widthBasis: 'shoulder' | 'waist' | 'hip' | 'chest';
+  totalLengthMeters: number;
+  waistWidthMeters?: number;
+  hipWidthMeters?: number;
+  inseamMeters?: number;
+}
+
+export interface DeformationProfile {
+  supportedMorphs?: string[];
+}
+
+export interface GarmentFitProfileV2 {
+  version: 2;
+  region: GarmentRegion;
+  category: GarmentCategory;
+  rootAnchor: RootAnchorProfile;
+  skeletonProfile: SkeletonProfile;
+  boneMap: Record<string, string>;
+  controlPoints: Record<string, Vec3>;
+  fitBands: FitBand[];
+  coverageProfile: CoverageProfile;
+  referenceMeasurements: ReferenceMeasurements;
+  sizeProfile?: {
+    standardSize?: string;
+    easeCm?: number;
+  };
+  deformationProfile?: DeformationProfile;
+}
 
 export interface GarmentFitProfile {
   category: GarmentCategory;
@@ -59,4 +119,8 @@ export interface GarmentMetadata {
   sleeveType?: 'LONG' | 'SHORT' | 'SLEEVELESS' | 'UNKNOWN';
   validationErrors?: string[];
   validationWarnings?: string[];
+
+  // V2 Profile additions (backward compatible)
+  garmentFitProfileVersion?: 1 | 2;
+  fitProfileV2?: GarmentFitProfileV2;
 }
