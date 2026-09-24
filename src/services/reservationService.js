@@ -681,6 +681,21 @@ export const resolveReadyCancellationRequest = async (requestId, approve, notes 
   }
 };
 
+/** Resolves a customer's 1-day pickup extension request. */
+export const resolvePickupExtension = async (reservationId, approve, notes = null) => {
+  try {
+    const { data, error } = await supabase.rpc('resolve_pickup_extension', {
+      _reservation_id: reservationId,
+      _approve: approve,
+      _notes: notes,
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    throw normalizeReservationError(err);
+  }
+};
+
 // Direct staff change of a pre-Ready appointment; the reason reaches the customer.
 export const rescheduleReservation = async (
   reservationId,

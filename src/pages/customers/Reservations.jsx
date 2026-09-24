@@ -74,6 +74,7 @@ import {
   completeReservationHandover,
   resolveRescheduleRequest,
   resolveReadyCancellationRequest,
+  resolvePickupExtension,
   subscribeToPendingChangeRequests,
   getPaymentsForReservation,
   rescheduleReservation,
@@ -191,6 +192,22 @@ const BOARD_COLUMNS = [
     empty: 'Nothing waiting to be collected.',
   },
 ];
+
+const resolveReservationPendingRequest = (r, changeRequest) => {
+  if (changeRequest) return changeRequest;
+  if (r?.extensionStatus === 'pending') {
+    return {
+      id: `ext-${r.id}`,
+      reservationId: r.id,
+      requestType: 'extension',
+      status: 'pending',
+      reason: r.extensionReason || 'Customer requested a 1-day pickup extension.',
+      createdAt: r.extensionRequestedAt || new Date().toISOString(),
+      requestedFor: r.extensionDeadlineAt,
+    };
+  }
+  return null;
+};
 
 const Reservations = () => {
   const { user } = useAuth();
@@ -554,7 +571,7 @@ const Reservations = () => {
       // the enriched modal data while the base reservation row refreshes.
       lines: previous?.lines ?? current.lines ?? [],
       displayStatus: toDisplayStatus(current.status),
-      pendingRequest: pendingRequests[current.id] ?? null,
+      pendingRequest: resolveReservationPendingRequest(current, pendingRequests[current.id]),
     }));
   }, [reservations, pendingRequests, viewModal?.id]);
 
@@ -668,7 +685,7 @@ const Reservations = () => {
       displayStatus: displayStatus,
       displayDate: parseDate(r.appointmentAt || r.reservationDate || r.date),
       displayName: r.customerName || r.customer || 'Unknown Customer',
-      pendingRequest: pendingRequests[r.id] ?? null,
+      pendingRequest: resolveReservationPendingRequest(r, pendingRequests[r.id]),
     };
   }).filter((r) => {
     const matchesSearch =
@@ -778,10 +795,13 @@ const Reservations = () => {
     const res = reservations.find((r) => r.id === request.reservationId);
     const label = res?.displayId || request.reservationId;
     const isReschedule = request.requestType === 'reschedule';
+    const isExtension = request.requestType === 'extension';
     const ok = await runReservationCommand(request.reservationId, `resolve-${request.requestType}`, async () => {
       const outcome = isReschedule
         ? await resolveRescheduleRequest(request.id, approve, notes)
-        : await resolveReadyCancellationRequest(request.id, approve, notes);
+        : isExtension
+          ? await resolvePickupExtension(request.reservationId, approve, notes)
+          : await resolveReadyCancellationRequest(request.id, approve, notes);
       if (outcome?.outcome === 'superseded') {
         toast.info(`The request on ${label} no longer applies (reservation is ${outcome.reservation_status}).`);
         return;
@@ -791,9 +811,13 @@ const Reservations = () => {
           ? approve
             ? `Moved ${label} to ${formatManilaSlot(request.requestedFor)}`
             : `Declined the new time for ${label}`
-          : approve
-            ? `Cancelled ${label} at the customer's request`
-            : `Declined the cancellation of ${label}`,
+          : isExtension
+            ? approve
+              ? `Extended pickup deadline for ${label}`
+              : `Declined pickup extension for ${label}`
+            : approve
+              ? `Cancelled ${label} at the customer's request`
+              : `Declined the cancellation of ${label}`,
       );
     });
     return ok === true;
@@ -864,7 +888,7 @@ const Reservations = () => {
       return;
     }
 
-    if ((action === 'ready_pickup' || action === 'complete') && pendingRequests[res.id]) {
+    if ((action === 'ready_pickup' || action === 'complete') && (pendingRequests[res.id] || res.extensionStatus === 'pending')) {
       toast.error("Review the customer's request first.");
       return;
     }
@@ -1815,9 +1839,15 @@ const Reservations = () => {
                               // the detail modal instead, where the receipt
                               // renders next to its own Verify Payment button.
                               disabled={busyReservationId === res.docId}
-                              onClick={() => (primaryAction.action === 'review_receipt' || hasBlockingChangeRequest(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
+                              onClick={() => (primaryAction.action === 'review_receipt' || primaryAction.action === 'review_request' || hasBlockingChangeRequest(res) ? setViewModal(res) : handleAction(res.id, primaryAction.action))}
                             >
-                              {isAwaitingReceipt(res) ? <><ReceiptText size={13} /> Verify Receipt</> : primaryAction.action === 'complete' ? <><PackageCheck size={13} /> Complete Pickup</> : <><CheckCircle size={13} /> {primaryAction.label}</>}
+                              {isAwaitingReceipt(res)
+                                ? <><ReceiptText size={13} /> Verify Receipt</>
+                                : primaryAction.action === 'review_request'
+                                  ? <><AlertTriangle size={13} /> Review request</>
+                                  : primaryAction.action === 'complete'
+                                    ? <><PackageCheck size={13} /> Complete Pickup</>
+                                    : <><CheckCircle size={13} /> {primaryAction.label}</>}
                             </button>
                           )}
                           {canManage && canRescheduleReservation(res) && (

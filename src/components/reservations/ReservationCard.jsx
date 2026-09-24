@@ -17,7 +17,7 @@ import {
   primaryActionFor,
 } from '../../utils/reservationActions';
 import { outstandingBalance } from '../../utils/reservationBalance';
-import { formatProposedAppointment, hasPendingReadyCancellation } from '../../utils/rescheduleRequest';
+import { formatProposedAppointment, hasPendingExtension, hasPendingReadyCancellation } from '../../utils/rescheduleRequest';
 import { formatCurrency, formatTimeLabel } from '../../utils/helpers';
 
 const initialsOf = (name) =>
@@ -129,17 +129,14 @@ const ReservationCard = ({ res, canManage, busy = false, onView, onAction, onRes
       {blockingRequest && (
         <div className="res-card-reschedule">
           <p className="res-card-reschedule-text">
-            {hasPendingReadyCancellation(res)
-              ? <>Customer asked to <strong>cancel</strong> this order</>
-              : <>Wants to move to <strong>{pendingReschedule}</strong></>}
+            {hasPendingReadyCancellation(res) ? (
+              <>Customer asked to <strong>cancel</strong> this order</>
+            ) : hasPendingExtension(res) ? (
+              <>Customer requested a <strong>pickup extension</strong></>
+            ) : (
+              <>Wants to move to <strong>{pendingReschedule}</strong></>
+            )}
           </p>
-          {canManage && (
-            <div className="res-card-reschedule-actions">
-              <button className="btn-primary res-card-reschedule-btn" onClick={onView}>
-                Review request
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -148,15 +145,15 @@ const ReservationCard = ({ res, canManage, busy = false, onView, onAction, onRes
           <button
             className="btn-primary res-card-primary"
             disabled={busy}
-            // A submitted-receipt reservation used to mutate payment the
-            // instant this button was clicked,
-            // just relabeled "Verify receipt" -- so staff could mark a
-            // payment verified without the receipt image ever having been
-            // opened. Now opens the detail modal instead, where the receipt
-            // renders next to its own dedicated Verify Payment button.
-            onClick={() => (primary.action === 'review_receipt' || res.balancePaymentStatus === 'submitted' || blockingRequest ? onView() : onAction(res.id, primary.action))}
+            onClick={() => (primary.action === 'review_receipt' || primary.action === 'review_request' || res.balancePaymentStatus === 'submitted' || blockingRequest ? onView() : onAction(res.id, primary.action))}
           >
-            {awaitingReceipt ? 'Verify receipt' : res.balancePaymentStatus === 'submitted' ? 'Verify balance proof' : primary.label}
+            {primary.action === 'review_request'
+              ? 'Review request'
+              : awaitingReceipt
+                ? 'Verify receipt'
+                : res.balancePaymentStatus === 'submitted'
+                  ? 'Verify balance proof'
+                  : primary.label}
           </button>
         )}
         <button className="btn-outline res-card-icon" onClick={onView} aria-label="View details" title="View details">

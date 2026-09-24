@@ -11,6 +11,7 @@ const ChangeRequestCard = ({ request, currentAppointment, canManage, busy, onRes
   const [note, setNote] = useState('');
   if (!request) return null;
   const isReschedule = request.requestType === 'reschedule';
+  const isExtension = request.requestType === 'extension';
 
   const resolve = (approve) => onResolve(request, approve, note.trim() || null);
 
@@ -19,7 +20,11 @@ const ChangeRequestCard = ({ request, currentAppointment, canManage, busy, onRes
       <p className="res-change-request-eyebrow">Customer request</p>
       <h3 id="change-request-heading" className="res-change-request-title">
         <AlertTriangle size={16} aria-hidden="true" />
-        {isReschedule ? 'Reschedule requested' : 'Cancellation requested'}
+        {isReschedule
+          ? 'Reschedule requested'
+          : isExtension
+            ? 'Pickup extension requested'
+            : 'Cancellation requested'}
       </h3>
 
       <dl className="res-dialog-summary">
@@ -29,9 +34,15 @@ const ChangeRequestCard = ({ request, currentAppointment, canManage, busy, onRes
             <div><dt>Requested appointment</dt><dd>{formatManilaSlot(request.requestedFor)}</dd></div>
           </>
         )}
+        {isExtension && (
+          <div>
+            <dt>Requested extension</dt>
+            <dd>Extend pickup window by 1 day</dd>
+          </div>
+        )}
         <div><dt>Reason</dt><dd className="res-change-request-reason">&ldquo;{request.reason}&rdquo;</dd></div>
         <div><dt>Requested</dt><dd>{formatManilaSlot(request.createdAt)}</dd></div>
-        {!isReschedule && (
+        {!isReschedule && !isExtension && (
           <div>
             <dt>Financial policy</dt>
             <dd>Paid amounts will be forfeited if this cancellation is approved.</dd>
@@ -58,11 +69,11 @@ const ChangeRequestCard = ({ request, currentAppointment, canManage, busy, onRes
             </button>
             <button
               type="button"
-              className={isReschedule ? 'res-btn-primary' : 'res-btn-danger-outline'}
+              className={isReschedule || isExtension ? 'res-btn-primary' : 'res-btn-danger-outline'}
               disabled={busy}
               onClick={() => resolve(true)}
             >
-              {busy ? 'Working…' : isReschedule ? 'Approve' : 'Approve cancellation'}
+              {busy ? 'Working…' : isReschedule ? 'Approve' : isExtension ? 'Approve extension' : 'Approve cancellation'}
             </button>
           </div>
         </>
