@@ -21,6 +21,21 @@ describe('primaryActionFor', () => {
     expect(isAwaitingReceipt(reservation)).toBe(true);
     expect(primaryActionFor(reservation)?.action).toBe('review_receipt');
   });
+
+  it('routes blocking change requests and pending extensions to review_request', () => {
+    expect(primaryActionFor({ displayStatus: 'To Pickup', pendingRequest: { requestType: 'cancel_ready' } })).toEqual({
+      action: 'review_request',
+      label: 'Review request',
+    });
+    expect(primaryActionFor({ displayStatus: 'To Pickup', extensionStatus: 'pending' })).toEqual({
+      action: 'review_request',
+      label: 'Review request',
+    });
+    expect(primaryActionFor({ displayStatus: 'Preparing', pendingRequest: { requestType: 'reschedule' } })).toEqual({
+      action: 'review_request',
+      label: 'Review request',
+    });
+  });
 });
 
 describe('canCancelReservation', () => {

@@ -8,6 +8,10 @@ export const hasPendingReschedule = (res) => res?.pendingRequest?.requestType ==
 
 export const hasPendingReadyCancellation = (res) => res?.pendingRequest?.requestType === 'cancel_ready';
 
+export const hasPendingExtension = (res) =>
+  res?.pendingRequest?.requestType === 'extension' ||
+  res?.extensionStatus === 'pending';
+
 /** The proposed appointment as a Date, or null when nothing is pending. */
 export const proposedAppointment = (res) => {
   if (!hasPendingReschedule(res)) return null;

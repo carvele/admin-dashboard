@@ -207,11 +207,12 @@
 .res-card-reschedule {
   margin-top: 10px;
   padding-top: 10px;
+  margin-bottom: var(--spacing-sm, 8px);
   border-top: 1px solid var(--border, #e5e7eb);
 }
 
 .res-card-reschedule-text {
-  margin: 0 0 var(--spacing-sm);
+  margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
 }

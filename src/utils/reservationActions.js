@@ -15,8 +15,14 @@ export const isAwaitingReceipt = (res) =>
     ['submitted', 'processing'].includes(String(res.paymentStatus || '').toLowerCase()),
   );
 
+export const hasBlockingChangeRequest = (res) =>
+  Boolean(res?.pendingRequest || res?.extensionStatus === 'pending');
+
 export const primaryActionFor = (res) => {
   if (!res) return null;
+  if (hasBlockingChangeRequest(res)) {
+    return { action: 'review_request', label: 'Review request' };
+  }
   if (res.displayStatus === 'To Pay') {
     if (isAwaitingReceipt(res)) return { action: 'review_receipt', label: 'Verify receipt' };
     if (String(res.paymentStatus || '').toLowerCase() === 'paid') {
@@ -31,9 +37,6 @@ export const primaryActionFor = (res) => {
 
 // Pre-Ready only: once Ready, pickup extension is the one date-change workflow.
 export const CAN_RESCHEDULE_STATUSES = new Set(['To Pay', 'Preparing']);
-
-/** A pending customer reschedule/cancellation must be answered first. */
-export const hasBlockingChangeRequest = (res) => Boolean(res?.pendingRequest);
 
 /** Only legacy reservations with a real appointment can be moved. */
 export const canRescheduleReservation = (res) =>
