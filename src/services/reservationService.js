@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '../lib/supabaseClient';
+import { isContentModerationError, getContentModerationMessage } from '../utils/contentModeration';
 import {
   subscribeToCollection,
   updateDocument,
@@ -390,6 +391,14 @@ export const isReservationConcurrencyConflict = (error) => {
 };
 
 export const normalizeReservationError = (error) => {
+  if (isContentModerationError(error)) {
+    const normalized = new Error(getContentModerationMessage(error, 'submitting'));
+    normalized.code = 'PT422';
+    normalized.status = 422;
+    normalized.isContentModeration = true;
+    normalized.cause = error;
+    return normalized;
+  }
   if (isReservationConcurrencyConflict(error)) {
     const normalized = new Error(
       'Reservation changed. The latest information has been loaded.'

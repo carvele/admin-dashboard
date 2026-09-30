@@ -45,9 +45,15 @@ const ReviewCard = ({ review, onDelete, onUpdate, showProductName = false }) => 
   const handleSaveReply = async () => {
     if (onUpdate) {
       setSubmittingReply(true);
-      await onUpdate(review.id, { admin_reply: replyText.trim() || null });
-      setSubmittingReply(false);
-      setIsReplying(false);
+      try {
+        await onUpdate(review.id, { admin_reply: replyText.trim() || null });
+        setIsReplying(false);
+      } catch (err) {
+        // Keep reply mode active and draft preserved on error
+        console.error('Failed to save reply:', err);
+      } finally {
+        setSubmittingReply(false);
+      }
     }
   };
 

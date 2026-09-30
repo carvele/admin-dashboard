@@ -4,6 +4,7 @@ import { getAllReviews, deleteReview, updateReview } from '../../services/review
 import { Filter } from 'lucide-react';
 import { PageHeader } from '../../components/PageHeader';
 import ReviewCard from '../../components/ReviewCard';
+import { isContentModerationError, getContentModerationMessage } from '../../utils/contentModeration';
 import './Reviews.css';
 
 const Reviews = () => {
@@ -53,8 +54,13 @@ const Reviews = () => {
       await updateReview(reviewId, updates);
       toast.success('Review updated');
       fetchReviews();
-    } catch {
-      toast.error('Failed to update review');
+    } catch (err) {
+      if (isContentModerationError(err)) {
+        toast.error(getContentModerationMessage(err, 'submitting'));
+      } else {
+        toast.error('Failed to update review');
+      }
+      throw err;
     }
   }, [fetchReviews]);
 

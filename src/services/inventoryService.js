@@ -277,7 +277,7 @@ export const getInventorySummary = async (viewMode = 'active') => {
   const totalReserved = items.reduce((sum, i) => sum + (i.reserved || 0), 0);
   const stockBreakdown = getStockBreakdown(items);
   const reservedCount = items.filter((i) => (i.reserved || 0) > 0).length;
-  const activeProductDocIds = new Set(items.map((r) => r.product_doc_id).filter(Boolean));
+  const productDocIds = new Set(items.map((r) => r.product_doc_id).filter(Boolean));
 
   return {
     totalVariants,
@@ -286,7 +286,8 @@ export const getInventorySummary = async (viewMode = 'active') => {
     lowStockCount: stockBreakdown.alerts,
     stockBreakdown,
     reservedCount,
-    activeProductDocIds,
+    activeProductDocIds: viewMode === 'active' ? productDocIds : new Set(),
+    productDocIds,
   };
 };
 
@@ -297,6 +298,6 @@ export const getInventorySummary = async (viewMode = 'active') => {
  */
 export const getActiveInventoryProductDocIds = async () => {
   const summary = await getInventorySummary('active');
-  return summary.activeProductDocIds;
+  return summary.productDocIds || summary.activeProductDocIds;
 };
 

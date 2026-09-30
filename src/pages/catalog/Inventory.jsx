@@ -38,7 +38,7 @@ import {
   recordBoutiqueSale,
   subscribeToCategories,
   } from '../../services/productService';
-import { getPaginatedInventory, getInventorySummary } from "../../services/inventoryService";
+import { getPaginatedInventory, getInventorySummary, getActiveInventoryProductDocIds } from "../../services/inventoryService";
 import { supabase } from '../../lib/supabaseClient';
 import { updateVariantHexColor } from '../../services/variantService';
 import { getWaitlistDemand } from '../../services/stockNotifyService';
@@ -462,7 +462,9 @@ const Inventory = () => {
     try {
       const summary = await getInventorySummary(viewMode);
       setInventorySummary(summary);
-      setActiveInventoryProductIds(summary.activeProductDocIds);
+      if (viewMode === 'active' && summary?.activeProductDocIds) {
+        setActiveInventoryProductIds(summary.activeProductDocIds);
+      }
     } catch (err) {
       console.error('Failed to load inventory summary:', err);
     } finally {
@@ -590,9 +592,9 @@ const Inventory = () => {
   } = inventorySummary;
 
   const productsWithNoInventory = useMemo(() => {
-    if (loadingInventoryProductIds) return [];
+    if (loadingInventoryProductIds || viewMode !== 'active') return [];
     return products.filter((p) => !p.deleted && !activeInventoryProductIds.has(p.id));
-  }, [products, activeInventoryProductIds, loadingInventoryProductIds]);
+  }, [products, activeInventoryProductIds, loadingInventoryProductIds, viewMode]);
 
   const dropdownCategories = ['All', ...categoryTree.map((c) => c.name)];
   const [noInvBannerDismissed, setNoInvBannerDismissed] = useState(false);
@@ -947,7 +949,7 @@ const Inventory = () => {
 
 
       {/* Catalog products missing inventory warning */}
-      {!loading && !loadingProducts && !loadingInventoryProductIds && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
+      {!loading && !loadingProducts && !loadingInventoryProductIds && viewMode === 'active' && !noInvBannerDismissed && productsWithNoInventory.length > 0 && (
         <div
           style={{
             display: 'flex',
