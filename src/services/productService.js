@@ -154,6 +154,29 @@ export const upsertProductWithColorways = async (productPayload, colorwaysPayloa
     }
     delete canonicalProductPayload.styleCode;
   }
+  // Sale fields — the RPC reads on_sale / sale_price / discount_percentage (snake_case)
+  // from the JSONB payload. The admin form uses camelCase; without these mappings the
+  // RPC receives null for all three fields and silently zeros out sale data on every save.
+  if ('onSale' in canonicalProductPayload) {
+    if (canonicalProductPayload.on_sale === undefined) {
+      canonicalProductPayload.on_sale = Boolean(canonicalProductPayload.onSale);
+    }
+    delete canonicalProductPayload.onSale;
+  }
+  if ('salePrice' in canonicalProductPayload) {
+    if (canonicalProductPayload.sale_price === undefined) {
+      const sp = parseFloat(canonicalProductPayload.salePrice);
+      canonicalProductPayload.sale_price = isNaN(sp) ? null : sp;
+    }
+    delete canonicalProductPayload.salePrice;
+  }
+  if ('discountPercentage' in canonicalProductPayload) {
+    if (canonicalProductPayload.discount_percentage === undefined) {
+      canonicalProductPayload.discount_percentage =
+        parseInt(canonicalProductPayload.discountPercentage, 10) || 0;
+    }
+    delete canonicalProductPayload.discountPercentage;
+  }
 
   const { data, error } = await supabase.rpc('upsert_product_with_colorways', {
     _product_payload: canonicalProductPayload,
