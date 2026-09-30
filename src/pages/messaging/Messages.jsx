@@ -24,6 +24,7 @@ import {
   CheckCheck,
   ChevronLeft,
   Info,
+  AlertCircle,
 } from 'lucide-react';
 import SendNotificationModal from '../../components/SendNotificationModal';
 import {
@@ -41,6 +42,7 @@ import {
 import { usePresence } from '../../hooks/usePresence';
 import { useTypingIndicator } from '../../hooks/useTypingIndicator';
 import { toast } from 'sonner';
+import { isContentModerationError, getContentModerationMessage } from '../../utils/contentModeration';
 import { subscribeToReservations } from '../../services/reservationService';
 import { getCustomers } from '../../services/customerService';
 import { logAction } from '../../services/staffService';
@@ -132,6 +134,7 @@ const Messages = () => {
 
   // Editing: { docId, text } for the message currently being edited, or null.
   const [editingMsg, setEditingMsg] = useState(null);
+  const [moderationWarning, setModerationWarning] = useState(null);
 
   const onlineUsers = usePresence(user?.uid, (user?.role || 'staff').toLowerCase());
   const activeConversationId = activeChat ? (activeChat.id || activeChat.customId) : null;
@@ -356,6 +359,9 @@ const Messages = () => {
   // plenty to keep the other side's "typing..." indicator alive.
   const handleMessageInputChange = (val) => {
     setNewMessage(val);
+    if (moderationWarning) {
+      setModerationWarning(null);
+    }
     if (!editingMsg) {
       sendTyping();
     }
@@ -375,6 +381,7 @@ const Messages = () => {
     const nowIso = new Date().toISOString();
     const senderDisplayName = (user?.name && user.name !== 'Staff') ? user.name : 'Boutique Support';
     try {
+      setModerationWarning(null);
       await sendMessage({
         conversationId: convKey,
         senderId: user?.uid ?? null,
@@ -388,7 +395,14 @@ const Messages = () => {
       await logAction(user, 'Sent message to customer', { customerName: getConvName(activeChat) });
       setNewMessage('');
     } catch (err) {
-      console.error(err);
+      console.error('Send message failed:', err);
+      if (isContentModerationError(err)) {
+        const msg = getContentModerationMessage(err, 'sending');
+        setModerationWarning(msg);
+        toast.error(msg);
+      } else {
+        toast.error('Failed to send message. Please try again.');
+      }
     }
   };
 
@@ -445,6 +459,7 @@ const Messages = () => {
   const cancelEdit = () => {
     setEditingMsg(null);
     setNewMessage('');
+    setModerationWarning(null);
   };
 
   const handleSaveEdit = async () => {
@@ -456,13 +471,20 @@ const Messages = () => {
       return;
     }
     try {
+      setModerationWarning(null);
       await editMessage(editingMsg.docId, nextText);
       await logAction(user, 'Edited message to customer', { customerName: getConvName(activeChat) });
-    } catch (err) {
-      console.error('Edit failed:', err);
-    } finally {
       setEditingMsg(null);
       setNewMessage('');
+    } catch (err) {
+      console.error('Edit failed:', err);
+      if (isContentModerationError(err)) {
+        const msg = getContentModerationMessage(err, 'sending');
+        setModerationWarning(msg);
+        toast.error(msg);
+      } else {
+        toast.error('Failed to edit message. Please try again.');
+      }
     }
   };
 
@@ -1273,6 +1295,28 @@ const Messages = () => {
               <button type="button" className="icon-btn" onClick={cancelEdit} aria-label="Cancel editing">
                 <X size={14} />
               </button>
+            </div>
+          )}
+                    {moderationWarning && (
+            <div
+              className="moderation-warning-banner"
+              role="alert"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                margin: '0 16px 8px 16px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid var(--danger, #ef4444)',
+                color: 'var(--danger, #ef4444)',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+              }}
+            >
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{moderationWarning}</span>
             </div>
           )}
           <form onSubmit={handleSend} className="chat-form">
